@@ -1551,13 +1551,22 @@ function mergeDocumentItems(...documentGroups) {
   })
 }
 
-function renderGeneralFactorySection(layout, request, context) {
+function renderGeneralFactorySection(layout, request, context, options = {}) {
   const { factory } = context
+  const showExtendedWpmsFields = options.showExtendedWpmsFields === true
   layout.sectionTitle('1. ข้อมูลทั่วไปของโรงงาน')
-  layout.labelValueRow([
-    { label: 'ชื่อโรงงาน : ', value: request?.factoryName ?? factory.factoryName },
-    { label: 'เลขทะเบียน : ', value: formatFactoryRegistration(request, factory) },
-  ])
+  if (showExtendedWpmsFields) {
+    layout.labelValue('ชื่อโรงงาน : ', request?.factoryName ?? factory.factoryName)
+    layout.labelValueRow([
+      { label: 'เลขทะเบียนโรงงาน (เดิม) : ', value: request?.factoryRegistrationNo ?? factory.oldRegistrationNo ?? factory.factoryRegistrationNo },
+      { label: 'เลขทะเบียนโรงงาน (ใหม่) : ', value: request?.factoryId ?? request?.newRegistrationNo ?? factory.factoryId ?? factory.newRegistrationNo },
+    ])
+  } else {
+    layout.labelValueRow([
+      { label: 'ชื่อโรงงาน : ', value: request?.factoryName ?? factory.factoryName },
+      { label: 'เลขทะเบียน : ', value: formatFactoryRegistration(request, factory) },
+    ])
+  }
   layout.labelValueRow([
     { label: 'ลำดับประเภทโรงงาน (หลัก) : ', value: request?.industryMainOrder ?? factory.industryMainOrder },
     { label: 'ลำดับประเภทโรงงาน (รอง) : ', value: request?.industrySubOrder ?? factory.industrySubOrder },
@@ -1565,6 +1574,16 @@ function renderGeneralFactorySection(layout, request, context) {
   layout.labelValue('ประกอบกิจการ : ', request?.businessActivity ?? factory.businessActivity)
   layout.labelValue('เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี) : ', request?.industrialEstate ?? factory.industrialEstate)
   layout.labelValue('การประเมินผลกระทบสิ่งแวดล้อม : ', request?.eia ?? factory.eia)
+  if (showExtendedWpmsFields) {
+    const eiaOther = request?.eiaOther ?? factory.eiaOther
+    const projectName = request?.projectName ?? factory.projectName
+    if (!isBlankValue(eiaOther)) {
+      layout.labelValue('รายละเอียดการประเมินผลกระทบสิ่งแวดล้อม (อื่นๆ) : ', eiaOther)
+    }
+    if (!isBlankValue(projectName)) {
+      layout.labelValue('ชื่อโครงการ : ', projectName)
+    }
+  }
   layout.labelValue('ที่ตั้ง เลขที่ : ', request?.address ?? factory.address)
   layout.labelValueRow([
     { label: 'พิกัดโรงงาน ละติจูด : ', value: request?.latitude ?? factory.latitude },
@@ -1855,36 +1874,54 @@ async function renderWpmsDocumentSections(layout, documentsAndImages) {
 
 async function renderWpms(layout, request, context) {
   const { details, point, instruments, isFullyExempted, documentParameters, signatureDate } = context
-  const treatmentSystemLabel = joinList(normalizeArrayValue(details.treatmentSystem))
-  const wpmsTreatmentSystem = firstDefinedValue(details.treatmentSystemOther, treatmentSystemLabel)
+  const treatmentSystems = normalizeArrayValue(details.treatmentSystem)
+  const treatmentSystemLabels = treatmentSystems.map((system) => (
+    system === 'อื่นๆ' && !isBlankValue(details.treatmentSystemOther)
+      ? `อื่นๆ (${details.treatmentSystemOther})`
+      : system
+  ))
+  const wpmsTreatmentSystem = treatmentSystemLabels.length
+    ? joinList(treatmentSystemLabels)
+    : firstDefinedValue(details.treatmentSystemOther, '-')
+  const wpmsConnectionDevice = details.connectionDevice === 'อื่นๆ' && !isBlankValue(details.connectionDeviceOther)
+    ? `อื่นๆ (${details.connectionDeviceOther})`
+    : firstDefinedValue(details.connectionDevice, details.connectionDeviceOther)
 
   layout.title([
     { text: 'แบบบันทึกข้อมูลโรงงานสำหรับการขอเชื่อมต่อระบบเฝ้าระวังและเตือนภัย', size: pdfTextSizes.title },
     { text: 'มลพิษระยะไกล (Digital Pollution Online Monitoring System : D-POMS)', size: pdfTextSizes.title },
     { text: '(สำหรับระบบเฝ้าระวังมลพิษน้ำระยะไกล (Water Pollution Monitoring : WPMS))', size: pdfTextSizes.subtitle },
   ])
-  renderGeneralFactorySection(layout, request, context)
+  renderGeneralFactorySection(layout, request, context, { showExtendedWpmsFields: true })
   renderContactsSection(layout, context)
   renderEmailsSection(layout, context)
   layout.addPage()
   layout.sectionTitle('4. รายละเอียดจุดตรวจวัด')
-  layout.paragraph('4.1 อัตราการระบายน้ำทิ้ง (Flow Rate)', { indent: 18 })
-  layout.labelValue('4.1.1 อัตราการระบายน้ำทิ้ง (Flow Rate) เฉลี่ย : ', details.averageWastewaterDischarge ?? details.averageDischarge, { indent: 30, suffix: 'm³/d' })
-  layout.labelValue('4.1.2 อัตราการระบายน้ำทิ้ง (Flow Rate) ต่ำสุด : ', details.minWastewaterDischarge ?? details.minDischarge, { indent: 30, suffix: 'm³/d' })
-  layout.labelValue('4.1.3 อัตราการระบายน้ำทิ้ง (Flow Rate) สูงสุด : ', details.maxWastewaterDischarge ?? details.maxDischarge, { indent: 30, suffix: 'm³/d' })
-  layout.treatmentSystemLine('4.2 ระบบบำบัด :', details.hasTreatmentSystem, wpmsTreatmentSystem, { indent: 18 })
+  layout.paragraph('4.1 รายละเอียดของจุดตรวจวัด', { indent: 18, bold: true })
+  layout.labelValue('4.1.1 รหัสจุดตรวจวัด : ', point.pointCode ?? request?.monitoringPointCode, { indent: 30 })
+  layout.labelValue('4.1.2 ชื่อจุดตรวจวัด : ', point.pointName, { indent: 30 })
+  layout.paragraph('4.2 การติดตั้ง WPMS', { indent: 18, bold: true })
+  layout.labelValue('4.2.1 พารามิเตอร์ที่เข้าข่าย : ', joinList(details.eligibleParameters ?? point.parameters), { indent: 30 })
+  layout.labelValue('4.2.2 พารามิเตอร์ที่เชื่อมต่อแล้ว : ', joinList(details.connectedParameters), { indent: 30 })
+  layout.labelValue('4.2.3 พารามิเตอร์ที่ยังไม่เชื่อมต่อ : ', joinList(details.pendingParameters ?? point.parameters), { indent: 30 })
+  layout.labelValue('4.2.4 พารามิเตอร์ที่ขอเชื่อมต่อ : ', getRequestedParametersDisplay(point, details), { indent: 30 })
+  layout.paragraph('4.3 อัตราการระบายน้ำทิ้ง (Flow Rate)', { indent: 18 })
+  layout.labelValue('4.3.1 อัตราการระบายน้ำทิ้ง (Flow Rate) เฉลี่ย : ', details.averageWastewaterDischarge ?? details.averageDischarge, { indent: 30, suffix: 'm³/d' })
+  layout.labelValue('4.3.2 อัตราการระบายน้ำทิ้ง (Flow Rate) ต่ำสุด : ', details.minWastewaterDischarge ?? details.minDischarge, { indent: 30, suffix: 'm³/d' })
+  layout.labelValue('4.3.3 อัตราการระบายน้ำทิ้ง (Flow Rate) สูงสุด : ', details.maxWastewaterDischarge ?? details.maxDischarge, { indent: 30, suffix: 'm³/d' })
+  layout.treatmentSystemLine('4.4 ระบบบำบัด :', details.hasTreatmentSystem, wpmsTreatmentSystem, { indent: 18 })
   layout.labelValue('ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด : ', firstDefinedValue(details.maxTreatmentCapacity, details.treatmentCapacity), { indent: 30 })
   layout.labelValueRow([
-    { label: '4.3 พิกัดจุดที่ติดตั้งเครื่องมือตรวจวัด ละติจูด : ', value: details.instrumentLatitude ?? point.instrumentLatitude ?? point.latitude, width: 310 },
+    { label: '4.5 พิกัดจุดที่ติดตั้งเครื่องมือตรวจวัด ละติจูด : ', value: details.instrumentLatitude ?? point.instrumentLatitude ?? point.latitude, width: 310 },
     { label: 'ลองจิจูด : ', value: details.instrumentLongitude ?? point.instrumentLongitude ?? point.longitude },
   ])
   layout.labelValueRow([
-    { label: '4.4 พิกัดจุดระบายน้ำทิ้งออกนอกโรงงาน ละติจูด : ', value: details.dischargeLatitude ?? details.outfallLatitude ?? point.latitude, width: 330 },
+    { label: '4.6 พิกัดจุดระบายน้ำทิ้งออกนอกโรงงาน ละติจูด : ', value: details.dischargeLatitude ?? details.outfallLatitude ?? point.latitude, width: 330 },
     { label: 'ลองจิจูด : ', value: details.dischargeLongitude ?? details.outfallLongitude ?? point.longitude },
   ])
-  layout.labelValue('4.5 แหล่งกำเนิดน้ำเสีย : ', firstDefinedValue(details.wastewaterSource, details.wastewaterOrigin))
-  layout.labelValue('4.6 แหล่งรองรับน้ำทิ้ง : ', firstDefinedValue(details.dischargeReceivingSource, details.receivingSource))
-  layout.labelValue('4.7 อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ : ', firstDefinedValue(details.connectionDeviceOther, details.connectionDevice))
+  layout.labelValue('4.7 แหล่งกำเนิดน้ำเสีย : ', firstDefinedValue(details.wastewaterSource, details.wastewaterOrigin))
+  layout.labelValue('4.8 แหล่งรองรับน้ำทิ้ง : ', firstDefinedValue(details.dischargeReceivingSource, details.receivingSource))
+  layout.labelValue('4.9 อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ : ', wpmsConnectionDevice)
   if (!isFullyExempted) {
     layout.addPage()
     layout.sectionTitle('5. รายละเอียดเครื่องมือตรวจวัด')
@@ -1900,6 +1937,15 @@ async function renderWpms(layout, request, context) {
       signatureDate,
     )
     renderStandardCriteriaAttachment(layout, documentParameters)
+  } else {
+    layout.addPage()
+    layout.sectionTitle('5. รายละเอียดเครื่องมือตรวจวัด')
+    layout.labelValue('พารามิเตอร์ที่ขอเชื่อมต่อ : ', getRequestedParametersDisplay(point, details), { indent: 18 })
+    layout.cemsInstrumentSignature(
+      request?.informationProviderName ?? details.informationProviderName,
+      request?.informationProviderPosition ?? details.informationProviderPosition,
+      signatureDate,
+    )
   }
   renderDeviceConfigPages(layout, request)
   await renderWpmsDocumentSections(layout, context.documentsAndImages)
