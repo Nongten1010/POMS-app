@@ -52,7 +52,6 @@ describe('Persistent hierarchy of display and connection statuses', () => {
   it('hides the factory without overwriting point/parameter preferences and restores inheritance', () => {
     const state = applyStatusManagementPatch(source, initial(), {
       expectedRevision: 0,
-      reason: 'test',
       factory: { visibility: 'HIDDEN' },
       measurementPoints: [
         { connectedPointId: 11, parameters: [{ parameter: 'CO', visibility: 'HIDDEN' }] },
@@ -67,7 +66,6 @@ describe('Persistent hierarchy of display and connection statuses', () => {
     ).toBe(true);
     const restored = applyStatusManagementPatch(source, current, {
       expectedRevision: 1,
-      reason: 'restore',
       factory: { visibility: 'VISIBLE' },
     });
     const dto = statusManagementDTO(source, { ...current, state: restored });
@@ -79,7 +77,6 @@ describe('Persistent hierarchy of display and connection statuses', () => {
   it('disconnects a whole factory without deleting points, parameters, or overriding point states', () => {
     const state = applyStatusManagementPatch(source, initial(), {
       expectedRevision: 0,
-      reason: 'test',
       factory: { connectionStatus: 'DISCONNECTED' },
       measurementPoints: [{ connectedPointId: 11, connectionStatus: 'DISCONNECTED' }],
     });
@@ -95,7 +92,6 @@ describe('Persistent hierarchy of display and connection statuses', () => {
   it('does not change the sibling when disconnecting one measurement point', () => {
     const state = applyStatusManagementPatch(source, initial(), {
       expectedRevision: 0,
-      reason: 'test',
       measurementPoints: [{ connectedPointId: 11, connectionStatus: 'DISCONNECTED' }],
     });
     const dto = statusManagementDTO(source, { ...initial(), state });
@@ -107,7 +103,7 @@ describe('Persistent hierarchy of display and connection statuses', () => {
       applyStatusManagementPatch(
         source,
         { ...initial(), revision: 4 },
-        { expectedRevision: 3, reason: 'test', factory: { visibility: 'HIDDEN' } },
+        { expectedRevision: 3, factory: { visibility: 'HIDDEN' } },
       ),
     ).toThrow('Status has changed');
   });
@@ -121,7 +117,6 @@ describe('Persistent hierarchy of display and connection statuses', () => {
       expect(() =>
         applyStatusManagementPatch(source, current, {
           expectedRevision: 0,
-          reason: 'test',
           factory: { visibility: 'HIDDEN' },
           measurementPoints: [point],
         }),
@@ -144,7 +139,6 @@ describe('Persistent hierarchy of display and connection statuses', () => {
     ];
     const state = applyStatusManagementPatch(unusual, initial(), {
       expectedRevision: 0,
-      reason: 'test',
       measurementPoints: [
         { connectedPointId: 11, parameters: [{ parameter: '__proto__', visibility: 'HIDDEN' }] },
       ],

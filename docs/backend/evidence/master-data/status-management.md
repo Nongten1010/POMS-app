@@ -52,7 +52,7 @@ payload ผิด / field เกิน / ID หรือ parameter ซ้ำ →
 
 - ยังไม่ได้รัน migration บน MSSQL จริง; ทดสอบ transaction ด้วย in-memory executor และ compile SQL เท่านั้น การตรวจ locking ไม่ใช่การทดสอบ concurrent transactions บน SQL Server จริง
 - ต้องรัน migration `0113_create_poms_status_management.ts` ก่อน backend รุ่นนี้ เนื่องจากรายการโรงงาน join ตารางสถานะใหม่
-- Frontend ต้องผูก GET/PATCH, ส่ง reason/revision และใช้ effective fields ตามสัญญา งานนี้ไม่เปลี่ยนการกรองทุกหน้าหรือปิดรับ telemetry
+- Frontend ต้องผูก GET/PATCH, ส่ง expectedRevision โดยไม่ส่ง reason และใช้ effective fields ตามสัญญา งานนี้ไม่เปลี่ยนการกรองทุกหน้าหรือปิดรับ telemetry
 - หลัง deployment ที่ได้รับอนุญาต ต้องตรวจ runtime OpenAPI และทดสอบ save/read ด้วยข้อมูลทดสอบที่อนุญาต
 
 ## Release candidate

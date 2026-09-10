@@ -13,7 +13,7 @@ curl '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' \
 curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' \
   -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
-  --data '{"expectedRevision":0,"reason":"ตรวจสอบการแสดงผล","factory":{"visibility":"HIDDEN"}}'
+  --data '{"expectedRevision":0,"factory":{"visibility":"HIDDEN"}}'
 ```
 
 บัญชีต้องมี JWT `roles` ที่มี `admin` ไม่ได้ตรวจจากชื่อผู้ใช้หรือ `userType` เพียงอย่างเดียว ดังนั้น Admin ที่ล็อกอินเป็น `userType=officer` ใช้ได้
@@ -99,7 +99,6 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 | Request field | Required | ข้อกำหนด |
 | --- | --- | --- |
 | `expectedRevision` | yes | integer 0–2147483646; ใช้ revision จาก GET ล่าสุด |
-| `reason` | yes | string 1–1000 ตัวอักษรหลัง trim |
 | `factory` | no | object ไม่ว่าง; ส่ง visibility และ/หรือ connectionStatus |
 | `measurementPoints` | no | array 1–200 จุด; ต้องไม่ซ้ำ connectedPointId |
 | `measurementPoints[].connectedPointId` | yes | positive safe integer; ต้องอยู่ในโรงงานเป้าหมาย |
@@ -107,12 +106,11 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 | `measurementPoints[].parameters` | no | array 1–100 รายการ; ห้าม parameter ซ้ำในจุดเดียวกันโดยไม่แยกตัวพิมพ์เล็กใหญ่ |
 | `parameters[].parameter`, `.visibility` | yes | key 1–200 ตัวอักษร และ enum; ต้องเป็นพารามิเตอร์ที่เชื่อมต่ออยู่ในจุดนั้น |
 
-ต้องส่ง `factory` หรือ `measurementPoints` อย่างน้อยหนึ่งอย่าง แต่ละจุดต้องมีการเปลี่ยนค่าอย่างน้อยหนึ่ง field ห้ามส่ง field นอกสัญญา เช่น `actorUserId` หรือ `parameters[].connectionStatus`
+ต้องส่ง `factory` หรือ `measurementPoints` อย่างน้อยหนึ่งอย่าง แต่ละจุดต้องมีการเปลี่ยนค่าอย่างน้อยหนึ่ง field ไม่ต้องระบุเหตุผล และไม่รับฟิลด์ `reason` ห้ามส่ง field นอกสัญญา เช่น `actorUserId` หรือ `parameters[].connectionStatus`
 
 ```json
 {
   "expectedRevision": 0,
-  "reason": "ปรับสถานะตามการตรวจสอบ",
   "factory": {"visibility":"VISIBLE"},
   "measurementPoints": [{
     "connectedPointId": 11,
@@ -142,8 +140,8 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 - Migration: `backend/src/db/migrations/0113_create_poms_status_management.ts` ต้องรันก่อน backend รุ่นนี้ ใช้ตารางสถานะตาม `eligible_factory_id` และ audit แยกต่างหาก
 - Routes/validator/service/repository: `backend/src/modules/poms-factories/poms-status-management.*`
 - Lock: ล็อกโรงงาน `UPDLOCK, HOLDLOCK` ก่อนอ่าน revision/insert/update และอ่าน current points ภายใน transaction เพื่อป้องกัน first-insert race
-- Audit เก็บ reason, actor จาก JWT, revision, before/after และ patch; API นี้ไม่รับ actor จาก body
+- Audit เก็บ actor จาก JWT, revision, before/after และ patch; คอลัมน์ reason เดิมใช้ข้อความระบบ `อัปเดตสถานะผ่าน status-management` จึงไม่ต้องเปลี่ยน schema ฐานข้อมูลสำหรับการถอด reason จาก request; API นี้ไม่รับ reason หรือ actor จาก body
 - Runtime OpenAPI: `backend/src/modules/api-docs/poms-status-management.openapi.ts`
 - Tests: `backend/tests/unit/poms-status-management.*.test.ts`
 - [หลักฐานการตรวจและทดสอบ](../../../evidence/master-data/status-management.md)
-- งาน frontend ถัดไป: ผูก GET/PATCH, ส่งเหตุผลและ revision, ใช้ key พารามิเตอร์จาก API, แสดงข้อผิดพลาด และโหลดข้อมูลใหม่หลังสำเร็จ
+- งาน frontend ถัดไป: ผูก GET/PATCH, ส่ง expectedRevision โดยไม่ส่ง reason, ใช้ key พารามิเตอร์จาก API, แสดงข้อผิดพลาด และโหลดข้อมูลใหม่หลังสำเร็จ

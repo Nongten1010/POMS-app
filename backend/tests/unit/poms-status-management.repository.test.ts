@@ -55,7 +55,6 @@ executor.raw = (_sql: string, bindings: string[]) => bindings[0]!;
 const actor = { actorUserId: 42, roles: ['admin'], scope: 'ALL' };
 const input = {
   expectedRevision: 0,
-  reason: 'reviewed',
   factory: { visibility: 'HIDDEN' as const },
 };
 beforeEach(() => {
@@ -100,8 +99,15 @@ describe('Transactional POMS status storage', () => {
     expect(statusManagementDTO(saved.source, saved.snapshot).factory.visibility).toBe('HIDDEN');
     expect(saved.snapshot.revision).toBe(1);
     expect(tables.poms_factory_status_events).toEqual([
-      expect.objectContaining({ actor_user_id: 42, reason: 'reviewed', revision: 1 }),
+      expect.objectContaining({
+        actor_user_id: 42,
+        reason: 'อัปเดตสถานะผ่าน status-management',
+        revision: 1,
+      }),
     ]);
+    expect(JSON.parse(tables.poms_factory_status_events?.[0]?.changes_json as string)).toEqual(
+      input,
+    );
     expect(tables.cems_wpms_connected_measurement_points![0]).not.toHaveProperty('deleted_at');
   });
   it('rolls back the state if audit persistence fails', async () => {

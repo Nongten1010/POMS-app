@@ -48,8 +48,17 @@ const authToken = (
   scopes: Record<string, string | null>,
   userType: 'officer' | 'admin' = 'officer',
 ) => signAccessToken({ sub: '42', userType, roles, scopes });
-const patch = { expectedRevision: 0, reason: 'ตรวจสอบสถานะ', factory: { visibility: 'HIDDEN' } };
+const patch = { expectedRevision: 0, factory: { visibility: 'HIDDEN' } };
 describe('Status management authorization and validation', () => {
+  it('saves a status change without a reason', async () => {
+    mocked.update.mockClear();
+    const res = await request(app())
+      .patch('/api/v1/poms-factories/F1/status-management')
+      .set('Authorization', `Bearer ${token()}`)
+      .send(patch);
+    expect(res.status).toBe(200);
+    expect(mocked.update.mock.calls[0]?.[2]).toEqual(patch);
+  });
   it('requires authentication for reads and writes', async () => {
     expect((await request(app()).get('/api/v1/poms-factories/F1/status-management')).status).toBe(
       401,
@@ -124,7 +133,7 @@ describe('Status management authorization and validation', () => {
   it.each([
     {},
     { ...patch, expectedRevision: -1 },
-    { ...patch, reason: ' ' },
+    { ...patch, reason: 'ตรวจสอบสถานะ' },
     { ...patch, factory: {} },
     { ...patch, actorUserId: 99 },
     { ...patch, factory: { visibility: 'whatever' } },

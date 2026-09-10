@@ -23,7 +23,6 @@ export const statusManagementParamsSchema = z.object({
 export const statusManagementInputSchema = z
   .object({
     expectedRevision: z.number().int().min(0).max(2147483646),
-    reason: z.string().trim().min(1).max(1000),
     factory: z
       .object(patchFields)
       .strict()

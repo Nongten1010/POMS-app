@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-09-10 — ถอด reason ออกจากการบันทึกสถานะโรงงาน POMS
+
+- **Affected canonical docs:** [จัดการสถานะ](./menus/master-data/status-management.md#patch-บันทึกทั้งหน้าต่าง)
+- **Impact:** `PATCH /api/v1/poms-factories/:factoryId/status-management` ไม่รับ `reason` อีกต่อไป; ส่งฟิลด์นี้จะตอบ `400 VALIDATION_ERROR` ตาม strict request schema
+- **Migration:** client เอาช่องกรอกเหตุผลและ `reason` ออกจาก payload โดยยังส่ง `expectedRevision` และสถานะที่ต้องการแก้ไข; ไม่ต้องเพิ่ม database migration สำหรับการเปลี่ยนนี้ เพราะ audit ใช้ข้อความเหตุการณ์จากระบบในคอลัมน์เดิม
+- **Old contract:** ต้องส่ง `reason` ที่ไม่ว่าง
+- **New contract:** ส่ง `expectedRevision` พร้อม `factory` และ/หรือ `measurementPoints` โดยไม่ส่ง `reason`; สิทธิ์, revision และ transaction audit คงเดิม
+
 ## 2026-09-09 — พารามิเตอร์ปัจจุบันหลังอนุมัติคำขอแก้ไขจุดตรวจวัด
 
 - **Affected canonical docs:** [คำขอแก้ไขโรงงาน](./menus/master-data/factory-edit-requests.md#เปลี่ยนพารามิเตอร์หลังอนุมัติ), [ตั้งค่าอุปกรณ์](./menus/connection-requests/device-configs.md#พารามิเตอร์หลังอนุมัติคำขอแก้ไขจุดตรวจวัด)

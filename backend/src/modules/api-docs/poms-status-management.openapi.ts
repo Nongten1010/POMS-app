@@ -40,7 +40,6 @@ const pointPatch = {
 };
 export const statusManagementExample = {
   expectedRevision: 0,
-  reason: 'ปรับสถานะตามการตรวจสอบ',
   factory: { visibility: 'VISIBLE' },
   measurementPoints: [
     {
@@ -55,11 +54,10 @@ export const statusManagementSchemas: Record<string, Schema> = {
     ...object(
       {
         expectedRevision: { type: 'integer', minimum: 0, maximum: 2147483646 },
-        reason: { type: 'string', minLength: 1, maxLength: 1000 },
         factory: statusPatch,
         measurementPoints: { type: 'array', minItems: 1, maxItems: 200, items: pointPatch },
       },
-      ['expectedRevision', 'reason'],
+      ['expectedRevision'],
     ),
     anyOf: [{ required: ['factory'] }, { required: ['measurementPoints'] }],
     description:
@@ -187,7 +185,7 @@ export const statusManagementPaths: Record<string, Schema> = {
       operationId: 'updatePomsStatusManagement',
       summary: 'บันทึกสถานะทั้งหน้าต่างแบบ atomic (Admin)',
       description:
-        'ต้องมี JWT role admin และ factories:view + factories:edit โดยโรงงานต้องผ่านทั้งสอง scope. expectedRevision ใช้ค่าจาก GET; revision เก่าตอบ 409 และไม่บันทึกส่วนใด. เหตุผลต้องไม่ว่าง; บันทึก before/after กับผู้ทำรายการใน transaction เดียวกัน. factory/point เปลี่ยน visibility และ connectionStatus ได้; parameter เปลี่ยนได้เฉพาะ visibility. ฟิลด์ที่ไม่ส่งคงค่าเดิม. การบันทึกไม่ลบข้อมูล ไม่แก้ snapshot คำขอ ไม่สั่งอุปกรณ์ และไม่เปลี่ยนการรับข้อมูลหรือรายงานเดิม. Frontend ต้องเชื่อมปุ่มบันทึกกับ API นี้.',
+        'ต้องมี JWT role admin และ factories:view + factories:edit โดยโรงงานต้องผ่านทั้งสอง scope. expectedRevision ใช้ค่าจาก GET; revision เก่าตอบ 409 และไม่บันทึกส่วนใด. ไม่รับฟิลด์ reason; บันทึก before/after กับผู้ทำรายการใน transaction เดียวกัน. factory/point เปลี่ยน visibility และ connectionStatus ได้; parameter เปลี่ยนได้เฉพาะ visibility. ฟิลด์ที่ไม่ส่งคงค่าเดิม. การบันทึกไม่ลบข้อมูล ไม่แก้ snapshot คำขอ ไม่สั่งอุปกรณ์ และไม่เปลี่ยนการรับข้อมูลหรือรายงานเดิม. Frontend ต้องเชื่อมปุ่มบันทึกกับ API นี้.',
       requestBody: {
         required: true,
         content: {

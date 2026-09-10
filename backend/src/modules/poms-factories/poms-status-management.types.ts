@@ -20,7 +20,6 @@ export interface StatusPatch {
 }
 export interface StatusManagementInput {
   expectedRevision: number;
-  reason: string;
   factory?: StatusPatch;
   measurementPoints?: Array<
     StatusPatch & {

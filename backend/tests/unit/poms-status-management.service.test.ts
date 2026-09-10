@@ -30,7 +30,6 @@ describe('Status management service', () => {
     });
     const input = {
       expectedRevision: 0,
-      reason: 'test',
       factory: { visibility: 'HIDDEN' as const },
     };
     await pomsStatusManagementService.update('F1', actor, input);
@@ -43,7 +42,6 @@ describe('Status management service', () => {
     await expect(
       pomsStatusManagementService.update('F1', outsider, {
         expectedRevision: 0,
-        reason: 'test',
         factory: { visibility: 'HIDDEN' },
       }),
     ).rejects.toThrow('Only Admin');
@@ -54,7 +52,6 @@ describe('Status management service', () => {
     await expect(
       pomsStatusManagementService.update('F1', actor, {
         expectedRevision: 0,
-        reason: '',
         factory: {},
       }),
     ).rejects.toThrow();

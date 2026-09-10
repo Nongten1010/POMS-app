@@ -147,7 +147,8 @@ export const pomsStatusManagementRepository = {
         eligible_factory_id: factory.eligibleFactoryId,
         revision,
         actor_user_id: actor.actorUserId,
-        reason: input.reason,
+        // Keep the existing audit constraint without requiring client-supplied text.
+        reason: 'อัปเดตสถานะผ่าน status-management',
         before_json: JSON.stringify(current.state),
         after_json: record.state_json,
         changes_json: JSON.stringify(input),
