@@ -174,7 +174,7 @@ Minimal request JSON สำหรับ endpoint ที่ไม่มี body:
 | `data[].canRequestEligibility`               | boolean                                                     | no       | คงที่เป็น `false`                                                                                                       |
 | `data[].monitoringPointCount`                | integer                                                     | no       | จำนวน active connected points ของโรงงาน                                                                                 |
 | `data[].requestStatusCode`                   | `CONNECTED`                                                 | no       | derive จากการมี active connected point; ไม่อ่านสถานะจาก connection-request snapshot                                     |
-| `data[].status`                              | `แสดง` \| `ซ่อน`                                          | no       | คงที่เป็น `แสดง`                                                                                                        |
+| `data[].status`                              | `แสดง` \| `ซ่อน` \| `ยกเลิกการเชื่อมต่อ`                                          | no       | อ่านค่าจัดการสถานะของ Admin; ดู [จัดการสถานะ](./status-management.md)                                                                                                        |
 | `meta.total`                                 | integer                                                     | no       | จำนวนโรงงานใน `data`                                                                                                    |
 
 Minimal response (`200 OK`):

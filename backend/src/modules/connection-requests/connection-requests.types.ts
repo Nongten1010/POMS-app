@@ -491,7 +491,7 @@ export interface OperatorFactoryTableRowDTO {
   requestStatusCode: ConnectionRequestStatus | null;
   eligibilityRequest: OperatorFactoryEligibilityRequestDTO | null;
   canRequestEligibility: boolean;
-  status: 'แสดง' | 'ซ่อน';
+  status: 'แสดง' | 'ซ่อน' | 'ยกเลิกการเชื่อมต่อ';
 }
 
 export interface OperatorFactoryDashboardRowDTO {

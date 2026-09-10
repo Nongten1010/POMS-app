@@ -733,7 +733,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         enum: Object.keys(CONNECTION_REQUEST_STATUS_LABELS),
         nullable: true,
       },
-      status: { type: 'string', enum: ['แสดง', 'ซ่อน'] },
+      status: { type: 'string', enum: ['แสดง', 'ซ่อน', 'ยกเลิกการเชื่อมต่อ'] },
     },
   },
   OperatorFactoryTableResponse: {

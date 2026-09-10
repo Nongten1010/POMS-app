@@ -39,9 +39,13 @@ curl --request POST \
   --data '{"formType":"BASIC_INFO","projectName":"โครงการปรับปรุงระบบตรวจวัด"}'
 ```
 
+## จัดการสถานะ (เฉพาะ Admin)
+
+[สัญญา API จัดการสถานะ](./status-management.md): `GET` และ `PATCH /api/v1/poms-factories/:factoryId/status-management` รองรับซ่อน/แสดงโรงงาน จุดตรวจวัด พารามิเตอร์ และสถานะยกเลิกการเชื่อมต่อโรงงาน/จุดตรวจวัด พร้อม revision และ audit
+
 ## Endpoint Summary
 
-เมนูข้อมูลพื้นฐานมี `17` canonical endpoints และแสดงเป็น `21` Swagger operations เพราะ connected-point endpoints เดิมมี annual path variants เพิ่ม `4` operations
+เมนูข้อมูลพื้นฐานมี `19` canonical endpoints และแสดงเป็น `23` Swagger operations เพราะ connected-point endpoints เดิมมี annual path variants เพิ่ม `4` operations
 
 ### โรงงานและคำขอแก้ไข: 11 API
 

@@ -1,3 +1,4 @@
+import { pomsStatusManagementRoutes } from './poms-status-management.routes';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import multer from 'multer';
@@ -32,6 +33,7 @@ const documentImageUpload = multer({
 });
 
 pomsFactoriesRoutes.use(authenticate);
+pomsFactoriesRoutes.use(pomsStatusManagementRoutes);
 
 pomsFactoriesRoutes.get('/', authorize('factories:view'), pomsFactoriesController.listFactories);
 pomsFactoriesRoutes.get(

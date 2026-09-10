@@ -1,3 +1,4 @@
+import { statusManagementPaths, statusManagementSchemas } from './poms-status-management.openapi';
 import { env } from '../../config/env';
 import {
   ALERT_EVENT_ALERT_TYPES,
@@ -4904,7 +4905,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List current/live POMS factories',
       operationId: 'listPomsFactories',
       description:
-        'คืนเฉพาะโรงงานที่มี active row ใน cems_wpms_connected_measurement_points ภายใต้ data scope ของ factories:view โดยใช้ response schema เดียวกับ GET /cems-wpms-requests/operator-factories แต่ข้อมูลของแต่ละ row มาจาก current/live connected POMS เท่านั้น ไม่ใช้ snapshot จากคำขอเชื่อมต่อ ฟิลด์ที่ derive/fixed จากการเป็นโรงงานที่เชื่อมต่อแล้วคือ requestStatusCode="CONNECTED", isEligible=true, eligibilityStatus="เข้าข่าย", eligibilityRequest=null, canRequestEligibility=false, status="แสดง" และ officerNotificationEmails=[]',
+        'คืนเฉพาะโรงงานที่มี active row ใน cems_wpms_connected_measurement_points ภายใต้ data scope ของ factories:view โดยใช้ response schema เดียวกับ GET /cems-wpms-requests/operator-factories แต่ข้อมูลของแต่ละ row มาจาก current/live connected POMS เท่านั้น ไม่ใช้ snapshot จากคำขอเชื่อมต่อ ฟิลด์ที่ derive/fixed จากการเป็นโรงงานที่เชื่อมต่อแล้วคือ requestStatusCode="CONNECTED", isEligible=true, eligibilityStatus="เข้าข่าย", eligibilityRequest=null, canRequestEligibility=false, officerNotificationEmails=[]; status อ่านสถานะที่ Admin บันทึกเป็น แสดง/ซ่อน/ยกเลิกการเชื่อมต่อ โดยโรงงานเดิมที่ยังไม่ตั้งค่าคือ แสดง',
       parameters: [
         queryString(
           'search',
@@ -5974,6 +5975,9 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
   }
 
   if (path.startsWith('/poms-factories')) {
+    if (path.endsWith('/status-management') && method === 'patch') {
+      return { permissions: ['factories:view', 'factories:edit'], mode: 'all' };
+    }
     if (path === '/poms-factories/document-images' && method === 'post') {
       return { permissions: ['factories:edit'], mode: 'any' };
     }
@@ -6163,6 +6167,7 @@ const components: OpenApiObject = {
   ...baseComponents,
   schemas: {
     ...componentSchemas,
+    ...statusManagementSchemas,
     ...baseSchemas,
     ErrorEnvelope: {
       ...baseErrorEnvelope,
@@ -6194,7 +6199,11 @@ const components: OpenApiObject = {
 
 const paths = decorateWriteRequestValidationDocs(
   decorateOperations(
-    mergePathMaps((baseDocument.paths as Record<string, OpenApiObject>) ?? {}, extraPaths),
+    mergePathMaps(
+      (baseDocument.paths as Record<string, OpenApiObject>) ?? {},
+      extraPaths,
+      statusManagementPaths,
+    ),
   ),
   components,
 );
@@ -6205,13 +6214,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.4.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 141 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 150 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 143 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 152 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 141,
+  'x-poms-canonical-operation-count': 143,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

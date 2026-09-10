@@ -87,3 +87,5 @@
 | Backend checklist และ rollout verification | `docs/backend/evidence/<capability>/`                                     |
 
 ยังไม่ย้าย evidence เดิมในงานออกแบบนี้ ให้ทำตาม [documentation migration workflow](../explanations/documentation-migration-workflow.md)
+
+- [จัดการสถานะโรงงาน จุดตรวจวัด และพารามิเตอร์ (Admin)](./master-data/status-management.md)

@@ -11,7 +11,7 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **141**
+จำนวน explicit endpoints: **143**
 
 | Method   | Full path                                                                 | Canonical owner                                                                 | Guard                                                                           | Route source                                                                                                |
 | -------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -161,3 +161,10 @@
 
 - `GET /api/v1/cems-wpms-requests/operator-factory-dashboard` เป็น compatibility endpoint ที่ตอบ `404` และชี้ไป `GET /api/v1/operator-factory-dashboard`
 - เอกสาร legacy ระบุว่า `parameter-values` เป็น public แต่ route ปัจจุบันใช้ `authenticate` และ `authorize('cems_wpms_requests:view')`; canonical contract ต้องยึด behavior ที่ยืนยันจาก code และ tests
+
+### จัดการสถานะโรงงาน (Admin)
+
+| Method | Endpoint | Contract |
+| --- | --- | --- |
+| `GET` | `/api/v1/poms-factories/:factoryId/status-management` | [จัดการสถานะ](./menus/master-data/status-management.md) |
+| `PATCH` | `/api/v1/poms-factories/:factoryId/status-management` | [จัดการสถานะ](./menus/master-data/status-management.md) |

@@ -13,6 +13,19 @@ import {
 } from '../../src/modules/poms-factories/poms-factories.repository';
 
 describe('pomsFactoriesRepository access and approved profile patches', () => {
+
+  it.each([
+    ['VISIBLE', 'CONNECTED', 'แสดง'],
+    ['HIDDEN', 'CONNECTED', 'ซ่อน'],
+    ['VISIBLE', 'DISCONNECTED', 'ยกเลิกการเชื่อมต่อ'],
+    ['HIDDEN', 'DISCONNECTED', 'ยกเลิกการเชื่อมต่อ'],
+  ])('reads saved factory status %s/%s without deleting the list row', (visibility, connectionStatus, label) => {
+    const rows = summarizeConnectedFactoryRowsForTests([connectedFactoryRow({
+      management_state_json: JSON.stringify({ factory: { visibility, connectionStatus }, measurementPoints: {} }),
+    })]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe(label);
+  });
   it('reads live factories from active connected POMS rows', () => {
     const sql = buildConnectedFactoryRowsQueryForTests({
       actorUserId: 77,

@@ -62,6 +62,7 @@ interface FactoryAccess {
 }
 
 interface ConnectedFactoryRow {
+  management_state_json?: string | null;
   connected_point_id: number | string;
   source_measurement_point_id: number | string;
   eligible_factory_id: number | string;
@@ -939,6 +940,11 @@ function buildConnectedFactoryRowsQuery(
     })
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
     .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
+    .leftJoin(
+      'poms_factory_status_management as fsm',
+      'fsm.eligible_factory_id',
+      'cp.eligible_factory_id',
+    )
     .whereNull('cp.deleted_at');
 
   if (search) {
@@ -957,6 +963,7 @@ function buildConnectedFactoryRowsQuery(
   applyFactoryAccess(builder, access);
   return builder
     .select(
+      'fsm.state_json as management_state_json',
       'cp.id as connected_point_id',
       'cp.source_measurement_point_id',
       'cp.eligible_factory_id',
@@ -1262,6 +1269,10 @@ function toOperatorFactoryTableRow(rows: ConnectedFactoryRow[]): OperatorFactory
   const first = sortedByProfileVersion[0];
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(first.factory_type_sequence);
 
+  const managed = first.management_state_json
+    ? JSON.parse(first.management_state_json).factory
+    : null;
+
   return {
     id: Number(first.eligible_factory_id),
     factoryId: first.factory_id,
@@ -1285,7 +1296,12 @@ function toOperatorFactoryTableRow(rows: ConnectedFactoryRow[]): OperatorFactory
     requestStatusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
     eligibilityRequest: null,
     canRequestEligibility: false,
-    status: 'แสดง',
+    status:
+      managed?.connectionStatus === 'DISCONNECTED'
+        ? 'ยกเลิกการเชื่อมต่อ'
+        : managed?.visibility === 'HIDDEN'
+          ? 'ซ่อน'
+          : 'แสดง',
   };
 }
 
@@ -1337,7 +1353,7 @@ function toMeasurementPointDTO(row: ConnectedFactoryRow): PomsMeasurementPointDT
   };
 }
 
-function toPomsParameterDisplayNames(
+export function toPomsParameterDisplayNames(
   parameters: string[],
   instruments: MeasurementInstrumentsInput | null,
 ): string[] {
