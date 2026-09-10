@@ -38,10 +38,12 @@ import {
   buildFactoryBasicInfoPayload,
   buildFactoryDocumentPatch,
   buildFactoryEditableProfilePatch,
+  buildStatusManagementPayload,
   canCancelFactoryEditRequest,
   formatFactoryEditRequestDate,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
+  getStatusManagementSelection,
 } from '../utils/masterData.mjs'
 
 const pomsFactoriesApiBaseUrl = window.location.hostname === 'localhost'
@@ -158,7 +160,11 @@ async function readMasterDataResponse(result, fallbackMessage) {
           .filter(Boolean)
           .join('\n')
       : ''
-    throw new Error(issueText || payload?.error?.message || fallbackMessage)
+    const error = new Error(issueText || payload?.error?.message || fallbackMessage)
+    error.status = result.status
+    error.code = payload?.error?.code
+    error.details = payload?.error?.details
+    throw error
   }
 
   return payload
@@ -350,6 +356,23 @@ function findRequestFactory(row, factories) {
   ))
 }
 
+function mapEditRequestEventsToStatusHistory(events = []) {
+  return events.filter(Boolean).map((event, index) => ({
+    id: event.id ?? `edit-request-event-${index}`,
+    statusCode: event.toStatus ?? event.status ?? event.action ?? '',
+    statusLabel: getFactoryEditRequestStatusLabel(
+      event.toStatus ?? event.status ?? event.action,
+      event.toStatusLabel ?? event.statusLabel ?? event.actionLabel,
+    ),
+    note: event.note ?? null,
+    changedByName: event.actorName
+      ?? event.actorFullName
+      ?? event.actorUsername
+      ?? (event.actorUserId ? `ผู้ใช้งาน #${event.actorUserId}` : '-'),
+    changedAt: event.createdAt ?? event.changedAt ?? null,
+  }))
+}
+
 function mapEditRequestRows(rows, factories = []) {
   return rows.map((row, index) => {
     const formType = row.formType ?? 'BASIC_INFO'
@@ -389,6 +412,9 @@ function mapEditRequestRows(rows, factories = []) {
       requestNote: row.requestNote ?? null,
       revisionReason: row.revisionReason ?? null,
       officerNote: row.officerNote ?? null,
+      statusHistory: Array.isArray(row.statusHistory) && row.statusHistory.length > 0
+        ? row.statusHistory
+        : mapEditRequestEventsToStatusHistory(row.events),
       raw: row,
     }
   })
@@ -838,10 +864,6 @@ function normalizeManagedStatus(value, options = factoryAndPointStatusOptions) {
   return matchedOption?.value ?? visibleStatus
 }
 
-function getManagedStatusLabel(value, options = factoryAndPointStatusOptions) {
-  return options.find((option) => option.value === value)?.label ?? 'แสดง'
-}
-
 function getPointParameters(point = {}) {
   const detailParameters = [
     point.details?.requestedParameters,
@@ -867,40 +889,20 @@ function getPointParameters(point = {}) {
         ?? parameter.name
         ?? `พารามิเตอร์ ${index + 1}`
     return {
-      id: String(parameter?.parameterId ?? parameter?.id ?? parameter?.parameterCode ?? parameter?.code ?? label ?? index),
+      id: String(parameter?.parameter ?? parameter?.parameterId ?? parameter?.id ?? parameter?.parameterCode ?? parameter?.code ?? label ?? index),
+      parameter: String(parameter?.parameter ?? parameter?.parameterCode ?? parameter?.code ?? label),
       label: String(label),
-      status: normalizeManagedStatus(parameter?.managementStatus ?? parameter?.visibilityStatus ?? parameter?.status, parameterStatusOptions),
+      status: normalizeManagedStatus(
+        parameter?.visibility ?? parameter?.managementStatus ?? parameter?.visibilityStatus ?? parameter?.status,
+        parameterStatusOptions,
+      ),
     }
   })
 }
 
 function createFactoryStatusRows(factory = {}) {
-  const savedPoints = Array.isArray(factory.statusManagement?.measurementPoints)
-    ? factory.statusManagement.measurementPoints
-    : []
-
   return (factory.measurementPoints ?? []).map((point, index) => {
     const pointId = String(point.connectedPointId ?? point.id ?? point.pointCode ?? point.stationId ?? index)
-    const pointIdentifiers = new Set([
-      point.connectedPointId,
-      point.id,
-      point.pointCode,
-      point.stationId,
-    ].filter((value) => value !== null && value !== undefined && value !== '').map(String))
-    const savedPoint = savedPoints.find((item) => [
-      item.connectedPointId,
-      item.pointId,
-      item.pointCode,
-    ].some((value) => value !== null && value !== undefined && pointIdentifiers.has(String(value))))
-    const parameters = getPointParameters(point).map((parameter) => {
-      const savedParameter = savedPoint?.parameters?.find((item) => (
-        String(item.parameterId ?? item.id ?? item.parameterCode ?? item.label ?? '') === parameter.id
-      ))
-      return {
-        ...parameter,
-        status: normalizeManagedStatus(savedParameter?.status ?? parameter.status, parameterStatusOptions),
-      }
-    })
 
     return {
       id: pointId,
@@ -908,11 +910,8 @@ function createFactoryStatusRows(factory = {}) {
       pointCode: getMonitoringPointCode(point, index),
       pointName: point.pointName ?? point.name ?? '-',
       systemType: point.systemType ?? '-',
-      status: normalizeManagedStatus(
-        savedPoint?.status ?? point.managementStatus ?? point.visibilityStatus,
-        factoryAndPointStatusOptions,
-      ),
-      parameters,
+      status: getStatusManagementSelection(point),
+      parameters: getPointParameters(point),
     }
   })
 }
@@ -936,12 +935,11 @@ function ManagedStatusSelect({ value, options, onChange, ariaLabel }) {
   )
 }
 
-function FactoryStatusManagementDialog({ factory, open, onClose, onSave }) {
-  const [factoryStatus, setFactoryStatus] = useState(() => normalizeManagedStatus(
-    factory?.statusManagement?.factoryStatus ?? factory?.managementStatus ?? factory?.visibilityStatus ?? factory?.status,
-  ))
+function FactoryStatusManagementDialog({ factory, open, submitting = false, error = '', onClose, onSave }) {
+  const [factoryStatus, setFactoryStatus] = useState(() => getStatusManagementSelection(factory?.factory))
   const [pointRows, setPointRows] = useState(() => createFactoryStatusRows(factory))
   const [selectedPointId, setSelectedPointId] = useState(() => pointRows[0]?.id ?? false)
+  const [validationError, setValidationError] = useState('')
   const selectedPoint = pointRows.find((point) => point.id === selectedPointId) ?? pointRows[0] ?? null
 
   const updatePointStatus = (pointId, status) => {
@@ -962,36 +960,38 @@ function FactoryStatusManagementDialog({ factory, open, onClose, onSave }) {
     )))
   }
   const handleSave = () => {
-    onSave?.({
-      factoryId: factory?.factoryId ?? factory?.id ?? null,
-      factoryStatus,
-      measurementPoints: pointRows.map((point) => ({
-        connectedPointId: point.connectedPointId,
-        pointCode: point.pointCode,
-        status: point.status,
-        parameters: point.parameters.map((parameter) => ({
-          parameterId: parameter.id,
-          label: parameter.label,
-          status: parameter.status,
-        })),
-      })),
-    })
+    try {
+      const payload = buildStatusManagementPayload({
+        initial: factory,
+        factoryStatus,
+        measurementPoints: pointRows,
+      })
+      setValidationError('')
+      onSave?.(payload)
+    } catch (saveError) {
+      setValidationError(saveError instanceof Error ? saveError.message : 'ข้อมูลสถานะไม่ถูกต้อง')
+    }
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+    <Dialog open={open} onClose={submitting ? undefined : onClose} fullWidth maxWidth="lg">
       <DialogTitle
         sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, pr: 2 }}
       >
         <Typography component="span" variant="h6" fontWeight={700}>
           จัดการสถานะ
         </Typography>
-        <IconButton aria-label="ปิด" size="small" onClick={onClose}>
+        <IconButton aria-label="ปิด" size="small" disabled={submitting} onClick={onClose}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
       <DialogContent dividers sx={{ p: 0 }}>
         <Stack divider={<Divider />}>
+          {error || validationError ? (
+            <Alert severity="error" sx={{ borderRadius: 0 }}>
+              {validationError || error}
+            </Alert>
+          ) : null}
           <Box sx={{ p: 2.5 }}>
             <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
               ข้อมูลโรงงาน
@@ -1116,14 +1116,20 @@ function FactoryStatusManagementDialog({ factory, open, onClose, onSave }) {
               </Table>
             </TableContainer>
           </Box>
+
         </Stack>
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'center', gap: 1, p: 2 }}>
-        <Button variant="outlined" color="inherit" onClick={onClose}>
+        <Button variant="outlined" color="inherit" disabled={submitting} onClick={onClose}>
           ยกเลิก
         </Button>
-        <Button variant="contained" onClick={handleSave}>
-          บันทึก
+        <Button
+          variant="contained"
+          disabled={submitting}
+          startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : null}
+          onClick={handleSave}
+        >
+          {submitting ? 'กำลังบันทึก' : 'บันทึก'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -1529,6 +1535,7 @@ function mapEditRequestToPdfRequest(request = {}) {
     submittedDate: formatFactoryEditRequestDate(raw.submittedAt ?? raw.createdAt),
     measurementPoints,
     documentsAndImages: getFactoryDocumentsForPreview(factory),
+    statusHistory: request.statusHistory ?? mapEditRequestEventsToStatusHistory(raw.events),
   }
 }
 
@@ -1987,7 +1994,7 @@ function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}
   }
 }
 
-function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
+function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessToken = '' }) {
   const [selectedFactory, setSelectedFactory] = useState(null)
   const [editingFactory, setEditingFactory] = useState(null)
   const [editingGeneralFactory, setEditingGeneralFactory] = useState(null)
@@ -2001,10 +2008,13 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   const [loadingFactories, setLoadingFactories] = useState(false)
   const [loadingRequests, setLoadingRequests] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  const [statusManagementSubmitting, setStatusManagementSubmitting] = useState(false)
+  const [statusManagementError, setStatusManagementError] = useState('')
+  const [statusManagementDialogVersion, setStatusManagementDialogVersion] = useState(0)
   const [tableError, setTableError] = useState('')
   const [snackbarMessage, setSnackbarMessage] = useState('')
   const [validationSnackbarMessage, setValidationSnackbarMessage] = useState('')
-  const isAdmin = String(roleCode).toLowerCase() === 'admin' || String(userType).toLowerCase() === 'admin'
+  const isAdmin = [roleCode, ...roleCodes].some((role) => String(role).toLowerCase() === 'admin')
   const isOperator = String(userType).toLowerCase() === 'operator'
   const canSubmitMasterData = isAdmin || String(userType).toLowerCase() === 'operator'
   const visibleSubMenus = useMemo(
@@ -2095,6 +2105,27 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     })
     const response = await readMasterDataResponse(result, 'โหลดข้อมูลโรงงานไม่สำเร็จ')
     return normalizeFactoryDetail(response?.data ?? factory)
+  }, [accessToken])
+
+  const loadFactoryStatusManagement = useCallback(async (factory) => {
+    const factoryId = getFactoryRowId(factory)
+    if (!accessToken || !factoryId) {
+      throw new Error('ไม่พบข้อมูลโรงงานสำหรับจัดการสถานะ')
+    }
+
+    const result = await fetch(`${pomsFactoriesApiBaseUrl}/${encodeURIComponent(factoryId)}/status-management`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const response = await readMasterDataResponse(result, 'โหลดข้อมูลสำหรับจัดการสถานะไม่สำเร็จ')
+    return {
+      ...response?.data,
+      id: factory.id ?? response?.data?.factoryId,
+      newRegistrationNo: factory.newRegistrationNo ?? factory.factoryRegistrationNo ?? response?.data?.factoryId,
+      province: factory.province ?? response?.data?.provinceName ?? '',
+    }
   }, [accessToken])
 
   const loadFactoryForm = useCallback(async (factory, formType = 'MEASUREMENT_POINTS') => {
@@ -2212,32 +2243,57 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   const handleManageFactoryStatus = useCallback(async (factory) => {
     setActionLoading(true)
     setTableError('')
+    setStatusManagementError('')
     try {
-      const detail = await loadFactoryDetail(factory)
-      setStatusManagingFactory({
-        ...detail,
-        statusManagement: factory.statusManagement ?? detail.statusManagement,
-      })
+      setStatusManagingFactory(await loadFactoryStatusManagement(factory))
+      setStatusManagementDialogVersion((current) => current + 1)
     } catch (error) {
       setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลสำหรับจัดการสถานะไม่สำเร็จ')
     } finally {
       setActionLoading(false)
     }
-  }, [loadFactoryDetail])
-  const handleSaveFactoryStatus = useCallback((statusManagement) => {
-    setFactoryRows((current) => current.map((factory) => {
-      if (String(getFactoryRowId(factory)) !== String(statusManagement.factoryId)) {
-        return factory
+  }, [loadFactoryStatusManagement])
+  const handleSaveFactoryStatus = useCallback(async (payload) => {
+    const factoryId = statusManagingFactory?.factoryId
+    if (!accessToken || !factoryId) {
+      setStatusManagementError('ไม่พบข้อมูลโรงงานสำหรับบันทึกสถานะ')
+      return
+    }
+
+    setStatusManagementSubmitting(true)
+    setStatusManagementError('')
+    try {
+      const result = await fetch(`${pomsFactoriesApiBaseUrl}/${encodeURIComponent(factoryId)}/status-management`, {
+        method: 'PATCH',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      await readMasterDataResponse(result, 'บันทึกสถานะไม่สำเร็จ')
+      await loadFactories()
+      setStatusManagingFactory(null)
+      setSnackbarMessage('บันทึกสถานะสำเร็จ')
+    } catch (error) {
+      if (error?.status === 409 || error?.code === 'CONFLICT') {
+        try {
+          const currentFactory = factoryRows.find((factory) => String(getFactoryRowId(factory)) === String(factoryId))
+            ?? statusManagingFactory
+          setStatusManagingFactory(await loadFactoryStatusManagement(currentFactory))
+          setStatusManagementDialogVersion((current) => current + 1)
+          setStatusManagementError('ข้อมูลสถานะมีการเปลี่ยนแปลง ระบบโหลดข้อมูลล่าสุดแล้ว กรุณาตรวจสอบและบันทึกอีกครั้ง')
+        } catch (reloadError) {
+          setStatusManagementError(reloadError instanceof Error ? reloadError.message : 'โหลดข้อมูลสถานะล่าสุดไม่สำเร็จ')
+        }
+      } else {
+        setStatusManagementError(error instanceof Error ? error.message : 'บันทึกสถานะไม่สำเร็จ')
       }
-      return {
-        ...factory,
-        status: getManagedStatusLabel(statusManagement.factoryStatus),
-        statusManagement,
-      }
-    }))
-    setStatusManagingFactory(null)
-    setSnackbarMessage('บันทึกสถานะสำเร็จ')
-  }, [])
+    } finally {
+      setStatusManagementSubmitting(false)
+    }
+  }, [accessToken, factoryRows, loadFactories, loadFactoryStatusManagement, statusManagingFactory])
   const handleEditRequest = useCallback(async (request) => {
     setViewingRequest(null)
     setReviewingRequest(null)
@@ -2489,10 +2545,15 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
 
       {statusManagingFactory ? (
         <FactoryStatusManagementDialog
-          key={statusManagingFactory.id ?? statusManagingFactory.factoryId ?? 'factory-status-management'}
+          key={`${statusManagingFactory.factoryId ?? statusManagingFactory.id ?? 'factory-status-management'}-${statusManagingFactory.revision ?? 0}-${statusManagementDialogVersion}`}
           factory={statusManagingFactory}
           open
-          onClose={() => setStatusManagingFactory(null)}
+          submitting={statusManagementSubmitting}
+          error={statusManagementError}
+          onClose={() => {
+            setStatusManagingFactory(null)
+            setStatusManagementError('')
+          }}
           onSave={handleSaveFactoryStatus}
         />
       ) : null}

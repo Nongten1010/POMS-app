@@ -187,3 +187,68 @@ export function buildFactoryBasicInfoPayload(options = {}) {
     ...buildFactoryEditableProfilePatch(options),
   }
 }
+
+export function getStatusManagementSelection(scope = {}, { parameter = false } = {}) {
+  if (!parameter && scope.connectionStatus === 'DISCONNECTED') {
+    return 'DISCONNECTED'
+  }
+  return scope.visibility === 'HIDDEN' ? 'HIDDEN' : 'VISIBLE'
+}
+
+function buildScopeStatusPatch(selection) {
+  if (selection === 'VISIBLE') {
+    return { visibility: 'VISIBLE', connectionStatus: 'CONNECTED' }
+  }
+  if (selection === 'HIDDEN') {
+    return { visibility: 'HIDDEN' }
+  }
+  if (selection === 'DISCONNECTED') {
+    return { connectionStatus: 'DISCONNECTED' }
+  }
+  throw new Error('สถานะไม่ถูกต้อง')
+}
+
+export function buildStatusManagementPayload({ initial = {}, factoryStatus, measurementPoints = [] } = {}) {
+  const payload = {
+    expectedRevision: initial.revision,
+  }
+  if (factoryStatus !== getStatusManagementSelection(initial.factory)) {
+    payload.factory = buildScopeStatusPatch(factoryStatus)
+  }
+
+  const initialPoints = Array.isArray(initial.measurementPoints) ? initial.measurementPoints : []
+  const pointPatches = measurementPoints.flatMap((point) => {
+    const initialPoint = initialPoints.find((item) => item.connectedPointId === point.connectedPointId)
+    if (!initialPoint) {
+      return []
+    }
+
+    const pointPatch = { connectedPointId: point.connectedPointId }
+    if (point.status !== getStatusManagementSelection(initialPoint)) {
+      Object.assign(pointPatch, buildScopeStatusPatch(point.status))
+    }
+
+    const initialParameters = Array.isArray(initialPoint.parameters) ? initialPoint.parameters : []
+    const parameterPatches = point.parameters.flatMap((parameter) => {
+      const initialParameter = initialParameters.find((item) => item.parameter === parameter.parameter)
+      if (!initialParameter || parameter.status === getStatusManagementSelection(initialParameter, { parameter: true })) {
+        return []
+      }
+      return [{ parameter: parameter.parameter, visibility: parameter.status }]
+    })
+    if (parameterPatches.length > 0) {
+      pointPatch.parameters = parameterPatches
+    }
+
+    return Object.keys(pointPatch).length > 1 ? [pointPatch] : []
+  })
+  if (pointPatches.length > 0) {
+    payload.measurementPoints = pointPatches
+  }
+
+  if (!payload.factory && !payload.measurementPoints) {
+    throw new Error('กรุณาเปลี่ยนสถานะอย่างน้อย 1 รายการก่อนบันทึก')
+  }
+
+  return payload
+}

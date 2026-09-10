@@ -112,22 +112,31 @@ function getUserTypeFromAuth(auth) {
   return auth?.userType ?? responseUser?.userType ?? response?.userType ?? ''
 }
 
-function getRoleCodeFromAuth(auth) {
+function getRoleCodesFromAuth(auth) {
   const response = getAuthResponsePayload(auth)
   const responseUser = response?.user ?? response?.data?.user
   const roleCodes = responseUser?.roleCodes ?? response?.roleCodes ?? auth?.roleCodes
 
   if (Array.isArray(roleCodes) && roleCodes.length) {
-    return roleCodes[0] ?? ''
+    return roleCodes.filter(Boolean).map(String)
   }
 
   const roles = responseUser?.roles ?? response?.roles ?? auth?.roles
 
   if (typeof roles === 'string') {
-    return roles
+    return [roles]
   }
 
-  return responseUser?.primaryRole?.code ?? roles?.[0]?.code ?? roles?.[0] ?? ''
+  if (Array.isArray(roles) && roles.length) {
+    return roles.map((role) => role?.code ?? role).filter(Boolean).map(String)
+  }
+
+  const primaryRoleCode = responseUser?.primaryRole?.code
+  return primaryRoleCode ? [String(primaryRoleCode)] : []
+}
+
+function getRoleCodeFromAuth(auth) {
+  return getRoleCodesFromAuth(auth)[0] ?? ''
 }
 
 function canViewMenu(menuValue, permissions) {
@@ -200,6 +209,7 @@ function App() {
   const currentUser = getUserFromAuth(authResponse)
   const accessToken = getAccessTokenFromAuth(authResponse)
   const userType = getUserTypeFromAuth(authResponse)
+  const roleCodes = getRoleCodesFromAuth(authResponse)
   const roleCode = getRoleCodeFromAuth(authResponse)
   const activePermissions = useMemo(() => getPermissionsFromAuth(authResponse), [authResponse])
   const [selectedMenu, setSelectedMenu] = useState('home')
@@ -273,7 +283,7 @@ function App() {
         {visibleSelectedMenu === 'home' ? (
           <HomePage accessToken={accessToken} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'master-data' ? (
-          <MasterDataPage userType={userType} roleCode={roleCode} accessToken={accessToken} />
+          <MasterDataPage userType={userType} roleCode={roleCode} roleCodes={roleCodes} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'permissions' ? (
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (

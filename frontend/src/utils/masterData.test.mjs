@@ -5,10 +5,12 @@ import {
   buildFactoryBasicInfoPayload,
   buildFactoryEditableProfilePatch,
   buildFactoryDocumentPatch,
+  buildStatusManagementPayload,
   canCancelFactoryEditRequest,
   formatFactoryEditRequestDate,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
+  getStatusManagementSelection,
 } from './masterData.mjs'
 
 test('keeps cancelled and rejected factory edit requests distinct', () => {
@@ -135,4 +137,59 @@ test('builds an optional factory profile patch for a measurement-point request',
     projectName: 'โครงการใหม่',
     factoryLogo: null,
   })
+})
+
+test('maps status management state to the single dropdown selection', () => {
+  assert.equal(getStatusManagementSelection({ visibility: 'HIDDEN', connectionStatus: 'CONNECTED' }), 'HIDDEN')
+  assert.equal(getStatusManagementSelection({ visibility: 'HIDDEN', connectionStatus: 'DISCONNECTED' }), 'DISCONNECTED')
+  assert.equal(getStatusManagementSelection({ visibility: 'HIDDEN' }, { parameter: true }), 'HIDDEN')
+})
+
+test('builds a minimal status management patch with exact parameter keys', () => {
+  const initial = {
+    revision: 3,
+    factory: { visibility: 'VISIBLE', connectionStatus: 'CONNECTED' },
+    measurementPoints: [{
+      connectedPointId: 11,
+      visibility: 'VISIBLE',
+      connectionStatus: 'CONNECTED',
+      parameters: [
+        { parameter: 'CO', displayName: 'CO (ppm)', visibility: 'VISIBLE' },
+        { parameter: 'NOX', displayName: 'NOx (ppm)', visibility: 'VISIBLE' },
+      ],
+    }],
+  }
+
+  assert.deepEqual(buildStatusManagementPayload({
+    initial,
+    factoryStatus: 'HIDDEN',
+    measurementPoints: [{
+      connectedPointId: 11,
+      status: 'DISCONNECTED',
+      parameters: [
+        { parameter: 'CO', status: 'HIDDEN' },
+        { parameter: 'NOX', status: 'VISIBLE' },
+      ],
+    }],
+  }), {
+    expectedRevision: 3,
+    factory: { visibility: 'HIDDEN' },
+    measurementPoints: [{
+      connectedPointId: 11,
+      connectionStatus: 'DISCONNECTED',
+      parameters: [{ parameter: 'CO', visibility: 'HIDDEN' }],
+    }],
+  })
+})
+
+test('requires at least one status management change', () => {
+  const initial = {
+    revision: 0,
+    factory: { visibility: 'VISIBLE', connectionStatus: 'CONNECTED' },
+    measurementPoints: [],
+  }
+  assert.throws(() => buildStatusManagementPayload({
+    initial,
+    factoryStatus: 'VISIBLE',
+  }), /เปลี่ยนสถานะอย่างน้อย 1 รายการ/)
 })
