@@ -1858,8 +1858,10 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ข้อมูลประกอบฟอร์ม',
       summary: 'อ่านโรงงานเข้าข่ายสำหรับเจ้าหน้าที่',
       operationId: 'listOfficerEligibleFactories',
-      description: 'Permission: cems_wpms_requests:view',
+      description:
+        'Permission: cems_wpms_requests:view. status อ่านสถานะโรงงานเดียวกับข้อมูลพื้นฐาน: ยกเลิกการเชื่อมต่อ มีลำดับก่อน ซ่อน และ แสดง; หากยังไม่มีสถานะที่บันทึกไว้ใช้ แสดง. ไม่กรองแถวที่ซ่อนหรือยกเลิกการเชื่อมต่อออกจากรายการ',
       parameters: operatorFactoryParameters,
+      successSchema: schemaRef('OperatorFactoryTableResponse'),
     }),
   },
   '/cems-wpms-requests/operator-factory-dashboard': {

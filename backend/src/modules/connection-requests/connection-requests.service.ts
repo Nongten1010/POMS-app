@@ -319,12 +319,14 @@ export const connectionRequestsService = {
     const accessibleFactories = result.data;
     const factoryIdByLookupKey = buildEligibleFactoryLookupKeyMap(accessibleFactories);
     const connectedPoints =
-      await connectionRequestsRepository.listConnectedMeasurementPointsForFactories([
-        ...factoryIdByLookupKey.keys(),
-      ]);
-    const measurementPointsByFactory = mapConnectedMeasurementPointsToEligibleFactories(
+      await connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
+        [...factoryIdByLookupKey.keys()],
+        accessibleFactories.map((factory) => factory.id),
+      );
+    const measurementPointsByFactory = mapConnectedMeasurementPointsToDashboardFactories(
       connectedPoints,
       factoryIdByLookupKey,
+      new Map(accessibleFactories.map((factory) => [factory.id, factory.factoryId])),
     );
     const eligibleFactories = filterEligibleFactoryRowsByQuery(
       accessibleFactories,
@@ -344,6 +346,7 @@ export const connectionRequestsService = {
 
     const data = eligibleFactories.map<OperatorFactoryTableRowDTO>((factory) => ({
       ...toOfficerEligibleFactoryTableRow(factory),
+      status: measurementPointsByFactory.get(factory.factoryId)?.[0]?.factoryStatus ?? 'แสดง',
       officerNotificationEmails: officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
       monitoringPointCount: filterMeasurementPointsBySystem(
         measurementPointsByFactory.get(factory.factoryId) ?? [],
@@ -2781,21 +2784,6 @@ function buildEligibleFactoryLookupKeyMap(
   return keys;
 }
 
-function mapConnectedMeasurementPointsToEligibleFactories(
-  connectedPoints: CurrentFactoryMeasurementPointDTO[],
-  factoryIdByLookupKey: Map<string, string>,
-): Map<string, CurrentFactoryMeasurementPointDTO[]> {
-  const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
-
-  connectedPoints.forEach((point) => {
-    const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
-    const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
-    measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
-  });
-
-  return measurementPointsByFactory;
-}
-
 function mapConnectedMeasurementPointsToDashboardFactories(
   connectedPoints: CurrentFactoryMeasurementPointDTO[],
   factoryIdByLookupKey: Map<string, string>,
@@ -3036,7 +3024,10 @@ function toNonEligibleOperatorFactoryTableRow(
 
 function toOfficerEligibleFactoryTableRow(
   factory: SelectedEligibleFactoryDTO,
-): Omit<OperatorFactoryTableRowDTO, 'officerNotificationEmails' | 'monitoringPointCount'> {
+): Omit<
+  OperatorFactoryTableRowDTO,
+  'officerNotificationEmails' | 'monitoringPointCount' | 'status'
+> {
   return {
     id: factory.id,
     factoryId: factory.factoryId,
@@ -3059,7 +3050,6 @@ function toOfficerEligibleFactoryTableRow(
     requestStatusCode: null,
     eligibilityRequest: null,
     canRequestEligibility: false,
-    status: 'แสดง',
   };
 }
 

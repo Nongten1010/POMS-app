@@ -385,6 +385,22 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 | `data[].factoryName` | string         | active current/live POMS point ล่าสุด; fallback เป็น factory master แล้วจึง request snapshot |
 | `data[].province`    | string \| null | factory snapshot ของคำขอที่มาจาก active eligible factory                                     |
 
+### Officer eligible factory list status
+
+`GET /api/v1/cems-wpms-requests/eligible-factories` คืน `data[].status` จากสถานะโรงงานที่บันทึกผ่าน [จัดการสถานะ](../master-data/status-management.md) ให้ตรงกับตารางข้อมูลพื้นฐานของโรงงานเดียวกัน:
+
+| Field | Type | ความหมาย |
+| --- | --- | --- |
+| `data[].status` | `"แสดง"` \| `"ซ่อน"` \| `"ยกเลิกการเชื่อมต่อ"` | สถานะโรงงานปัจจุบัน; ยกเลิกการเชื่อมต่อมีลำดับก่อนซ่อน และแสดง |
+
+ตัวอย่างส่วนของแถวเมื่อโรงงานถูกซ่อน:
+
+```json
+{ "id": 7, "factoryId": "10700000525488", "status": "ซ่อน" }
+```
+
+หากยังไม่มีสถานะที่บันทึกไว้ ใช้ `แสดง`. สถานะโรงงานใช้การคำนวณเดียวกับข้อมูลพื้นฐาน รวมการสรุปสถานะจากจุดตรวจวัดและพารามิเตอร์ปัจจุบันตามกติกาจัดการสถานะ. แถวที่ซ่อนหรือยกเลิกการเชื่อมต่อยังอยู่ในรายการตามสิทธิ์เดิม และการนับจุดตรวจวัดไม่เปลี่ยนแปลง. Backend จับคู่สถานะด้วย `eligible_factory_id` ของโรงงานที่ผ่านการตรวจสิทธิ์แล้ว ไม่ใช้ชื่อหรือเลขทะเบียนเก่า โดยใช้สถานะโรงงานที่คำนวณพร้อมข้อมูลจุดตรวจวัดปัจจุบัน จึงไม่เพิ่ม query แยกสำหรับแต่ละโรงงาน.
+
 ### Operator factory list source
 
 `GET /api/v1/cems-wpms-requests/operator-factories` คืนทุกโรงงานที่ user เข้าถึงได้จากความสัมพันธ์ใน `factories` และสิทธิ์ `factories:view` แม้โรงงานนั้นจะยังไม่มี active row ใน `eligible_factories`. Endpoint นี้ใช้เป็น owner/request list ไม่ใช่ connected-only dashboard list.
