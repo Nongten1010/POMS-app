@@ -189,7 +189,12 @@ export const pomsFactoriesService = {
       ...request,
       contactPersons: (formContacts?.contactPersons ?? []).map((contact) => ({ ...contact })),
       notificationEmails: [...(formContacts?.notificationEmails ?? [])],
-      officerNotificationEmails: [...(formContacts?.officerNotificationEmails ?? [])],
+      officerNotificationEmails: measurementPointOfficerEmails(
+        (request.proposedMeasurementPoints ?? []).filter(
+          (point) => systemType === undefined || point.systemType === systemType,
+        ),
+        formContacts?.officerNotificationEmails,
+      ),
       informationProviderName: formContacts?.informationProviderName ?? null,
       informationProviderPosition: formContacts?.informationProviderPosition ?? null,
       currentMeasurementPoints:
@@ -459,7 +464,10 @@ function toPomsConnectionRequestForm(
     contactEmail: formContacts?.contactEmail ?? baseForm.contactEmail,
     contactPersons: (formContacts?.contactPersons ?? []).map((contact) => ({ ...contact })),
     notificationEmails: [...(formContacts?.notificationEmails ?? [])],
-    officerNotificationEmails: [...(formContacts?.officerNotificationEmails ?? [])],
+    officerNotificationEmails: measurementPointOfficerEmails(
+      points.filter((point) => point.systemType === systemType),
+      formContacts?.officerNotificationEmails,
+    ),
     informationProviderName: formContacts?.informationProviderName ?? null,
     informationProviderPosition: formContacts?.informationProviderPosition ?? null,
     measurementPoints: mergeFactoryProfileDocuments(
@@ -712,6 +720,11 @@ function buildProposedMeasurementPoints(
     const requested = requestedPointParameters(patch.details);
     return {
       ...point,
+      ...(patch.officerNotificationEmails === undefined
+        ? {}
+        : {
+            officerNotificationEmails: [...patch.officerNotificationEmails],
+          }),
       parameters: requested ?? point.parameters,
       pointName: patch.pointName === undefined ? point.pointName : patch.pointName,
       monitoringPointStatus: Object.prototype.hasOwnProperty.call(patch, 'monitoringPointStatus')
@@ -746,6 +759,7 @@ function ensureMeasurementRequestChanged(
 function editableMeasurementPoint(point: PomsMeasurementPointDTO) {
   return {
     connectedPointId: point.connectedPointId,
+    officerNotificationEmails: point.officerNotificationEmails,
     parameters: point.parameters,
     pointName: point.pointName,
     monitoringPointStatus: point.monitoringPointStatus,
@@ -758,4 +772,13 @@ function editableMeasurementPoint(point: PomsMeasurementPointDTO) {
 function ensureAdminReviewActor(actor: PomsFactoryReviewActorContext): void {
   if (actor.roles.includes('admin')) return;
   throw new ForbiddenError('POMS factory edit request review is limited to admin users');
+}
+
+// Historical snapshots lack this field; explicit [] must not fall back to source recipients.
+function measurementPointOfficerEmails(
+  points: PomsMeasurementPointDTO[],
+  fallback: string[] = [],
+): string[] {
+  if (!points.some((point) => point.officerNotificationEmails !== undefined)) return [...fallback];
+  return [...new Set(points.flatMap((point) => point.officerNotificationEmails ?? fallback))];
 }

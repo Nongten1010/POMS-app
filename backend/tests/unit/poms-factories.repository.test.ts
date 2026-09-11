@@ -13,19 +13,26 @@ import {
 } from '../../src/modules/poms-factories/poms-factories.repository';
 
 describe('pomsFactoriesRepository access and approved profile patches', () => {
-
   it.each([
     ['VISIBLE', 'CONNECTED', 'แสดง'],
     ['HIDDEN', 'CONNECTED', 'ซ่อน'],
     ['VISIBLE', 'DISCONNECTED', 'ยกเลิกการเชื่อมต่อ'],
     ['HIDDEN', 'DISCONNECTED', 'ยกเลิกการเชื่อมต่อ'],
-  ])('reads saved factory status %s/%s without deleting the list row', (visibility, connectionStatus, label) => {
-    const rows = summarizeConnectedFactoryRowsForTests([connectedFactoryRow({
-      management_state_json: JSON.stringify({ factory: { visibility, connectionStatus }, measurementPoints: {} }),
-    })]);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.status).toBe(label);
-  });
+  ])(
+    'reads saved factory status %s/%s without deleting the list row',
+    (visibility, connectionStatus, label) => {
+      const rows = summarizeConnectedFactoryRowsForTests([
+        connectedFactoryRow({
+          management_state_json: JSON.stringify({
+            factory: { visibility, connectionStatus },
+            measurementPoints: {},
+          }),
+        }),
+      ]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.status).toBe(label);
+    },
+  );
   it('reads live factories from active connected POMS rows', () => {
     const sql = buildConnectedFactoryRowsQueryForTests({
       actorUserId: 77,
@@ -41,7 +48,9 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     expect(sql).toContain('[ef].[factory_registration_no_old]');
     expect(sql).toContain('[ef].[business_activity]');
     expect(sql).toContain('[ef].[factory_type_sequence]');
-    expect(sql).not.toContain('cems_wpms_connection_requests');
+    expect(sql).toContain('left join [cems_wpms_connection_requests] as [email_source]');
+    expect(sql).toContain('[cp_notifications].[officer_notification_emails_json]');
+    expect(sql).not.toContain('[email_source].[factory_name]');
     expect(sql).not.toContain('user_juristics');
   });
 
@@ -476,3 +485,31 @@ function connectedFactoryRow(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe('current POMS officer recipients', () => {
+  it.each([
+    [null, ['source@example.com']],
+    ['[]', []],
+    ['["new@example.com"]', ['new@example.com']],
+  ])('reads override %j without restoring a cleared source list', (override, expected) => {
+    const rows = [
+      connectedFactoryRow({
+        officer_notification_emails_json: override,
+        source_officer_notification_emails_json: '["source@example.com"]',
+      }),
+    ];
+    expect(
+      toPomsFactoryDetailForTests(rows, 0).measurementPoints[0].officerNotificationEmails,
+    ).toEqual(expected);
+    expect(summarizeConnectedFactoryRowsForTests(rows)[0].officerNotificationEmails).toEqual(
+      expected,
+    );
+  });
+  it('does not overwrite recipients when approving a historical snapshot without the field', () => {
+    const point = toPomsFactoryDetailForTests([connectedFactoryRow()], 0).measurementPoints[0];
+    delete point.officerNotificationEmails;
+    expect(buildApprovedMeasurementPointWritePatchForTests(point)).not.toHaveProperty(
+      'officer_notification_emails_json',
+    );
+  });
+});

@@ -86,6 +86,7 @@ export interface PomsFactorySummaryDTO extends PomsFactoryProfileDTO {
 }
 
 export interface PomsMeasurementPointDTO extends Partial<PomsManagedStatusDTO> {
+  officerNotificationEmails?: string[];
   connectedPointId: number;
   sourceMeasurementPointId: number;
   eligibleFactoryId: number;
@@ -133,6 +134,7 @@ export interface CreatePomsFactoryEditRequestInput extends PomsFactoryProfilePat
 }
 
 export interface PomsMeasurementPointPatchInput {
+  officerNotificationEmails?: string[];
   connectedPointId: number;
   pointName?: string;
   monitoringPointStatus?: MonitoringPointStatus | null;

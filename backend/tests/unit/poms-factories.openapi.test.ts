@@ -189,7 +189,9 @@ describe('POMS factory master-data OpenAPI contract', () => {
     );
     expect(pomsList.description).toEqual(expect.stringContaining('current/live connected POMS'));
     expect(pomsList.description).toEqual(expect.stringContaining('requestStatusCode="CONNECTED"'));
-    expect(pomsList.description).toEqual(expect.stringContaining('officerNotificationEmails=[]'));
+    expect(pomsList.description).toEqual(
+      expect.stringContaining('officerNotificationEmails รวมอีเมล current'),
+    );
     expect(pomsList.description).toEqual(expect.stringContaining('eligibilityRequest=null'));
     expect(operatorList.description).not.toEqual(pomsList.description);
   });
@@ -785,4 +787,17 @@ it('documents managed display fields while preserving legacy monitoring status',
   });
   expect(fields.effectiveVisibility).toMatchObject({ enum: ['VISIBLE', 'HIDDEN'] });
   expect(fields.monitoringPointStatus).toBeDefined();
+});
+
+describe('POMS officer email contract', () => {
+  it('documents point-level email replacement for writes and reads', () => {
+    for (const name of ['PomsFactoryMeasurementPointPatchRequest', 'PomsMeasurementPoint']) {
+      const properties = asObject(asObject(schemas()[name], name).properties, 'properties');
+      expect(properties.officerNotificationEmails).toMatchObject({
+        type: 'array',
+        maxItems: 20,
+        items: { type: 'string', format: 'email', maxLength: 254 },
+      });
+    }
+  });
 });

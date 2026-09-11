@@ -137,6 +137,11 @@ const editableFactoryProfileSchema = z
 const editableMeasurementPointPatchSchema: z.ZodType<PomsMeasurementPointPatchInput> = z
   .object({
     connectedPointId: z.number().int().positive(),
+    officerNotificationEmails: z
+      .array(z.string().trim().max(254).email().toLowerCase())
+      .max(20)
+      .transform((emails) => [...new Set(emails)])
+      .optional(),
     pointName: trimmedString(255).optional(),
     monitoringPointStatus: z.enum(MONITORING_POINT_STATUSES).nullable().optional(),
     details: measurementPointDetailsSchema.nullable().optional() as z.ZodType<
@@ -165,6 +170,7 @@ const editableMeasurementPointPatchSchema: z.ZodType<PomsMeasurementPointPatchIn
       }
     }
     const editableKeys = [
+      'officerNotificationEmails',
       'pointName',
       'monitoringPointStatus',
       'details',

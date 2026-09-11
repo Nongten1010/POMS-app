@@ -79,6 +79,8 @@ interface ConnectedFactoryRow {
   factory_profile_revision?: number | string;
   factory_profile_updated_at?: Date | string;
   management_state_json?: string | null;
+  officer_notification_emails_json?: string | null;
+  source_officer_notification_emails_json?: string | null;
   connected_point_id: number | string;
   source_measurement_point_id: number | string;
   eligible_factory_id: number | string;
@@ -808,6 +810,11 @@ export function buildApprovedMeasurementPointWritePatch(
   updatedAt?: Knex.Raw | Date | string,
 ) {
   return {
+    ...(point.officerNotificationEmails === undefined
+      ? {}
+      : {
+          officer_notification_emails_json: JSON.stringify(point.officerNotificationEmails),
+        }),
     point_name: point.pointName,
     monitoring_point_status: point.monitoringPointStatus ?? null,
     details_json: point.details ? JSON.stringify(point.details) : null,
@@ -961,6 +968,7 @@ function buildFactoryFormContactsQuery(
 
 function editableMeasurementPointState(point: PomsMeasurementPointDTO) {
   return {
+    officerNotificationEmails: point.officerNotificationEmails,
     pointName: point.pointName,
     monitoringPointStatus: point.monitoringPointStatus,
     details: point.details,
@@ -977,6 +985,15 @@ function buildConnectedFactoryRowsQuery(
   const builder = executor<ConnectedFactoryRow>(
     factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
   )
+    // Read point metadata from its live row in both legacy and canonical modes.
+    .innerJoin(
+      'cems_wpms_connected_measurement_points as cp_notifications',
+      'cp_notifications.id',
+      'cp.id',
+    )
+    .leftJoin('cems_wpms_connection_requests as email_source', function joinEmailSource() {
+      this.on('email_source.id', '=', 'cp.source_request_id').andOnNull('email_source.deleted_at');
+    })
     .innerJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
     })
@@ -1016,6 +1033,8 @@ function buildConnectedFactoryRowsQuery(
   }
   return builder
     .select(
+      'cp_notifications.officer_notification_emails_json',
+      'email_source.officer_notification_emails_json as source_officer_notification_emails_json',
       'fsm.state_json as management_state_json',
       'cp.id as connected_point_id',
       'cp.source_measurement_point_id',
@@ -1205,11 +1224,16 @@ function buildLockedCurrentFactoryProfileQuery(
     .innerJoin('eligible_factories as ef', function joinEligibleFactory() {
       this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
     })
+    .leftJoin('cems_wpms_connection_requests as email_source', function joinEmailSource() {
+      this.on('email_source.id', '=', 'cp.source_request_id').andOnNull('email_source.deleted_at');
+    })
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
     .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
     .where('cp.eligible_factory_id', eligibleFactoryId)
     .whereNull('cp.deleted_at')
     .select(
+      'cp.officer_notification_emails_json',
+      'email_source.officer_notification_emails_json as source_officer_notification_emails_json',
       'cp.id as connected_point_id',
       'cp.source_measurement_point_id',
       'cp.eligible_factory_id',
@@ -1371,7 +1395,7 @@ function toOperatorFactoryTableRow(rows: ConnectedFactoryRow[]): OperatorFactory
     latitude: toNullableString(first.factory_latitude),
     longitude: toNullableString(first.factory_longitude),
     province: first.province_name,
-    officerNotificationEmails: [],
+    officerNotificationEmails: [...new Set(rows.flatMap(currentPointOfficerEmails))],
     isEligible: true,
     eligibilityStatus: 'เข้าข่าย',
     monitoringPointCount: rows.length,
@@ -1420,6 +1444,7 @@ function toMeasurementPointDTO(
   const measurementInstruments = parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json);
   return {
     ...status,
+    officerNotificationEmails: currentPointOfficerEmails(row),
     connectedPointId: Number(row.connected_point_id),
     sourceMeasurementPointId: Number(row.source_measurement_point_id),
     eligibleFactoryId: Number(row.eligible_factory_id),
@@ -1761,11 +1786,19 @@ function ensureSameMeasurementPointsVersion(
     );
   }
 
+  const emailSnapshotIds = new Set(
+    expected
+      .filter((point) => point.officerNotificationEmails !== undefined)
+      .map((point) => point.connectedPointId),
+  );
   const normalize = (points: PomsMeasurementPointDTO[]) =>
     [...points]
       .sort((left, right) => left.connectedPointId - right.connectedPointId)
       .map((point) => ({
         connectedPointId: point.connectedPointId,
+        ...(emailSnapshotIds.has(point.connectedPointId)
+          ? { officerNotificationEmails: point.officerNotificationEmails }
+          : {}),
         pointName: point.pointName,
         pointCode: point.pointCode,
         pointType: point.pointType,
@@ -1862,4 +1895,16 @@ function toIsoStringRequired(value: Date | string): string {
 
 function toNullableIsoString(value: Date | string | null): string | null {
   return value == null ? null : toIsoStringRequired(value);
+}
+
+function currentPointOfficerEmails(row: ConnectedFactoryRow): string[] {
+  return [
+    ...new Set(
+      parseJsonArray<string>(
+        row.officer_notification_emails_json ?? row.source_officer_notification_emails_json ?? null,
+      )
+        .filter((email) => typeof email === 'string' && email.trim().length > 0)
+        .map((email) => email.trim().toLowerCase()),
+    ),
+  ];
 }

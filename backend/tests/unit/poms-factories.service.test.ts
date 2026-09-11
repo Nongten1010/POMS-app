@@ -47,6 +47,150 @@ describe('pomsFactoriesService edit-request workflow', () => {
     mockedRepository.reviewEditRequest.mockResolvedValue(editRequest('APPROVED'));
   });
 
+  it('proposes an email-only edit for the selected point while keeping the current snapshot', async () => {
+    const detail = factoryDetail();
+    detail.measurementPoints[0].officerNotificationEmails = ['old@example.com'];
+    const second = {
+      ...detail.measurementPoints[0],
+      connectedPointId: 99,
+      officerNotificationEmails: ['other@example.com'],
+    };
+    detail.measurementPoints.push(second);
+    mockedRepository.findFactoryDetail.mockResolvedValue(detail);
+    await pomsFactoriesService.createEditRequest(
+      'factory-001',
+      {
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [
+          {
+            connectedPointId: detail.measurementPoints[0].connectedPointId,
+            officerNotificationEmails: ['new@example.com'],
+          },
+        ],
+      },
+      42,
+      ownFactoryScope,
+      null,
+    );
+    const [current, proposed] = mockedRepository.createEditRequest.mock.calls[0];
+    expect(current.measurementPoints[0].officerNotificationEmails).toEqual(['old@example.com']);
+    expect(proposed.proposedMeasurementPoints?.[0].officerNotificationEmails).toEqual([
+      'new@example.com',
+    ]);
+    expect(proposed.proposedMeasurementPoints?.[1]).toEqual(second);
+  });
+
+  it.each([[[]], [['new@example.com']]])(
+    'prefills current email values %j ahead of source contacts',
+    async (...args) => {
+      const emails = args[0] as string[];
+      const detail = factoryDetail();
+      detail.measurementPoints[0].officerNotificationEmails = emails;
+      mockedRepository.findFactoryDetail.mockResolvedValue(detail);
+      mockedRepository.findFactoryFormContacts.mockResolvedValue({
+        contactName: '',
+        contactPhone: '',
+        contactEmail: null,
+        contactPersons: [],
+        notificationEmails: [],
+        officerNotificationEmails: ['old@example.com'],
+        informationProviderName: null,
+        informationProviderPosition: null,
+      });
+      const result = await pomsFactoriesService.getFactoryForm(
+        'factory-001',
+        42,
+        ownFactoryScope,
+        { formType: 'MEASUREMENT_POINTS', systemType: 'CEMS' },
+        null,
+      );
+      expect(result.officerNotificationEmails).toEqual(emails);
+    },
+  );
+
+  it('returns proposed recipients in edit detail and form, including explicit clears', async () => {
+    const detail = factoryDetail();
+    const points = detail.measurementPoints.map((point) => ({
+      ...point,
+      officerNotificationEmails: ['old@example.com'],
+    }));
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: points,
+        proposedMeasurementPoints: points.map((point) => ({
+          ...point,
+          officerNotificationEmails: [],
+        })),
+      }),
+    );
+    const result = await pomsFactoriesService.getEditRequest(11, 42, ownFactoryScope, null);
+    expect(result.officerNotificationEmails).toEqual([]);
+    expect(result.currentMeasurementPoints?.[0].officerNotificationEmails).toEqual([
+      'old@example.com',
+    ]);
+    expect(result.proposedMeasurementPoints?.[0].officerNotificationEmails).toEqual([]);
+    const form = await pomsFactoriesService.getEditRequestForm(
+      11,
+      42,
+      ownFactoryScope,
+      { systemType: 'CEMS' },
+      null,
+    );
+    expect(form.officerNotificationEmails).toEqual([]);
+  });
+
+  it('resubmits revised recipients and preserves recipients when the field is omitted', async () => {
+    const detail = factoryDetail();
+    detail.measurementPoints[0].officerNotificationEmails = ['current@example.com'];
+    mockedRepository.findFactoryDetail.mockResolvedValue(detail);
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: detail.measurementPoints,
+        proposedMeasurementPoints: detail.measurementPoints,
+      }),
+    );
+    await pomsFactoriesService.resubmitEditRequest(
+      11,
+      {
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [
+          {
+            connectedPointId: detail.measurementPoints[0].connectedPointId,
+            officerNotificationEmails: ['revised@example.com'],
+          },
+        ],
+      },
+      42,
+      ownFactoryScope,
+      null,
+    );
+    expect(
+      mockedRepository.resubmitEditRequest.mock.calls[0][1].proposedMeasurementPoints?.[0]
+        .officerNotificationEmails,
+    ).toEqual(['revised@example.com']);
+    await pomsFactoriesService.createEditRequest(
+      'factory-001',
+      {
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [
+          {
+            connectedPointId: detail.measurementPoints[0].connectedPointId,
+            pointName: 'Changed name',
+          },
+        ],
+      },
+      42,
+      ownFactoryScope,
+      null,
+    );
+    expect(
+      mockedRepository.createEditRequest.mock.calls[0][1].proposedMeasurementPoints?.[0]
+        .officerNotificationEmails,
+    ).toEqual(['current@example.com']);
+  });
+
   it('returns the exact operator-factories table row contract for live POMS factories', async () => {
     const row = factoryOperatorTableRow();
     mockedRepository.listFactories.mockResolvedValue([row]);

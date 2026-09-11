@@ -20,6 +20,55 @@ describe('approved measurement-point parameter replacement', () => {
     jest.clearAllMocks();
   });
 
+  it.each([[[]], [['new@example.com']]])(
+    'commits recipient replacement %j with approval and reads it back',
+    async (emails) => {
+      const harness = approvalHarness({ emails });
+      transaction.mockImplementationOnce(harness.runTransaction);
+      await pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77);
+      const writes = harness.committed.filter(
+        (write) => write.table === 'cems_wpms_connected_measurement_points',
+      );
+      expect(writes).toHaveLength(1);
+      expect(writes[0].values.officer_notification_emails_json).toBe(JSON.stringify(emails));
+      expect(writes[0].values).not.toHaveProperty('parameters_json');
+      expect(
+        harness.committed.some((write) => write.table === 'cems_wpms_connection_requests'),
+      ).toBe(false);
+      const live = toPomsFactoryDetailForTests(
+        [
+          connectedFactoryRow({
+            ...writes[0].values,
+            source_officer_notification_emails_json: '["old@example.com"]',
+          }),
+        ],
+        0,
+      );
+      expect(live.measurementPoints[0].officerNotificationEmails).toEqual(emails);
+    },
+  );
+
+  it('rolls back approval when saving recipients fails', async () => {
+    const harness = approvalHarness({ emails: ['new@example.com'], failPointWrite: true });
+    transaction.mockImplementationOnce(harness.runTransaction);
+    await expect(
+      pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77),
+    ).rejects.toThrow('point write failed');
+    expect(harness.committed).toEqual([]);
+    expect(harness.attempted.some((write) => write.table === 'poms_factory_edit_requests')).toBe(
+      false,
+    );
+  });
+
+  it('rejects approval when recipients changed after the snapshot', async () => {
+    const harness = approvalHarness({ emails: ['new@example.com'], staleEmails: true });
+    transaction.mockImplementationOnce(harness.runTransaction);
+    await expect(
+      pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77),
+    ).rejects.toThrow('measurement points changed');
+    expect(harness.attempted).toEqual([]);
+  });
+
   it.each([false, true])(
     'updates live parameters from BOD COD Watt to BOD Watt Flow (derived snapshot: %s)',
     async (derivedParameters) => {
@@ -83,9 +132,18 @@ describe('approved measurement-point parameter replacement', () => {
 });
 
 function approvalHarness(
-  options: { derivedParameters?: boolean; failChannelWrite?: boolean } = {},
+  options: {
+    derivedParameters?: boolean;
+    failChannelWrite?: boolean;
+    emails?: string[];
+    failPointWrite?: boolean;
+    staleEmails?: boolean;
+  } = {},
 ) {
   const currentRow = connectedFactoryRow({
+    ...(options.emails === undefined
+      ? {}
+      : { officer_notification_emails_json: '["old@example.com"]' }),
     system_type: 'WPMS',
     point_code: 'P0260',
     parameters_json: JSON.stringify(['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)']),
@@ -95,8 +153,12 @@ function approvalHarness(
   const proposedPoints = current.measurementPoints.map((point) => ({
     ...point,
     ...(options.derivedParameters ? { parameters } : {}),
-    details: { requestedParameters: parameters },
+    ...(options.emails === undefined
+      ? { details: { requestedParameters: parameters } }
+      : { officerNotificationEmails: options.emails }),
   }));
+  if (options.staleEmails)
+    Object.assign(currentRow, { officer_notification_emails_json: '["concurrent@example.com"]' });
   const row = {
     id: 11,
     request_no: 'point-00001/2569',
@@ -145,6 +207,8 @@ function approvalHarness(
       chain.first = async () => row;
       chain.update = async (values: Record<string, unknown>) => {
         attempted.push({ table, values });
+        if (table === 'cems_wpms_connected_measurement_points' && options.failPointWrite)
+          throw new Error('point write failed');
         if (table === 'device_measurement_channels' && options.failChannelWrite)
           throw new Error('channel write failed');
         if (table === 'poms_factory_edit_requests') Object.assign(row, values);

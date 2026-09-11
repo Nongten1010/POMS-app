@@ -245,7 +245,6 @@ describe('POMS factory edit request validators', () => {
   });
 });
 
-
 describe.each([
   ['create', createPomsFactoryEditRequestSchema],
   ['resubmit', resubmitPomsFactoryEditRequestSchema],
@@ -298,5 +297,35 @@ describe.each([
     { status: 'APPROVED' },
   ])('rejects invalid or read-only profile data %j', (patch) => {
     expect(schema.safeParse({ ...points, ...patch }).success).toBe(false);
+  });
+});
+
+describe.each([
+  ['create', createPomsFactoryEditRequestSchema],
+  ['resubmit', resubmitPomsFactoryEditRequestSchema],
+])('POMS officer emails %s', (_operation, schema) => {
+  const payload = (emails: unknown) => ({
+    formType: 'MEASUREMENT_POINTS',
+    measurementPoints: [{ connectedPointId: 3, officerNotificationEmails: emails }],
+  });
+  it('accepts an email-only patch and normalizes duplicate addresses', () => {
+    expect(schema.parse(payload([' Officer@Example.com ', 'officer@example.com']))).toMatchObject({
+      measurementPoints: [
+        { connectedPointId: 3, officerNotificationEmails: ['officer@example.com'] },
+      ],
+    });
+  });
+  it('accepts an explicit empty recipient list', () => {
+    expect(schema.safeParse(payload([])).success).toBe(true);
+  });
+  it.each([
+    null,
+    'officer@example.com',
+    ['invalid'],
+    [''],
+    ['a@example.com\r\nBcc:other@example.com'],
+    Array.from({ length: 21 }, (_, i) => `officer${i}@example.com`),
+  ])('rejects invalid recipients %j', (emails) => {
+    expect(schema.safeParse(payload(emails)).success).toBe(false);
   });
 });
