@@ -16,6 +16,7 @@ describe('integrated POMS measurement-point edit OpenAPI contract', () => {
         'details',
         'documentsAndImages',
         'measurementInstruments',
+        'officerNotificationEmails',
       ].sort(),
     );
     expect(patch.additionalProperties).toBe(false);
