@@ -6894,6 +6894,8 @@ export function RequestFormBottomSheet({
   documentImagesUploadUrl = '',
   generalFactoryFieldsReadOnly = false,
   factoryProfilePatchMode = false,
+  monitoringPointTypeReadOnly = false,
+  officerNotificationEmailsEditable = false,
   embedded = false,
   readOnlyPreview = false,
   highlightedFieldNames = [],
@@ -6921,9 +6923,13 @@ export function RequestFormBottomSheet({
   const initialNotificationEmails = useInitialRequestValues && Array.isArray(initialRequest?.notificationEmails) && initialRequest.notificationEmails.length
     ? initialRequest.notificationEmails.map((email, index) => ({ id: index + 1, value: email }))
     : [{ id: 1, value: '' }]
-  const initialOfficerNotificationEmails = normalizeEmailList(
+  const pointOfficerNotificationEmails = normalizeEmailList(initialPoint?.officerNotificationEmails)
+  const requestOfficerNotificationEmails = normalizeEmailList(
     useInitialRequestValues ? initialRequest?.officerNotificationEmails : formFactory?.officerNotificationEmails,
   )
+  const initialOfficerNotificationEmails = officerNotificationEmailsEditable && pointOfficerNotificationEmails.length
+    ? pointOfficerNotificationEmails
+    : requestOfficerNotificationEmails
   const initialMonitoringPointType = useInitialRequestValues && initialRequest ? getRequestSystemType(initialRequest) : ''
   const initialMonitoringPoints = [{ id: 1, type: initialMonitoringPointType }]
   const initialConnectedParameters = normalizeArrayValue(initialPoint.details?.connectedParameters ?? [])
@@ -6954,7 +6960,9 @@ export function RequestFormBottomSheet({
   const [eiaAssessment, setEiaAssessment] = useState(
     factoryProfilePatchMode ? (formFactory?.eia ?? 'ไม่มี') : getEiaAssessmentValue(formFactory),
   )
-  const officerEmails = initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : ['']
+  const [officerEmails, setOfficerEmails] = useState(
+    initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : [''],
+  )
   const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด' || isAddParameterMode
   const showOfficerPostSubmitStatusSection = isOfficerAddMeasurementPointMode
   const selectedMonitoringPoint = monitoringPoints.find((point) => point.id === selectedMonitoringPointId)
@@ -7547,19 +7555,38 @@ export function RequestFormBottomSheet({
               <Grid size={{ xs: 12, md: 6 }}>
                 <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
                 <Stack spacing={2}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่
-                  </Typography>
+                  <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                      อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่
+                    </Typography>
+                    {officerNotificationEmailsEditable ? (
+                      <Button
+                        size="small"
+                        startIcon={<AddIcon />}
+                        disabled={officerEmails.length >= 20}
+                        onClick={() => setOfficerEmails((current) => [...current, ''])}
+                      >
+                        เพิ่มข้อมูล
+                      </Button>
+                    ) : null}
+                  </Stack>
                   {officerEmails.map((email, index) => (
                     <TextField
-                      key={`${email || 'empty-officer-email'}-${index}`}
+                      key={`officer-email-${index}`}
                       name="officerNotificationEmail"
                       label="อีเมล"
+                      type="email"
                       size="small"
-                      defaultValue={email}
+                      value={email}
+                      onChange={(event) => {
+                        const nextValue = event.target.value
+                        setOfficerEmails((current) => current.map((item, itemIndex) => (
+                          itemIndex === index ? nextValue : item
+                        )))
+                      }}
                       slotProps={{
                         input: {
-                          readOnly: true,
+                          readOnly: !officerNotificationEmailsEditable,
                         },
                       }}
                       fullWidth
@@ -7595,7 +7622,7 @@ export function RequestFormBottomSheet({
                       <FormControlLabel
                         key={type}
                         value={type}
-                        control={<Radio size="small" />}
+                        control={<Radio size="small" disabled={monitoringPointTypeReadOnly} />}
                         label={type}
                       />
                     ))}

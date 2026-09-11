@@ -1977,6 +1977,15 @@ function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}
   })
   const documentsAndImages = sanitizeDocuments(point.documentsAndImages ?? initialPoint.documentsAndImages)
     .filter((document) => hasStoredDocument(document) && !factoryGeneralDocumentTitles.has(document.title))
+  const officerNotificationEmails = Array.isArray(requestBody?.officerNotificationEmails)
+    ? requestBody.officerNotificationEmails.map((email) => String(email).trim()).filter(Boolean)
+    : []
+
+  officerNotificationEmails.forEach((email, index) => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error(`อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่รายการที่ ${index + 1} ไม่ถูกต้อง`)
+    }
+  })
 
   return {
     formType: 'MEASUREMENT_POINTS',
@@ -1985,6 +1994,7 @@ function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}
       {
         connectedPointId,
         pointName,
+        officerNotificationEmails,
         monitoringPointStatus: point.monitoringPointStatus ?? initialPoint.monitoringPointStatus ?? null,
         details: point.details ?? null,
         documentsAndImages,
@@ -2578,6 +2588,8 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         documentImagesUploadUrl={`${pomsFactoriesApiBaseUrl}/document-images`}
         generalFactoryFieldsReadOnly={!canSubmitMasterData}
         factoryProfilePatchMode
+        monitoringPointTypeReadOnly
+        officerNotificationEmailsEditable={canSubmitMasterData}
         footerActions={canSubmitMasterData ? undefined : null}
         onClose={() => setEditingFactory(null)}
       />
