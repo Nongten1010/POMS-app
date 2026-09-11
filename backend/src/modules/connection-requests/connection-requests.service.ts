@@ -318,11 +318,18 @@ export const connectionRequestsService = {
     );
     const accessibleFactories = result.data;
     const factoryIdByLookupKey = buildEligibleFactoryLookupKeyMap(accessibleFactories);
-    const connectedPoints =
-      await connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
-        [...factoryIdByLookupKey.keys()],
-        accessibleFactories.map((factory) => factory.id),
+    const connectedPoints: CurrentFactoryMeasurementPointDTO[] = [];
+    const eligibleFactoryIds = accessibleFactories.map((factory) => factory.id);
+    // Current POMS rows are linked by eligible id. Bound each query below MSSQL's
+    // 2,100-parameter limit without multiplying bindings by registration aliases.
+    for (let offset = 0; offset < eligibleFactoryIds.length; offset += 1000) {
+      connectedPoints.push(
+        ...(await connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
+          [],
+          eligibleFactoryIds.slice(offset, offset + 1000),
+        )),
       );
+    }
     const measurementPointsByFactory = mapConnectedMeasurementPointsToDashboardFactories(
       connectedPoints,
       factoryIdByLookupKey,

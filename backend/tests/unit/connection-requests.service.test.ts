@@ -734,7 +734,7 @@ describe('connectionRequestsService', () => {
     );
     expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
-      ['3-88(2)-5/49อบ'],
+      [],
       [7],
     );
     expect(mockedRepository.listOfficerNotificationEmailsForFactories).toHaveBeenCalledWith([
@@ -821,7 +821,7 @@ describe('connectionRequestsService', () => {
       },
     );
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
-      ['factory-favorite-east', 'factory-not-favorite-east'],
+      [],
       [10, 11],
     );
     expect(result.data.map((factory) => factory.factoryId)).toEqual([

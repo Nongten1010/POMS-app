@@ -33,15 +33,18 @@ beforeEach(() => {
     run: async () => {
       const query = (value as Knex.QueryBuilder).toSQL();
       if (query.sql.includes('from [cems_wpms_connected_measurement_points] where')) {
+        if (query.bindings.length > 2100) throw new Error('MSSQL parameter limit exceeded');
         pointQueries.push([...query.bindings]);
-        return factories.map((f) => ({
-          ...connectedFactoryRow(),
-          id: 15,
-          eligible_factory_id: f.id,
-          factory_id: f.factoryId,
-          source_request_id: 1,
-          management_state_json: states.get(f.id) ?? null,
-        }));
+        return factories
+          .filter((f) => query.bindings.includes(f.id) || query.bindings.includes(f.factoryId))
+          .map((f) => ({
+            ...connectedFactoryRow(),
+            id: 15,
+            eligible_factory_id: f.id,
+            factory_id: f.factoryId,
+            source_request_id: 1,
+            management_state_json: states.get(f.id) ?? null,
+          }));
       }
       if (query.sql.includes('as [cp]')) {
         expect(query.sql).toContain('[fsm].[eligible_factory_id] = [cp].[eligible_factory_id]');
@@ -118,6 +121,21 @@ describe('saved factory status across master data and officer connection menus',
     ]);
     expect(pointQueries.flat()).toEqual(expect.arrayContaining([7, 8]));
     expect(pointQueries.flat()).not.toContain(99);
+  });
+
+  it('loads a large eligible list without exceeding the MSSQL parameter limit', async () => {
+    factories = Array.from({ length: 2101 }, (_, index) =>
+      selectedEligibleFactory({
+        id: index + 1,
+        factoryId: `new-${index}`,
+        factoryRegistrationNo: `old-${index}`,
+      }),
+    );
+    const result = await connectionRequestsService.listOfficerEligibleFactories(42, {
+      scope: 'ALL',
+    });
+    expect(result.data).toHaveLength(2101);
+    expect(pointQueries.map((bindings) => bindings.length)).toEqual([1000, 1000, 101]);
   });
 
   it('does not query connected points when the accessible list is empty', async () => {
