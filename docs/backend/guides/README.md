@@ -16,6 +16,8 @@
 
 ## Database operations
 
+- [ข้อมูลทั่วไปโรงงานเข้าข่ายและ POMS ชุดเดียวกัน: โครงสร้างและการเปิดใช้](./factory-profile-consistency-rollout.md)
+
 - [ล้างข้อมูลทดสอบด้วย SQL](./test-data-cleanup.md)
 
 ## Integrations

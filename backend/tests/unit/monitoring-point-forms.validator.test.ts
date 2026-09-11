@@ -1,4 +1,8 @@
-import { describe, expect, it } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+const mockCanonicalMode = jest.fn(() => false);
+jest.mock('../../src/modules/factory-profiles/factory-profile-mode', () => ({
+  isCanonicalFactoryProfilesEnabled: mockCanonicalMode,
+}));
 import { saveMonitoringPointFormSchema } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.validator';
 
 const cemsAnnexRequiredBy = [
@@ -7,6 +11,28 @@ const cemsAnnexRequiredBy = [
 ] as const;
 
 describe('monitoring point form validator', () => {
+  beforeEach(() => {
+    mockCanonicalMode.mockReturnValue(false);
+  });
+
+  it('preserves omitted EIA only in canonical mode and keeps explicit clearing distinct', () => {
+    expect(
+      saveMonitoringPointFormSchema.parse({ factory: {}, points: [] }).factory.eiaInfo,
+    ).toBeNull();
+    mockCanonicalMode.mockReturnValue(true);
+    expect(
+      saveMonitoringPointFormSchema.parse({ factory: {}, points: [] }).factory.eiaInfo,
+    ).toBeUndefined();
+    expect(
+      saveMonitoringPointFormSchema.parse({ factory: { eiaInfo: null }, points: [] }).factory
+        .eiaInfo,
+    ).toBeNull();
+    expect(
+      saveMonitoringPointFormSchema.parse({ factory: { eiaInfo: '  ' }, points: [] }).factory
+        .eiaInfo,
+    ).toBeNull();
+  });
+
   it('accepts and preserves project fields when EIA is Other', () => {
     const result = saveMonitoringPointFormSchema.parse({
       factory: {

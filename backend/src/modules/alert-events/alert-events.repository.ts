@@ -1,3 +1,7 @@
+import {
+  factoryProfileReadTable,
+  isCanonicalFactoryProfilesEnabled,
+} from '../factory-profiles/factory-profile-mode';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
@@ -52,10 +56,14 @@ export const alertEventsRepository = {
     stationId: string;
     pointCode?: string | null;
   }): Promise<ConnectedAlertMeasurementPointSnapshot | null> {
-    const lookupCodes = [...new Set([input.pointCode, input.stationId].filter(Boolean))] as string[];
+    const lookupCodes = [
+      ...new Set([input.pointCode, input.stationId].filter(Boolean)),
+    ] as string[];
     if (lookupCodes.length === 0) return null;
 
-    const row = await db<ConnectedMeasurementPointRow>('cems_wpms_connected_measurement_points')
+    const row = await db<ConnectedMeasurementPointRow>(
+      factoryProfileReadTable('cems_wpms_connected_measurement_points'),
+    )
       .whereNull('deleted_at')
       .where('system_type', input.systemType)
       .whereIn('point_code', lookupCodes)
@@ -119,13 +127,11 @@ export const alertEventsRepository = {
     actorUserId: number,
     access: AlertEventAccess,
   ): Promise<AlertEventDTO | null> {
-    await buildAccessQuery(access)
-      .where('alert_events.id', id)
-      .update({
-        notification_status: input.notificationStatus,
-        updated_by: actorUserId,
-        updated_at: db.fn.now(),
-      });
+    await buildAccessQuery(access).where('alert_events.id', id).update({
+      notification_status: input.notificationStatus,
+      updated_by: actorUserId,
+      updated_at: db.fn.now(),
+    });
 
     return this.findById(id, access);
   },
@@ -137,7 +143,8 @@ function buildListQuery(query: ListAlertEventsQuery, access: AlertEventAccess) {
     .distinct<AlertEventRow[]>('alert_events.*');
 
   if (query.systemType) builder.where('alert_events.system_type', query.systemType);
-  if (query.displaySystemType) builder.where('alert_events.display_system_type', query.displaySystemType);
+  if (query.displaySystemType)
+    builder.where('alert_events.display_system_type', query.displaySystemType);
   if (query.alertType) builder.where('alert_events.alert_type', query.alertType);
   if (query.thresholdType) builder.where('alert_events.threshold_type', query.thresholdType);
   if (query.factoryId) builder.where('alert_events.factory_id', query.factoryId);
@@ -169,7 +176,7 @@ function buildAccessQuery(access: AlertEventAccess) {
         );
       }).andOnNull('f.deleted_at');
     })
-    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on(function joinFactoryIdentifiers() {
         this.on('ef.factory_registration_no_new', '=', 'alert_events.factory_id')
           .orOn('ef.source_factory_id', '=', 'alert_events.factory_id')
@@ -177,10 +184,28 @@ function buildAccessQuery(access: AlertEventAccess) {
       }).andOnNull('ef.deleted_at');
     })
     .leftJoin('provinces as p', function joinProvince() {
-      this.on('p.id', '=', 'f.province_id').orOn('p.name_th', '=', 'ef.province_name');
+      if (isCanonicalFactoryProfilesEnabled()) {
+        this.on('p.name_th', '=', 'ef.province_name').orOn(function masterFallback() {
+          this.onNull('ef.id').andOn('p.id', '=', 'f.province_id');
+        });
+      } else {
+        this.on('p.id', '=', 'f.province_id').orOn('p.name_th', '=', 'ef.province_name');
+      }
     })
     .leftJoin('industrial_estates as ie', function joinIndustrialEstate() {
-      this.on('ie.id', '=', 'f.industrial_estate_id').orOn('ie.name_th', '=', 'ef.industrial_estate_name');
+      if (isCanonicalFactoryProfilesEnabled()) {
+        this.on(function currentEstate() {
+          this.on('ie.name_th', '=', 'ef.industrial_estate_name').orOn(function masterFallback() {
+            this.onNull('ef.id').andOn('ie.id', '=', 'f.industrial_estate_id');
+          });
+        }).andOnNull('ie.deleted_at');
+      } else {
+        this.on('ie.id', '=', 'f.industrial_estate_id').orOn(
+          'ie.name_th',
+          '=',
+          'ef.industrial_estate_name',
+        );
+      }
     })
     .whereNull('alert_events.deleted_at');
 
@@ -239,9 +264,9 @@ function applyPermissionLocationFilter(
 
   if (scope.scope === 'IN_ESTATE' && estateCode) {
     builder.where((estateBuilder) => {
-      estateBuilder.where('ie.code', estateCode).orWhereRaw('CAST(ie.id as varchar(32)) = ?', [
-        estateCode,
-      ]);
+      estateBuilder
+        .where('ie.code', estateCode)
+        .orWhereRaw('CAST(ie.id as varchar(32)) = ?', [estateCode]);
     });
   }
   if (scope.scope === 'FACTORY_TYPE_88') {
@@ -255,7 +280,9 @@ function applyRegionalAccessFilter(
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
   if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
-  const regionValues = [...new Set((regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean))];
+  const regionValues = [
+    ...new Set((regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean)),
+  ];
   if (regionValues.length === 0) return;
   builder.whereIn('p.region', regionValues);
 }
@@ -411,7 +438,20 @@ function toIntegerOrNull(value: unknown): number | null {
 function formatThaiShortDate(value: string): string {
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) return value;
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   return `${day}-${monthNames[month - 1]}-${String(year + 543).slice(-2)}`;
 }
 

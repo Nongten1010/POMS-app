@@ -1,4 +1,5 @@
-import { describe, expect, it } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
+import { env } from '../../src/config/env';
 import { buildDeviceConnectionAccessQueryForTests } from '../../src/modules/device-connections/device-connections.repository';
 
 describe('device connection repository access filters', () => {
@@ -74,5 +75,56 @@ describe('device connection repository access filters', () => {
     expect(sql).toContain('[ef].[factory_type_sequence]');
     expect(sql).toContain('[fs].[factory_main_type_code]');
     expect(compiled.bindings).toContain('00088');
+  });
+});
+
+describe('canonical current device access', () => {
+  const originalMode = env.FACTORY_PROFILE_MODE;
+  beforeEach(() => {
+    env.FACTORY_PROFILE_MODE = 'canonical';
+  });
+  afterEach(() => {
+    env.FACTORY_PROFILE_MODE = originalMode;
+  });
+
+  it.each([
+    [{ scope: 'IN_REGION', region: 'ภาคตะวันตก' }, '[fs].[region_name]'],
+    [{ scope: 'IN_PROVINCE', province: 'ระยอง' }, '[fs].[province_name]'],
+    [{ scope: 'IN_ESTATE', estateCode: 'MTP' }, '[fs].[industrial_estate_code]'],
+  ] as const)(
+    'authorizes %s using current profile location without old snapshot alternatives',
+    (scope, oldColumn) => {
+      const compiled = buildDeviceConnectionAccessQueryForTests({
+        actorUserId: 42,
+        scope,
+        regionalAccess: { regions: ['ภาคตะวันตก'] },
+      }).toSQL();
+      const sql = compiled.sql.toLowerCase();
+      expect(sql).toContain('current_connected_measurement_points');
+      expect(sql).toContain('current_eligible_factories');
+      expect(sql).toContain('[pr].[name_th] = [ef].[province_name]');
+      expect(sql).toContain('[ie].[name_th] = [ef].[industrial_estate_name]');
+      expect(sql).not.toContain(oldColumn);
+    },
+  );
+
+  it('does not grant factory-type access from the old request snapshot', () => {
+    const compiled = buildDeviceConnectionAccessQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+    expect(compiled.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(compiled.sql.toLowerCase()).not.toContain('[fs].[factory_main_type_code]');
+    expect(compiled.bindings).toContain('00088');
+  });
+
+  it('retains ownership authorization and requires a live point', () => {
+    const compiled = buildDeviceConnectionAccessQueryForTests({
+      actorUserId: 42,
+      scope: { scope: 'OWN_FACTORY' },
+    }).toSQL();
+    expect(compiled.sql.toLowerCase()).toContain('user_factory_access');
+    expect(compiled.sql.toLowerCase()).toContain('[cp].[deleted_at] is null');
+    expect(compiled.bindings).toContain(42);
   });
 });

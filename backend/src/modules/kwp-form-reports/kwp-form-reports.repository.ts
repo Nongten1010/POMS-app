@@ -1,3 +1,4 @@
+import { factoryProfileReadTable } from '../factory-profiles/factory-profile-mode';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
@@ -139,7 +140,7 @@ function buildFactoryQuery(
       `
       OUTER APPLY (
         SELECT TOP (1) ef_source.*
-        FROM eligible_factories AS ef_source
+        FROM ${factoryProfileReadTable('eligible_factories')} AS ef_source
         WHERE ef_source.deleted_at IS NULL
           AND (
             ef_source.factory_registration_no_new = f.fid
@@ -180,9 +181,12 @@ function buildFactoryQuery(
       ) AS ie
     `,
     )
-    .join('cems_wpms_connected_measurement_points as cp', function joinConnectedPoints() {
-      this.on('cp.eligible_factory_id', '=', 'ef.id').andOnNull('cp.deleted_at');
-    })
+    .join(
+      factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
+      function joinConnectedPoints() {
+        this.on('cp.eligible_factory_id', '=', 'ef.id').andOnNull('cp.deleted_at');
+      },
+    )
     .whereNull('f.deleted_at')
     .select(
       'f.id as factory_id',
@@ -192,7 +196,7 @@ function buildFactoryQuery(
         COALESCE(
           (
             SELECT TOP (1) cp_name.factory_name
-            FROM cems_wpms_connected_measurement_points AS cp_name
+            FROM ${factoryProfileReadTable('cems_wpms_connected_measurement_points')} AS cp_name
             WHERE cp_name.eligible_factory_id = ef.id
               AND cp_name.deleted_at IS NULL
             ORDER BY cp_name.updated_at DESC, cp_name.id DESC
@@ -241,14 +245,17 @@ function buildRequestQuery(
   access: KwpFormReportAccess,
 ): Knex.QueryBuilder<SubmissionRow, SubmissionRow[]> {
   const builder = db<SubmissionRow>('kwp_form_submissions as s')
-    .leftJoin('cems_wpms_connected_measurement_points as cp', function joinConnectedPoint() {
-      this.on('cp.id', '=', 's.connected_point_id').andOnNull('cp.deleted_at');
-    })
+    .leftJoin(
+      factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
+      function joinConnectedPoint() {
+        this.on('cp.id', '=', 's.connected_point_id').andOnNull('cp.deleted_at');
+      },
+    )
     .joinRaw(
       `
       OUTER APPLY (
         SELECT TOP (1) ef_source.*
-        FROM eligible_factories AS ef_source
+        FROM ${factoryProfileReadTable('eligible_factories')} AS ef_source
         WHERE ef_source.deleted_at IS NULL
           AND (
             ef_source.id = cp.eligible_factory_id
@@ -440,9 +447,7 @@ function scopeValue(scope: KwpFormReportAccess['scope']): string | null | undefi
   return typeof scope === 'object' && scope !== null ? scope.scope : scope;
 }
 
-function scopeDetails(
-  scope: KwpFormReportAccess['scope'],
-): PermissionScopeDetails | null {
+function scopeDetails(scope: KwpFormReportAccess['scope']): PermissionScopeDetails | null {
   return typeof scope === 'object' && scope !== null ? scope : null;
 }
 

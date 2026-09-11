@@ -81,6 +81,18 @@ curl --request POST \
   --data '{"reason":"ยุติโครงการติดตั้งระบบตรวจวัด"}'
 ```
 
+## ขอบเขตข้อมูลปัจจุบันและประวัติ
+
+ข้อมูลมี 3 ชุด: ทะเบียนต้นทาง Fac60k, โรงงานเข้าข่าย และโรงงาน POMS ที่เชื่อมต่อแล้ว ทะเบียนต้นทางคงเป็น read-only; ใน canonical mode เฉพาะข้อมูลทั่วไปของเข้าข่ายและ POMS ใช้แหล่งหลักร่วมกัน ส่วนข้อมูลจุดตรวจวัดและ snapshot ของคำขอไม่ถูกย้ายมารวมเป็นข้อมูลทั่วไป ดู[แนวทางเปิดใช้ข้อมูลทั่วไปชุดเดียวและตรวจย้ายข้อมูล](../../../guides/factory-profile-consistency-rollout.md)
+
+- `GET /cems-wpms-requests/factories/:factoryId/general` ใช้ข้อมูลทั่วไปปัจจุบันร่วมกันเมื่อโรงงานเข้าข่ายแล้ว; โรงงานที่ยังไม่เข้าข่ายยังอ่านข้อมูลต้นทางตาม contract เดิม
+- `eiaOther` เป็น response field แบบ optional `string | null` ความยาวไม่เกิน 500 ตัวอักษรสำหรับข้อมูลทั่วไป/สรุปโรงงานใน canonical mode; มีข้อความเมื่อ `eia = "อื่นๆ"` โดยไม่เพิ่ม field บังคับใน request
+- `GET /cems-wpms-requests/:id/form` ยังคงอ่าน snapshot ของคำขอสำหรับแก้ไขและตรวจย้อนหลัง; ใช้ `/poms-factories/:factoryId/form` เมื่อต้องการข้อมูล POMS ปัจจุบัน
+- การเชื่อมต่อครั้งแรกที่มี optional general-profile patch ใน canonical mode ต้องตรง source revision ที่ backend เก็บเมื่อ create/resubmit/direct-connect; revision หายหรือเปลี่ยนตอบ `409 CONFLICT` โดย `error.details.reason = "FACTORY_PROFILE_CHANGED"` ให้โหลดล่าสุดและ resubmit ตาม workflow ที่อนุญาต หากไม่มีข้อมูลทั่วไปที่จะเปลี่ยน ให้รับข้อมูลหลักปัจจุบันได้
+- เมื่อมี active connected point แล้ว การเชื่อมต่อครั้งถัดไปใช้ข้อมูลทั่วไปปัจจุบัน รวม `null` โดยไม่ย้อนข้อมูลโรงงานจาก snapshot เก่ากลับมา ทั้งการเชื่อมต่อปกติ การอนุมัติที่เชื่อมต่อได้ทันที และ direct connection ใช้กติกาเดียวกัน
+- หากคำขอแรกค้างใน `WAITING_CONNECTION` หรือ `CONNECTION_CONFIRMED` และถูกปฏิเสธด้วย `FACTORY_PROFILE_CHANGED` ผู้พิจารณาที่มี `cems_wpms_requests:approve` ใช้ `POST /cems-wpms-requests/:id/status` พร้อม `action: "REQUEST_REVISION"` เพื่อกลับ `WAITING_FACTORY_REVISION` ได้เฉพาะ canonical mode ที่ยังไม่มี active connected point และ baseline ของข้อมูลทั่วไปหาย/เก่า จากนั้นเจ้าของคำขอเดิม resubmit ตาม workflow เดิมเพื่อเก็บ revision ใหม่ โดย `OPERATOR_FORM` เป็นผู้สร้างเดิมและ `OFFICER_DIRECT_API` เป็นเจ้าหน้าที่ผู้สร้างเดิม ทุกกรณียังต้องมีสิทธิ์ edit และไม่โอนเจ้าของคำขอ; กรณีอื่นยังใช้ข้อจำกัดสถานะเดิม
+- Backend เก็บ revision ภายใน ไม่เพิ่ม `factoryProfileId` หรือ `sourceFactoryProfileRevision` ให้ client ส่ง และไม่เปลี่ยนความหมาย `factoryId`/เลขทะเบียนเดิม
+
 ## Endpoint Summary
 
 นับแบบ `Method + Path` แยกกัน เมนูขอเชื่อมต่อมี **34 API ที่ใช้งานได้** และ **1 compatibility API ที่ตอบ `404` เสมอ** รวมที่แสดงในหน้านี้ 35 route signatures ขอบเขตนี้รวม API คำขอ, prefill, การตั้งค่าอุปกรณ์ และการทดสอบการเชื่อมต่อ แต่ไม่นับ API สถิติ/ปฏิทิน/ส่งออกที่เป็นหน้าที่ของเมนูหน้าหลัก
@@ -842,7 +854,11 @@ Minimal response:
 
 ### Add-parameter prefill
 
-`GET /api/v1/connected-measurement-points/:stationId/parameter-form` ใช้ข้อมูลคำขอที่เชื่อมต่อแล้วเป็นฐานสำหรับรายละเอียดโรงงานและจุดตรวจวัด แต่ประกอบสถานะพารามิเตอร์ปัจจุบันจาก active device config ของ `stationId` ทุกครั้ง จึงไม่ใช้ `connectedParameters` และ `pendingParameters` จาก request snapshot โดยตรง.
+`GET /api/v1/connected-measurement-points/:stationId/parameter-form` อ่านจุดตรวจวัด active ปัจจุบัน โดย `pointName`, `pointCode`, `pointType`, `parameters`, `monitoringPointStatus`, `details`, `documentsAndImages` และ `measurementInstruments` ใช้ค่าจากจุดปัจจุบันตาม allowlist และไม่ใช้ค่าเก่าแทนเมื่อถูกล้างเป็น `null` หรือ `[]`. หากจุดไม่ active หรืออยู่นอกสิทธิ์ ตอบ `404 NOT_FOUND` แม้ยังมีคำขอ CONNECTED เก่า; รูปแบบ annual path `/:stationId/:buddhistYear/parameter-form` ใช้กติกาเดียวกัน
+
+canonical mode ใช้ข้อมูลทั่วไปโรงงานปัจจุบันร่วมกับเข้าข่าย ส่วนข้อมูลเฉพาะคำขอและผู้ติดต่อยังอ้างคำขอต้นทางตาม contract เดิม. สถานะพารามิเตอร์ยังประกอบจาก active device config ของ `stationId` ทุกครั้ง จึงไม่ใช้ `connectedParameters` และ `pendingParameters` จาก request snapshot โดยตรง
+
+รายการ `/connected-measurement-points`, alias `/cems-wpms-requests/connected-measurement-points` และรายการรายโรงงาน ใช้จุดปัจจุบันชุดเดียวกันและตัดจุด inactive ออกจากผลลัพธ์; รหัสจุดและรหัสคำขอใน response คงเดิม
 
 Response fields ที่เพิ่มเติมสำหรับเลขทะเบียนโรงงาน:
 
@@ -889,6 +905,21 @@ Minimal response:
 
 `GET /api/v1/connected-measurement-points/:stationId/requests` ยังคงเป็นประวัติคำขอและอาจคืนค่าพารามิเตอร์ตาม snapshot ณ เวลายื่นคำขอ; client ที่ต้องการ prefill ฟอร์มเพิ่มพารามิเตอร์ต้องใช้ endpoint `parameter-form` นี้.
 
+ตัวอย่างส่วนข้อมูลทั่วไปที่เพิ่มใน canonical mode (field อื่นคง contract เดิม):
+
+```json
+{
+  "success": true,
+  "data": {
+    "factoryId": "10120000325542",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด",
+    "eligibleFactoryId": 9,
+    "eia": "อื่นๆ",
+    "eiaOther": "รายงานสิ่งแวดล้อมประเภทเฉพาะ"
+  }
+}
+```
+
 ## Errors
 
 ใช้ error envelope กลางของระบบ:
@@ -898,6 +929,9 @@ Minimal response:
 - `404 Not Found` เมื่อไม่พบคำขอหรือจุดตรวจวัด หรือ resource อยู่นอก data scope.
 - `404 Not Found` เมื่อ endpoint สร้างคำขอ resolve active eligible factory ไม่สำเร็จ.
 - `409 Conflict` เมื่อคำขอเคยผูก eligible factory ไว้ แต่ eligible row ไม่ active แล้วในเวลาที่เชื่อมต่อ.
+- `409 CONFLICT` เมื่อสำเนาข้อมูลโรงงาน live ใน legacy mode ขัดกัน โดย `error.details.reason = "FACTORY_PROFILE_CONFLICT"`; ให้ผู้ดูแลตรวจข้อมูลก่อนเชื่อมต่อ ไม่เลือกสำเนาใหม่สุดทับรายการอื่นเอง
+- `409 CONFLICT` เมื่อ source revision ของการเชื่อมต่อครั้งแรกใน canonical mode หาย/เปลี่ยนและมี optional general-profile patch โดย `error.details.reason = "FACTORY_PROFILE_CHANGED"`; reload และ resubmit
+- `409 CONFLICT` เมื่อ canonical profile ยังไม่พร้อมหรือเปลี่ยนระหว่างเขียน; ไม่มี partial update และไม่รับประกันว่า error กลุ่มนี้มี `reason` เสมอ
 - `400 Bad Request` เมื่อ payload หรือสถานะปัจจุบันไม่อนุญาตให้ทำ action.
 
 ## Business Flow And Explanations

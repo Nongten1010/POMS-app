@@ -20,6 +20,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../src/shared/errors/AppError';
+import { env } from '../../src/config/env';
 import { pomsFactoriesRepository } from '../../src/modules/poms-factories/poms-factories.repository';
 import { pomsFactoriesService } from '../../src/modules/poms-factories/poms-factories.service';
 import type {
@@ -863,6 +864,35 @@ describe('pomsFactoriesService edit-request workflow', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictError);
     expect(mockedRepository.createEditRequest).not.toHaveBeenCalled();
+  });
+
+  it('passes the observed baseline internally when resubmitting canonical point-only edits', async () => {
+    const current = factoryDetail();
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: current.measurementPoints,
+        proposedMeasurementPoints: current.measurementPoints,
+      }),
+    );
+    const previousMode = env.FACTORY_PROFILE_MODE;
+    env.FACTORY_PROFILE_MODE = 'canonical';
+    try {
+      await pomsFactoriesService.resubmitEditRequest(
+        11,
+        {
+          formType: 'MEASUREMENT_POINTS',
+          measurementPoints: [{ connectedPointId: 15, pointName: 'New point' }],
+        },
+        42,
+        ownFactoryScope,
+      );
+      expect(mockedRepository.resubmitEditRequest.mock.calls[0]?.[1]).toMatchObject({
+        currentFactory: current,
+      });
+    } finally {
+      env.FACTORY_PROFILE_MODE = previousMode;
+    }
   });
 
   it('resubmits a measurement-point request without allowing the form type to change', async () => {

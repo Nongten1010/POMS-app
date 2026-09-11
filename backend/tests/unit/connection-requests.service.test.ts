@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.repository', () => ({
   connectionRequestsRepository: {
@@ -12,6 +12,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     syncConnectedMeasurementPoints: jest.fn(),
     connect: jest.fn(),
     updateStatus: jest.fn(),
+    returnToFactoryRevisionAfterProfileChange: jest.fn(),
     list: jest.fn(),
     listFactoriesForAccess: jest.fn(),
     listFactoryMainTypeLabels: jest.fn(),
@@ -70,6 +71,7 @@ import type { LatestHourlyParameterValuesResultDTO } from '../../src/modules/par
 import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
 import type { SelectedEligibleFactoryDTO } from '../../src/modules/eligible-factories/eligible-factories.types';
 import { logger } from '../../src/config/logger';
+import { env } from '../../src/config/env';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import {
   connectionRequestsService,
@@ -2945,6 +2947,7 @@ describe('connectionRequestsService', () => {
       ],
     });
     mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockActivePointsForRequests([request]);
     mockedRepository.findActiveEligibleFactoryReference.mockResolvedValueOnce({
       id: 17,
       sourceFactoryId: '10120000325542',
@@ -3345,6 +3348,7 @@ describe('connectionRequestsService', () => {
       ],
     });
     mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockActivePointsForRequests([request]);
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
@@ -3417,6 +3421,7 @@ describe('connectionRequestsService', () => {
       ],
     });
     mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockActivePointsForRequests([request]);
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
@@ -3478,6 +3483,7 @@ describe('connectionRequestsService', () => {
           stationId: point.pointCode,
           pointCode: point.pointCode,
           pointName: approvedName,
+          parameters: point.parameters,
         }),
       ]);
       return { point, request };
@@ -3543,7 +3549,7 @@ describe('connectionRequestsService', () => {
         ],
       },
     ])(
-      'preserves the snapshot name when no active source point matches (%j)',
+      'excludes inactive or replaced source points from the current endpoint (%j)',
       async ({ currentPoints }) => {
         const { request } = setupApprovedRename();
         mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue(
@@ -3554,7 +3560,246 @@ describe('connectionRequestsService', () => {
           actorUserId,
           'ALL',
         );
-        expect(result.data[0].point.pointName).toBe('Boiler 35 T');
+        expect(result).toEqual({ data: [], meta: { total: 0 } });
+      },
+    );
+
+    it('returns every approved live point field and keeps the request snapshot unchanged', async () => {
+      const { point, request } = setupApprovedRename();
+      const details = { primaryFuel: 'approved fuel', requestedParameters: ['SO2 (ppm)'] };
+      const instruments = { parameters: [{ parameter: 'SO2 (ppm)', brand: 'approved brand' }] };
+      const documents = [{ title: 'approved evidence', fileUrl: '/uploads/approved.pdf' }];
+      mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+        currentFactoryMeasurementPoint({
+          sourceMeasurementPointId: point.id,
+          sourceRequestId: request.id,
+          pointCode: 'S1125',
+          pointName: approvedName,
+          pointType: 'OTHER',
+          parameters: ['SO2 (ppm)'],
+          details,
+          documentsAndImages: documents,
+          measurementInstruments: instruments,
+        }),
+      ]);
+      const result = await connectionRequestsService.listConnectedMeasurementPoints(
+        { factoryId: request.factoryId },
+        actorUserId,
+        'ALL',
+      );
+      expect(result.data[0].point).toMatchObject({
+        id: point.id,
+        pointName: approvedName,
+        pointType: 'OTHER',
+        parameters: ['SO2 (ppm)'],
+        details,
+        documentsAndImages: documents,
+        measurementInstruments: instruments,
+      });
+      expect(request.measurementPoints[0]).toEqual(point);
+      expect(point.parameters).toEqual(['CO (ppm)']);
+    });
+
+    it('clears removed live attachments and instruments instead of restoring historical values', async () => {
+      const { request } = setupApprovedRename();
+      request.measurementPoints = [
+        {
+          ...request.measurementPoints[0],
+          details: { primaryFuel: 'historical fuel' },
+          documentsAndImages: [{ title: 'historical document' }],
+          measurementInstruments: { parameters: [{ parameter: 'CO (ppm)' }] },
+        },
+      ];
+      mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+        currentFactoryMeasurementPoint({
+          sourceMeasurementPointId: request.measurementPoints[0].id,
+          pointCode: 'S1125',
+          documentsAndImages: [],
+          measurementInstruments: null,
+          parameters: [],
+          details: null,
+        }),
+      ]);
+      const result = await connectionRequestsService.listConnectedMeasurementPoints(
+        {},
+        actorUserId,
+        'ALL',
+      );
+      expect(result.data[0].point).toMatchObject({
+        details: null,
+        documentsAndImages: [],
+        measurementInstruments: null,
+        parameters: [],
+      });
+    });
+
+    it('filters using the approved current station name', async () => {
+      setupApprovedRename();
+      const result = await connectionRequestsService.listConnectedMeasurementPoints(
+        { stationId: approvedName },
+        actorUserId,
+        'ALL',
+      );
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].point.pointName).toBe(approvedName);
+    });
+
+    it.each(['parameter', 'device'] as const)(
+      'hydrates current %s forms after a point rename without changing history',
+      async (form) => {
+        const { point } = setupApprovedRename();
+        const result =
+          form === 'parameter'
+            ? await connectionRequestsService.getAddParameterFormDetail(
+                approvedName,
+                actorUserId,
+                'ALL',
+              )
+            : await connectionRequestsService.getCurrentDeviceConfigFormDetail(
+                approvedName,
+                actorUserId,
+                'ALL',
+              );
+        const current =
+          'formDefaults' in result
+            ? result.formDefaults.measurementPoints[0]
+            : result.monitoringPoint;
+        expect(current).toMatchObject({ pointName: approvedName, parameters: ['CO (ppm)'] });
+        expect(point.pointName).toBe('Boiler 35 T');
+      },
+    );
+
+    it('rejects the add-parameter form when the requested source point is no longer active', async () => {
+      setupApprovedRename();
+      mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
+      await expect(
+        connectionRequestsService.getAddParameterFormDetail('S1125', actorUserId, 'ALL'),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('prefills canonical current factory values instead of the source request profile', async () => {
+      const { request } = setupApprovedRename();
+      mockedRepository.findFactoryGeneral.mockResolvedValue(
+        factoryGeneral({
+          factoryName: 'Approved current factory',
+          address: null,
+          projectName: null,
+          latitude: '14.01',
+          longitude: null,
+          eia: 'อื่นๆ',
+          eiaOther: 'Approved current EIA note',
+          hasEia: false,
+        }),
+      );
+      const previousMode = env.FACTORY_PROFILE_MODE;
+      env.FACTORY_PROFILE_MODE = 'canonical';
+      try {
+        const result = await connectionRequestsService.getAddParameterFormDetail(
+          'S1125',
+          actorUserId,
+          'ALL',
+        );
+        expect(result.formDefaults).toMatchObject({
+          factoryId: request.factoryId,
+          factoryName: 'Approved current factory',
+          address: null,
+          projectName: null,
+          latitude: 14.01,
+          longitude: null,
+          eia: 'อื่นๆ',
+          eiaOther: 'Approved current EIA note',
+          hasEia: false,
+        });
+        expect(request.factoryName).not.toBe('Approved current factory');
+        expect(mockedRepository.findFactoryGeneral).toHaveBeenCalledWith(request.factoryId, {
+          actorUserId,
+          scope: 'ALL',
+          regionalAccess: undefined,
+        });
+      } finally {
+        env.FACTORY_PROFILE_MODE = previousMode;
+      }
+    });
+
+    it.each(['list', 'parameter', 'device'] as const)(
+      'retains hardware settings when the current %s endpoint is selected by renamed point name',
+      async (form) => {
+        setupApprovedRename();
+        mockedDeviceConnectionsService.listActiveSettings.mockImplementation(
+          async ({ stationId }) =>
+            stationId === 'S1125'
+              ? [
+                  deviceConnectionConfig({
+                    stationId: 'S1125',
+                    channels: [{ dataType: 'CO (ppm)', addressId: 40001, offset: 0 }],
+                  }),
+                ]
+              : [],
+        );
+        if (form === 'list') {
+          const result = await connectionRequestsService.listConnectedMeasurementPoints(
+            { stationId: approvedName },
+            actorUserId,
+            'ALL',
+          );
+          expect(result.data[0].deviceConfigs).toHaveLength(1);
+        } else if (form === 'device') {
+          const result = await connectionRequestsService.getCurrentDeviceConfigFormDetail(
+            approvedName,
+            actorUserId,
+            'ALL',
+          );
+          expect(result.connectionForms).toHaveLength(1);
+        } else {
+          const result = await connectionRequestsService.getAddParameterFormDetail(
+            approvedName,
+            actorUserId,
+            'ALL',
+          );
+          expect(result.formDefaults.measurementPoints[0].details?.connectedParameters).toEqual([
+            'CO (ppm)',
+          ]);
+        }
+      },
+    );
+
+    it('does not attach a live point belonging to a different source request', async () => {
+      const { point, request } = setupApprovedRename();
+      mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+        currentFactoryMeasurementPoint({
+          sourceMeasurementPointId: point.id,
+          sourceRequestId: request.id + 1,
+        }),
+      ]);
+      const result = await connectionRequestsService.listConnectedMeasurementPoints(
+        {},
+        actorUserId,
+        'ALL',
+      );
+      expect(result).toEqual({ data: [], meta: { total: 0 } });
+    });
+
+    it.each([14.91, null])(
+      'uses the approved point coordinates even when the request has old top-level values (%s)',
+      async (latitude) => {
+        const { request } = setupApprovedRename();
+        request.measurementPoints = [
+          { ...request.measurementPoints[0], latitude: 12.1, longitude: 100.1 },
+        ];
+        mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+          currentFactoryMeasurementPoint({
+            sourceMeasurementPointId: 15,
+            pointCode: 'S1125',
+            details: { stackLatitude: latitude, stackLongitude: null },
+          }),
+        ]);
+        const result = await connectionRequestsService.listConnectedMeasurementPoints(
+          {},
+          actorUserId,
+          'ALL',
+        );
+        expect(result.data[0].point).toMatchObject({ latitude, longitude: null });
+        expect(request.measurementPoints[0].latitude).toBe(12.1);
       },
     );
 
@@ -3654,6 +3899,8 @@ describe('connectionRequestsService', () => {
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
       {
         connectedPointId: 101,
+        details: request.measurementPoints[0].details,
+        measurementInstruments: request.measurementPoints[0].measurementInstruments,
         sourceMeasurementPointId: 1,
         factoryId: 'factory-001',
         stationId: 'STACK-A',
@@ -3665,6 +3912,8 @@ describe('connectionRequestsService', () => {
       } as unknown as CurrentFactoryMeasurementPointDTO,
       {
         connectedPointId: 102,
+        details: wpmsRequest.measurementPoints[0].details,
+        measurementInstruments: wpmsRequest.measurementPoints[0].measurementInstruments,
         sourceMeasurementPointId: 2,
         factoryId: 'factory-001',
         stationId: 'WWTP-1',
@@ -3773,6 +4022,7 @@ describe('connectionRequestsService', () => {
       ],
     });
     mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockActivePointsForRequests([request]);
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
@@ -3817,6 +4067,7 @@ describe('connectionRequestsService', () => {
       ],
     });
     mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockActivePointsForRequests([request]);
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
@@ -3906,6 +4157,7 @@ describe('connectionRequestsService', () => {
       ],
     });
     mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockActivePointsForRequests([request]);
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
@@ -4598,6 +4850,201 @@ describe('connectionRequestsService', () => {
         connectionDueAt: dueAt,
       },
     );
+  });
+
+  describe('first connection profile revision recovery', () => {
+    let previousMode: typeof env.FACTORY_PROFILE_MODE;
+
+    beforeEach(() => {
+      previousMode = env.FACTORY_PROFILE_MODE;
+      env.FACTORY_PROFILE_MODE = 'canonical';
+    });
+
+    afterEach(() => {
+      env.FACTORY_PROFILE_MODE = previousMode;
+    });
+
+    it.each([
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+    ])(
+      'returns %s to factory revision after the atomic repository guard succeeds',
+      async (status) => {
+        const current = requestDto({ status, submissionSource: 'OFFICER_DIRECT_API' });
+        const recovered = requestDto({
+          ...current,
+          status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        });
+        mockedRepository.findById.mockResolvedValue(current);
+        mockedRepository.returnToFactoryRevisionAfterProfileChange.mockResolvedValue(recovered);
+
+        const result = await connectionRequestsService.changeStatus(
+          1,
+          {
+            action: 'REQUEST_REVISION',
+            revisionReason: '  ตรวจสอบข้อมูลโรงงานล่าสุด  ',
+            officerNote: 'แก้ข้อมูลก่อนเชื่อมต่ออีกครั้ง',
+          },
+          7,
+          'ALL',
+        );
+
+        expect(result).toEqual(recovered);
+        expect(mockedRepository.returnToFactoryRevisionAfterProfileChange).toHaveBeenCalledWith(
+          1,
+          7,
+          { scope: 'ALL', regionalAccess: undefined },
+          {
+            revisionReason: 'ตรวจสอบข้อมูลโรงงานล่าสุด',
+            officerNote: 'แก้ข้อมูลก่อนเชื่อมต่ออีกครั้ง',
+          },
+        );
+        expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+        expect(mockedRepository.replaceForm).not.toHaveBeenCalled();
+        expect(mockedDeviceConnectionsService.replaceCurrentStation).not.toHaveBeenCalled();
+      },
+    );
+
+    it('uses current factory scope in the transaction even when the request has an older province', async () => {
+      const recovered = requestDto({ status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION });
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+          provinceName: 'สระบุรี',
+          provinceCode: '19',
+          regionName: 'ภาคกลาง',
+          regionCode: 'ภาคกลาง',
+        }),
+      );
+      mockedRepository.returnToFactoryRevisionAfterProfileChange.mockResolvedValue(recovered);
+      const scope = { scope: 'IN_PROVINCE' as const, province: 'ระยอง', region: null };
+      const regionalAccess = { regions: ['ภาคตะวันออก'] };
+
+      await expect(
+        connectionRequestsService.changeStatus(
+          1,
+          { action: 'REQUEST_REVISION', revisionReason: 'ข้อมูลโรงงานเปลี่ยน' },
+          7,
+          scope,
+          regionalAccess,
+        ),
+      ).resolves.toEqual(recovered);
+
+      expect(mockedRepository.returnToFactoryRevisionAfterProfileChange).toHaveBeenCalledWith(
+        1,
+        7,
+        { scope, regionalAccess },
+        { revisionReason: 'ข้อมูลโรงงานเปลี่ยน', officerNote: null },
+      );
+      expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it.each(['CONFLICT', 'NOT_FOUND'])(
+      'preserves the transactional %s rejection without an unguarded status update',
+      async (code) => {
+        mockedRepository.findById.mockResolvedValue(
+          requestDto({ status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED }),
+        );
+        const rejection = Object.assign(new Error('Recovery denied'), { code });
+        mockedRepository.returnToFactoryRevisionAfterProfileChange.mockRejectedValue(rejection);
+
+        await expect(
+          connectionRequestsService.changeStatus(
+            1,
+            { action: 'REQUEST_REVISION', revisionReason: 'ข้อมูลโรงงานเปลี่ยน' },
+            7,
+          ),
+        ).rejects.toBe(rejection);
+        expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+      },
+    );
+
+    it('requires a nonblank revision reason before entering recovery', async () => {
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({ status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION }),
+      );
+
+      await expect(
+        connectionRequestsService.changeStatus(
+          1,
+          { action: 'REQUEST_REVISION', revisionReason: '   ' },
+          7,
+        ),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST', details: { path: 'revisionReason' } });
+      expect(mockedRepository.returnToFactoryRevisionAfterProfileChange).not.toHaveBeenCalled();
+      expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+    ])('retains the legacy invalid transition for %s', async (status) => {
+      env.FACTORY_PROFILE_MODE = 'legacy';
+      mockedRepository.findById.mockResolvedValue(requestDto({ status }));
+
+      await expect(
+        connectionRequestsService.changeStatus(
+          1,
+          { action: 'REQUEST_REVISION', revisionReason: 'ข้อมูลโรงงานเปลี่ยน' },
+          7,
+        ),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockedRepository.returnToFactoryRevisionAfterProfileChange).not.toHaveBeenCalled();
+      expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      CONNECTION_REQUEST_STATUS.CONNECTED,
+      CONNECTION_REQUEST_STATUS.CANCELED,
+      CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+    ])('does not open recovery from %s', async (status) => {
+      mockedRepository.findById.mockResolvedValue(requestDto({ status }));
+
+      await expect(
+        connectionRequestsService.changeStatus(
+          1,
+          { action: 'REQUEST_REVISION', revisionReason: 'ข้อมูลโรงงานเปลี่ยน' },
+          7,
+        ),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockedRepository.returnToFactoryRevisionAfterProfileChange).not.toHaveBeenCalled();
+      expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('preserves the existing design review revision path', async () => {
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({ status: CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW }),
+      );
+      const recovered = requestDto({ status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION });
+      mockedRepository.updateStatus.mockResolvedValue(recovered);
+
+      await expect(
+        connectionRequestsService.changeStatus(
+          1,
+          { action: 'REQUEST_REVISION', revisionReason: 'เพิ่มเติมแบบคำขอ' },
+          7,
+        ),
+      ).resolves.toEqual(recovered);
+      expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+        1,
+        CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        7,
+        { revisionReason: 'เพิ่มเติมแบบคำขอ', officerNote: null },
+      );
+      expect(mockedRepository.returnToFactoryRevisionAfterProfileChange).not.toHaveBeenCalled();
+    });
+
+    it('does not let APPROVE_FORM enter the recovery transition', async () => {
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({ status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED }),
+      );
+
+      await expect(
+        connectionRequestsService.changeStatus(1, { action: 'APPROVE_FORM' }, 7),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockedRepository.returnToFactoryRevisionAfterProfileChange).not.toHaveBeenCalled();
+      expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+    });
   });
 
   it('passes point-code assignments through approval actions', async () => {
@@ -5720,6 +6167,24 @@ function selectedEligibleFactory(
     measurementPoints: [],
     ...overrides,
   };
+}
+
+function mockActivePointsForRequests(requests: ConnectionRequestDTO[]): void {
+  mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue(
+    requests.flatMap((request) =>
+      request.measurementPoints.map((point) =>
+        currentFactoryMeasurementPoint({
+          ...point,
+          sourceRequestId: request.id,
+          sourceMeasurementPointId: point.id,
+          factoryId: request.factoryId,
+          systemType: request.systemType,
+          stationId: point.pointCode ?? point.pointName,
+          pointCode: point.pointCode ?? null,
+        }),
+      ),
+    ),
+  );
 }
 
 function currentFactoryMeasurementPoint(

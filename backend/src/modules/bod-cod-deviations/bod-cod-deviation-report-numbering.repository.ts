@@ -1,3 +1,7 @@
+import {
+  factoryProfileReadTable,
+  isCanonicalFactoryProfilesEnabled,
+} from '../factory-profiles/factory-profile-mode';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { BadRequestError, ConflictError, ForbiddenError } from '../../shared/errors/AppError';
@@ -130,8 +134,30 @@ function buildNumberingFactoryQuery(
   access: CreateBodCodDeviationReportAccess,
   connection: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<NumberingFactoryRow, NumberingFactoryRow | undefined> {
-  const builder = connection<NumberingFactoryRow>('factories as f')
-    .leftJoin('provinces as p', 'p.id', 'f.province_id')
+  const builder = connection<NumberingFactoryRow>('factories as f');
+  if (isCanonicalFactoryProfilesEnabled()) {
+    builder
+      .leftJoin(
+        factoryProfileReadTable('eligible_factories', 'ef'),
+        function currentEligibleFactory() {
+          this.on(function factoryIdentifiers() {
+            this.on('ef.factory_registration_no_new', '=', 'f.fid')
+              .orOn('ef.source_factory_id', '=', 'f.fid')
+              .orOn('ef.factory_registration_no_new', '=', 'f.code')
+              .orOn('ef.factory_registration_no_old', '=', 'f.code');
+          }).andOnNull('ef.deleted_at');
+        },
+      )
+      .leftJoin('provinces as p', function currentProvince() {
+        this.on('p.name_th', '=', 'ef.province_name').orOn(function masterFallback() {
+          this.onNull('ef.id').andOn('p.id', '=', 'f.province_id');
+        });
+      })
+      .whereNull('f.deleted_at');
+  } else {
+    builder.leftJoin('provinces as p', 'p.id', 'f.province_id');
+  }
+  builder
     .select('f.id as factory_internal_id', 'p.name_th as province_name', 'p.region as region_name')
     .first();
   if (scopeValue(access.scope) === 'OWN_FACTORY') {

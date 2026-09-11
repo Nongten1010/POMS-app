@@ -1,3 +1,4 @@
+import { factoryProfileReadTable } from '../factory-profiles/factory-profile-mode';
 import { db } from '../../config/database';
 import type { IntegrationConnectedPointDTO } from './integration-device-configs.types';
 import type {
@@ -19,7 +20,9 @@ export const integrationDeviceConfigsRepository = {
   async findConnectedPointByStationId(
     stationId: string,
   ): Promise<IntegrationConnectedPointDTO | null> {
-    const row = await db<ConnectedMeasurementPointRow>('cems_wpms_connected_measurement_points')
+    const row = await db<ConnectedMeasurementPointRow>(
+      factoryProfileReadTable('cems_wpms_connected_measurement_points'),
+    )
       .whereNull('deleted_at')
       .where((builder) => {
         builder.where('point_code', stationId).orWhere('point_name', stationId);

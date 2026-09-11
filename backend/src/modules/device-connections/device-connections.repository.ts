@@ -2,6 +2,10 @@ import type { Knex } from 'knex';
 import { ConflictError } from '../../shared/errors/AppError';
 import { approvedParameterLabel } from '../poms-factories/poms-measurement-point-parameters';
 import { db } from '../../config/database';
+import {
+  factoryProfileReadTable,
+  isCanonicalFactoryProfilesEnabled,
+} from '../factory-profiles/factory-profile-mode';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
@@ -61,9 +65,7 @@ export const deviceConnectionsRepository = {
     id: number,
     access?: DeviceConnectionAccessContext,
   ): Promise<DeviceConnectionConfigDTO | null> {
-    const row = await buildDeviceConnectionAccessQuery(access)
-      .where('id', id)
-      .first();
+    const row = await buildDeviceConnectionAccessQuery(access).where('id', id).first();
     return row ? hydrate(row) : null;
   },
 
@@ -235,30 +237,39 @@ async function listActiveConfigs(
     .orderBy('id', 'desc');
 
   return Promise.all(
-    rows.map((row: DeviceConnectionConfigRow) =>
-      hydrate(row, undefined, sensitiveSettingsMode),
-    ),
+    rows.map((row: DeviceConnectionConfigRow) => hydrate(row, undefined, sensitiveSettingsMode)),
   );
 }
 
 function buildDeviceConnectionAccessQuery(access?: DeviceConnectionAccessContext) {
-  const query = db<DeviceConnectionConfigRow>('device_connection_configs')
-    .whereNull('deleted_at');
+  const query = db<DeviceConnectionConfigRow>('device_connection_configs').whereNull('deleted_at');
   const scopeValue = getAccessScopeValue(access?.scope);
   if (!access || scopeValue === 'ALL') return query;
 
   return query.whereExists(function deviceConnectionAccessExists() {
     this.select(db.raw('1'))
-      .from('cems_wpms_connected_measurement_points as cp')
-      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
-        this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
-      })
+      .from(factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'))
+      .leftJoin(
+        factoryProfileReadTable('eligible_factories', 'ef'),
+        function joinEligibleFactory() {
+          this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
+        },
+      )
       .leftJoin('factories as f', function joinFactory() {
-        this.on('f.fid', '=', 'cp.factory_id').orOn('f.code', '=', 'cp.factory_id').andOnNull('f.deleted_at');
+        this.on('f.fid', '=', 'cp.factory_id')
+          .orOn('f.code', '=', 'cp.factory_id')
+          .andOnNull('f.deleted_at');
       })
-      .leftJoin('provinces as pr', 'pr.id', 'f.province_id')
+      .leftJoin('provinces as pr', function joinProvince() {
+        if (isCanonicalFactoryProfilesEnabled()) this.on('pr.name_th', '=', 'ef.province_name');
+        else this.on('pr.id', '=', 'f.province_id');
+      })
       .leftJoin('industrial_estates as ie', function joinEstate() {
-        this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
+        if (isCanonicalFactoryProfilesEnabled()) {
+          this.on('ie.name_th', '=', 'ef.industrial_estate_name').andOnNull('ie.deleted_at');
+        } else {
+          this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
+        }
       })
       .leftJoin('cems_wpms_request_factory_snapshots as fs', function joinSnapshot() {
         this.on('fs.request_id', '=', 'cp.source_request_id').andOnNull('fs.deleted_at');
@@ -283,7 +294,9 @@ function applyDeviceConnectionLocationFilter(
         return;
       }
       builder.where((regionBuilder) => {
-        regionBuilder.whereIn('pr.region', regions).orWhereIn('fs.region_name', regions);
+        regionBuilder.whereIn('pr.region', regions);
+        if (!isCanonicalFactoryProfilesEnabled())
+          regionBuilder.orWhereIn('fs.region_name', regions);
       });
       return;
     }
@@ -294,7 +307,9 @@ function applyDeviceConnectionLocationFilter(
         return;
       }
       builder.where((provinceBuilder) => {
-        provinceBuilder.where('pr.name_th', province).orWhere('fs.province_name', province);
+        provinceBuilder.where('pr.name_th', province);
+        if (!isCanonicalFactoryProfilesEnabled())
+          provinceBuilder.orWhere('fs.province_name', province);
       });
       return;
     }
@@ -305,23 +320,29 @@ function applyDeviceConnectionLocationFilter(
         return;
       }
       builder.where((estateBuilder) => {
-        estateBuilder.where('ie.code', estate).orWhere('fs.industrial_estate_code', estate);
+        estateBuilder.where('ie.code', estate);
+        if (!isCanonicalFactoryProfilesEnabled())
+          estateBuilder.orWhere('fs.industrial_estate_code', estate);
       });
       return;
     }
     case 'OWN_FACTORY':
       builder.where((ownBuilder) => {
         ownBuilder.whereExists(function assignedFactory() {
-          this.select(db.raw('1')).from('factories as f').whereRaw('f.fid = cp.factory_id OR f.code = cp.factory_id');
+          this.select(db.raw('1'))
+            .from('factories as f')
+            .whereRaw('f.fid = cp.factory_id OR f.code = cp.factory_id');
           applyAssignedFactoryAccessFilter(this, access.actorUserId);
         });
       });
       return;
     case 'FACTORY_TYPE_88':
-      applyFactoryType88Filter(builder, [
-        'ef.factory_type_sequence',
-        'fs.factory_main_type_code',
-      ]);
+      applyFactoryType88Filter(
+        builder,
+        isCanonicalFactoryProfilesEnabled()
+          ? ['ef.factory_type_sequence']
+          : ['ef.factory_type_sequence', 'fs.factory_main_type_code'],
+      );
       return;
     default:
       builder.whereRaw('1 = 0');
@@ -526,8 +547,7 @@ async function hydrate(
     stationId: row.station_id,
     deviceCode: row.device_code ?? null,
     protocol: row.protocol,
-    settings:
-      sensitiveSettingsMode === 'plaintext' ? settings : maskSensitiveSettings(settings),
+    settings: sensitiveSettingsMode === 'plaintext' ? settings : maskSensitiveSettings(settings),
     channels: channels.map(toChannelDTO),
     statusManagement: parseStatusManagement(row.status_management_json),
     createdBy: Number(row.created_by),

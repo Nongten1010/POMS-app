@@ -1,3 +1,4 @@
+import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
 import { z } from 'zod';
 import {
   MONITORING_POINT_STATUSES,
@@ -79,7 +80,15 @@ export const saveMonitoringPointFormSchema = z
         factoryTypeMain: optionalText(128),
         factoryTypeSub: optionalText(128),
         operationStatus: optionalText(128),
-        eiaInfo: optionalText(255),
+        eiaInfo: z
+          .string()
+          .trim()
+          .max(255)
+          .optional()
+          .nullable()
+          .transform((value) =>
+            value === undefined && isCanonicalFactoryProfilesEnabled() ? undefined : value || null,
+          ),
         eiaOther: optionalText(500),
         projectName: optionalText(500),
         address: optionalText(1000),

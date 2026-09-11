@@ -2,6 +2,15 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-09-11 — เปิดใช้ข้อมูลทั่วไปโรงงานร่วมกันใน canonical mode
+
+- **Breaking change:** มี เมื่อเปิด `FACTORY_PROFILE_MODE=canonical`; ค่าเริ่มต้นยังเป็น `legacy` และข้อกำหนดใหม่เฉพาะ canonical ด้านล่างยังไม่บังคับใน legacy mode
+- **Affected canonical docs:** [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md), [คำขอเชื่อมต่อ](./menus/connection-requests/README.md), [คำขอแก้ไขโรงงาน POMS](./menus/master-data/factory-edit-requests.md)
+- **Impact:** ข้อมูลทั่วไปปัจจุบันของโรงงานเข้าข่ายและ POMS ใช้แหล่งหลักร่วมกัน โดยทะเบียนต้นทาง Fac60k ยังคง read-only. ฟอร์มที่ผูกเข้าข่ายและการเลือกฟอร์มเข้าเป็นโรงงานเข้าข่ายรับ `factory.eiaInfo` เฉพาะหกค่าที่รองรับหรือ `null`; free-text อื่นที่ไม่ว่างตอบ `400 BAD_REQUEST`. `null`/ค่าว่างล้าง EIA และรายละเอียดร่วมกัน ส่วนการไม่ส่งคงค่าปัจจุบัน. การ `PUT` ฟอร์มที่ผูกเข้าข่ายแล้วโดยไม่ส่งเลขทะเบียนใหม่ หรือส่ง `null`/ค่าว่าง ตอบ `409 CONFLICT` พร้อม `error.details.field = "factory.factoryRegistrationNoNew"`.
+- **Impact on pending requests:** การเชื่อมต่อครั้งแรกที่มีข้อมูลทั่วไปขอเปลี่ยนต้องมี source revision ที่ backend เก็บไว้ตรงกับข้อมูลหลักปัจจุบัน; คำขอค้างที่ไม่มี revision หรือ revision เก่าตอบ `409 CONFLICT` พร้อม `error.details.reason = "FACTORY_PROFILE_CHANGED"`. การเชื่อมต่อเพิ่มเมื่อมี active point แล้วใช้ข้อมูลทั่วไปปัจจุบัน และไม่ย้อน snapshot ของคำขอเก่ามาเขียนทับ. คำขอแก้ข้อมูลทั่วไปจาก POMS ตรวจ revision หรือ baseline ของคำขอเก่าก่อนอนุมัติและอาจตอบ `409` เช่นกัน
+- **Migration:** ทำ audit, แก้ความขัดแย้ง, backfill และตรวจ readiness ตาม [คู่มือเปิดใช้](../guides/factory-profile-consistency-rollout.md) ก่อนเปิด canonical. Client ของ linked form ต้องเลือก EIA จาก `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA`, `อื่นๆ` หรือ `null` และส่งเลขทะเบียนที่ไม่ว่างเมื่อบันทึก. เมื่อคำขอเชื่อมต่อครั้งแรกมี revision หายหรือเก่า ผู้พิจารณาใช้ `POST /api/v1/cems-wpms-requests/:id/status` ด้วย `action: "REQUEST_REVISION"` จาก `WAITING_CONNECTION` หรือ `CONNECTION_CONFIRMED` กลับ `WAITING_FACTORY_REVISION` ได้เฉพาะกรณีดังกล่าวที่ยังไม่มี active point จากนั้นให้เจ้าของคำขอเดิม reload และ resubmit เพื่อเก็บ revision ใหม่ โดย `OFFICER_DIRECT_API` ยังคงเป็นเจ้าหน้าที่ผู้สร้างเดิมที่ส่งแบบใหม่ ไม่โอนเจ้าของคำขอ; สิทธิ์และกฎ transition อื่นคงเดิม
+- **Public contract:** ไม่เพิ่ม field revision หรือ profile ID ที่ client ต้องส่ง; IDs เดิมและ snapshot ประวัติคงเดิม. `eiaOther` ใน general response เป็น optional nullable field. เวลา `data.updatedAt` ของข้อมูลทั่วไปแยกจาก `data.measurementPoints[].updatedAt`; การแก้เฉพาะจุดตรวจวัดใน POMS ไม่เปลี่ยนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. แบบร่างที่ยังไม่ผูกโรงงานยังรองรับ EIA free-text ตามเดิม
+
 ## 2026-09-10 — ถอด reason ออกจากการบันทึกสถานะโรงงาน POMS
 
 - **Affected canonical docs:** [จัดการสถานะ](./menus/master-data/status-management.md#patch-บันทึกทั้งหน้าต่าง)

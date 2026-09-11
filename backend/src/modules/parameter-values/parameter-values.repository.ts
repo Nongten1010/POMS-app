@@ -1,3 +1,7 @@
+import {
+  factoryProfileReadTable,
+  isCanonicalFactoryProfilesEnabled,
+} from '../factory-profiles/factory-profile-mode';
 import { env } from '../../config/env';
 import { db } from '../../config/database';
 import { parameterSourceDb } from '../../config/parameter-source-database';
@@ -113,7 +117,7 @@ export const parameterValuesRepository = {
   },
 
   async stationExists(stationId: string): Promise<boolean> {
-    const row = await db('cems_wpms_connected_measurement_points as p')
+    const row = await db(factoryProfileReadTable('cems_wpms_connected_measurement_points', 'p'))
       .whereNull('p.deleted_at')
       .where((builder) => {
         builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
@@ -358,13 +362,15 @@ function uniqueRegisteredParameters(parameters: string[]): string[] {
 }
 
 function buildStationAccessQuery(access: ParameterValueAccessContext) {
-  const query = db('cems_wpms_connected_measurement_points as p').whereNull('p.deleted_at');
+  const query = db(
+    factoryProfileReadTable('cems_wpms_connected_measurement_points', 'p'),
+  ).whereNull('p.deleted_at');
 
   const scopeValue = getAccessScopeValue(access.scope);
   if (scopeValue === 'ALL') return query;
 
   const scopedQuery = query
-    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'p.eligible_factory_id').andOnNull('ef.deleted_at');
     })
     .leftJoin('factories as f', function joinFactory() {
@@ -378,10 +384,24 @@ function buildStationAccessQuery(access: ParameterValueAccessContext) {
       }).andOnNull('f.deleted_at');
     })
     .leftJoin('provinces as pr', function joinProvince() {
-      this.on('pr.id', '=', 'f.province_id').orOn('pr.name_th', '=', 'ef.province_name');
+      if (isCanonicalFactoryProfilesEnabled()) {
+        this.on('pr.name_th', '=', 'ef.province_name').orOn(function masterFallback() {
+          this.onNull('ef.id').andOn('pr.id', '=', 'f.province_id');
+        });
+      } else {
+        this.on('pr.id', '=', 'f.province_id').orOn('pr.name_th', '=', 'ef.province_name');
+      }
     })
     .leftJoin('industrial_estates as ie', function joinEstate() {
-      this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
+      if (isCanonicalFactoryProfilesEnabled()) {
+        this.on(function currentEstate() {
+          this.on('ie.name_th', '=', 'ef.industrial_estate_name').orOn(function masterFallback() {
+            this.onNull('ef.id').andOn('ie.id', '=', 'f.industrial_estate_id');
+          });
+        }).andOnNull('ie.deleted_at');
+      } else {
+        this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
+      }
     });
 
   applyStationAccessFilter(scopedQuery, access, 'p');
@@ -440,9 +460,7 @@ function getAccessScopeValue(
   return scope && typeof scope === 'object' ? scope.scope : scope;
 }
 
-function toScopeDetails(
-  scope: ParameterValueAccessContext['scope'],
-): PermissionScopeDetails {
+function toScopeDetails(scope: ParameterValueAccessContext['scope']): PermissionScopeDetails {
   return scope && typeof scope === 'object'
     ? scope
     : { scope: (scope ?? null) as PermissionScopeDetails['scope'] };

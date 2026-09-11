@@ -1,3 +1,7 @@
+import type { Knex } from 'knex';
+import { db } from '../../config/database';
+import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
+import { lockFactoryProfileInTransaction } from '../factory-profiles/factory-profiles.repository';
 import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
 import {
@@ -20,9 +24,15 @@ import type {
   ListMonitoringPointFormsQuery,
   MonitoringPointFormAccessContext,
   MonitoringPointFormDTO,
+  MonitoringPointFormFactoryInput,
   MonitoringPointFormSummaryDTO,
   SaveMonitoringPointFormInput,
 } from './monitoring-point-forms.types';
+
+interface SyncEligibleFactoryOptions {
+  requireRegistration: boolean;
+  submittedFactory?: MonitoringPointFormFactoryInput;
+}
 
 interface MonitoringPointFormsService {
   list(
@@ -94,9 +104,26 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
       }
     }
 
-    const created = await monitoringPointFormsRepository.create(normalizedInput, actorUserId);
-    await syncEligibleFactoryFromForm(created, actorUserId, { requireRegistration: false });
-    return created;
+    if (isCanonicalFactoryProfilesEnabled() && normalizedInput.factory.factoryRegistrationNoNew) {
+      assertCanonicalFactoryEia(normalizedInput.factory.eiaInfo);
+    }
+    return db.transaction(async (trx) => {
+      const created = await monitoringPointFormsRepository.create(
+        normalizedInput,
+        actorUserId,
+        trx,
+      );
+      await syncEligibleFactoryFromForm(
+        created,
+        actorUserId,
+        { requireRegistration: false, submittedFactory: normalizedInput.factory },
+        trx,
+      );
+      if (!isCanonicalFactoryProfilesEnabled()) return created;
+      const current = await monitoringPointFormsRepository.findById(created.id, undefined, trx);
+      if (!current) throw new Error('Created monitoring point form could not be loaded');
+      return current;
+    });
   },
 
   async update(
@@ -115,15 +142,42 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     ) {
       throw new NotFoundError('Monitoring point form not found');
     }
-    const updated = await monitoringPointFormsRepository.update(
-      id,
-      normalizedInput,
-      actorUserId,
-      access,
-    );
-    if (!updated) throw new NotFoundError('Monitoring point form not found');
-    await syncEligibleFactoryFromForm(updated, actorUserId, { requireRegistration: false });
-    return updated;
+    return db.transaction(async (trx) => {
+      if (isCanonicalFactoryProfilesEnabled()) {
+        const selected = await eligibleFactoriesRepository.findByMonitoringPointFormId(id, trx);
+        if (selected && !normalizedInput.factory.factoryRegistrationNoNew?.trim()) {
+          throw new ConflictError(
+            'Cannot clear the registration number of a linked eligible factory',
+            {
+              field: 'factory.factoryRegistrationNoNew',
+              eligibleFactoryId: selected.id,
+            },
+          );
+        }
+        if (selected || normalizedInput.factory.factoryRegistrationNoNew) {
+          assertCanonicalFactoryEia(normalizedInput.factory.eiaInfo);
+        }
+        if (selected) await lockFactoryProfileInTransaction(trx, selected.id);
+      }
+      const updated = await monitoringPointFormsRepository.update(
+        id,
+        normalizedInput,
+        actorUserId,
+        access,
+        trx,
+      );
+      if (!updated) throw new NotFoundError('Monitoring point form not found');
+      await syncEligibleFactoryFromForm(
+        updated,
+        actorUserId,
+        { requireRegistration: false, submittedFactory: normalizedInput.factory },
+        trx,
+      );
+      if (!isCanonicalFactoryProfilesEnabled()) return updated;
+      const current = await monitoringPointFormsRepository.findById(updated.id, undefined, trx);
+      if (!current) throw new Error('Updated monitoring point form could not be loaded');
+      return current;
+    });
   },
 
   async selectEligible(
@@ -131,14 +185,32 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     actorUserId: number,
     access?: MonitoringPointFormAccessContext,
   ): Promise<EligibleFactoryDTO> {
-    const form = await monitoringPointFormsRepository.findById(id, access);
-    if (!form) throw new NotFoundError('Monitoring point form not found');
-
-    const selected = await syncEligibleFactoryFromForm(form, actorUserId, {
-      requireRegistration: true,
+    return db.transaction(async (trx) => {
+      let form = await monitoringPointFormsRepository.findById(id, access, trx);
+      if (!form) throw new NotFoundError('Monitoring point form not found');
+      if (isCanonicalFactoryProfilesEnabled()) {
+        const linked = await eligibleFactoriesRepository.findByMonitoringPointFormId(id, trx);
+        if (linked) {
+          await lockFactoryProfileInTransaction(trx, linked.id);
+          form = await monitoringPointFormsRepository.findById(id, access, trx);
+          if (!form) throw new NotFoundError('Monitoring point form not found');
+          assertCanonicalFactoryEia(form.factory.eiaInfo);
+          const current = await eligibleFactoriesRepository.findByMonitoringPointFormId(id, trx);
+          if (!current) throw new NotFoundError('Eligible factory selection not found');
+          return current;
+        }
+      }
+      const selected = await syncEligibleFactoryFromForm(
+        form,
+        actorUserId,
+        {
+          requireRegistration: true,
+        },
+        trx,
+      );
+      if (!selected) throw new Error('Eligible factory selection could not be synchronized');
+      return selected;
     });
-    if (!selected) throw new Error('Eligible factory selection could not be synchronized');
-    return selected;
   },
 };
 
@@ -157,20 +229,37 @@ function normalizeMonitoringPointFormAddress(
 async function syncEligibleFactoryFromForm(
   form: MonitoringPointFormDTO,
   actorUserId: number,
-  options: { requireRegistration: boolean },
+  options: SyncEligibleFactoryOptions,
+  trx: Knex.Transaction,
 ): Promise<EligibleFactoryDTO | null> {
   const rawInput = buildEligibleFactoryInput(form, options);
   if (!rawInput) return null;
-  const resolvedAddress = await resolveEligibleFactoryAddressForStorage({
-    sourceFactoryId: rawInput.sourceFactoryId ?? null,
-    factoryRegistrationNoNew: rawInput.factoryRegistrationNoNew,
-    address: rawInput.address,
-    provinceName: rawInput.provinceName,
-  });
-  const resolvedIndustrialEstate = await resolveEligibleFactoryIndustrialEstateForStorage({
-    sourceFactoryId: rawInput.sourceFactoryId ?? null,
-    factoryRegistrationNoNew: rawInput.factoryRegistrationNoNew,
-  });
+  const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(
+    form.id,
+    trx,
+  );
+  const existingByRegistration = existingByForm
+    ? null
+    : await eligibleFactoriesRepository.findByRegistrationNoNew(
+        rawInput.factoryRegistrationNoNew,
+        trx,
+      );
+  const hasCanonicalProfile =
+    isCanonicalFactoryProfilesEnabled() && Boolean(existingByForm || existingByRegistration);
+  const resolvedAddress = hasCanonicalProfile
+    ? rawInput.address
+    : await resolveEligibleFactoryAddressForStorage({
+        sourceFactoryId: rawInput.sourceFactoryId ?? null,
+        factoryRegistrationNoNew: rawInput.factoryRegistrationNoNew,
+        address: rawInput.address,
+        provinceName: rawInput.provinceName,
+      });
+  const resolvedIndustrialEstate = hasCanonicalProfile
+    ? undefined
+    : await resolveEligibleFactoryIndustrialEstateForStorage({
+        sourceFactoryId: rawInput.sourceFactoryId ?? null,
+        factoryRegistrationNoNew: rawInput.factoryRegistrationNoNew,
+      });
   const input: CreateEligibleFactoryInput = {
     ...rawInput,
     address: resolvedAddress,
@@ -179,20 +268,17 @@ async function syncEligibleFactoryFromForm(
       : {}),
   };
 
-  const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(form.id);
   if (existingByForm) {
     const updated = await eligibleFactoriesRepository.updateFromMonitoringPointForm(
       existingByForm.id,
       input,
       actorUserId,
+      trx,
     );
     if (!updated) throw new NotFoundError('Eligible factory selection not found');
     return updated;
   }
 
-  const existingByRegistration = await eligibleFactoriesRepository.findByRegistrationNoNew(
-    input.factoryRegistrationNoNew,
-  );
   if (
     existingByRegistration?.monitoringPointFormId &&
     existingByRegistration.monitoringPointFormId !== form.id
@@ -211,17 +297,18 @@ async function syncEligibleFactoryFromForm(
       existingByRegistration.id,
       input,
       actorUserId,
+      trx,
     );
     if (!updated) throw new NotFoundError('Eligible factory selection not found');
     return updated;
   }
 
-  return eligibleFactoriesRepository.create(input, actorUserId);
+  return eligibleFactoriesRepository.create(input, actorUserId, trx);
 }
 
 function buildEligibleFactoryInput(
   form: MonitoringPointFormDTO,
-  options: { requireRegistration: boolean },
+  options: SyncEligibleFactoryOptions,
 ): CreateEligibleFactoryInput | null {
   const registrationNoNew = form.factory.factoryRegistrationNoNew?.trim();
   if (!registrationNoNew) {
@@ -253,7 +340,14 @@ function buildEligibleFactoryInput(
     machineryHorsepower: form.factory.machineryHorsepower ?? null,
     productionCapacity: buildProductionCapacitySummary(form),
     fuelUsed: buildFuelSummary(form),
-    ...buildEligibleFactoryEiaPatch(form.factory.eiaInfo, form.factory.eiaOther),
+    ...buildEligibleFactoryEiaPatch(
+      isCanonicalFactoryProfilesEnabled() && options.submittedFactory
+        ? options.submittedFactory.eiaInfo
+        : form.factory.eiaInfo,
+      isCanonicalFactoryProfilesEnabled() && options.submittedFactory
+        ? options.submittedFactory.eiaOther
+        : form.factory.eiaOther,
+    ),
     ...(form.factory.projectName != null ? { projectName: form.factory.projectName } : {}),
     selectedReason: 'selected_from_monitoring_point_form',
   };
@@ -264,6 +358,11 @@ function buildEligibleFactoryEiaPatch(
   eiaOther?: string | null,
 ): Pick<CreateEligibleFactoryInput, 'eia' | 'eiaOther' | 'hasEia'> {
   const assessment = eiaInfo?.trim();
+  if (isCanonicalFactoryProfilesEnabled()) {
+    assertCanonicalFactoryEia(eiaInfo);
+    if (eiaInfo === undefined) return {};
+    if (!assessment) return { eia: null, eiaOther: null, hasEia: null };
+  }
   if (isConnectionRequestEiaAssessment(assessment)) {
     return {
       eia: assessment,
@@ -273,6 +372,16 @@ function buildEligibleFactoryEiaPatch(
   }
 
   return {};
+}
+
+function assertCanonicalFactoryEia(eiaInfo?: string | null): void {
+  const assessment = eiaInfo?.trim();
+  if (assessment && !isConnectionRequestEiaAssessment(assessment)) {
+    throw new BadRequestError('Unsupported EIA assessment for a shared factory profile', {
+      field: 'factory.eiaInfo',
+      allowedValues: [...CONNECTION_REQUEST_EIA_ASSESSMENTS],
+    });
+  }
 }
 
 function isConnectionRequestEiaAssessment(value?: string): value is ConnectionRequestEiaAssessment {

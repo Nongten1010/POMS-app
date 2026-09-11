@@ -1,3 +1,4 @@
+import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
 import {
   AppError,
   BadRequestError,
@@ -292,6 +293,7 @@ export const pomsFactoriesService = {
         id,
         {
           formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
+          ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
           proposedFactory,
           proposedMeasurementPoints: proposed,
         },
@@ -309,6 +311,7 @@ export const pomsFactoriesService = {
       id,
       {
         formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO,
+        ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
         proposedFactory: proposed,
         proposedMeasurementPoints: null,
       },

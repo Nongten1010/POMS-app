@@ -63,6 +63,15 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
     },
   },
 };
+const currentConnectedPointDescription =
+  'อ่าน pointName, pointCode, pointType, parameters, monitoringPointStatus, details, documentsAndImages และ measurementInstruments จาก active connected point ปัจจุบันตาม allowlist; null และ [] ที่ล้างแล้วไม่ดึงค่า snapshot เก่ากลับมา. รายการตัดจุด inactive ออก; endpoint ของสถานีที่ไม่ active หรือนอก scope ตอบ 404. canonical mode ใช้ข้อมูลทั่วไปโรงงานร่วมกับเข้าข่าย; ประวัติคำขอยังคง snapshot เดิม';
+const connectionProfileWriteDescription =
+  'การเชื่อมต่อครั้งแรกปรับเฉพาะข้อมูลทั่วไปที่อนุญาต โดย canonical mode ตรวจ source revision ที่ backend เก็บเมื่อยื่น/ส่งกลับก่อนบันทึก; ถ้า revision หายหรือเปลี่ยนและคำขอมีข้อมูลทั่วไป ให้ส่งคำขอกลับมาใหม่. เมื่อมีจุดเชื่อมต่ออยู่แล้วใช้ข้อมูลโรงงานปัจจุบัน รวม null โดยไม่นำ snapshot เก่ามาเขียนทับ. Backend เก็บ revision ภายใน ผู้เรียกไม่ต้องส่ง field เพิ่ม';
+const connectionProfileConflictResponse: OpenApiObject = {
+  description:
+    '409 CONFLICT: legacy สำเนาข้อมูลโรงงานปัจจุบันขัดกัน ใช้ error.details.reason = FACTORY_PROFILE_CONFLICT; canonical การเชื่อมต่อครั้งแรกมีข้อมูลทั่วไปแต่ source revision หายหรือเก่า ใช้ error.details.reason = FACTORY_PROFILE_CHANGED ให้ reload และ resubmit. canonical profile ยังไม่พร้อม หรือ eligible factory ไม่ active ก็ตอบ CONFLICT; ไม่มี partial update',
+  content: { 'application/json': { schema: schemaRef('ErrorEnvelope') } },
+};
 const currentDeviceConfigDescription =
   'อ่านพารามิเตอร์จาก active connected point หลังตรวจสิทธิ์; คง mapping เดิมที่ยังอยู่, ซ่อนช่องที่ถอดออก, เพิ่ม mapping ว่างสำหรับพารามิเตอร์ใหม่. rawConfigs แสดงเฉพาะค่าที่บันทึกจริง; request-specific device-configs ยังคง snapshot เดิม';
 
@@ -662,6 +671,38 @@ const componentSchemas: Record<string, OpenApiObject> = {
       meta: { type: 'object', additionalProperties: true },
     },
   },
+  ConnectionFactoryGeneral: {
+    type: 'object',
+    additionalProperties: true,
+    required: ['factoryId', 'factoryName', 'eligibleFactoryId'],
+    description:
+      'ข้อมูลทั่วไปตาม FactoryGeneralDTO; คง field และชนิดข้อมูลเดิม เพิ่ม eiaOther เป็น optional nullable field สำหรับ canonical mode',
+    properties: {
+      factoryId: { type: 'string', maxLength: 64 },
+      factoryName: { type: 'string', maxLength: 500 },
+      eligibleFactoryId: { type: 'integer', minimum: 1, nullable: true },
+      address: nullableString(1000, 'ที่อยู่ปัจจุบัน'),
+      provinceName: nullableString(128, 'จังหวัดปัจจุบัน'),
+      industrialEstateName: nullableString(255, 'ชื่อนิคมปัจจุบัน'),
+      eia: { type: 'string', enum: [...CONNECTION_REQUEST_EIA_ASSESSMENTS], nullable: true },
+      eiaOther: nullableString(
+        500,
+        'Optional; canonical mode คืนรายละเอียดเมื่อ eia = อื่นๆ หรือ null; ไม่ใช่ field ใหม่ที่ต้องส่งใน request',
+      ),
+      hasEia: { type: 'boolean', nullable: true },
+      projectName: nullableString(500, 'ชื่อโครงการปัจจุบัน'),
+      latitude: { type: 'string', nullable: true },
+      longitude: { type: 'string', nullable: true },
+    },
+  },
+  ConnectionFactoryGeneralResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('ConnectionFactoryGeneral'),
+    },
+  },
   OperatorFactoryEligibilityRequest: {
     type: 'object',
     additionalProperties: false,
@@ -716,6 +757,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         enum: [...CONNECTION_REQUEST_EIA_ASSESSMENTS],
         nullable: true,
       },
+      eiaOther: nullableString(500, 'Optional nullable รายละเอียด EIA ใน canonical mode'),
       projectName: { type: 'string', nullable: true },
       address: { type: 'string', nullable: true },
       latitude: { type: 'string', nullable: true },
@@ -1851,7 +1893,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ข้อมูลประกอบฟอร์ม',
       summary: 'อ่านข้อมูลทั่วไปของโรงงาน',
       operationId: 'getConnectionRequestFactoryGeneral',
-      description: 'Permission: factories:view',
+      description:
+        'Permission: factories:view. ข้อมูลมี 3 ชุด: ทะเบียนต้นทาง Fac60k เป็น read-only ตามเดิม; canonical mode ใช้ข้อมูลทั่วไปปัจจุบันร่วมกันเฉพาะโรงงานเข้าข่ายและ POMS. โรงงานที่ยังไม่เข้าข่ายยังอ่านทะเบียนต้นทางตาม contract เดิม; เพิ่ม eiaOther แบบ optional nullable โดยคง factoryId และ field เดิม',
+      successSchema: schemaRef('ConnectionFactoryGeneralResponse'),
       parameters: [factoryIdPathParameter],
     }),
   },
@@ -1860,7 +1904,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้วผ่าน alias',
       operationId: 'listConnectedMeasurementPointsAlias',
-      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription}`,
+      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription} ${currentConnectedPointDescription}`,
       parameters: connectedPointFilterParameters,
     }),
   },
@@ -1884,13 +1928,14 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่',
       operationId: 'createDirectConnection',
       description:
-        'Permission: cems_wpms_requests:direct_connect. ต้องเป็น officer/admin ที่มี role monitoring_kpm/admin และ active eligible factory อยู่ใน scope; submissionAction=REQUEST_FACTORY_REVISION สร้างสถานะ WAITING_FACTORY_REVISION และ CONNECT สร้างสถานะ CONNECTED. หากไม่ส่ง action/status จะใช้ CONNECTED. เมื่อ CONNECT และ point มี pendingParameters จริง ต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า มิฉะนั้นตอบ 400 VALIDATION_ERROR',
+        'Permission: cems_wpms_requests:direct_connect. ต้องเป็น officer/admin ที่มี role monitoring_kpm/admin และ active eligible factory อยู่ใน scope; submissionAction=REQUEST_FACTORY_REVISION สร้างสถานะ WAITING_FACTORY_REVISION และ CONNECT สร้างสถานะ CONNECTED. หากไม่ส่ง action/status จะใช้ CONNECTED. เมื่อ CONNECT และ point มี pendingParameters จริง ต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า มิฉะนั้นตอบ 400 VALIDATION_ERROR' +
+        ` ${connectionProfileWriteDescription}`,
       requestBody: jsonRequestBody(schemaRef('DirectConnectionRequest'), directConnectionExample),
       successStatus: '201',
       successDescription: 'เพิ่มจุดตรวจวัดและบันทึกสถานะที่เลือกแล้ว',
       successSchema: schemaRef('ConnectionRequestResponse'),
       extraResponses: {
-        '409': { $ref: '#/components/responses/Conflict' },
+        '409': connectionProfileConflictResponse,
       },
       focus: true,
     }),
@@ -2015,7 +2060,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านข้อมูลลงแบบคำขอเชื่อมต่อ',
       operationId: 'getConnectionRequestForm',
       description:
-        'Permission: cems_wpms_requests:view และต้องเข้าถึงคำขอตาม owner/data scope. คืนเฉพาะ canonical form fields ที่ส่งกลับเข้า PUT endpoint ได้ โดยไม่คืน workflow IDs',
+        'Permission: cems_wpms_requests:view และต้องเข้าถึงคำขอตาม owner/data scope. อ่าน snapshot ของคำขอเพื่อแก้ไข/ตรวจย้อนหลัง; ไม่ใช่ API ข้อมูลปัจจุบัน. คืนเฉพาะ canonical form fields ที่ส่งกลับเข้า PUT endpoint ได้ โดยไม่คืน workflow IDs',
       parameters: [idPathParameter],
       successSchema: schemaRef('ConnectionRequestFormResponse'),
       focus: true,
@@ -2100,7 +2145,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'พิจารณาคำขอ',
       summary: 'เปลี่ยนสถานะหรือแจ้งแก้ไข',
       operationId: 'changeConnectionRequestStatus',
-      description: 'Permission: cems_wpms_requests:approve',
+      description:
+        'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นเจ้าของคำขอเดิม resubmit เพื่อเก็บ revision ใหม่ (OPERATOR_FORM: ผู้สร้างเดิม; OFFICER_DIRECT_API: เจ้าหน้าที่ผู้สร้างเดิม) โดยยังต้องมีสิทธิ์ edit และไม่โอนเจ้าของคำขอ. กรณีอื่นคงข้อจำกัด transition เดิม',
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -2188,7 +2234,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'บันทึกหรือยืนยันการเชื่อมต่อ',
       operationId: 'confirmConnectionRequestConnection',
-      description: 'Permission: cems_wpms_requests:edit',
+      description: 'Permission: cems_wpms_requests:edit' + ` ${connectionProfileWriteDescription}`,
+      extraResponses: { '409': connectionProfileConflictResponse },
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -2213,7 +2260,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'พิจารณาคำขอ',
       summary: 'เจ้าหน้าที่ตรวจยืนยันการเชื่อมต่อ',
       operationId: 'verifyConnectionRequestConnection',
-      description: 'Permission: cems_wpms_requests:approve',
+      description:
+        'Permission: cems_wpms_requests:approve' + ` ${connectionProfileWriteDescription}`,
+      extraResponses: { '409': connectionProfileConflictResponse },
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -2233,7 +2282,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้ว',
       operationId: 'listConnectedMeasurementPoints',
-      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription}`,
+      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription} ${currentConnectedPointDescription}`,
       parameters: connectedPointFilterParameters,
     }),
   },
@@ -2242,7 +2291,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้วของโรงงาน',
       operationId: 'listConnectedMeasurementPointsForFactory',
-      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription}`,
+      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription} ${currentConnectedPointDescription}`,
       parameters: [factoryIdPathParameter],
     }),
   },
@@ -2260,7 +2309,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ข้อมูลประกอบฟอร์ม',
       summary: 'อ่าน prefill ฟอร์มเพิ่มพารามิเตอร์',
       operationId: 'getAddParameterFormDetail',
-      description: 'Permission: cems_wpms_requests:view',
+      description: `Permission: cems_wpms_requests:view. ${currentConnectedPointDescription}`,
       parameters: [stationIdPathParameter],
     }),
   },
@@ -2308,8 +2357,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ข้อมูลประกอบฟอร์ม',
       summary: 'อ่าน prefill เพิ่มพารามิเตอร์ของ annual point code (proxy-decoded path)',
       operationId: 'getAnnualAddParameterFormDetail',
-      description:
-        'Permission: cems_wpms_requests:view. Compatibility path สำหรับ annual point code ที่ถูกแยกเป็น 2 path segments',
+      description: `Permission: cems_wpms_requests:view. Compatibility path สำหรับ annual point code ที่ถูกแยกเป็น 2 path segments. ${currentConnectedPointDescription}`,
       parameters: [annualStationIdPathParameter, buddhistYearPathParameter],
     }),
   },

@@ -238,6 +238,40 @@ jobs:
           npm run db:migrate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify factory profile activation prerequisites
+        if: steps.changes.outputs.backend_changed == 'true'
+        working-directory: backend
+        timeout-minutes: 2
+        run: |
+          @'
+          (async () => {
+            const { env } = require('./dist/config/env');
+            console.log('[factory-profile-deploy] mode=' + env.FACTORY_PROFILE_MODE);
+            if (env.FACTORY_PROFILE_MODE !== 'canonical') return;
+
+            const { db } = require('./dist/config/database');
+            try {
+              const { runFactoryProfileBackfill } = require('./dist/modules/factory-profiles/factory-profile-backfill');
+              const report = await runFactoryProfileBackfill(db, { apply: false });
+              console.log(JSON.stringify({
+                schemaReady: report.schemaReady,
+                readyForCanonical: report.readyForCanonical,
+                missingProfiles: report.counts.missingProfiles,
+                conflicts: report.counts.conflicts
+              }));
+              if (!report.readyForCanonical) {
+                throw new Error('Canonical factory profiles are not ready');
+              }
+            } finally {
+              await db.destroy();
+            }
+          })().catch(() => {
+            console.error('Factory profile activation preflight failed; inspect readiness before deploying.');
+            process.exitCode = 1;
+          });
+          '@ | node
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Deploy backend service files
         if: steps.changes.outputs.backend_changed == 'true'
         timeout-minutes: 15

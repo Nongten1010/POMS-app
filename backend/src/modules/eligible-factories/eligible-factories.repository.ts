@@ -1,5 +1,15 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import {
+  factoryProfileReadTable,
+  isCanonicalFactoryProfilesEnabled,
+} from '../factory-profiles/factory-profile-mode';
+import {
+  createFactoryProfileFromEligibleInTransaction,
+  lockFactoryProfileInTransaction,
+  projectFactoryProfileToMonitoringFormInTransaction,
+  updateFactoryProfileInTransaction,
+} from '../factory-profiles/factory-profiles.repository';
 import { ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import type { EligibleFactoryAccessContext } from './eligible-factories.access';
 import {
@@ -174,8 +184,11 @@ export const eligibleFactoriesRepository = {
     };
   },
 
-  async findByMonitoringPointFormId(formId: number): Promise<EligibleFactoryDTO | null> {
-    const row = await db<EligibleFactoryRow>('eligible_factories')
+  async findByMonitoringPointFormId(
+    formId: number,
+    trx?: Knex.Transaction,
+  ): Promise<EligibleFactoryDTO | null> {
+    const row = await (trx ?? db)<EligibleFactoryRow>(factoryProfileReadTable('eligible_factories'))
       .where('monitoring_point_form_id', formId)
       .whereNull('deleted_at')
       .first();
@@ -371,7 +384,7 @@ export const eligibleFactoriesRepository = {
   },
 
   async findById(id: number, trx?: Knex.Transaction): Promise<EligibleFactoryDTO | null> {
-    const row = await (trx ?? db)<EligibleFactoryRow>('eligible_factories')
+    const row = await (trx ?? db)<EligibleFactoryRow>(factoryProfileReadTable('eligible_factories'))
       .where('id', id)
       .whereNull('deleted_at')
       .first();
@@ -429,31 +442,72 @@ export const eligibleFactoriesRepository = {
     eligibleFactoryId: number,
     formId: number,
     actorUserId: number,
+    trx?: Knex.Transaction,
   ): Promise<EligibleFactoryDTO | null> {
-    await db('eligible_factories').where('id', eligibleFactoryId).whereNull('deleted_at').update({
-      monitoring_point_form_id: formId,
-      updated_at: db.fn.now(),
-      updated_by: actorUserId,
-    });
+    await (trx ?? db)('eligible_factories')
+      .where('id', eligibleFactoryId)
+      .whereNull('deleted_at')
+      .update({
+        monitoring_point_form_id: formId,
+        updated_at: (trx ?? db).fn.now(),
+        updated_by: actorUserId,
+      });
 
-    return this.findById(eligibleFactoryId);
+    return this.findById(eligibleFactoryId, trx);
   },
 
   async updateFromMonitoringPointForm(
     eligibleFactoryId: number,
     input: CreateEligibleFactoryInput,
     actorUserId: number,
+    trx?: Knex.Transaction,
   ): Promise<EligibleFactoryDTO | null> {
-    await db('eligible_factories')
+    if (!trx && isCanonicalFactoryProfilesEnabled()) {
+      return db.transaction((transaction) =>
+        this.updateFromMonitoringPointForm(eligibleFactoryId, input, actorUserId, transaction),
+      );
+    }
+    if (trx) await lockFactoryProfileInTransaction(trx, eligibleFactoryId);
+    const formPatch = toMonitoringPointFormUpdateRow(input);
+    const affected = await (trx ?? db)('eligible_factories')
       .where('id', eligibleFactoryId)
       .whereNull('deleted_at')
       .update({
-        ...toMonitoringPointFormUpdateRow(input),
-        updated_at: db.fn.now(),
+        ...formPatch,
+        updated_at: (trx ?? db).fn.now(),
         updated_by: actorUserId,
       });
-
-    return this.findById(eligibleFactoryId);
+    if (!affected) return null;
+    if (trx) {
+      const sharedFields = [
+        'factory_name',
+        'factory_type_sequence',
+        'address',
+        'province_name',
+        'industrial_estate_name',
+        'latitude',
+        'longitude',
+        'business_activity',
+        'eia_assessment',
+        'eia_other',
+        'has_eia',
+        'project_name',
+      ] as const;
+      const profilePatch = Object.fromEntries(
+        sharedFields
+          .filter((field) => Object.hasOwn(formPatch, field))
+          .map((field) => [field, formPatch[field]]),
+      ) as Parameters<typeof updateFactoryProfileInTransaction>[2];
+      await updateFactoryProfileInTransaction(
+        trx,
+        eligibleFactoryId,
+        profilePatch,
+        actorUserId,
+        'monitoring-point-form',
+      );
+      await projectFactoryProfileToMonitoringFormInTransaction(trx, eligibleFactoryId, actorUserId);
+    }
+    return this.findById(eligibleFactoryId, trx);
   },
 };
 
@@ -548,7 +602,9 @@ function buildEligibleFactoriesBaseQuery(
   actorUserId: number | undefined,
   trx?: Knex.Transaction,
 ): Knex.QueryBuilder<EligibleFactoryRow, EligibleFactoryRow[]> {
-  const builder = (trx ?? db)<EligibleFactoryRow>('eligible_factories as ef')
+  const builder = (trx ?? db)<EligibleFactoryRow>(
+    factoryProfileReadTable('eligible_factories', 'ef'),
+  )
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
     .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
     .whereNull('ef.deleted_at');
@@ -708,6 +764,12 @@ async function createEligibleFactoryRecord(
   const [{ id }] = await trx('eligible_factories')
     .insert(toInsertRow(input, actorUserId))
     .returning('id');
+  await createFactoryProfileFromEligibleInTransaction(
+    trx,
+    Number(id),
+    actorUserId,
+    'eligible-selection',
+  );
   const created = await eligibleFactoriesRepository.findById(Number(id), trx);
   if (!created) throw new Error('Created eligible factory could not be loaded');
   return created;
@@ -736,15 +798,15 @@ async function lockFactoryMasterForEligibleInput(
 async function restoreDeletedFactory(
   input: CreateEligibleFactoryInput,
   actorUserId: number,
-  trx?: Knex.Transaction,
+  trx: Knex.Transaction,
 ): Promise<EligibleFactoryDTO | null> {
-  const querySource = trx ?? db;
+  const querySource = trx;
   const deletedFactoryQuery = querySource('eligible_factories')
     .where('factory_registration_no_new', input.factoryRegistrationNoNew)
     .whereNotNull('deleted_at')
     .select<{ id: number | string }[]>('id')
     .first();
-  if (trx) deletedFactoryQuery.forUpdate();
+  deletedFactoryQuery.forUpdate();
   const existingDeleted = await deletedFactoryQuery;
 
   if (!existingDeleted) return null;
@@ -758,6 +820,12 @@ async function restoreDeletedFactory(
       updated_at: querySource.fn.now(),
     });
 
+  await createFactoryProfileFromEligibleInTransaction(
+    trx,
+    Number(existingDeleted.id),
+    actorUserId,
+    'eligible-selection',
+  );
   return eligibleFactoriesRepository.findById(Number(existingDeleted.id), trx);
 }
 
@@ -823,7 +891,7 @@ function toMonitoringPointFormUpdateRow(
     machinery_horsepower: input.machineryHorsepower ?? null,
     production_capacity: input.productionCapacity ?? null,
     fuel_used: input.fuelUsed ?? null,
-    ...(input.eia != null
+    ...(input.eia != null || (isCanonicalFactoryProfilesEnabled() && input.eia === null)
       ? {
           eia_assessment: input.eia,
           eia_other: input.eia === 'อื่นๆ' ? (input.eiaOther ?? null) : null,

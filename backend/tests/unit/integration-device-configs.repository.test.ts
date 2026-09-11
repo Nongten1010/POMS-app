@@ -1,11 +1,17 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../src/config/database', () => ({
   db: jest.fn(),
 }));
 
 import { db } from '../../src/config/database';
+import { env } from '../../src/config/env';
 import { integrationDeviceConfigsRepository } from '../../src/modules/integrations/integration-device-configs.repository';
+
+const originalProfileMode = env.FACTORY_PROFILE_MODE;
+afterEach(() => {
+  env.FACTORY_PROFILE_MODE = originalProfileMode;
+});
 
 const mockedDb = db as unknown as jest.Mock<(...args: unknown[]) => unknown>;
 
@@ -13,6 +19,35 @@ describe('integrationDeviceConfigsRepository', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
+
+  it.each([
+    ['legacy', 'cems_wpms_connected_measurement_points'],
+    ['canonical', 'current_connected_measurement_points'],
+  ] as const)(
+    'uses %s current point source without changing the integration response',
+    async (mode, table) => {
+      env.FACTORY_PROFILE_MODE = mode;
+      const { query } = connectedPointQuery({
+        point_name: 'Point fixture',
+        point_code: 'S0001',
+        system_type: 'CEMS',
+        point_type: 'STACK',
+        details_json: JSON.stringify({ monitoringPointKind: 'Stationary' }),
+        instruments_json: null,
+      });
+      mockedDb.mockReturnValue(query);
+      const result =
+        await integrationDeviceConfigsRepository.findConnectedPointByStationId('S0001');
+      expect(mockedDb).toHaveBeenCalledWith(table);
+      expect(result).toEqual({
+        stationId: 'S0001',
+        systemType: 'CEMS',
+        pointType: 'STACK',
+        monitoringPointKind: 'Stationary',
+        measurementInstruments: null,
+      });
+    },
+  );
 
   it('loads the three measurement-point source fields for an integration response', async () => {
     const { query, first } = connectedPointQuery({

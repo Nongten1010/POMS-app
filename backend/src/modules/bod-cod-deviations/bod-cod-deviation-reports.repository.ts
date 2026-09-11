@@ -1,3 +1,7 @@
+import {
+  factoryProfileReadTable,
+  isCanonicalFactoryProfilesEnabled,
+} from '../factory-profiles/factory-profile-mode';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
@@ -658,22 +662,53 @@ export function buildBodCodResubmissionWorkflowResetQueriesForTests(reportId: nu
 function buildFactoryQuery(
   access: BodCodDeviationAccess,
 ): Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]> {
-  const builder = db<FactoryTableRow>('cems_wpms_connected_measurement_points as cp')
+  const builder = db<FactoryTableRow>(
+    factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
+  )
     .leftJoin('factories as f', function joinPomsFactory() {
       this.on('f.fid', '=', 'cp.factory_id')
         .orOn('f.code', '=', 'cp.factory_id')
         .orOn('f.code', '=', 'cp.factory_registration_no');
     })
-    .leftJoin('provinces as p', 'p.id', 'f.province_id')
-    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
-    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on(function joinFactoryKeys() {
-        this.on('ef.factory_registration_no_new', '=', 'cp.factory_registration_no')
-          .orOn('ef.factory_registration_no_new', '=', 'cp.factory_id')
-          .orOn('ef.source_factory_id', '=', 'cp.factory_id')
-          .orOn('ef.source_factory_id', '=', 'f.fid')
-          .orOn('ef.factory_registration_no_new', '=', 'f.code');
+        if (isCanonicalFactoryProfilesEnabled()) {
+          this.on('ef.id', '=', 'cp.eligible_factory_id').orOn(function unlinkedFactoryFallback() {
+            this.onNull('cp.eligible_factory_id').andOn(function factoryIdentifiers() {
+              this.on('ef.factory_registration_no_new', '=', 'cp.factory_registration_no')
+                .orOn('ef.factory_registration_no_new', '=', 'cp.factory_id')
+                .orOn('ef.source_factory_id', '=', 'cp.factory_id')
+                .orOn('ef.source_factory_id', '=', 'f.fid')
+                .orOn('ef.factory_registration_no_new', '=', 'f.code');
+            });
+          });
+        } else {
+          this.on('ef.factory_registration_no_new', '=', 'cp.factory_registration_no')
+            .orOn('ef.factory_registration_no_new', '=', 'cp.factory_id')
+            .orOn('ef.source_factory_id', '=', 'cp.factory_id')
+            .orOn('ef.source_factory_id', '=', 'f.fid')
+            .orOn('ef.factory_registration_no_new', '=', 'f.code');
+        }
       }).andOnNull('ef.deleted_at');
+    })
+    .modify((builder) => {
+      if (!isCanonicalFactoryProfilesEnabled()) {
+        builder
+          .leftJoin('provinces as p', 'p.id', 'f.province_id')
+          .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id');
+        return;
+      }
+      builder
+        .leftJoin('provinces as p', function currentProvince() {
+          this.on('p.name_th', '=', 'ef.province_name').orOn(function masterFallback() {
+            this.onNull('ef.id').andOn('p.id', '=', 'f.province_id');
+          });
+        })
+        .leftJoin('industrial_estates as ie', function currentEstate() {
+          this.on('ie.name_th', '=', 'ef.industrial_estate_name').orOn(function masterFallback() {
+            this.onNull('ef.id').andOn('ie.id', '=', 'f.industrial_estate_id');
+          });
+        });
     })
     .whereNull('cp.deleted_at')
     .select(
@@ -735,7 +770,7 @@ function buildReportQuery(
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
-    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on(function joinFactoryIdentifiers() {
         this.on('ef.factory_registration_no_new', '=', 'r.factory_registration_no')
           .orOn('ef.factory_registration_no_new', '=', 'f.code')
@@ -857,7 +892,12 @@ async function assertCanChangeWorkflowStatus(
   if (!row) throw new NotFoundError('BOD/COD deviation report not found');
 
   const currentStep = editableCurrentStep(row);
-  const allowedActions = allowedActionsFor(row.status, currentStep, access.scope, access.roles ?? []);
+  const allowedActions = allowedActionsFor(
+    row.status,
+    currentStep,
+    access.scope,
+    access.roles ?? [],
+  );
   if (!allowedActions.includes(input.action)) {
     throw new ConflictError('BOD/COD workflow action is not allowed for current status', {
       currentStatus: row.status,
@@ -937,7 +977,7 @@ function buildEditableReportQuery(
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
-    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on(function joinFactoryIdentifiers() {
         this.on('ef.factory_registration_no_new', '=', 'r.factory_registration_no')
           .orOn('ef.factory_registration_no_new', '=', 'f.code')

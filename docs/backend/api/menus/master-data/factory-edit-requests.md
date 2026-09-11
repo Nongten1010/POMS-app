@@ -10,6 +10,21 @@
 
 การอ่านข้อมูลและการกำหนดขอบเขตโรงงานใช้ `factories:view` การอัปโหลดเอกสารใช้ `factories:edit` ส่วนการส่ง ส่งกลับ หรือยกเลิกคำขอใช้ทั้ง `factories:view` และ `factories:edit` แต่การคัด resource สำหรับ mutation จะยึด data scope ของ `factories:edit` และการพิจารณาใช้ทั้ง `factories:view` และ `factories:approve` โดยยึด data scope ของ `factories:approve` พร้อมบังคับว่า reviewer ต้องมี role `admin` ทุก endpoint ต้องใช้ Bearer token
 
+### ข้อมูลสามชุดและเวอร์ชัน
+
+ทะเบียนต้นทาง Fac60k เป็นข้อมูลอ้างอิงแบบ read-only ตามเดิม โรงงานเข้าข่ายและโรงงาน POMS ใช้ข้อมูลทั่วไปหลักร่วมกันเมื่อเปิด canonical mode หลังตรวจและย้ายข้อมูล; ข้อมูลจุดตรวจวัด สถานะเฉพาะระบบ และ snapshot ของคำขอยังคงแยกตามหน้าที่ ดู[แนวทางเปิดใช้ข้อมูลทั่วไปชุดเดียวและตรวจย้ายข้อมูล](../../../guides/factory-profile-consistency-rollout.md)
+
+| ข้อมูล | พฤติกรรมใน canonical mode |
+| --- | --- |
+| ข้อมูลทั่วไปโรงงาน | หนึ่ง profile ต่อโรงงาน ใช้ร่วมกันระหว่างเข้าข่ายและ POMS; อนุมัติแล้วอ่านค่าร่วมตรงกัน |
+| `data.updatedAt` | เวลาแก้ข้อมูลทั่วไปล่าสุด แยกจากเวลาจุดตรวจวัด |
+| `data.measurementPoints[].updatedAt` | เวลาของจุดนั้น ใช้ตรวจการแก้จุดพร้อมกัน ไม่ใช้แทน revision ข้อมูลทั่วไป |
+| คำขอแก้ข้อมูลทั่วไป | Backend เก็บ source revision ภายในเมื่อสร้าง/ส่งกลับ แล้วตรวจซ้ำก่อนอนุมัติ; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline |
+| คำขอแก้เฉพาะจุด | แก้ข้อมูลจุดใน POMS และการผูกช่องอุปกรณ์ที่เกี่ยวข้อง ไม่เขียนข้อมูลทั่วไปหรือเข้าข่าย |
+| ประวัติคำขอ | คง current/proposed snapshots ณ เวลาคำขอ แม้ profile ปัจจุบันเปลี่ยนแล้ว |
+
+ไม่เพิ่ม field revision หรือรหัส profile ที่ frontend ต้องส่ง และไม่เปลี่ยนความหมายรหัส API เดิม หาก profile เปลี่ยนระหว่างรออนุมัติหรือยังไม่พร้อมใช้ ตอบ `409 CONFLICT` โดยไม่บันทึกสำเร็จเพียงบางส่วน
+
 ### Main Flow
 
 1. เรียก `GET /api/v1/poms-factories` เพื่อแสดงโรงงาน current/live ที่อยู่ใน data scope ของผู้ใช้
@@ -1121,7 +1136,7 @@ State transitions:
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `APPROVE`          | `APPROVED`               | sync ข้อมูลจริงแบบ atomic ตาม `formType`                    |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้ข้อมูลจริง                                   |
 
-Approval target mapping สำหรับ `BASIC_INFO` (ใช้ allowlist นี้รวมถึงการอนุมัติคำขอเก่าที่ยังรอพิจารณา):
+ใน canonical mode `BASIC_INFO` เขียนข้อมูลทั่วไปหลักและประวัติ revision ใน transaction เดียวกับ approval พร้อมอัปเดตสำเนาสำหรับรองรับระบบเดิมตามตารางด้านล่าง; ตารางนี้เป็น compatibility projection ไม่ใช่หลายแหล่งหลัก. ใน legacy mode ใช้ตารางเดิมตาม mapping นี้โดยตรง. ใช้ allowlist เดิมรวมถึงการอนุมัติคำขอเก่าที่ยังรอพิจารณา:
 
 | API profile field                   | active `cems_wpms_connected_measurement_points`                                           | active `eligible_factories`                      |
 | ----------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -1151,7 +1166,7 @@ Approval target mapping สำหรับ `BASIC_INFO` (ใช้ allowlist น
 | `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกไม่ใช่ `createdBy`, reviewer ไม่ใช่ admin หรือผู้พิจารณาซ้ำกับ `createdBy`/`submittedBy`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
 | `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
-| `409`       | `CONFLICT`         | ไม่มี profile field เปลี่ยน, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version เปลี่ยน, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |
+| `409`       | `CONFLICT`         | ไม่มี profile field เปลี่ยน, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version/revision เปลี่ยน, canonical profile ยังไม่พร้อม, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |
 
 ## Business Flow And Explanations
 

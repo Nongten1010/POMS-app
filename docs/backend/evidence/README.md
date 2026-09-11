@@ -11,6 +11,10 @@
 - Snapshot ต้องระบุว่าเป็นหลักฐาน ณ เวลาหนึ่ง ห้ามให้ frontend ใช้แทน request/response contract ปัจจุบัน
 - เอกสาร evidence ใหม่ต้องลิงก์กลับไป canonical API page หรือ explanation ที่มันสนับสนุน
 
+## ข้อมูลทั่วไปโรงงาน
+
+- [ข้อมูลทั่วไปโรงงานเข้าข่ายและ POMS: ผลตรวจและขอบเขตหลักฐาน](./master-data/factory-profile-consistency.md)
+
 ## Connection requests
 
 - [ชื่อจุดตรวจวัดในหน้าขอเชื่อมต่อหลังอนุมัติแก้ไข](./connection-requests/current-point-name-after-approval.tdd.md)

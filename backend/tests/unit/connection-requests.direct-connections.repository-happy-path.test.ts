@@ -7,8 +7,11 @@ jest.mock('../../src/config/database', () => ({
 }));
 
 import { db } from '../../src/config/database';
+import { env } from '../../src/config/env';
+import { factoryProfileReadTable } from '../../src/modules/factory-profiles/factory-profile-mode';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 
+const originalMode = env.FACTORY_PROFILE_MODE;
 const mockedDb = db as unknown as jest.Mock<(...args: unknown[]) => unknown> & {
   transaction: jest.Mock<(...args: unknown[]) => Promise<unknown>>;
 };
@@ -16,12 +19,14 @@ const mockedDb = db as unknown as jest.Mock<(...args: unknown[]) => unknown> & {
 describe('connectionRequestsRepository.createDirectConnection happy path', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    env.FACTORY_PROFILE_MODE = 'legacy';
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-07-21T03:04:05.000Z'));
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    env.FACTORY_PROFILE_MODE = originalMode;
   });
 
   it('rejects without writing when the linked eligible factory is no longer active', async () => {
@@ -57,183 +62,237 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     );
   });
 
-  it('persists eligible-factory location when no factory master row exists', async () => {
-    const fixedNow = new Date('2026-07-21T03:04:05.000Z');
-    const requestInsert = jest.fn((_: unknown) => ({
-      returning: jest.fn(async () => [{ id: 101 }]),
-    }));
-    const snapshotInsert = jest.fn(async (_: unknown) => 1);
-    const pointInsert = jest.fn((_: unknown) => ({
-      returning: jest.fn(async () => [{ id: 202 }]),
-    }));
-    const registryInsert = jest.fn(async (_: unknown) => 1);
-    const historyInsert = jest.fn(async (_: unknown) => 1);
-    const connectedPointInsert = jest.fn(async (_: unknown) => 1);
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    'persists current general data (connected=%s canonical=%s)',
+    async (hasCurrentProfile, canonical) => {
+      env.FACTORY_PROFILE_MODE = canonical ? 'canonical' : 'legacy';
+      const fixedNow = new Date('2026-07-21T03:04:05.000Z');
+      const requestInsert = jest.fn((_: unknown) => ({
+        returning: jest.fn(async () => [{ id: 101 }]),
+      }));
+      const snapshotInsert = jest.fn(async (_: unknown) => 1);
+      const pointInsert = jest.fn((_: unknown) => ({
+        returning: jest.fn(async () => [{ id: 202 }]),
+      }));
+      const registryInsert = jest.fn(async (_: unknown) => 1);
+      const historyInsert = jest.fn(async (_: unknown) => 1);
+      const connectedPointInsert = jest.fn(async (_: unknown) => 1);
 
-    const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
-    const duplicateLookup = makeChain({ first: async () => undefined });
-    const existingProfileLookup = makeChain({ first: async () => undefined });
-    const requestNumberLookup = makeChain({ first: async () => ({ total: 0 }) });
-    const eligibleFactorySource = makeChain({
-      first: async () => ({
-        province_id: '10',
-        province_name: 'กรุงเทพมหานคร',
-        province_region: 'ภาคกลาง',
-        industrial_estate_code: 'IE-01',
-        industrial_estate_name: 'นิคมทดสอบ',
-      }),
-    });
-    const snapshotSoftDelete = makeChain({ update: async () => 1 });
-    const requestRead = makeChain({ first: async () => requestRow(fixedNow, 'WPMS') });
-    const pointRead = makeChain({ terminalOrderBy: async () => [measurementPointRow()] });
-    const historyRead = makeChain({
-      terminalOrderBy: async () => [statusHistoryRow(fixedNow)],
-      terminalOrderByAfter: 2,
-    });
-    const snapshotRead = makeChain({ first: async () => factorySnapshotRow() });
+      const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
+      const duplicateLookup = makeChain({ first: async () => undefined });
+      const existingProfileLookup = makeChain({
+        terminalSelect: async () =>
+          hasCurrentProfile
+            ? [
+                {
+                  factory_name: 'ชื่อโรงงานปัจจุบัน',
+                  factory_address: 'ที่อยู่ปัจจุบัน',
+                  factory_latitude: 14,
+                  factory_longitude: 101,
+                  factory_eia_assessment: 'ไม่มี',
+                  factory_eia_other: null,
+                  factory_has_eia: false,
+                  factory_project_name: null,
+                  factory_front_photos_json: null,
+                  factory_logo_json: null,
+                },
+              ]
+            : [],
+      });
+      const requestNumberLookup = makeChain({ first: async () => ({ total: 0 }) });
+      const eligibleFactorySource = makeChain({
+        first: async () => ({
+          province_id: '10',
+          province_name: 'กรุงเทพมหานคร',
+          province_region: 'ภาคกลาง',
+          industrial_estate_code: 'IE-01',
+          industrial_estate_name: 'นิคมทดสอบ',
+        }),
+      });
+      const snapshotSoftDelete = makeChain({ update: async () => 1 });
+      const requestRead = makeChain({ first: async () => requestRow(fixedNow, 'WPMS') });
+      const pointRead = makeChain({ terminalOrderBy: async () => [measurementPointRow()] });
+      const historyRead = makeChain({
+        terminalOrderBy: async () => [statusHistoryRow(fixedNow)],
+        terminalOrderByAfter: 2,
+      });
+      const snapshotRead = makeChain({ first: async () => factorySnapshotRow() });
 
-    const queues = new Map<string, unknown[]>([
-      ['eligible_factories', [eligibleLookup]],
-      [
-        'cems_wpms_connected_measurement_points',
-        [duplicateLookup, existingProfileLookup, { insert: connectedPointInsert }],
-      ],
-      [
-        'cems_wpms_connection_requests',
-        [requestNumberLookup, { insert: requestInsert }, requestRead],
-      ],
-      ['eligible_factories as ef', [eligibleFactorySource]],
-      [
-        'cems_wpms_request_factory_snapshots',
-        [snapshotSoftDelete, { insert: snapshotInsert }, snapshotRead],
-      ],
-      ['cems_wpms_measurement_points', [{ insert: pointInsert }, pointRead]],
-      ['cems_wpms_point_code_registry', [{ insert: registryInsert }]],
-      ['cems_wpms_request_status_history', [{ insert: historyInsert }, historyRead]],
-    ]);
-    const trx = Object.assign(
-      jest.fn((tableName: string) => {
-        const builder = queues.get(tableName)?.shift();
-        if (!builder) throw new Error(`Unexpected query for ${tableName}`);
-        return builder;
-      }),
-      { fn: { now: jest.fn(() => 'db-now') } },
-    );
-    mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
-      const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
-      return callback(trx);
-    });
+      const canonicalProfileLookup = makeChain({
+        first: async () => ({
+          id: 501,
+          eligible_factory_id: 17,
+          revision: 3,
+          factory_name: 'ชื่อโรงงานปัจจุบัน',
+          address: 'ที่อยู่ปัจจุบัน',
+          latitude: 14,
+          longitude: 101,
+          eia_assessment: 'ไม่มี',
+          eia_other: null,
+          has_eia: false,
+          project_name: null,
+          front_photos_json: null,
+          logo_json: null,
+        }),
+      });
+      const queues = new Map<string, unknown[]>([
+        ['eligible_factories', canonical ? Array(3).fill(eligibleLookup) : [eligibleLookup]],
+        ['factory_profiles', canonical ? Array(2).fill(canonicalProfileLookup) : []],
+        [
+          'cems_wpms_connected_measurement_points',
+          [duplicateLookup, existingProfileLookup, { insert: connectedPointInsert }],
+        ],
+        [
+          'cems_wpms_connection_requests',
+          [requestNumberLookup, { insert: requestInsert }, requestRead],
+        ],
+        [factoryProfileReadTable('eligible_factories', 'ef'), [eligibleFactorySource]],
+        [
+          'cems_wpms_request_factory_snapshots',
+          [snapshotSoftDelete, { insert: snapshotInsert }, snapshotRead],
+        ],
+        ['cems_wpms_measurement_points', [{ insert: pointInsert }, pointRead]],
+        ['cems_wpms_point_code_registry', [{ insert: registryInsert }]],
+        ['cems_wpms_request_status_history', [{ insert: historyInsert }, historyRead]],
+      ]);
+      const trx = Object.assign(
+        jest.fn((tableName: string) => {
+          const builder = queues.get(tableName)?.shift();
+          if (!builder) throw new Error(`Unexpected query for ${tableName}`);
+          return builder;
+        }),
+        { fn: { now: jest.fn(() => 'db-now') } },
+      );
+      mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
+        const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
+        return callback(trx);
+      });
 
-    const created = await connectionRequestsRepository.createDirectConnection(
-      directInput('WPMS') as never,
-      42,
-    );
+      const created = await connectionRequestsRepository.createDirectConnection(
+        directInput('WPMS') as never,
+        42,
+      );
 
-    expect(mockedDb.transaction).toHaveBeenCalledTimes(1);
-    expect(requestInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        request_no: 'WPMS-0001/2569',
-        eligible_factory_id: 17,
-        request_type: 'ADD_MEASUREMENT_POINT',
-        submission_source: 'OFFICER_DIRECT_API',
-        status: 'CONNECTED',
-        revision_reason: null,
-        officer_note: null,
-        verified_at: fixedNow,
-        created_by: 42,
-        updated_by: 42,
-      }),
-    );
-    expect(snapshotInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        request_id: 101,
-        region_code: 'ภาคกลาง',
-        region_name: 'ภาคกลาง',
-        province_code: '10',
-        province_name: 'กรุงเทพมหานคร',
-        industrial_estate_code: 'IE-01',
-        industrial_estate_name: 'นิคมทดสอบ',
-        created_by: 42,
-      }),
-    );
-    expect(pointInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        request_id: 101,
+      expect(mockedDb.transaction).toHaveBeenCalledTimes(1);
+      expect(requestInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          request_no: 'WPMS-0001/2569',
+          eligible_factory_id: 17,
+          request_type: 'ADD_MEASUREMENT_POINT',
+          submission_source: 'OFFICER_DIRECT_API',
+          status: 'CONNECTED',
+          revision_reason: null,
+          officer_note: null,
+          verified_at: fixedNow,
+          created_by: 42,
+          updated_by: 42,
+        }),
+      );
+      if (canonical) {
+        expect(requestInsert).toHaveBeenCalledWith(
+          expect.objectContaining({ source_factory_profile_revision: 3 }),
+        );
+      }
+      expect(snapshotInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          request_id: 101,
+          region_code: 'ภาคกลาง',
+          region_name: 'ภาคกลาง',
+          province_code: '10',
+          province_name: 'กรุงเทพมหานคร',
+          industrial_estate_code: 'IE-01',
+          industrial_estate_name: 'นิคมทดสอบ',
+          created_by: 42,
+        }),
+      );
+      expect(pointInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          request_id: 101,
+          point_code: 'free form / จุด-01',
+          point_name: 'ปล่องทดสอบ 1',
+          monitoring_point_status: 'เชื่อมต่อครบแล้ว',
+          point_code_assignment_mode: 'OFFICER_DIRECT',
+          point_code_assignment_reason: null,
+          point_code_assigned_by: 42,
+          point_code_assigned_at: 'db-now',
+          created_by: 42,
+        }),
+      );
+      expect(registryInsert).toHaveBeenCalledWith({
         point_code: 'free form / จุด-01',
-        point_name: 'ปล่องทดสอบ 1',
-        monitoring_point_status: 'เชื่อมต่อครบแล้ว',
-        point_code_assignment_mode: 'OFFICER_DIRECT',
-        point_code_assignment_reason: null,
-        point_code_assigned_by: 42,
-        point_code_assigned_at: 'db-now',
-        created_by: 42,
-      }),
-    );
-    expect(registryInsert).toHaveBeenCalledWith({
-      point_code: 'free form / จุด-01',
-      normalized_point_code: 'FREE FORM / จุด-01',
-      system_type: 'WPMS',
-      prefix: null,
-      numeric_sequence: null,
-      assignment_mode: 'OFFICER_DIRECT',
-      source_request_id: 101,
-      source_measurement_point_id: 202,
-      reason: null,
-      assigned_by: 42,
-      assigned_at: 'db-now',
-    });
-    expect(historyInsert).toHaveBeenCalledWith({
-      request_id: 101,
-      status: 'CONNECTED',
-      note: 'เจ้าหน้าที่เพิ่มจุดตรวจวัดและเชื่อมต่อโดยตรงผ่าน API',
-      changed_by: 42,
-    });
-    expect(connectedPointInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
+        normalized_point_code: 'FREE FORM / จุด-01',
+        system_type: 'WPMS',
+        prefix: null,
+        numeric_sequence: null,
+        assignment_mode: 'OFFICER_DIRECT',
         source_request_id: 101,
         source_measurement_point_id: 202,
-        eligible_factory_id: 17,
-        factory_id: 'factory-001',
-        factory_address: '99 หมู่ 1 แขวงลำปลาทิว เขตลาดกระบัง กรุงเทพมหานคร 10520',
-        system_type: 'WPMS',
-        point_code: 'free form / จุด-01',
-        monitoring_point_status: 'เชื่อมต่อครบแล้ว',
-        connected_at: fixedNow,
-        created_by: 42,
-      }),
-    );
-    expect(created).toMatchObject({
-      id: 101,
-      requestNo: 'WPMS-0001/2569',
-      requestType: 'ADD_MEASUREMENT_POINT',
-      submissionSource: 'OFFICER_DIRECT_API',
-      status: 'CONNECTED',
-      verifiedAt: fixedNow.toISOString(),
-      regionName: 'ภาคกลาง',
-      measurementPoints: [
+        reason: null,
+        assigned_by: 42,
+        assigned_at: 'db-now',
+      });
+      expect(historyInsert).toHaveBeenCalledWith({
+        request_id: 101,
+        status: 'CONNECTED',
+        note: 'เจ้าหน้าที่เพิ่มจุดตรวจวัดและเชื่อมต่อโดยตรงผ่าน API',
+        changed_by: 42,
+      });
+      expect(connectedPointInsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: 202,
-          pointCode: 'free form / จุด-01',
-          monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+          source_request_id: 101,
+          source_measurement_point_id: 202,
+          eligible_factory_id: 17,
+          factory_id: 'factory-001',
+          factory_name: hasCurrentProfile || canonical ? 'ชื่อโรงงานปัจจุบัน' : 'โรงงานทดสอบ',
+          factory_address:
+            hasCurrentProfile || canonical
+              ? 'ที่อยู่ปัจจุบัน'
+              : '99 หมู่ 1 แขวงลำปลาทิว เขตลาดกระบัง กรุงเทพมหานคร 10520',
+          system_type: 'WPMS',
+          point_code: 'free form / จุด-01',
+          monitoring_point_status: 'เชื่อมต่อครบแล้ว',
+          connected_at: fixedNow,
+          created_by: 42,
         }),
-      ],
-      statusHistory: [expect.objectContaining({ status: 'CONNECTED', changedById: 42 })],
-    });
-    expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
-    const scopedWhere = {
-      where: jest.fn().mockReturnThis(),
-      orWhere: jest.fn().mockReturnThis(),
-    };
-    const requestNumberWhere = requestNumberLookup.where as jest.Mock;
-    const requestNoScope = requestNumberWhere.mock.calls[0]?.[0] as
-      | ((query: typeof scopedWhere) => void)
-      | undefined;
-    expect(requestNoScope).toEqual(expect.any(Function));
-    requestNoScope?.(scopedWhere);
-    expect(scopedWhere.where).toHaveBeenCalledWith('request_no', 'like', 'WPMS-%/2569');
-    expect(scopedWhere.orWhere).toHaveBeenCalledWith('request_no', 'like', 'WEMS-%/2569');
-    expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
-  });
+      );
+      expect(created).toMatchObject({
+        id: 101,
+        requestNo: 'WPMS-0001/2569',
+        requestType: 'ADD_MEASUREMENT_POINT',
+        submissionSource: 'OFFICER_DIRECT_API',
+        status: 'CONNECTED',
+        verifiedAt: fixedNow.toISOString(),
+        regionName: 'ภาคกลาง',
+        measurementPoints: [
+          expect.objectContaining({
+            id: 202,
+            pointCode: 'free form / จุด-01',
+            monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+          }),
+        ],
+        statusHistory: [expect.objectContaining({ status: 'CONNECTED', changedById: 42 })],
+      });
+      expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
+      const scopedWhere = {
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis(),
+      };
+      const requestNumberWhere = requestNumberLookup.where as jest.Mock;
+      const requestNoScope = requestNumberWhere.mock.calls[0]?.[0] as
+        | ((query: typeof scopedWhere) => void)
+        | undefined;
+      expect(requestNoScope).toEqual(expect.any(Function));
+      requestNoScope?.(scopedWhere);
+      expect(scopedWhere.where).toHaveBeenCalledWith('request_no', 'like', 'WPMS-%/2569');
+      expect(scopedWhere.orWhere).toHaveBeenCalledWith('request_no', 'like', 'WEMS-%/2569');
+      expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
+    },
+  );
 
   it('returns a field conflict when the direct point code is already reserved', async () => {
     const requestInsert = jest.fn((_: unknown) => ({
@@ -493,6 +552,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
 function makeChain(options: {
   first?: () => Promise<unknown>;
   update?: () => Promise<unknown>;
+  terminalSelect?: () => Promise<unknown>;
   terminalOrderBy?: () => Promise<unknown>;
   terminalOrderByAfter?: number;
 }) {
@@ -506,7 +566,7 @@ function makeChain(options: {
     count: returnChain,
     forUpdate: returnChain,
     leftJoin: returnChain,
-    select: returnChain,
+    select: options.terminalSelect ? jest.fn(options.terminalSelect) : returnChain,
     first: jest.fn(options.first ?? (async () => undefined)),
     update: jest.fn(options.update ?? (async () => 1)),
     orderBy: jest.fn(() => {

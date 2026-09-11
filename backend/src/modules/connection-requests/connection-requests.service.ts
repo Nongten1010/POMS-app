@@ -9,6 +9,7 @@ import {
   NotFoundError,
 } from '../../shared/errors/AppError';
 import { logger } from '../../config/logger';
+import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
 import { isFactoryType88 } from '../../shared/utils/factory-type-scope';
 import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
 import { toCanonicalStatusDateTime } from '../device-connections/device-connection-status-datetime';
@@ -663,18 +664,44 @@ export const connectionRequestsService = {
       regionalAccess,
     );
 
-    const [factoryReference, activeDeviceConfigs] = await Promise.all([
+    const [factoryReference, activeDeviceConfigs, currentFactory] = await Promise.all([
       connectionRequestsRepository.findActiveEligibleFactoryReference({
         factoryId: request.factoryId,
         factoryRegistrationNo: request.factoryRegistrationNo,
       }),
-      deviceConnectionsService.listActiveSettings({ stationId }),
+      listActiveDeviceConfigsForPoint(point, stationId),
+      isCanonicalFactoryProfilesEnabled()
+        ? connectionRequestsRepository.findFactoryGeneral(request.factoryId, {
+            actorUserId,
+            scope: viewScope,
+            regionalAccess,
+          })
+        : Promise.resolve(null),
     ]);
+    if (isCanonicalFactoryProfilesEnabled() && !currentFactory) {
+      throw new NotFoundError('Current factory profile not found');
+    }
+    const currentRequest = currentFactory
+      ? {
+          ...request,
+          factoryName: currentFactory.factoryName,
+          industryMainOrder: currentFactory.industryMainOrder,
+          industrySubOrder: currentFactory.industrySubOrder,
+          businessActivity: currentFactory.businessActivity,
+          eia: currentFactory.eia,
+          eiaOther: currentFactory.eiaOther ?? null,
+          hasEia: currentFactory.hasEia,
+          projectName: currentFactory.projectName,
+          address: currentFactory.address,
+          latitude: currentFactory.latitude === null ? null : Number(currentFactory.latitude),
+          longitude: currentFactory.longitude === null ? null : Number(currentFactory.longitude),
+        }
+      : request;
 
     const inferredOldRegistrationNo =
       request.factoryRegistrationNo !== request.factoryId ? request.factoryRegistrationNo : null;
 
-    return toAddParameterFormDetail(request, point, stationId, {
+    return toAddParameterFormDetail(currentRequest, point, stationId, {
       newRegistrationNo: factoryReference?.factoryRegistrationNoNew ?? request.factoryId,
       oldRegistrationNo: factoryReference?.factoryRegistrationNoOld ?? inferredOldRegistrationNo,
       activeDeviceConfigs,
@@ -687,14 +714,14 @@ export const connectionRequestsService = {
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigFormDetailDTO> {
-    const { request } = await loadCurrentDeviceConfigPoint(
+    const { request, point } = await loadCurrentDeviceConfigPoint(
       stationId,
       actorUserId,
       viewScope,
       true,
       regionalAccess,
     );
-    const configs = await deviceConnectionsService.listActiveSettings({ stationId });
+    const configs = await listActiveDeviceConfigsForPoint(point, stationId);
     return toDeviceConfigFormDetail(request, configs, stationId, true);
   },
 
@@ -761,17 +788,27 @@ export const connectionRequestsService = {
           ],
         )
       : [];
-    const currentNamesBySourcePointId = new Map(
+    const currentPointsBySourcePointId = new Map(
       currentPoints.flatMap((point) =>
         point.sourceMeasurementPointId !== undefined
-          ? [[point.sourceMeasurementPointId, point.pointName] as const]
+          ? [[point.sourceMeasurementPointId, point] as const]
           : [],
       ),
     );
     const details = await Promise.all(
       rows.flatMap((request) =>
         request.measurementPoints
-          .filter((point) => stationMatchesMeasurementPoint(point, query.stationId))
+          .flatMap((point) => {
+            const current = currentPointsBySourcePointId.get(point.id);
+            if (
+              !current ||
+              (current.sourceRequestId !== undefined && current.sourceRequestId !== request.id)
+            ) {
+              return [];
+            }
+            const livePoint = toCurrentMeasurementPoint(point, current);
+            return stationMatchesMeasurementPoint(livePoint, query.stationId) ? [livePoint] : [];
+          })
           .map(async (point) => {
             const pointDeviceConfigs = await listActiveDeviceConfigsForPoint(
               point,
@@ -786,12 +823,7 @@ export const connectionRequestsService = {
               status: request.statusLabel,
               statusCode: request.status,
               connectedAt: request.verifiedAt,
-              // Display the approved live name without mutating the historical request
-              // or changing the identifiers used to look up device configuration.
-              point: {
-                ...point,
-                pointName: currentNamesBySourcePointId.get(point.id) ?? point.pointName,
-              },
+              point,
               deviceConfigs: toDeviceConfigPayloadGroups(pointDeviceConfigs),
             };
           }),
@@ -1247,7 +1279,7 @@ export const connectionRequestsService = {
     );
   },
 
-  changeStatus(
+  async changeStatus(
     id: number,
     input: ChangeConnectionRequestStatusInput,
     actorUserId: number,
@@ -1259,6 +1291,28 @@ export const connectionRequestsService = {
     }
 
     if (input.action === 'REQUEST_REVISION') {
+      if (isCanonicalFactoryProfilesEnabled()) {
+        const request = await loadRequest(id);
+        if (
+          request.status === CONNECTION_REQUEST_STATUS.WAITING_CONNECTION ||
+          request.status === CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED
+        ) {
+          const revisionReason = input.revisionReason?.trim();
+          if (!revisionReason) {
+            throw new BadRequestError('revisionReason is required when requesting revision', {
+              path: 'revisionReason',
+            });
+          }
+          // Recovery checks current factory access and profile revision together under locks.
+          // The request's historical location can differ from the current eligible factory.
+          return connectionRequestsRepository.returnToFactoryRevisionAfterProfileChange(
+            id,
+            actorUserId,
+            { scope: approveScope, regionalAccess },
+            { revisionReason, officerNote: input.officerNote ?? null },
+          );
+        }
+      }
       return this.review(
         id,
         {
@@ -1577,6 +1631,34 @@ async function requireActiveEligibleFactory(input: {
   return eligibleFactory;
 }
 
+function toCurrentMeasurementPoint(
+  snapshot: MeasurementPointDTO,
+  current: CurrentFactoryMeasurementPointDTO,
+): MeasurementPointDTO {
+  const details = current.details ?? null;
+  return {
+    ...snapshot,
+    latitude:
+      details && ('stackLatitude' in details || 'instrumentLatitude' in details)
+        ? (coordinateFromDetails(details, 'stackLatitude') ??
+          coordinateFromDetails(details, 'instrumentLatitude'))
+        : snapshot.latitude,
+    longitude:
+      details && ('stackLongitude' in details || 'instrumentLongitude' in details)
+        ? (coordinateFromDetails(details, 'stackLongitude') ??
+          coordinateFromDetails(details, 'instrumentLongitude'))
+        : snapshot.longitude,
+    pointName: current.pointName,
+    pointCode: current.pointCode,
+    pointType: current.pointType ?? snapshot.pointType,
+    parameters: current.parameters,
+    monitoringPointStatus: current.monitoringPointStatus,
+    details,
+    documentsAndImages: current.documentsAndImages ?? [],
+    measurementInstruments: current.measurementInstruments ?? null,
+  };
+}
+
 function stationMatchesMeasurementPoint(point: MeasurementPointDTO, stationId?: string): boolean {
   if (!stationId) return true;
   return point.pointCode === stationId || point.pointName === stationId;
@@ -1596,32 +1678,16 @@ async function loadCurrentDeviceConfigPoint(
     useAssignedFactoryAccess,
     regionalAccess,
   );
-  const currentPoints =
-    await connectionRequestsRepository.listConnectedMeasurementPointsForFactories([
-      request.factoryId,
-    ]);
-  const current = currentPoints.find(
-    (candidate) =>
-      candidate.sourceMeasurementPointId === point.id &&
-      (candidate.pointCode === stationId ||
-        candidate.pointName === stationId ||
-        candidate.stationId === stationId),
-  );
-  if (!current) throw new NotFoundError('Active connected measurement point not found');
   const livePoint: MeasurementPointDTO = {
     ...point,
-    pointName: current.pointName,
-    pointCode: current.pointCode,
-    parameters: current.parameters,
-    monitoringPointStatus: current.monitoringPointStatus,
     measurementInstruments: alignPointInstruments(
-      current.measurementInstruments ?? null,
-      current.parameters,
+      point.measurementInstruments ?? null,
+      point.parameters,
     ),
     details: {
       ...point.details,
-      requestedParameters: current.parameters,
-      connectedParameters: current.parameters,
+      requestedParameters: point.parameters,
+      connectedParameters: point.parameters,
     },
   };
   return {
@@ -1671,12 +1737,36 @@ async function loadLatestConnectedRequestForStation(
     },
   );
 
+  const currentPoints = rows.length
+    ? await connectionRequestsRepository.listConnectedMeasurementPointsForFactories([
+        ...new Set(rows.map((request) => request.factoryId)),
+      ])
+    : [];
   for (const request of rows) {
-    const point = findMonitoringPoint(request, stationId);
-    if (point) return { request, point };
+    for (const snapshot of request.measurementPoints) {
+      const current = currentPoints.find(
+        (candidate) =>
+          candidate.sourceMeasurementPointId === snapshot.id &&
+          (candidate.sourceRequestId === undefined || candidate.sourceRequestId === request.id) &&
+          (candidate.pointCode === stationId ||
+            candidate.pointName === stationId ||
+            candidate.stationId === stationId),
+      );
+      if (!current) continue;
+      const point = toCurrentMeasurementPoint(snapshot, current);
+      return {
+        request: {
+          ...request,
+          measurementPoints: request.measurementPoints.map((item) =>
+            item.id === point.id ? point : item,
+          ),
+        },
+        point,
+      };
+    }
   }
 
-  throw new NotFoundError('Connected measurement point not found');
+  throw new NotFoundError('Active connected measurement point not found');
 }
 
 function toAddParameterFormDetail(
@@ -1898,9 +1988,13 @@ async function listActiveDeviceConfigsForPoint(
   point: MeasurementPointDTO,
   stationId?: string,
 ): Promise<DeviceConnectionConfigDTO[]> {
-  const stationIds = stationId
-    ? [stationId]
-    : [point.pointCode, point.pointName].filter((value): value is string => Boolean(value));
+  const stationIds = [
+    ...new Set(
+      (stationId ? [point.pointCode, stationId] : [point.pointCode, point.pointName]).filter(
+        (value): value is string => Boolean(value),
+      ),
+    ),
+  ];
 
   for (const stationId of stationIds) {
     const configs = await deviceConnectionsService.listActiveSettings({ stationId });

@@ -1,7 +1,17 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { env } from '../../config/env';
+import {
+  factoryProfileReadTable,
+  isCanonicalFactoryProfilesEnabled,
+} from '../factory-profiles/factory-profile-mode';
 import { factorySourceDb } from '../../config/factory-source-database';
+import {
+  lockFactoryProfileInTransaction,
+  updateFactoryProfileInTransaction,
+  type FactoryProfileValues,
+  type FactoryProfilePatch,
+} from '../factory-profiles/factory-profiles.repository';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -60,6 +70,7 @@ const POINT_CODE_INITIAL_SEQUENCE = 2000;
 const POINT_CODE_MAX_SEQUENCE = 9999;
 
 interface ConnectionRequestRow {
+  source_factory_profile_revision?: number | string | null;
   id: number | string;
   eligible_factory_id: number | string | null;
   request_no: string;
@@ -142,6 +153,8 @@ interface ConnectedMeasurementPointRow {
 }
 
 interface ConnectedFactoryProfileRow {
+  factory_name?: string;
+  factory_address?: string | null;
   factory_latitude: number | string | null;
   factory_longitude: number | string | null;
   factory_eia_assessment: string | null;
@@ -154,6 +167,9 @@ interface ConnectedFactoryProfileRow {
 
 interface CurrentFactoryMeasurementPointRow {
   id: number | string;
+  source_request_id: number | string;
+  point_type: MeasurementPointInput['pointType'];
+  details_json: string | null;
   source_measurement_point_id: number | string;
   factory_id: string;
   eligible_factory_id: number | string | null;
@@ -229,6 +245,9 @@ interface FactoryMainTypeLabelRow {
 }
 
 interface FactoryGeneralRow {
+  eia_assessment?: string | null;
+  eia_other?: string | null;
+  project_name?: string | null;
   id: number | string;
   fid: string;
   code: string;
@@ -556,13 +575,38 @@ export const connectionRequestsRepository = {
     factoryId: string,
     access: FactoryAccess,
   ): Promise<FactoryGeneralDTO | null> {
+    const canonical = isCanonicalFactoryProfilesEnabled();
     const builder = db<FactoryGeneralRow>('factories as f')
-      .leftJoin('provinces as p', 'p.id', 'f.province_id')
-      .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+      .leftJoin(
+        factoryProfileReadTable('eligible_factories', 'ef'),
+        function joinEligibleFactory() {
+          if (canonical) {
+            this.on(function factoryIdentity() {
+              this.on('f.code', '=', 'ef.factory_registration_no_new')
+                .orOn('f.fid', '=', 'ef.factory_registration_no_new')
+                .orOn('f.fid', '=', 'ef.source_factory_id')
+                .orOn('f.code', '=', 'ef.source_factory_id');
+            }).andOnNull('ef.deleted_at');
+          } else {
+            this.on('ef.factory_registration_no_new', '=', 'f.code').andOnNull('ef.deleted_at');
+          }
+        },
+      )
+      .leftJoin(
+        'provinces as p',
+        canonical
+          ? db.raw('p.name_th = ef.province_name OR (ef.id IS NULL AND p.id = f.province_id)')
+          : db.raw('p.id = f.province_id'),
+      )
+      .leftJoin(
+        'industrial_estates as ie',
+        canonical
+          ? db.raw(
+              'ie.name_th = ef.industrial_estate_name OR (ef.id IS NULL AND ie.id = f.industrial_estate_id)',
+            )
+          : db.raw('ie.id = f.industrial_estate_id'),
+      )
       .leftJoin('juristics as j', 'j.id', 'f.juristic_id')
-      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
-        this.on('ef.factory_registration_no_new', '=', 'f.code').andOnNull('ef.deleted_at');
-      })
       .whereNull('f.deleted_at')
       .where((whereBuilder) => {
         whereBuilder
@@ -575,17 +619,27 @@ export const connectionRequestsRepository = {
         'f.id',
         'f.fid',
         'f.code',
-        'f.name',
+        canonical
+          ? db.raw('CASE WHEN ef.id IS NOT NULL THEN ef.factory_name ELSE f.name END as name')
+          : 'f.name',
         'f.system_id',
         'f.system_detail',
         'f.verify_status',
         'f.authorize_start',
         'f.authorize_end',
-        'f.province_id',
+        canonical ? 'p.id as province_id' : 'f.province_id',
         'p.region as province_region',
         'ie.code as industrial_estate_code',
-        'p.name_th as province_name',
-        'ie.name_th as industrial_estate_name',
+        canonical
+          ? db.raw(
+              'CASE WHEN ef.id IS NOT NULL THEN ef.province_name ELSE p.name_th END as province_name',
+            )
+          : 'p.name_th as province_name',
+        canonical
+          ? db.raw(
+              'CASE WHEN ef.id IS NOT NULL THEN ef.industrial_estate_name ELSE ie.name_th END as industrial_estate_name',
+            )
+          : 'ie.name_th as industrial_estate_name',
         'j.juristic_id as juristic_id',
         'j.name_th as juristic_name',
         'ef.source_factory_id',
@@ -604,6 +658,9 @@ export const connectionRequestsRepository = {
         'ef.boiler_size_each',
         'ef.fuel_used',
         'ef.has_eia',
+        'ef.eia_assessment',
+        'ef.eia_other',
+        'ef.project_name',
         'ef.id as eligible_factory_id',
       );
 
@@ -887,6 +944,9 @@ export const connectionRequestsRepository = {
       .select(
         'id',
         'source_measurement_point_id',
+        'source_request_id',
+        'point_type',
+        'details_json',
         'factory_id',
         'eligible_factory_id',
         'point_name',
@@ -905,6 +965,9 @@ export const connectionRequestsRepository = {
     return rows.map((row) => ({
       connectedPointId: Number(row.id),
       sourceMeasurementPointId: Number(row.source_measurement_point_id),
+      sourceRequestId: Number(row.source_request_id),
+      pointType: row.point_type,
+      details: parseJsonObject<MeasurementPointDetailsInput>(row.details_json),
       factoryId: row.factory_id,
       eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
       stationId: row.point_code ?? row.point_name,
@@ -970,12 +1033,17 @@ export const connectionRequestsRepository = {
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
       await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
+      const profileRevisionPatch = await captureFactoryProfileRevision(
+        trx,
+        input.eligibleFactoryId,
+      );
       const requestNo = await nextRequestNo(trx, input.systemType);
       const [{ id }] = await trx('cems_wpms_connection_requests')
         .insert({
           request_no: requestNo,
           request_type: input.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
           ...toRequestRow(input),
+          ...profileRevisionPatch,
           status: initialStatus,
           revision_reason: options?.revisionReason ?? null,
           officer_note: options?.officerNote ?? null,
@@ -1019,6 +1087,10 @@ export const connectionRequestsRepository = {
           trx,
           input.eligibleFactoryId,
         );
+        const profileRevisionPatch = await captureFactoryProfileRevision(
+          trx,
+          input.eligibleFactoryId,
+        );
         await ensureDirectPointCodeAvailable(trx, pointCode);
         const initialStatus = input.status ?? CONNECTION_REQUEST_STATUS.CONNECTED;
         const connectedImmediately = initialStatus === CONNECTION_REQUEST_STATUS.CONNECTED;
@@ -1031,6 +1103,7 @@ export const connectionRequestsRepository = {
             request_type: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
             submission_source: CONNECTION_REQUEST_SUBMISSION_SOURCE.OFFICER_DIRECT_API,
             ...toRequestRow(input),
+            ...profileRevisionPatch,
             status: initialStatus,
             revision_reason: input.revisionReason ?? null,
             officer_note: input.officerNote ?? null,
@@ -1074,6 +1147,7 @@ export const connectionRequestsRepository = {
             activeEligibleFactory,
             input,
             actorUserId,
+            requestId,
           );
           await trx('cems_wpms_connected_measurement_points').insert({
             source_request_id: requestId,
@@ -1158,12 +1232,17 @@ export const connectionRequestsRepository = {
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
       await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
+      const profileRevisionPatch = await captureFactoryProfileRevision(
+        trx,
+        input.eligibleFactoryId,
+      );
       await trx('cems_wpms_connection_requests')
         .where('id', id)
         .whereNull('deleted_at')
         .update({
           request_type: input.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
           ...toRequestRow(input),
+          ...profileRevisionPatch,
           status: nextStatus,
           revision_reason: null,
           officer_note: null,
@@ -1187,6 +1266,87 @@ export const connectionRequestsRepository = {
       const updated = await findByIdInTransaction(trx, id);
       if (!updated) throw new Error('Updated connection request could not be loaded');
       return updated;
+    });
+  },
+
+  async returnToFactoryRevisionAfterProfileChange(
+    id: number,
+    actorUserId: number,
+    access: Pick<FactoryAccess, 'scope' | 'regionalAccess'>,
+    update: { revisionReason: string; officerNote?: string | null },
+  ): Promise<ConnectionRequestDTO> {
+    if (!isCanonicalFactoryProfilesEnabled())
+      throw new ConflictError('Factory profile recovery is not enabled');
+    if (!update.revisionReason.trim()) throw new BadRequestError('Revision reason is required');
+    return db.transaction(async (trx) => {
+      const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first();
+      if (!current) throw new NotFoundError('Connection request not found');
+      if (
+        current.status !== CONNECTION_REQUEST_STATUS.WAITING_CONNECTION &&
+        current.status !== CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED
+      ) {
+        throw new ConflictError(
+          'Connection request cannot return to factory revision from its current status',
+          { currentStatus: current.status },
+        );
+      }
+      const eligibleFactoryId = Number(current.eligible_factory_id);
+      if (!Number.isSafeInteger(eligibleFactoryId) || eligibleFactoryId < 1) {
+        throw new ConflictError('Connection request is not linked to an eligible factory');
+      }
+      const profile = await lockFactoryProfileInTransaction(trx, eligibleFactoryId);
+      const points = await trx('cems_wpms_connected_measurement_points')
+        .where('eligible_factory_id', eligibleFactoryId)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .select('id');
+      const sourceRevision = Number(current.source_factory_profile_revision);
+      if (points.length > 0 || sourceRevision === Number(profile?.revision)) {
+        throw new ConflictError('Connection request has no first-connection profile conflict');
+      }
+      const accessible = await buildDirectConnectionFactoryQuery(
+        {
+          factoryId: current.factory_id,
+          factoryRegistrationNo: current.factory_registration_no,
+        },
+        { ...access, actorUserId },
+        trx,
+        eligibleFactoryId,
+      ).first();
+      if (!accessible) throw new ForbiddenError('Current factory is outside the approval scope');
+      const source = await hydrate(current, trx);
+      if (Object.keys(buildConnectedFactoryProfilePatch(source)).length === 0) {
+        throw new ConflictError('Connection request has no submitted general profile changes');
+      }
+      const updated = await trx('cems_wpms_connection_requests')
+        .where('id', id)
+        .where('status', current.status)
+        .whereNull('deleted_at')
+        .update({
+          status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+          revision_reason: update.revisionReason.trim(),
+          officer_note: update.officerNote ?? null,
+          confirmed_at: null,
+          verified_at: null,
+          updated_by: actorUserId,
+          updated_at: trx.fn.now(),
+        });
+      if (updated !== 1)
+        throw new ConflictError('Connection request changed while returning it for revision');
+      await insertHistory(
+        trx,
+        id,
+        CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        actorUserId,
+        update.revisionReason.trim(),
+      );
+      const result = await findByIdInTransaction(trx, id);
+      if (!result) throw new NotFoundError('Connection request not found');
+      return result;
     });
   },
 
@@ -1423,6 +1583,7 @@ async function syncConnectedMeasurementPointsInTransaction(
     activeEligibleFactory,
     request,
     actorUserId,
+    request.id,
   );
   for (const point of request.measurementPoints) {
     const existing = await findConnectedPointForMeasurementPoint(trx, point);
@@ -1467,6 +1628,18 @@ async function syncConnectedMeasurementPointsInTransaction(
   }
 }
 
+async function captureFactoryProfileRevision(
+  trx: Knex.Transaction,
+  eligibleFactoryId: number | undefined,
+): Promise<{ source_factory_profile_revision?: number }> {
+  if (!isCanonicalFactoryProfilesEnabled()) return {};
+  const profile = await lockFactoryProfileInTransaction(trx, eligibleFactoryId as number);
+  const revision = Number(profile?.revision);
+  if (!Number.isSafeInteger(revision) || revision < 1)
+    throw new ConflictError('Factory profile revision is invalid');
+  return { source_factory_profile_revision: revision };
+}
+
 async function requireActiveEligibleFactoryInTransaction(
   trx: Knex.Transaction,
   eligibleFactoryId: number | undefined,
@@ -1491,15 +1664,19 @@ async function syncFactoryProfileInTransaction(
   activeEligibleFactory: EligibleFactoryProfileRow,
   source: FactoryProfileSyncSource,
   actorUserId: number,
+  sourceRequestId: number,
 ): Promise<ConnectedFactoryProfileRow> {
   const eligibleFactoryId = Number(activeEligibleFactory.id);
-  const existingProfile = await trx<ConnectedFactoryProfileRow>(
+  const canonicalProfile = await lockFactoryProfileInTransaction(trx, eligibleFactoryId);
+  const existingProfiles = await trx<ConnectedFactoryProfileRow>(
     'cems_wpms_connected_measurement_points',
   )
     .where('eligible_factory_id', eligibleFactoryId)
     .whereNull('deleted_at')
-    .orderBy('id', 'desc')
-    .first(
+    .forUpdate()
+    .select(
+      'factory_name',
+      'factory_address',
       'factory_latitude',
       'factory_longitude',
       'factory_eia_assessment',
@@ -1509,19 +1686,73 @@ async function syncFactoryProfileInTransaction(
       'factory_front_photos_json',
       'factory_logo_json',
     );
+  if (canonicalProfile) {
+    if (existingProfiles.length > 0) return connectedProfileFromCanonical(canonicalProfile);
+
+    const submittedPatch = Object.fromEntries(
+      Object.entries(buildConnectedFactoryProfilePatch(source)).map(([key, value]) => [
+        key.replace(/^factory_/, ''),
+        value,
+      ]),
+    ) as FactoryProfilePatch;
+    if (Object.keys(submittedPatch).length === 0)
+      return connectedProfileFromCanonical(canonicalProfile);
+    const sourceRequest = await trx('cems_wpms_connection_requests')
+      .where('id', sourceRequestId)
+      .whereNull('deleted_at')
+      .first('source_factory_profile_revision');
+    const sourceRevision = Number(sourceRequest?.source_factory_profile_revision);
+    if (
+      !Number.isSafeInteger(sourceRevision) ||
+      sourceRevision < 1 ||
+      sourceRevision !== Number(canonicalProfile.revision)
+    ) {
+      throw new ConflictError(
+        'Factory profile changed after the request was submitted; resubmit the request',
+        {
+          eligibleFactoryId,
+          reason: 'FACTORY_PROFILE_CHANGED',
+        },
+      );
+    }
+    await updateFactoryProfileInTransaction(
+      trx,
+      eligibleFactoryId,
+      submittedPatch,
+      actorUserId,
+      'connection:first-connection',
+      sourceRevision,
+    );
+    return connectedProfileFromCanonical({ ...canonicalProfile, ...submittedPatch });
+  }
+
+  // Connection requests are historical snapshots. Once a factory is live, a
+  // subsequent connection must inherit its approved profile, including nulls.
+  const existingProfile = existingProfiles[0];
+  if (existingProfile) {
+    const comparable = (profile: ConnectedFactoryProfileRow) =>
+      JSON.stringify({
+        ...profile,
+        factory_latitude: toNullableNumber(profile.factory_latitude),
+        factory_longitude: toNullableNumber(profile.factory_longitude),
+        factory_has_eia:
+          profile.factory_has_eia == null ? null : Boolean(Number(profile.factory_has_eia)),
+      });
+    if (existingProfiles.some((profile) => comparable(profile) !== comparable(existingProfile))) {
+      throw new ConflictError(
+        'Current factory profiles disagree; reconcile the factory before connecting',
+        {
+          eligibleFactoryId,
+          reason: 'FACTORY_PROFILE_CONFLICT',
+        },
+      );
+    }
+    return existingProfile;
+  }
+
   const connectedPatch = buildConnectedFactoryProfilePatch(source);
   const eligiblePatch = buildEligibleFactoryProfilePatch(source);
 
-  if (existingProfile && Object.keys(connectedPatch).length > 0) {
-    await trx('cems_wpms_connected_measurement_points')
-      .where('eligible_factory_id', eligibleFactoryId)
-      .whereNull('deleted_at')
-      .update({
-        ...connectedPatch,
-        updated_by: actorUserId,
-        updated_at: trx.fn.now(),
-      });
-  }
   if (Object.keys(eligiblePatch).length > 0) {
     await trx('eligible_factories')
       .where('id', eligibleFactoryId)
@@ -1542,8 +1773,22 @@ async function syncFactoryProfileInTransaction(
     factory_project_name: activeEligibleFactory.project_name,
     factory_front_photos_json: null,
     factory_logo_json: null,
-    ...(existingProfile ?? {}),
     ...connectedPatch,
+  };
+}
+
+function connectedProfileFromCanonical(profile: FactoryProfileValues): ConnectedFactoryProfileRow {
+  return {
+    factory_name: profile.factory_name,
+    factory_address: profile.address,
+    factory_latitude: profile.latitude,
+    factory_longitude: profile.longitude,
+    factory_eia_assessment: profile.eia_assessment,
+    factory_eia_other: profile.eia_other,
+    factory_has_eia: profile.has_eia,
+    factory_project_name: profile.project_name,
+    factory_front_photos_json: profile.front_photos_json,
+    factory_logo_json: profile.logo_json,
   };
 }
 
@@ -1609,7 +1854,7 @@ function buildFactoriesForAccessQuery(
       `
       OUTER APPLY (
         SELECT TOP (1) ef_source.*
-        FROM eligible_factories AS ef_source
+        FROM ${factoryProfileReadTable('eligible_factories')} AS ef_source
         WHERE ef_source.deleted_at IS NULL
           AND (
             ef_source.factory_registration_no_new = f.code
@@ -1657,7 +1902,7 @@ function buildFactoriesForAccessQuery(
         COALESCE(
           (
             SELECT TOP (1) cp_name.factory_name
-            FROM cems_wpms_connected_measurement_points AS cp_name
+            FROM ${factoryProfileReadTable('cems_wpms_connected_measurement_points')} AS cp_name
             WHERE cp_name.eligible_factory_id = ef.id
               AND cp_name.deleted_at IS NULL
             ORDER BY cp_name.updated_at DESC, cp_name.id DESC
@@ -1701,7 +1946,9 @@ function buildCurrentPomsFactoryNamesQuery(
   factoryIds: string[],
   eligibleFactoryIds: number[],
 ): Knex.QueryBuilder<CurrentPomsFactoryNameRow, CurrentPomsFactoryNameRow[]> {
-  const query = db<CurrentPomsFactoryNameRow>('cems_wpms_connected_measurement_points as cp_name')
+  const query = db<CurrentPomsFactoryNameRow>(
+    factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp_name'),
+  )
     .whereNull('cp_name.deleted_at')
     .where((builder) => {
       if (factoryIds.length > 0) builder.whereIn('cp_name.factory_id', factoryIds);
@@ -1732,7 +1979,7 @@ function buildCurrentPomsFactoryNamesQuery(
 function buildConnectedFactoriesForAccessQuery(
   access: FactoryAccess,
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
-  const builder = db<FactoryRow>('eligible_factories as ef')
+  const builder = db<FactoryRow>(factoryProfileReadTable('eligible_factories', 'ef'))
     .leftJoin('factories as f', function joinFactoryMaster() {
       this.on(function joinFactoryKeys() {
         this.on('f.code', '=', 'ef.factory_registration_no_new')
@@ -1742,7 +1989,12 @@ function buildConnectedFactoriesForAccessQuery(
       }).andOnNull('f.deleted_at');
     })
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
-    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+    .leftJoin(
+      'industrial_estates as ie',
+      isCanonicalFactoryProfilesEnabled()
+        ? db.raw('ie.name_th = ef.industrial_estate_name')
+        : db.raw('ie.id = f.industrial_estate_id'),
+    )
     .whereNull('ef.deleted_at')
     .whereExists(function activeConnectedPomsPoint() {
       this.select(db.raw('1'))
@@ -1758,7 +2010,7 @@ function buildConnectedFactoriesForAccessQuery(
         COALESCE(
           (
             SELECT TOP (1) cp_name.factory_name
-            FROM cems_wpms_connected_measurement_points AS cp_name
+            FROM ${factoryProfileReadTable('cems_wpms_connected_measurement_points')} AS cp_name
             WHERE cp_name.eligible_factory_id = ef.id
               AND cp_name.deleted_at IS NULL
             ORDER BY cp_name.updated_at DESC, cp_name.id DESC
@@ -1771,9 +2023,13 @@ function buildConnectedFactoriesForAccessQuery(
       db.raw('COALESCE(f.is_active, 1) as is_active'),
       'p.id as province_id',
       'p.region as province_region',
-      'p.name_th as province_name',
+      isCanonicalFactoryProfilesEnabled()
+        ? 'ef.province_name as province_name'
+        : 'p.name_th as province_name',
       'ie.code as industrial_estate_code',
-      db.raw('COALESCE(ie.name_th, ef.industrial_estate_name) as industrial_estate_name'),
+      isCanonicalFactoryProfilesEnabled()
+        ? 'ef.industrial_estate_name as industrial_estate_name'
+        : db.raw('COALESCE(ie.name_th, ef.industrial_estate_name) as industrial_estate_name'),
       'ef.factory_registration_no_old',
       'ef.factory_type_sequence',
       'ef.address',
@@ -1815,15 +2071,24 @@ function buildConnectedFactoryGeneralForAccessQuery(
 function buildDirectConnectionFactoryQuery(
   input: { factoryId: string; factoryRegistrationNo: string },
   access: FactoryAccess,
+  connection: Knex | Knex.Transaction = db,
+  eligibleFactoryId?: number,
 ): Knex.QueryBuilder<DirectConnectionFactoryRow, DirectConnectionFactoryRow[]> {
   const identifiers = [...new Set([input.factoryId, input.factoryRegistrationNo])]
     .map((value) => value.trim())
     .filter(Boolean);
-  const builder = db<DirectConnectionFactoryRow>('eligible_factories as ef')
+  const builder = connection<DirectConnectionFactoryRow>(
+    factoryProfileReadTable('eligible_factories', 'ef'),
+  )
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
     .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
     .whereNull('ef.deleted_at')
     .where((identifierBuilder) => {
+      // Recovery keeps its stable factory link even after a registration correction.
+      if (eligibleFactoryId !== undefined) {
+        identifierBuilder.where('ef.id', eligibleFactoryId);
+        return;
+      }
       identifierBuilder
         .whereIn('ef.source_factory_id', identifiers)
         .orWhereIn('ef.factory_registration_no_new', identifiers)
@@ -2283,6 +2548,7 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
     industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
     businessActivity: row.business_activity,
     eia: environmentalAssessment.eia,
+    ...(isCanonicalFactoryProfilesEnabled() ? { eiaOther: environmentalAssessment.eiaOther } : {}),
     hasEia,
     projectName: row.project_name ?? null,
     address: row.address,
@@ -2329,13 +2595,23 @@ function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
     industryMainOrder: factoryClass ?? TEMPORARY_FACTORY_TEXT,
     industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
     businessActivity: row.business_activity,
-    eia:
-      toNullableBoolean(row.has_eia) === null
+    eia: isCanonicalFactoryProfilesEnabled()
+      ? resolveStoredConnectionRequestEia({
+          eiaAssessment: row.eia_assessment ?? null,
+          eiaOther: row.eia_other ?? null,
+          hasEia: row.has_eia,
+        }).eia
+      : toNullableBoolean(row.has_eia) === null
         ? TEMPORARY_EIA_LABEL
         : toNullableBoolean(row.has_eia)
           ? 'มี'
           : 'ไม่มี',
-    projectName: TEMPORARY_FACTORY_TEXT,
+    ...(isCanonicalFactoryProfilesEnabled()
+      ? { eiaOther: row.eia_assessment === 'อื่นๆ' ? (row.eia_other ?? null) : null }
+      : {}),
+    projectName: isCanonicalFactoryProfilesEnabled()
+      ? (row.project_name ?? null)
+      : TEMPORARY_FACTORY_TEXT,
     address: row.address,
     latitude: nullableValueToString(row.latitude),
     longitude: nullableValueToString(row.longitude),
@@ -2707,7 +2983,7 @@ async function findFactorySnapshotSource(
   input: CreateConnectionRequestInput,
 ): Promise<FactorySnapshotSourceRow | null> {
   return (
-    (await trx<FactorySnapshotSourceRow>('eligible_factories as ef')
+    (await trx<FactorySnapshotSourceRow>(factoryProfileReadTable('eligible_factories', 'ef'))
       .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
       .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
       .whereNull('ef.deleted_at')
@@ -3574,7 +3850,7 @@ function buildConnectedMeasurementPointsQuery(
   eligibleFactoryIds: number[],
 ): Knex.QueryBuilder<CurrentFactoryMeasurementPointRow, CurrentFactoryMeasurementPointRow[]> {
   const query = db<CurrentFactoryMeasurementPointRow>(
-    'cems_wpms_connected_measurement_points',
+    factoryProfileReadTable('cems_wpms_connected_measurement_points'),
   ).whereNull('deleted_at');
   applyConnectedFactoryLookup(query, factoryIds, eligibleFactoryIds);
   return query;

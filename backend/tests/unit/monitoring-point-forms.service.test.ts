@@ -1,4 +1,20 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import type { Knex } from 'knex';
+const mockTransaction = {} as Knex.Transaction;
+const mockCanonicalMode = jest.fn(() => false);
+const mockLockProfile = jest.fn(async (..._args: unknown[]) => null);
+jest.mock('../../src/modules/factory-profiles/factory-profiles.repository', () => ({
+  lockFactoryProfileInTransaction: mockLockProfile,
+}));
+jest.mock('../../src/modules/factory-profiles/factory-profile-mode', () => ({
+  isCanonicalFactoryProfilesEnabled: mockCanonicalMode,
+}));
+jest.mock('../../src/config/database', () => ({
+  db: {
+    transaction: async (callback: (trx: Knex.Transaction) => Promise<unknown>) =>
+      callback(mockTransaction),
+  },
+}));
 
 jest.mock('../../src/modules/monitoring-point-forms/monitoring-point-forms.repository', () => ({
   monitoringPointFormsRepository: {
@@ -31,6 +47,7 @@ import {
 } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 import { monitoringPointFormsRepository } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.repository';
 import { monitoringPointFormsService } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.service';
+import { saveMonitoringPointFormSchema } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.validator';
 import type {
   MonitoringPointFormFactoryInput,
   SaveMonitoringPointFormInput,
@@ -122,7 +139,222 @@ describe('monitoringPointFormsService', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    mockCanonicalMode.mockReturnValue(false);
+    mockedResolveAddress.mockImplementation(async (value) => value.address);
+  });
+
+  it('preserves explicitly cleared canonical address and returns the shared profile after syncing', async () => {
+    mockCanonicalMode.mockReturnValue(true);
+    const form = {
+      id: 1,
+      factory: toFactoryDTO(input.factory),
+      points: [],
+      createdAt: '2026-09-11T00:00:00.000Z',
+      updatedAt: '2026-09-11T00:00:00.000Z',
+    };
+    mockedRepository.update.mockResolvedValue(form);
+    mockedRepository.findById.mockResolvedValue(form);
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(
+      createEligibleFactoryDTO(),
+    );
+    mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(
+      createEligibleFactoryDTO(),
+    );
+    mockedResolveAddress.mockResolvedValueOnce('External replacement');
+    mockedResolveIndustrialEstate.mockResolvedValueOnce('External estate');
+
+    const result = await monitoringPointFormsService.update(1, input, 42);
+
+    expect(mockLockProfile).toHaveBeenCalledWith(mockTransaction, 88);
+    expect(mockLockProfile.mock.invocationCallOrder[0]).toBeLessThan(
+      Number(mockedRepository.update.mock.invocationCallOrder[0]),
+    );
+    expect(mockedResolveAddress).not.toHaveBeenCalled();
+    expect(mockedResolveIndustrialEstate).not.toHaveBeenCalled();
+    expect(
+      mockedEligibleRepository.updateFromMonitoringPointForm.mock.calls[0]?.[1].address,
+    ).toBeNull();
+    expect(mockedRepository.findById).toHaveBeenCalledWith(1, undefined, mockTransaction);
+    expect(result).toBe(form);
+  });
+
+  it.each(['create', 'update'] as const)(
+    'rejects unsupported canonical EIA before %s can overwrite the linked form',
+    async (action) => {
+      mockCanonicalMode.mockReturnValue(true);
+      const invalidInput = { ...input, factory: { ...input.factory, eiaInfo: 'มีรายงานแนบ' } };
+      mockedRepository.list.mockResolvedValue([]);
+      mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(
+        createEligibleFactoryDTO(),
+      );
+      const saved = {
+        id: 1,
+        factory: toFactoryDTO(invalidInput.factory),
+        points: [],
+        createdAt: '2026-09-11',
+        updatedAt: '2026-09-11',
+      };
+      mockedRepository.create.mockResolvedValue(saved);
+      mockedRepository.update.mockResolvedValue(saved);
+      mockedRepository.findById.mockResolvedValue(saved);
+      mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(
+        createEligibleFactoryDTO(),
+      );
+      const operation =
+        action === 'create'
+          ? monitoringPointFormsService.create(invalidInput, 42)
+          : monitoringPointFormsService.update(1, invalidInput, 42);
+      await expect(operation).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        details: { field: 'factory.eiaInfo' },
+      });
+      expect(mockedRepository.create).not.toHaveBeenCalled();
+      expect(mockedRepository.update).not.toHaveBeenCalled();
+      expect(mockedEligibleRepository.updateFromMonitoringPointForm).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, true])(
+    'refuses selecting unsupported canonical EIA without modifying data (linked: %s)',
+    async (linked) => {
+      mockCanonicalMode.mockReturnValue(true);
+      const saved = {
+        id: 1,
+        factory: toFactoryDTO({ ...input.factory, eiaInfo: 'มีรายงานแนบ' }),
+        points: [],
+        createdAt: '2026-09-11',
+        updatedAt: '2026-09-11',
+      };
+      mockedRepository.findById.mockResolvedValue(saved);
+      mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(
+        linked ? createEligibleFactoryDTO() : null,
+      );
+      await expect(monitoringPointFormsService.selectEligible(1, 42)).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        details: { field: 'factory.eiaInfo' },
+      });
+      expect(mockedEligibleRepository.create).not.toHaveBeenCalled();
+      expect(mockedEligibleRepository.updateFromMonitoringPointForm).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([null, undefined, ''])(
+    'rejects clearing linked canonical registration with %s before form persistence',
+    async (registration) => {
+      mockCanonicalMode.mockReturnValue(true);
+      const submitted = {
+        ...input,
+        factory: { ...input.factory, factoryRegistrationNoNew: registration },
+      };
+      const saved = {
+        id: 1,
+        factory: toFactoryDTO(submitted.factory),
+        points: [],
+        createdAt: '2026-09-11',
+        updatedAt: '2026-09-11',
+      };
+      mockedRepository.update.mockResolvedValue(saved);
+      mockedRepository.findById.mockResolvedValue(saved);
+      mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(
+        createEligibleFactoryDTO(),
+      );
+      await expect(monitoringPointFormsService.update(1, submitted, 42)).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'CONFLICT',
+        details: { field: 'factory.factoryRegistrationNoNew' },
+      });
+      expect(mockedRepository.update).not.toHaveBeenCalled();
+      expect(mockedEligibleRepository.updateFromMonitoringPointForm).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps free-text EIA on an unregistered canonical draft', async () => {
+    mockCanonicalMode.mockReturnValue(true);
+    const draft = {
+      factory: { factoryRegistrationNoNew: null, eiaInfo: 'มีรายงานแนบ' },
+      points: [],
+    };
+    const saved = {
+      id: 1,
+      factory: toFactoryDTO(draft.factory),
+      points: [],
+      createdAt: '2026-09-11',
+      updatedAt: '2026-09-11',
+    };
+    mockedRepository.create.mockResolvedValue(saved);
+    mockedRepository.findById.mockResolvedValue(saved);
+    expect((await monitoringPointFormsService.create(draft, 42)).factory.eiaInfo).toBe(
+      'มีรายงานแนบ',
+    );
+    expect(mockedEligibleRepository.create).not.toHaveBeenCalled();
+  });
+
+  it.each([null, undefined])(
+    'distinguishes canonical EIA %s after HTTP validation',
+    async (eiaInfo) => {
+      mockCanonicalMode.mockReturnValue(true);
+      const parsed = saveMonitoringPointFormSchema.parse({
+        factory: { ...input.factory, ...(eiaInfo === undefined ? {} : { eiaInfo }) },
+        points: [],
+      });
+      const saved = {
+        id: 1,
+        factory: toFactoryDTO(parsed.factory),
+        points: [],
+        createdAt: '2026-09-11',
+        updatedAt: '2026-09-11',
+      };
+      mockedRepository.update.mockResolvedValue(saved);
+      mockedRepository.findById.mockResolvedValue(saved);
+      mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(
+        createEligibleFactoryDTO(),
+      );
+      mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(
+        createEligibleFactoryDTO(),
+      );
+      await monitoringPointFormsService.update(1, parsed, 42);
+      const patch = mockedEligibleRepository.updateFromMonitoringPointForm.mock.calls[0]?.[1];
+      if (eiaInfo === undefined) {
+        expect(parsed.factory.eiaInfo).toBeUndefined();
+        expect(patch).not.toHaveProperty('eia');
+        expect(patch).not.toHaveProperty('hasEia');
+      } else {
+        expect(patch).toMatchObject({ eia: null, eiaOther: null, hasEia: null });
+      }
+    },
+  );
+
+  it('keeps an already linked canonical selection idempotent after a concurrent profile approval', async () => {
+    mockCanonicalMode.mockReturnValue(true);
+    const earlier = {
+      id: 1,
+      factory: toFactoryDTO({ ...input.factory, factoryName: 'Earlier name' }),
+      points: [],
+      createdAt: '2026-09-11',
+      updatedAt: '2026-09-11',
+    };
+    const current = {
+      ...earlier,
+      factory: { ...earlier.factory, factoryName: 'Approved new name' },
+    };
+    const selected = createEligibleFactoryDTO({ factoryName: 'Approved new name' });
+    mockedRepository.findById.mockResolvedValueOnce(earlier).mockResolvedValueOnce(current);
+    mockedEligibleRepository.findByMonitoringPointFormId
+      .mockResolvedValueOnce(createEligibleFactoryDTO({ factoryName: 'Earlier name' }))
+      .mockResolvedValueOnce(selected);
+    mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(selected);
+    const result = await monitoringPointFormsService.selectEligible(1, 42);
+    expect(result.factoryName).toBe('Approved new name');
+    expect(mockLockProfile).toHaveBeenCalledWith(mockTransaction, 88);
+    expect(mockedRepository.findById).toHaveBeenCalledTimes(2);
+    expect(mockLockProfile.mock.invocationCallOrder[0]).toBeLessThan(
+      Number(mockedRepository.findById.mock.invocationCallOrder[1]),
+    );
+    expect(mockedEligibleRepository.updateFromMonitoringPointForm).not.toHaveBeenCalled();
+    expect(mockedEligibleRepository.create).not.toHaveBeenCalled();
   });
 
   it('creates a form when the factory does not already have one', async () => {
@@ -143,7 +375,7 @@ describe('monitoringPointFormsService', () => {
     expect(mockedRepository.list).toHaveBeenCalledWith({
       factoryRegistrationNoNew: '10520000225172',
     });
-    expect(mockedRepository.create).toHaveBeenCalledWith(input, 42);
+    expect(mockedRepository.create).toHaveBeenCalledWith(input, 42, mockTransaction);
     expect(mockedEligibleRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceSystem: 'monitoring_point_forms',
@@ -157,6 +389,7 @@ describe('monitoringPointFormsService', () => {
         },
       }),
       42,
+      mockTransaction,
     );
     expect(result.id).toBe(1);
   });
@@ -196,6 +429,7 @@ describe('monitoringPointFormsService', () => {
         industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
       }),
       42,
+      mockTransaction,
     );
   });
 
@@ -229,6 +463,7 @@ describe('monitoringPointFormsService', () => {
         }),
       }),
       42,
+      mockTransaction,
     );
   });
 
@@ -264,6 +499,7 @@ describe('monitoringPointFormsService', () => {
         projectName: 'โครงการขยายกำลังผลิต',
       }),
       42,
+      mockTransaction,
     );
   });
 
@@ -333,7 +569,7 @@ describe('monitoringPointFormsService', () => {
     const result = await monitoringPointFormsService.create(blankInput, 42);
 
     expect(mockedRepository.list).not.toHaveBeenCalled();
-    expect(mockedRepository.create).toHaveBeenCalledWith(blankInput, 42);
+    expect(mockedRepository.create).toHaveBeenCalledWith(blankInput, 42, mockTransaction);
     expect(mockedEligibleRepository.create).not.toHaveBeenCalled();
     expect(mockedEligibleRepository.findByRegistrationNoNew).not.toHaveBeenCalled();
     expect(result.id).toBe(8);
@@ -369,6 +605,7 @@ describe('monitoringPointFormsService', () => {
         },
       }),
       42,
+      mockTransaction,
     );
     expect(result.id).toBe(1);
   });
@@ -403,6 +640,7 @@ describe('monitoringPointFormsService', () => {
       88,
       expect.objectContaining({ address: resolvedAddress }),
       42,
+      mockTransaction,
     );
   });
 
@@ -493,6 +731,7 @@ describe('monitoringPointFormsService', () => {
         fuelUsed: 'ก๊าซธรรมชาติ',
       }),
       42,
+      mockTransaction,
     );
     expect(result.id).toBe(88);
   });
@@ -531,6 +770,7 @@ describe('monitoringPointFormsService', () => {
       99,
       expect.objectContaining({ monitoringPointFormId: 1 }),
       42,
+      mockTransaction,
     );
     expect(mockedEligibleRepository.create).not.toHaveBeenCalled();
   });

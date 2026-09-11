@@ -1,5 +1,13 @@
 import type { Knex } from 'knex';
 import {
+  factoryProfileReadTable,
+  isCanonicalFactoryProfilesEnabled,
+} from '../factory-profiles/factory-profile-mode';
+import {
+  lockFactoryProfileInTransaction,
+  updateFactoryProfileInTransaction,
+} from '../factory-profiles/factory-profiles.repository';
+import {
   requestedPointParameters,
   alignPointInstruments,
 } from './poms-measurement-point-parameters';
@@ -61,7 +69,13 @@ interface FactoryAccess {
   regionalAccess?: RegionalAccessDTO | null;
 }
 
+interface LockedFactoryProfile extends PomsFactoryDetailDTO {
+  factoryProfileRevision?: number;
+}
+
 interface ConnectedFactoryRow {
+  factory_profile_revision?: number | string;
+  factory_profile_updated_at?: Date | string;
   management_state_json?: string | null;
   connected_point_id: number | string;
   source_measurement_point_id: number | string;
@@ -122,6 +136,7 @@ interface EditRequestRow {
   current_measurement_points_json: string | null;
   proposed_measurement_points_json: string | null;
   source_profile_updated_at: Date | string;
+  source_factory_profile_revision?: number | string | null;
   request_note: string | null;
   revision_reason: string | null;
   officer_note: string | null;
@@ -153,6 +168,7 @@ interface PendingCountRow {
 }
 
 interface EditRequestPayload {
+  currentFactory?: PomsFactoryDetailDTO;
   formType: PomsFactoryEditRequestFormType;
   proposedFactory: PomsFactoryProfileDTO;
   proposedMeasurementPoints: PomsMeasurementPointDTO[] | null;
@@ -240,7 +256,7 @@ export const pomsFactoriesRepository = {
       return await db.transaction(async (trx) => {
         const requestNo = await allocatePomsFactoryEditRequestNo(trx, payload.formType);
         const live = await lockCurrentFactoryProfile(trx, current.eligibleFactoryId);
-        ensureSameProfileVersion(current.updatedAt, live.updatedAt);
+        ensurePreparedRequestStillCurrent(current, payload, live);
 
         const openRequest = await trx<EditRequestRow>('poms_factory_edit_requests')
           .where('eligible_factory_id', current.eligibleFactoryId)
@@ -280,6 +296,9 @@ export const pomsFactoriesRepository = {
                 ? null
                 : JSON.stringify(payload.proposedMeasurementPoints),
             source_profile_updated_at: new Date(current.updatedAt),
+            ...(isCanonicalFactoryProfilesEnabled()
+              ? { source_factory_profile_revision: live.factoryProfileRevision }
+              : {}),
             request_note: requestNote,
             revision_reason: null,
             officer_note: null,
@@ -417,7 +436,9 @@ export const pomsFactoriesRepository = {
       }
 
       const live = await lockCurrentFactoryProfile(trx, payload.proposedFactory.eligibleFactoryId);
-      ensureSameProfileVersion(payload.proposedFactory.updatedAt, live.updatedAt);
+      const baseline = isCanonicalFactoryProfilesEnabled() ? payload.currentFactory : undefined;
+      if (baseline) ensurePreparedRequestStillCurrent(baseline, payload, live);
+      else ensureSameProfileVersion(payload.proposedFactory.updatedAt, live.updatedAt);
       await trx('poms_factory_edit_requests')
         .where('id', id)
         .update({
@@ -429,17 +450,20 @@ export const pomsFactoriesRepository = {
           status: POMS_FACTORY_EDIT_REQUEST_STATUS.REVISED_PENDING_REVIEW,
           revision_no: Number(request.revision_no) + 1,
           is_open: true,
-          current_factory_json: JSON.stringify(toProfile(live)),
+          current_factory_json: JSON.stringify(toProfile(baseline ?? live)),
           proposed_factory_json: JSON.stringify(payload.proposedFactory),
           current_measurement_points_json:
             payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
-              ? JSON.stringify(live.measurementPoints)
+              ? JSON.stringify((baseline ?? live).measurementPoints)
               : null,
           proposed_measurement_points_json:
             payload.proposedMeasurementPoints == null
               ? null
               : JSON.stringify(payload.proposedMeasurementPoints),
           source_profile_updated_at: new Date(payload.proposedFactory.updatedAt),
+          ...(isCanonicalFactoryProfilesEnabled()
+            ? { source_factory_profile_revision: live.factoryProfileRevision }
+            : {}),
           request_note: requestNote,
           revision_reason: null,
           officer_note: null,
@@ -640,11 +664,14 @@ async function applyApprovedRequestInTransaction(
       throw new ConflictError('POMS measurement-point edit request does not contain any changes');
     }
     if (profileChanged) {
-      ensureSameProfileVersion(
-        toIsoStringRequired(request.source_profile_updated_at),
-        latestProfile.updatedAt,
+      ensurePendingProfileStillCurrent(request, latestProfile);
+      await applyApprovedFactoryProfileInTransaction(
+        trx,
+        request,
+        proposedFactory,
+        actorUserId,
+        latestProfile.factoryProfileRevision,
       );
-      await applyApprovedFactoryProfileInTransaction(trx, request, proposedFactory, actorUserId);
     }
     await applyApprovedMeasurementPointsInTransaction(
       trx,
@@ -656,12 +683,15 @@ async function applyApprovedRequestInTransaction(
   }
 
   const latestProfile = await lockCurrentFactoryProfile(trx, Number(request.eligible_factory_id));
-  ensureSameProfileVersion(
-    toIsoStringRequired(request.source_profile_updated_at),
-    latestProfile.updatedAt,
-  );
+  ensurePendingProfileStillCurrent(request, latestProfile);
   const proposed = requireProfileSnapshot(request.proposed_factory_json);
-  await applyApprovedFactoryProfileInTransaction(trx, request, proposed, actorUserId);
+  await applyApprovedFactoryProfileInTransaction(
+    trx,
+    request,
+    proposed,
+    actorUserId,
+    latestProfile.factoryProfileRevision,
+  );
 }
 
 async function applyApprovedFactoryProfileInTransaction(
@@ -669,8 +699,24 @@ async function applyApprovedFactoryProfileInTransaction(
   request: EditRequestRow,
   proposed: PomsFactoryProfileDTO,
   actorUserId: number,
+  expectedRevision?: number,
 ): Promise<void> {
   const patches = buildApprovedPomsFactoryProfilePatches(proposed);
+  if (isCanonicalFactoryProfilesEnabled()) {
+    await updateFactoryProfileInTransaction(
+      trx,
+      Number(request.eligible_factory_id),
+      {
+        ...patches.eligible,
+        front_photos_json: patches.connected.factory_front_photos_json,
+        logo_json: patches.connected.factory_logo_json,
+      },
+      actorUserId,
+      'POMS_APPROVAL',
+      expectedRevision,
+    );
+    return;
+  }
   const connectedPointUpdateCount = await trx('cems_wpms_connected_measurement_points')
     .where('eligible_factory_id', request.eligible_factory_id)
     .whereNull('deleted_at')
@@ -926,8 +972,10 @@ function buildConnectedFactoryRowsQuery(
   search?: string,
   executor: DbExecutor = db,
 ): Knex.QueryBuilder<ConnectedFactoryRow, ConnectedFactoryRow[]> {
-  const builder = executor<ConnectedFactoryRow>('cems_wpms_connected_measurement_points as cp')
-    .innerJoin('eligible_factories as ef', function joinEligibleFactory() {
+  const builder = executor<ConnectedFactoryRow>(
+    factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
+  )
+    .innerJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
     })
     .leftJoin('factories as f', function joinFactory() {
@@ -961,6 +1009,9 @@ function buildConnectedFactoryRowsQuery(
     });
   }
   applyFactoryAccess(builder, access);
+  if (isCanonicalFactoryProfilesEnabled()) {
+    builder.select('cp.factory_profile_revision', 'cp.factory_profile_updated_at');
+  }
   return builder
     .select(
       'fsm.state_json as management_state_json',
@@ -979,7 +1030,9 @@ function buildConnectedFactoryRowsQuery(
       'cp.factory_front_photos_json',
       'cp.factory_logo_json',
       'ef.province_name as province_name',
-      'ie.name_th as industrial_estate_name',
+      isCanonicalFactoryProfilesEnabled()
+        ? 'ef.industrial_estate_name as industrial_estate_name'
+        : 'ie.name_th as industrial_estate_name',
       'ef.factory_registration_no_new',
       'ef.factory_registration_no_old',
       'ef.business_activity',
@@ -1008,7 +1061,7 @@ function buildEditRequestsQuery(
   access: FactoryAccess,
 ): Knex.QueryBuilder<EditRequestRow, EditRequestRow[]> {
   const builder = db<EditRequestRow>('poms_factory_edit_requests as req')
-    .innerJoin('eligible_factories as ef', function joinEligibleFactory() {
+    .innerJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'req.eligible_factory_id').andOnNull('ef.deleted_at');
     })
     .leftJoin('factories as f', function joinFactory() {
@@ -1119,10 +1172,24 @@ function normalizeLocationValue(value: string | null | undefined): string | null
 async function lockCurrentFactoryProfile(
   trx: Knex.Transaction,
   eligibleFactoryId: number,
-): Promise<PomsFactoryDetailDTO> {
-  const rows = await buildLockedCurrentFactoryProfileQuery(trx, eligibleFactoryId);
+): Promise<LockedFactoryProfile> {
+  const profile = await lockFactoryProfileInTransaction(trx, eligibleFactoryId);
+  const lockedRows = await buildLockedCurrentFactoryProfileQuery(trx, eligibleFactoryId);
+  if (lockedRows.length === 0)
+    throw new ConflictError('Connected POMS factory is no longer active');
+  if (!isCanonicalFactoryProfilesEnabled())
+    return toFactoryDetail(uniqueConnectedPointRows(lockedRows), 0);
+  if (!profile) throw new ConflictError('Current factory profile is not ready');
+  const rows = await buildConnectedFactoryRowsQuery(
+    { actorUserId: 0, scope: 'ALL' },
+    undefined,
+    trx,
+  ).where('cp.eligible_factory_id', eligibleFactoryId);
   if (rows.length === 0) throw new ConflictError('Connected POMS factory is no longer active');
-  return toFactoryDetail(uniqueConnectedPointRows(rows), 0);
+  return {
+    ...toFactoryDetail(uniqueConnectedPointRows(rows), 0),
+    factoryProfileRevision: Number(profile.revision),
+  };
 }
 
 function buildLockedCurrentFactoryProfileQuery(
@@ -1155,8 +1222,12 @@ function buildLockedCurrentFactoryProfileQuery(
       'cp.factory_project_name',
       'cp.factory_front_photos_json',
       'cp.factory_logo_json',
-      'p.name_th as province_name',
-      'ie.name_th as industrial_estate_name',
+      isCanonicalFactoryProfilesEnabled()
+        ? 'ef.province_name as province_name'
+        : 'p.name_th as province_name',
+      isCanonicalFactoryProfilesEnabled()
+        ? 'ef.industrial_estate_name as industrial_estate_name'
+        : 'ie.name_th as industrial_estate_name',
       'ef.business_activity',
       'ef.factory_type_sequence',
       'cp.system_type',
@@ -1211,7 +1282,11 @@ function toFactoryDetail(
     projectName: first.factory_project_name,
     factoryFrontPhotos: parseJsonArray<RequestDocumentImageInput>(first.factory_front_photos_json),
     factoryLogo: parseJsonObject<RequestDocumentImageInput>(first.factory_logo_json),
-    updatedAt: toIsoStringRequired(first.updated_at),
+    updatedAt: toIsoStringRequired(
+      isCanonicalFactoryProfilesEnabled()
+        ? (first.factory_profile_updated_at ?? first.updated_at)
+        : first.updated_at,
+    ),
     systemTypes: [...new Set(rows.map((row) => row.system_type))].sort(),
     measurementPointCount: rows.length,
     pendingEditRequestCount,
@@ -1564,6 +1639,52 @@ function reviewTransition(input: ReviewPomsFactoryEditRequestInput): {
       return { status: POMS_FACTORY_EDIT_REQUEST_STATUS.REVISION_REQUESTED, isOpen: true };
     case POMS_FACTORY_EDIT_REQUEST_ACTION.REJECT:
       return { status: POMS_FACTORY_EDIT_REQUEST_STATUS.REJECTED, isOpen: false };
+  }
+}
+
+function ensurePreparedRequestStillCurrent(
+  baseline: PomsFactoryDetailDTO,
+  payload: EditRequestPayload,
+  live: LockedFactoryProfile,
+): void {
+  if (
+    isCanonicalFactoryProfilesEnabled() &&
+    payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+  ) {
+    ensureSameMeasurementPointsVersion(baseline.measurementPoints, live.measurementPoints);
+    const profileChanged =
+      JSON.stringify(buildApprovedPomsFactoryProfilePatches(baseline)) !==
+      JSON.stringify(buildApprovedPomsFactoryProfilePatches(payload.proposedFactory));
+    if (!profileChanged) return;
+  }
+  ensureSameProfileVersion(baseline.updatedAt, live.updatedAt);
+}
+
+function ensurePendingProfileStillCurrent(
+  request: EditRequestRow,
+  current: LockedFactoryProfile,
+): void {
+  if (!isCanonicalFactoryProfilesEnabled()) {
+    ensureSameProfileVersion(
+      toIsoStringRequired(request.source_profile_updated_at),
+      current.updatedAt,
+    );
+    return;
+  }
+  if (request.source_factory_profile_revision != null) {
+    if (Number(request.source_factory_profile_revision) !== current.factoryProfileRevision) {
+      throw new ConflictError('POMS factory profile changed while the request was pending');
+    }
+    return;
+  }
+  // Pre-migration requests have no revision. Compare their editable baseline before
+  // authorizing a write; the former point timestamp cannot identify a profile revision.
+  const baseline = requireProfileSnapshot(request.current_factory_json);
+  if (
+    JSON.stringify(buildApprovedPomsFactoryProfilePatches(baseline)) !==
+    JSON.stringify(buildApprovedPomsFactoryProfilePatches(current))
+  ) {
+    throw new ConflictError('POMS factory profile changed while the request was pending');
   }
 }
 

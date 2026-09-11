@@ -1,11 +1,9 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { factoryProfileReadTable } from '../factory-profiles/factory-profile-mode';
 import { BadRequestError, ConflictError } from '../../shared/errors/AppError';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
-import {
-  applyFactoryType88Filter,
-  isFactoryType88,
-} from '../../shared/utils/factory-type-scope';
+import { applyFactoryType88Filter, isFactoryType88 } from '../../shared/utils/factory-type-scope';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import type {
   ListMonitoringPointFormsQuery,
@@ -159,13 +157,19 @@ export const monitoringPointFormsRepository = {
     id: number,
     access?: MonitoringPointFormAccessContext,
     trx?: Knex.Transaction,
+    // Persistence needs submitted values until the shared profile is synchronized.
+    useStoredFactory = false,
   ): Promise<MonitoringPointFormDTO | null> {
     const form = access
       ? await buildFormsQuery({}, access, trx ?? db)
           .where('f.id', id)
           .select<MonitoringPointFormRow[]>('f.*')
           .first()
-      : await (trx ?? db)<MonitoringPointFormRow>('factory_monitoring_point_forms')
+      : await (trx ?? db)<MonitoringPointFormRow>(
+          useStoredFactory
+            ? 'factory_monitoring_point_forms'
+            : factoryProfileReadTable('factory_monitoring_point_forms'),
+        )
           .where('id', id)
           .whereNull('deleted_at')
           .first();
@@ -191,8 +195,9 @@ export const monitoringPointFormsRepository = {
   async create(
     input: SaveMonitoringPointFormInput,
     actorUserId: number,
+    transaction?: Knex.Transaction,
   ): Promise<MonitoringPointFormDTO> {
-    return db.transaction(async (trx) => {
+    const persist = async (trx: Knex.Transaction) => {
       const [{ id }] = await trx('factory_monitoring_point_forms')
         .insert(toFormInsertRow(input.factory, actorUserId))
         .returning('id');
@@ -203,10 +208,11 @@ export const monitoringPointFormsRepository = {
       }));
       await persistMonitoringPointPlans(trx, Number(id), pointPlans, [], actorUserId);
       await synchronizeMonitoringPointAttachments(trx, pointPlans, actorUserId);
-      const created = await this.findById(Number(id), undefined, trx);
+      const created = await this.findById(Number(id), undefined, trx, true);
       if (!created) throw new Error('Created monitoring point form could not be loaded');
       return created;
-    });
+    };
+    return transaction ? persist(transaction) : db.transaction(persist);
   },
 
   async update(
@@ -214,9 +220,10 @@ export const monitoringPointFormsRepository = {
     input: SaveMonitoringPointFormInput,
     actorUserId: number,
     access?: MonitoringPointFormAccessContext,
+    transaction?: Knex.Transaction,
   ): Promise<MonitoringPointFormDTO | null> {
-    if (access && !(await this.findById(id, access))) return null;
-    return db.transaction(async (trx) => {
+    if (access && !(await this.findById(id, access, transaction))) return null;
+    const persist = async (trx: Knex.Transaction) => {
       const form = await trx('factory_monitoring_point_forms')
         .where('id', id)
         .whereNull('deleted_at')
@@ -255,8 +262,9 @@ export const monitoringPointFormsRepository = {
       await persistMonitoringPointPlans(trx, id, plans, unmatchedExisting, actorUserId);
       await synchronizeMonitoringPointAttachments(trx, plans, actorUserId);
 
-      return this.findById(id, undefined, trx);
-    });
+      return this.findById(id, undefined, trx, true);
+    };
+    return transaction ? persist(transaction) : db.transaction(persist);
   },
 
   async canAccessFactory(
@@ -315,7 +323,9 @@ function buildFormsQuery(
   access?: MonitoringPointFormAccessContext,
   executor: Knex | Knex.Transaction = db,
 ) {
-  const builder = executor('factory_monitoring_point_forms as f').whereNull('f.deleted_at');
+  const builder = executor(
+    factoryProfileReadTable('factory_monitoring_point_forms', 'f'),
+  ).whereNull('f.deleted_at');
 
   if (query.factoryRegistrationNoNew) {
     builder.where('f.factory_registration_no_new', query.factoryRegistrationNoNew);

@@ -2017,6 +2017,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
         enum: CONNECTION_REQUEST_EIA_ASSESSMENTS,
         nullable: true,
       },
+      eiaOther: {
+        type: 'string',
+        maxLength: 500,
+        nullable: true,
+        description: 'Optional nullable รายละเอียด EIA ใน canonical mode',
+      },
       hasEia: { type: 'boolean', nullable: true },
       regionCode: { type: 'string', nullable: true },
       regionName: { type: 'string', nullable: true },
@@ -2349,7 +2355,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       industryMainOrder: {
         ...nullableStringSchema(128),
         description:
-          'ลำดับประเภทโรงงานหลักที่แยกจาก active eligible_factories.factory_type_sequence',
+          'ลำดับประเภทโรงงานหลักจาก eligible_factories.factory_type_sequence ใน legacy mode หรือข้อมูลทั่วไปหลักร่วมกับเข้าข่ายใน canonical mode',
       },
       industryMainOrderLabel: {
         ...nullableStringSchema(500),
@@ -2357,11 +2363,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       industrySubOrder: {
         ...nullableStringSchema(128),
-        description: 'ลำดับประเภทย่อยที่แยกจาก active eligible_factories.factory_type_sequence',
+        description:
+          'ลำดับประเภทย่อยจาก eligible_factories.factory_type_sequence ใน legacy mode หรือข้อมูลทั่วไปหลักร่วมกับเข้าข่ายใน canonical mode',
       },
       businessActivity: {
         ...nullableStringSchema(4000),
-        description: 'การประกอบกิจการจาก active eligible_factories.business_activity',
+        description:
+          'การประกอบกิจการจาก eligible_factories.business_activity ใน legacy mode หรือข้อมูลทั่วไปหลักร่วมกับเข้าข่ายใน canonical mode',
       },
       factoryAddress: nullableStringSchema(1000),
       provinceName: nullableStringSchema(128),
@@ -2384,7 +2392,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
         allOf: [schemaRef('RequestDocumentImage')],
         nullable: true,
       },
-      updatedAt: { type: 'string', format: 'date-time' },
+      updatedAt: {
+        type: 'string',
+        format: 'date-time',
+        description:
+          'เวลาแก้ข้อมูลทั่วไปโรงงานล่าสุด; canonical mode ใช้เวลา profile แยกจากการแก้จุดตรวจวัด ไม่ใช่ revision ที่ client ต้องส่ง',
+      },
     },
   },
   PomsFactorySummary: {
@@ -2455,7 +2468,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: schemaRef('RequestDocumentImage'),
       },
       measurementInstruments: { type: 'object', nullable: true, additionalProperties: true },
-      updatedAt: { type: 'string', format: 'date-time' },
+      updatedAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'เวลาแก้ข้อมูลจุดตรวจวัดล่าสุด ใช้แยกจาก updatedAt ของข้อมูลทั่วไปโรงงาน',
+      },
     },
   },
   PomsFactoryDetail: {
@@ -2853,13 +2870,25 @@ const componentSchemas: Record<string, OpenApiObject> = {
         additionalProperties: false,
         properties: {
           factoryName: { type: 'string', maxLength: 500, nullable: true },
-          factoryRegistrationNoNew: { type: 'string', maxLength: 64, nullable: true },
+          factoryRegistrationNoNew: {
+            type: 'string',
+            maxLength: 64,
+            nullable: true,
+            description:
+              'canonical mode: PUT ฟอร์มที่ผูกโรงงานเข้าข่ายแล้วต้องคงเลขทะเบียนที่ไม่ว่าง; ไม่ส่ง, null หรือค่าว่างตอบ 409 CONFLICT พร้อม error.details.field = factory.factoryRegistrationNoNew และ eligibleFactoryId. แบบร่างที่ยังไม่ผูกโรงงานและ legacy mode คง optional/null ตามเดิม',
+          },
           factoryRegistrationNoOld: { type: 'string', maxLength: 64, nullable: true },
           provinceName: { type: 'string', maxLength: 128, nullable: true },
           factoryTypeMain: { type: 'string', maxLength: 128, nullable: true },
           factoryTypeSub: { type: 'string', maxLength: 128, nullable: true },
           operationStatus: { type: 'string', maxLength: 128, nullable: true },
-          eiaInfo: { type: 'string', maxLength: 255, nullable: true },
+          eiaInfo: {
+            type: 'string',
+            maxLength: 255,
+            nullable: true,
+            description:
+              'canonical mode: ก่อนเลือกเข้าข่ายหรือบันทึกฟอร์มที่ผูกเข้าข่ายแล้ว รับเฉพาะ มี, ไม่มี, มี IEE, มี EIA, มี EHIA, อื่นๆ หรือ null; ค่าอื่นตอบ 400 BAD_REQUEST พร้อม error.details.field = factory.eiaInfo และ allowedValues. null/ค่าว่างล้าง EIA, ไม่ส่งคงค่าเดิม. legacy และแบบร่างที่ยังไม่ผูกโรงงานยังรองรับ free-text เดิม',
+          },
           eiaOther: { type: 'string', maxLength: 500, nullable: true },
           projectName: { type: 'string', maxLength: 500, nullable: true },
           address: { type: 'string', maxLength: 1000, nullable: true },
@@ -4923,7 +4952,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get current/live POMS factory and measurement points',
       operationId: 'getPomsFactoryDetail',
       description:
-        'คืนข้อมูลโรงงานและ active measurement points. measurementPoints ใช้ทั้งสำหรับแสดงผลและเป็นฐานของฟอร์ม MEASUREMENT_POINTS; resource นอก data scope ตอบ 404',
+        'คืนข้อมูลโรงงานและ active measurement points. canonical mode ข้อมูลทั่วไปใช้แหล่งหลักร่วมกับโรงงานเข้าข่าย โดยทะเบียนต้นทาง Fac60k คงเป็น read-only ตามเดิม. measurementPoints ใช้ทั้งสำหรับแสดงผลและเป็นฐานของฟอร์ม MEASUREMENT_POINTS; resource นอก data scope ตอบ 404',
       parameters: [factoryIdParameter],
       successSchema: schemaRef('PomsFactoryDetailResponse'),
     }),
@@ -5033,7 +5062,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Submit a POMS factory edit request',
       operationId: 'createPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType. BASIC_INFO รับเฉพาะ 7 field ใน PomsFactoryEditableProfileRequest; MEASUREMENT_POINTS รับ 7 field เดียวกันเป็น optional top-level fields ร่วมกับ measurementPoints และยอมรับการเปลี่ยนเฉพาะข้อมูลโรงงาน. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType. BASIC_INFO รับเฉพาะ 7 field ใน PomsFactoryEditableProfileRequest; MEASUREMENT_POINTS รับ 7 field เดียวกันเป็น optional top-level fields ร่วมกับ measurementPoints และยอมรับการเปลี่ยนเฉพาะข้อมูลโรงงาน. canonical mode เก็บ source revision ภายในโดยไม่เพิ่ม field ที่ผู้เรียกต้องส่ง. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [factoryIdParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditSubmissionRequest'),
@@ -5044,7 +5073,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       extraResponses: {
         '409': {
           description:
-            'มีคำขอเปิดของโรงงานนี้อยู่แล้ว, current/live profile เปลี่ยนระหว่างทำรายการ หรือเลขคำขอของประเภทและปี พ.ศ. นั้นครบ 99999 (CONFLICT)',
+            'มีคำขอเปิดของโรงงานนี้อยู่แล้ว, current/live profile เปลี่ยนระหว่างทำรายการ หรือ canonical profile ยังไม่พร้อม หรือเลขคำขอของประเภทและปี พ.ศ. นั้นครบ 99999 (CONFLICT)',
           content: {
             'application/json': { schema: schemaRef('ErrorEnvelope') },
           },
@@ -5135,7 +5164,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Review a POMS factory edit request',
       operationId: 'reviewPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องมี JWT role admin; userType อาจเป็น officer หรือ admin และ userType=admin อย่างเดียวไม่เพียงพอ; ห้ามทั้ง original creator (createdBy) และ latest submitter (submittedBy) พิจารณาคำขอของตนเอง. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องมี JWT role admin; userType อาจเป็น officer หรือ admin และ userType=admin อย่างเดียวไม่เพียงพอ; ห้ามทั้ง original creator (createdBy) และ latest submitter (submittedBy) พิจารณาคำขอของตนเอง. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditReviewRequest'),
@@ -5145,7 +5174,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       extraResponses: {
         '409': {
           description:
-            'สถานะไม่อนุญาต ผู้สร้างพยายามพิจารณาคำขอตนเอง หรือ current/live profile เปลี่ยนก่อนอนุมัติ',
+            'สถานะไม่อนุญาต ผู้สร้างพยายามพิจารณาคำขอตนเอง หรือ current/live profile เปลี่ยนก่อนอนุมัติ หรือ canonical profile ยังไม่พร้อม',
           content: {
             'application/json': { schema: schemaRef('ErrorEnvelope') },
           },

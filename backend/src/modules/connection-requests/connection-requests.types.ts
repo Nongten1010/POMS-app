@@ -393,6 +393,7 @@ export interface FactorySummaryDTO {
   businessActivity: string | null;
   eia: ConnectionRequestEiaAssessment | null;
   hasEia?: boolean | null;
+  eiaOther?: string | null;
   projectName: string | null;
   address: string | null;
   latitude: string | null;
@@ -590,6 +591,9 @@ export interface CurrentFactoryMeasurementPointDTO extends Omit<
 > {
   connectedPointId?: number;
   sourceMeasurementPointId?: number;
+  sourceRequestId?: number;
+  pointType?: MeasurementPointInput['pointType'];
+  details?: MeasurementPointDetailsInput | null;
   factoryId: string;
   eligibleFactoryId?: number | null;
   factoryLogo?: RequestDocumentImageInput | null;

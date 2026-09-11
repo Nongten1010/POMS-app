@@ -1,3 +1,4 @@
+import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
 import { env } from '../../config/env';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
 import { logger } from '../../config/logger';
@@ -83,6 +84,7 @@ export async function hydrateEligibleFactoriesFromSource(
 }
 
 function normalizeStoredFactoryAddresses(rows: EligibleFactoryDTO[]): EligibleFactoryDTO[] {
+  if (isCanonicalFactoryProfilesEnabled()) return rows;
   return rows.map((row) => ({
     ...row,
     address: withProvinceInFactoryAddress(row.address, row.provinceName) ?? null,
@@ -281,6 +283,13 @@ function hydrateFactoryRow(
     (sourceKey ? sourceRowByFactoryKey.get(sourceKey) : undefined) ??
     (registrationKey ? sourceRowByFactoryKey.get(registrationKey) : undefined);
   if (!sourceRow) return row;
+  if (isCanonicalFactoryProfilesEnabled()) {
+    return {
+      ...row,
+      machineryHorsepower:
+        row.machineryHorsepower ?? firstNullableNumber(sourceRow.HP2, sourceRow.HP),
+    };
+  }
 
   const administrativeAreaKey = diwAdministrativeAreaKey(
     sourceRow.PROV,

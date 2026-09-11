@@ -23,6 +23,16 @@ curl --request GET \
 
 ความหมายของ `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve`, `cems_wpms_requests:view`, `cems_wpms_requests:edit` และ data scope ที่เกี่ยวข้องอ้างตาม [สิทธิ์การใช้งาน](../permissions/README.md)
 
+## ข้อมูลสามชุดและแหล่งข้อมูลทั่วไป
+
+1. **ทะเบียนโรงงานต้นทาง Fac60k** เป็นข้อมูลอ้างอิงแบบ read-only; candidate และ `/source-factories/:factoryRegistrationNo` ยังอ่านต้นทางตามกติกาเดิม การแก้เข้าข่ายหรือ POMS ไม่เขียนกลับทะเบียนต้นทาง
+2. **โรงงานเข้าข่าย** เก็บการเลือกโรงงานและข้อมูลเฉพาะเรื่องเข้าข่าย
+3. **โรงงาน POMS** คือโรงงานที่มีจุดตรวจวัดเชื่อมต่อแล้ว โดยข้อมูลจุดตรวจวัดเป็นข้อมูลเฉพาะ POMS
+
+เมื่อเปิด canonical mode หลังตรวจและย้ายข้อมูลแล้ว ข้อมูลทั่วไปของโรงงานในข้อ 2–3 ใช้แหล่งหลักร่วมกันหนึ่งรายการต่อโรงงาน เช่น ชื่อ ที่อยู่ จังหวัด นิคม พิกัด EIA และชื่อโครงการ ส่วนข้อมูลจุดตรวจวัด สถานะเฉพาะส่วน และประวัติคำขอคงแยกตามหน้าที่เดิม การอนุมัติแก้เฉพาะจุดตรวจวัดใน POMS ไม่แก้ข้อมูลทั่วไปหรือข้อมูลเข้าข่าย
+
+รหัส `id`, `factoryId` และเลขทะเบียนใน API เดิมยังมีความหมายเดิม ไม่มีรหัส profile ใหม่ที่ client ต้องส่ง ดูเงื่อนไขเปิดใช้และการตรวจข้อมูลจริงใน[แนวทางเปิดใช้ข้อมูลทั่วไปชุดเดียวและตรวจย้ายข้อมูล](../../../guides/factory-profile-consistency-rollout.md)
+
 ## Endpoint Summary
 
 | งาน | Method | Path | Auth | Permission |
@@ -603,7 +613,7 @@ Errors ของ `POST` และ `PUT` ใช้ [shared error envelope](../../
 | `404` | `NOT_FOUND` | ไม่พบ form หรือโรงงานไม่อยู่ใน data scope ของผู้เรียก | reload รายการและหยุดแก้ไข form id เดิม |
 | `409` | `CONFLICT` | สร้าง form ซ้ำ; point/attachment `id` ไม่ใช่ active resource ของ form/point นี้; `uploadToken` ไม่มี, ปลอม, หมดอายุ, เคย claim แล้ว หรือเป็นของ actor อื่น; resource เปลี่ยนระหว่าง update; หรือ legacy point matching กำกวมและเสี่ยงทำทรัพยากรหาย | reload detail เพื่อรับ id ล่าสุด, upload ไฟล์ใหม่เมื่อ token ใช้ไม่ได้ หรือเปิด form เดิมเมื่อสร้างซ้ำ |
 
-เมื่อฟอร์มผูกกับโรงงานเข้าข่าย ระบบ sync แบบ patch:
+ใน legacy mode เมื่อฟอร์มผูกกับโรงงานเข้าข่าย ระบบ sync แบบ patch:
 
 - `projectName` ที่ไม่เป็น `null` อัปเดต `eligible_factories.project_name`; ค่า `null` หรือไม่ได้ส่งคงค่าปัจจุบัน.
 - `eiaInfo` ที่เป็น `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA` หรือ `อื่นๆ` อัปเดต `eia`, derived `hasEia` และ `eiaOther` ให้สอดคล้องกัน.
@@ -611,9 +621,18 @@ Errors ของ `POST` และ `PUT` ใช้ [shared error envelope](../../
 - `eiaInfo` แบบ free-text เดิมที่ไม่ตรงหกค่า canonical ยังบันทึกและอ่านกลับจากฟอร์มได้ แต่ไม่แก้ EIA ใด ๆ ใน `eligible_factories` เพื่อป้องกันข้อมูล categorical กับ `hasEia` ขัดกัน.
 - ฟอร์มข้อมูลจุดตรวจวัดเองยังบันทึก `null` ได้ แม้ค่าใน `eligible_factories` จะถูกเก็บไว้ตาม patch semantics.
 
+ใน canonical mode การแก้ฟอร์มที่ผูกโรงงานเข้าข่ายและการเลือกฟอร์มเข้าเป็นโรงงานเข้าข่ายใช้ข้อมูลทั่วไปหลักร่วมกัน และบันทึกฟอร์มกับข้อมูลทั่วไปใน transaction เดียวกัน:
+
+- `factory.eiaInfo` รับ `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA`, `อื่นๆ` หรือ `null`; `อื่นๆ` ต้องมี `eiaOther` ตาม validator เดิม
+- `eiaInfo: null` หรือค่าว่างล้าง `eia`, `eiaOther` และ `hasEia` ร่วมกัน; หากไม่ส่ง `eiaInfo` ให้คง EIA ปัจจุบัน
+- ค่า free-text อื่นที่ไม่ว่างตอบ `400 BAD_REQUEST` พร้อม `error.details.field = "factory.eiaInfo"` และ `error.details.allowedValues`; client ต้องเลือกค่าที่รองรับก่อนเลือกเข้าข่ายหรือบันทึก
+- แบบร่างที่ยังไม่ผูกโรงงานและ legacy mode ยังคงรับ free-text ตามเดิม ไม่มีการลบข้อความเก่าทิ้งโดยเงียบ
+- การ `PUT` ฟอร์มที่ผูกโรงงานเข้าข่ายแล้วต้องส่ง `factory.factoryRegistrationNoNew` ที่ไม่ว่าง; ไม่ส่ง, `null` หรือค่าว่างตอบ `409 CONFLICT` พร้อม `error.details.field = "factory.factoryRegistrationNoNew"` และ `error.details.eligibleFactoryId` เพื่อรักษาการเชื่อมโยงโรงงานเดิม แบบร่างที่ยังไม่ผูกโรงงานและ legacy mode คงพฤติกรรมเดิม
+- ถ้า canonical profile ยังไม่พร้อมหรือข้อมูลเปลี่ยนระหว่างบันทึก ตอบ `409 CONFLICT` และ rollback ทั้งรายการ ให้ reload ข้อมูลล่าสุดหรือให้ผู้ดูแลตรวจ readiness ตามคู่มือเปิดใช้
+
 ## ข้อมูลที่ซิงก์หลังเชื่อมต่อ
 
-`GET /api/v1/eligible-factories` อ่านค่าปัจจุบันจาก `eligible_factories`. เมื่อคำขอของโรงงานเข้าสู่ `CONNECTED` ระบบอัปเดตพิกัดโรงงาน, EIA และชื่อโครงการใน transaction เดียวกับข้อมูล POMS.
+`GET /api/v1/eligible-factories` อ่านข้อมูลเข้าข่ายปัจจุบัน; canonical mode ใช้ข้อมูลทั่วไปหลักร่วมกับ POMS ผ่าน current view ส่วน legacy mode อ่าน `eligible_factories` ตามเดิม. การเชื่อมต่อครั้งแรกอัปเดตเฉพาะข้อมูลทั่วไปที่อนุญาตและตรวจ source revision ก่อนเขียนใน canonical mode. เมื่อโรงงานมีจุดเชื่อมต่อแล้ว จุดใหม่ใช้ข้อมูลทั่วไปปัจจุบันและไม่ย้อน snapshot เก่ามาเขียนทับ รวมถึงค่าที่ล้างเป็น `null`. ถ้าฐาน revision หายหรือเก่าและมีข้อมูลทั่วไปที่ขอเปลี่ยน ให้ reload และ resubmit ก่อนเชื่อมต่อ; ไม่เปลี่ยนข้อมูลทั่วไปจากคำขอค้างโดยอัตโนมัติ.
 
 Relevant response fields:
 
