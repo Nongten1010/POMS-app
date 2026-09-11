@@ -1,3 +1,4 @@
+import type { PomsManagedStatusDTO } from './poms-status-management.types';
 import type { ConnectionRequestEiaAssessment } from '../connection-requests/connection-request-eia';
 import type {
   ContactPersonInput,
@@ -84,7 +85,7 @@ export interface PomsFactorySummaryDTO extends PomsFactoryProfileDTO {
   pendingEditRequestCount: number;
 }
 
-export interface PomsMeasurementPointDTO {
+export interface PomsMeasurementPointDTO extends Partial<PomsManagedStatusDTO> {
   connectedPointId: number;
   sourceMeasurementPointId: number;
   eligibleFactoryId: number;
@@ -102,7 +103,7 @@ export interface PomsMeasurementPointDTO {
   updatedAt: string;
 }
 
-export interface PomsFactoryDetailDTO extends PomsFactorySummaryDTO {
+export interface PomsFactoryDetailDTO extends PomsFactorySummaryDTO, Partial<PomsManagedStatusDTO> {
   measurementPoints: PomsMeasurementPointDTO[];
 }
 

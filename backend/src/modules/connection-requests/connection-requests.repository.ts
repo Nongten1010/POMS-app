@@ -1,3 +1,4 @@
+import { readPomsManagedStatus } from '../poms-factories/poms-status-management.state';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { env } from '../../config/env';
@@ -166,6 +167,7 @@ interface ConnectedFactoryProfileRow {
 }
 
 interface CurrentFactoryMeasurementPointRow {
+  management_state_json?: string | null;
   id: number | string;
   source_request_id: number | string;
   point_type: MeasurementPointInput['pointType'];
@@ -941,28 +943,16 @@ export const connectionRequestsRepository = {
 
     const query = buildConnectedMeasurementPointsQuery(lookupKeys, eligibleLookupIds);
     const rows = await query
-      .select(
-        'id',
-        'source_measurement_point_id',
-        'source_request_id',
-        'point_type',
-        'details_json',
-        'factory_id',
-        'eligible_factory_id',
-        'point_name',
-        'point_code',
-        'system_type',
-        'parameters_json',
-        'monitoring_point_status',
-        'instruments_json',
-        'factory_logo_json',
-        'documents_json',
-      )
+      .select<
+        CurrentFactoryMeasurementPointRow[]
+      >(['id', 'source_measurement_point_id', 'source_request_id', 'point_type', 'details_json', 'factory_id', 'eligible_factory_id', 'point_name', 'point_code', 'system_type', 'parameters_json', 'monitoring_point_status', 'instruments_json', 'factory_logo_json', 'documents_json'])
       .orderBy('factory_id', 'asc')
       .orderBy('point_code', 'asc')
       .orderBy('point_name', 'asc');
 
     return rows.map((row) => ({
+      ...readPomsManagedStatus(row.management_state_json, Number(row.id)),
+      factoryStatus: readPomsManagedStatus(row.management_state_json).status,
       connectedPointId: Number(row.id),
       sourceMeasurementPointId: Number(row.source_measurement_point_id),
       sourceRequestId: Number(row.source_request_id),
@@ -993,23 +983,16 @@ export const connectionRequestsRepository = {
 
     const query = buildConnectedMeasurementPointsQuery(lookupKeys, eligibleLookupIds);
     const rows = await query
-      .select(
-        'factory_id',
-        'eligible_factory_id',
-        'point_name',
-        'point_code',
-        'system_type',
-        'parameters_json',
-        'monitoring_point_status',
-        'instruments_json',
-        'factory_logo_json',
-        'documents_json',
-      )
+      .select<
+        CurrentFactoryMeasurementPointRow[]
+      >(['id', 'factory_id', 'eligible_factory_id', 'point_name', 'point_code', 'system_type', 'parameters_json', 'monitoring_point_status', 'instruments_json', 'factory_logo_json', 'documents_json'])
       .orderBy('factory_id', 'asc')
       .orderBy('point_code', 'asc')
       .orderBy('point_name', 'asc');
 
     return rows.map((row) => ({
+      ...readPomsManagedStatus(row.management_state_json, Number(row.id)),
+      factoryStatus: readPomsManagedStatus(row.management_state_json).status,
       factoryId: row.factory_id,
       eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
       stationId: row.point_code ?? row.point_name,
@@ -3852,6 +3835,13 @@ function buildConnectedMeasurementPointsQuery(
   const query = db<CurrentFactoryMeasurementPointRow>(
     factoryProfileReadTable('cems_wpms_connected_measurement_points'),
   ).whereNull('deleted_at');
+  const source = factoryProfileReadTable('cems_wpms_connected_measurement_points');
+  query.select(
+    db('poms_factory_status_management as fsm')
+      .select('fsm.state_json')
+      .whereRaw('?? = ??', ['fsm.eligible_factory_id', `${source}.eligible_factory_id`])
+      .as('management_state_json'),
+  );
   applyConnectedFactoryLookup(query, factoryIds, eligibleFactoryIds);
   return query;
 }

@@ -1,3 +1,7 @@
+import type {
+  PomsManagedStatusDTO,
+  PomsDisplayStatus,
+} from '../poms-factories/poms-status-management.types';
 import type { ConnectionRequestEiaAssessment } from './connection-request-eia';
 import type { MonitoringPointStatus } from '../monitoring-point-forms/monitoring-point-forms.types';
 
@@ -274,7 +278,8 @@ export interface VerifyConnectionInput {
   note?: string | null;
 }
 
-export interface MeasurementPointDTO extends Omit<MeasurementPointInput, 'parameters'> {
+export interface MeasurementPointDTO
+  extends Omit<MeasurementPointInput, 'parameters'>, Partial<PomsManagedStatusDTO> {
   id: number;
   parameters: string[];
   pointCodeAssignmentMode?: PointCodeAssignmentMode | null;
@@ -527,7 +532,7 @@ export interface OperatorFactoryDashboardRowDTO {
   isFavorite: boolean;
   hasLatestHourlyMeasurement: boolean;
   monitoringPointCountBySystem: OperatorFactorySystemPointCountDTO[];
-  status: 'แสดง';
+  status: PomsDisplayStatus;
   measurementPoints: OperatorFactoryMeasurementPointDTO[];
 }
 
@@ -554,7 +559,7 @@ export interface OperatorFactorySystemPointCountDTO {
   count: number;
 }
 
-export interface OperatorFactoryMeasurementPointDTO {
+export interface OperatorFactoryMeasurementPointDTO extends Partial<PomsManagedStatusDTO> {
   stationId: string | null;
   pointName: string;
   pointCode: string | null;
@@ -589,6 +594,7 @@ export interface CurrentFactoryMeasurementPointDTO extends Omit<
   OperatorFactoryMeasurementPointDTO,
   'parameterStandards'
 > {
+  factoryStatus?: PomsDisplayStatus;
   connectedPointId?: number;
   sourceMeasurementPointId?: number;
   sourceRequestId?: number;

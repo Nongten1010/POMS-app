@@ -846,3 +846,7 @@ CSV ใช้ identity columns `date_time`, `factory_name`, `factory_registratio
 | Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
 | Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`parameter-values.service.test.ts`](../../../../../backend/tests/unit/parameter-values.service.test.ts), [`measurement-csv-export.route.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.route.test.ts), [`measurement-csv-export.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.test.ts) |
+
+## สถานะบริหาร POMS ในรายการ current
+
+status ของรายการที่เชื่อมต่อใช้ `แสดง`, `ซ่อน`, `ยกเลิกการเชื่อมต่อ` ตามสถานะที่ Admin บันทึก จุดตรวจวัดส่ง visibility, connectionStatus, effectiveVisibility, effectiveConnectionStatus ด้วย ส่วน statusCode และ monitoringPointStatus ยังคงความหมายของขั้นตอนคำขอเดิม ดู [กติกาสถานะและการสืบทอดจากโรงงาน](../../menus/master-data/status-management.md)

@@ -74,7 +74,9 @@ export const statusManagementSchemas: Record<string, Schema> = {
       factory: object(
         {
           ...patchFields,
-          status: { type: 'string', enum: ['แสดง', 'ซ่อน'] },
+          status: { type: 'string', enum: ['แสดง', 'ซ่อน', 'ยกเลิกการเชื่อมต่อ'] },
+          effectiveVisibility: visibility,
+          effectiveConnectionStatus: connectionStatus,
           connectionStatusLabel: { type: 'string', enum: ['เชื่อมต่อแล้ว', 'ยกเลิกการเชื่อมต่อ'] },
         },
         ['visibility', 'connectionStatus', 'status', 'connectionStatusLabel'],
@@ -88,6 +90,7 @@ export const statusManagementSchemas: Record<string, Schema> = {
             pointName: { type: 'string' },
             systemType: { type: 'string', enum: ['CEMS', 'WPMS'] },
             ...patchFields,
+            status: { type: 'string', enum: ['แสดง', 'ซ่อน', 'ยกเลิกการเชื่อมต่อ'] },
             effectiveVisibility: visibility,
             effectiveConnectionStatus: connectionStatus,
             parameters: {
@@ -196,5 +199,23 @@ export const statusManagementPaths: Record<string, Schema> = {
         },
       },
     },
+  },
+};
+
+export const pomsManagedStatusProperties = {
+  status: {
+    type: 'string',
+    enum: ['แสดง', 'ซ่อน', 'ยกเลิกการเชื่อมต่อ'],
+    readOnly: true,
+    description:
+      'สถานะบริหาร POMS ที่มีผลจริง; ยกเลิกการเชื่อมต่อมีลำดับก่อนซ่อน ไม่ใช่ monitoringPointStatus ของขั้นตอนเชื่อมต่อ',
+  },
+  visibility: { ...visibility, readOnly: true },
+  connectionStatus: { ...connectionStatus, readOnly: true },
+  effectiveVisibility: { ...visibility, readOnly: true, description: 'รวมผลจากสถานะโรงงานแม่' },
+  effectiveConnectionStatus: {
+    ...connectionStatus,
+    readOnly: true,
+    description: 'รวมผลจากสถานะโรงงานแม่',
   },
 };

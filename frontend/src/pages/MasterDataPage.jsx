@@ -44,6 +44,7 @@ import {
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
   getStatusManagementSelection,
+  getPomsDisplayStatus,
 } from '../utils/masterData.mjs'
 
 const pomsFactoriesApiBaseUrl = window.location.hostname === 'localhost'
@@ -774,7 +775,7 @@ function mapMonitoringPointRows(factory) {
       ? point.parameters.join(', ')
       : point.parameters ?? point.parameterText ?? 'CO (ppm), NOx (ppm), Temp. (°C), O2 (%), Flow (m3/hr)',
     latestUpdatedAt: getLatestUpdatedAt(point),
-    status: point.monitoringPointStatus ?? point.status ?? 'เชื่อมต่อแล้ว',
+    status: getPomsDisplayStatus(point),
     source: point,
   }))
 }
@@ -2274,6 +2275,9 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
       })
       await readMasterDataResponse(result, 'บันทึกสถานะไม่สำเร็จ')
       await loadFactories()
+      if (selectedFactory && String(getFactoryRowId(selectedFactory)) === String(factoryId)) {
+        setSelectedFactory(await loadFactoryDetail(selectedFactory))
+      }
       setStatusManagingFactory(null)
       setSnackbarMessage('บันทึกสถานะสำเร็จ')
     } catch (error) {
@@ -2293,7 +2297,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     } finally {
       setStatusManagementSubmitting(false)
     }
-  }, [accessToken, factoryRows, loadFactories, loadFactoryStatusManagement, statusManagingFactory])
+  }, [accessToken, factoryRows, loadFactories, loadFactoryDetail, loadFactoryStatusManagement, selectedFactory, statusManagingFactory])
   const handleEditRequest = useCallback(async (request) => {
     setViewingRequest(null)
     setReviewingRequest(null)

@@ -164,3 +164,113 @@ describe('Transactional POMS status storage', () => {
     void client.destroy();
   });
 });
+
+const actualFactories = jest.requireActual<
+  typeof import('../../src/modules/poms-factories/poms-factories.repository')
+>('../../src/modules/poms-factories/poms-factories.repository');
+describe('persist point status then map factory GET detail', () => {
+  it.each([
+    ['VISIBLE', 'CONNECTED', 'แสดง'],
+    ['HIDDEN', 'CONNECTED', 'ซ่อน'],
+    ['VISIBLE', 'DISCONNECTED', 'ยกเลิกการเชื่อมต่อ'],
+  ] as const)('%s/%s must return %s after save', async (visibility, connectionStatus, label) => {
+    await pomsStatusManagementRepository.update('10120000325542', actor, {
+      expectedRevision: 0,
+      measurementPoints: [{ connectedPointId: 11, visibility, connectionStatus }],
+    });
+    const saved = await pomsStatusManagementRepository.read('10120000325542', actor);
+    const status = statusManagementDTO(saved.source, saved.snapshot).measurementPoints[0];
+    expect(status?.visibility).toBe(visibility);
+    expect(status?.connectionStatus).toBe(connectionStatus);
+    const row = connectedFactoryRow({
+      connected_point_id: 11,
+      management_state_json: tables.poms_factory_status_management![0]!.state_json,
+    });
+    const detail = actualFactories.toPomsFactoryDetailForTests([row], 0);
+    expect((detail?.measurementPoints[0] as unknown as { status?: string })?.status).toBe(label);
+  });
+});
+function connectedFactoryRow(overrides: Record<string, unknown> = {}) {
+  return {
+    connected_point_id: 15,
+    source_measurement_point_id: 2,
+    eligible_factory_id: 7,
+    factory_id: 'factory-001',
+    factory_name: 'บริษัท ทดสอบ จำกัด',
+    factory_registration_no: 'POMS-REG-001',
+    factory_address: '99 หมู่ 1',
+    factory_latitude: 12.7,
+    factory_longitude: 101.1,
+    factory_eia_assessment: 'มี EIA' as const,
+    factory_eia_other: null,
+    factory_project_name: 'โครงการเดิม',
+    factory_front_photos_json: null,
+    factory_logo_json: null,
+    province_name: 'ระยอง',
+    industrial_estate_name: null,
+    factory_registration_no_new: '3-106-33/50สบ',
+    factory_registration_no_old: '3-106-33/49สบ',
+    business_activity: 'ผลิตเคมีภัณฑ์',
+    factory_type_sequence: '42 / 4201',
+    system_type: 'CEMS' as const,
+    point_name: 'ปล่อง A',
+    point_code: 'S0001',
+    point_type: 'STACK' as const,
+    parameters_json: '["CO"]',
+    monitoring_point_status: 'เชื่อมต่อครบแล้ว' as const,
+    details_json: null,
+    documents_json: null,
+    instruments_json: null,
+    updated_at: '2026-09-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('factory status inheritance in both POMS GET responses', () => {
+  it.each([
+    ['HIDDEN', 'CONNECTED', 'ซ่อน'],
+    ['VISIBLE', 'DISCONNECTED', 'ยกเลิกการเชื่อมต่อ'],
+  ] as const)(
+    '%s/%s reaches detail, points and list',
+    async (visibility, connectionStatus, label) => {
+      await pomsStatusManagementRepository.update('F1', actor, {
+        expectedRevision: 0,
+        factory: { visibility, connectionStatus },
+      });
+      const row = connectedFactoryRow({
+        connected_point_id: 11,
+        management_state_json: tables.poms_factory_status_management![0]!.state_json,
+      });
+      const detail = actualFactories.toPomsFactoryDetailForTests([row], 0);
+      expect(detail).toMatchObject({ status: label, visibility, connectionStatus });
+      expect(detail?.measurementPoints[0]).toMatchObject({
+        status: label,
+        visibility: 'VISIBLE',
+        connectionStatus: 'CONNECTED',
+        effectiveVisibility: visibility,
+        effectiveConnectionStatus: connectionStatus,
+        monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+      });
+      expect(actualFactories.summarizeConnectedFactoryRowsForTests([row])[0]?.status).toBe(label);
+    },
+  );
+  it('restores own point state after showing the parent again', async () => {
+    await pomsStatusManagementRepository.update('F1', actor, {
+      expectedRevision: 0,
+      factory: { visibility: 'HIDDEN' },
+      measurementPoints: [{ connectedPointId: 11, visibility: 'HIDDEN' }],
+    });
+    await pomsStatusManagementRepository.update('F1', actor, {
+      expectedRevision: 1,
+      factory: { visibility: 'VISIBLE' },
+    });
+    const row = connectedFactoryRow({
+      connected_point_id: 11,
+      management_state_json: tables.poms_factory_status_management![0]!.state_json,
+    });
+    expect(
+      actualFactories.toPomsFactoryDetailForTests([row], 0)?.measurementPoints[0]?.status,
+    ).toBe('ซ่อน');
+    expect(actualFactories.summarizeConnectedFactoryRowsForTests([row])[0]?.status).toBe('แสดง');
+  });
+});

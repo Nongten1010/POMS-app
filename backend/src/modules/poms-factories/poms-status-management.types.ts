@@ -61,3 +61,10 @@ export const defaultFactoryStatus = (): StoredFactoryStatus => ({
   factory: defaultManagedStatus(),
   measurementPoints: {},
 });
+
+export type PomsDisplayStatus = 'แสดง' | 'ซ่อน' | 'ยกเลิกการเชื่อมต่อ';
+export interface PomsManagedStatusDTO extends ManagedStatus {
+  status: PomsDisplayStatus;
+  effectiveVisibility: Visibility;
+  effectiveConnectionStatus: ConnectionStatus;
+}

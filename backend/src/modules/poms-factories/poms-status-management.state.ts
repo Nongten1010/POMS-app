@@ -1,6 +1,8 @@
 import { ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import {
   defaultManagedStatus,
+  defaultFactoryStatus,
+  type PomsManagedStatusDTO,
   type ManagedStatus,
   type StatusManagementInput,
   type StatusSnapshot,
@@ -65,8 +67,7 @@ export function statusManagementDTO(source: StatusSource, snapshot: StatusSnapsh
     updatedAt: snapshot.updatedAt,
     updatedBy: snapshot.updatedBy,
     factory: {
-      ...factory,
-      status: factory.visibility === 'HIDDEN' ? 'ซ่อน' : 'แสดง',
+      ...managedStatusDTO(factory),
       connectionStatusLabel:
         factory.connectionStatus === 'DISCONNECTED' ? 'ยกเลิกการเชื่อมต่อ' : 'เชื่อมต่อแล้ว',
     },
@@ -83,6 +84,7 @@ export function statusManagementDTO(source: StatusSource, snapshot: StatusSnapsh
         systemType: point.systemType,
         visibility: own.visibility,
         connectionStatus: own.connectionStatus,
+        status: managedStatusDTO(own, factory).status,
         effectiveVisibility: effective.visibility,
         effectiveConnectionStatus: effective.connectionStatus,
         parameters: point.parameters.map((parameter) => {
@@ -99,4 +101,37 @@ export function statusManagementDTO(source: StatusSource, snapshot: StatusSnapsh
       };
     }),
   };
+}
+
+export function managedStatusDTO(own: ManagedStatus, parent?: ManagedStatus): PomsManagedStatusDTO {
+  const effective = effectiveStatus(own, parent);
+  return {
+    ...own,
+    effectiveVisibility: effective.visibility,
+    effectiveConnectionStatus: effective.connectionStatus,
+    status:
+      effective.connectionStatus === 'DISCONNECTED'
+        ? 'ยกเลิกการเชื่อมต่อ'
+        : effective.visibility === 'HIDDEN'
+          ? 'ซ่อน'
+          : 'แสดง',
+  };
+}
+
+/** Shared by current POMS reads; workflow monitoringPointStatus remains independent. */
+export function readPomsManagedStatus(
+  stateJson?: string | null,
+  connectedPointId?: number,
+): PomsManagedStatusDTO {
+  const state: StoredFactoryStatus = stateJson ? JSON.parse(stateJson) : defaultFactoryStatus();
+  const factory = { ...defaultManagedStatus(), ...state.factory };
+  if (connectedPointId === undefined) return managedStatusDTO(factory);
+  const point = state.measurementPoints?.[String(connectedPointId)];
+  return managedStatusDTO(
+    {
+      visibility: point?.visibility ?? 'VISIBLE',
+      connectionStatus: point?.connectionStatus ?? 'CONNECTED',
+    },
+    factory,
+  );
 }

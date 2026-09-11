@@ -200,7 +200,7 @@ function buildScopeStatusPatch(selection) {
     return { visibility: 'VISIBLE', connectionStatus: 'CONNECTED' }
   }
   if (selection === 'HIDDEN') {
-    return { visibility: 'HIDDEN' }
+    return { visibility: 'HIDDEN', connectionStatus: 'CONNECTED' }
   }
   if (selection === 'DISCONNECTED') {
     return { connectionStatus: 'DISCONNECTED' }
@@ -251,4 +251,14 @@ export function buildStatusManagementPayload({ initial = {}, factoryStatus, meas
   }
 
   return payload
+}
+
+// Current POMS display status is independent from connection-request workflow status.
+export function getPomsDisplayStatus(point = {}) {
+  const connection = point.effectiveConnectionStatus ?? point.connectionStatus
+  const visibility = point.effectiveVisibility ?? point.visibility
+  if (connection === 'DISCONNECTED') return 'ยกเลิกการเชื่อมต่อ'
+  if (visibility === 'HIDDEN') return 'ซ่อน'
+  if (visibility === 'VISIBLE' || connection === 'CONNECTED') return 'แสดง'
+  return ['แสดง', 'ซ่อน', 'ยกเลิกการเชื่อมต่อ'].includes(point.status) ? point.status : 'แสดง'
 }

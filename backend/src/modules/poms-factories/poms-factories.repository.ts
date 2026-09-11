@@ -1,3 +1,4 @@
+import { readPomsManagedStatus } from './poms-status-management.state';
 import type { Knex } from 'knex';
 import {
   factoryProfileReadTable,
@@ -1264,6 +1265,7 @@ function toFactoryDetail(
   const first = sortedByProfileVersion[0];
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(first.factory_type_sequence);
   return {
+    ...readPomsManagedStatus(first.management_state_json),
     eligibleFactoryId: Number(first.eligible_factory_id),
     factoryId: first.factory_id,
     factoryRegistrationNo: first.factory_registration_no,
@@ -1344,9 +1346,7 @@ function toOperatorFactoryTableRow(rows: ConnectedFactoryRow[]): OperatorFactory
   const first = sortedByProfileVersion[0];
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(first.factory_type_sequence);
 
-  const managed = first.management_state_json
-    ? JSON.parse(first.management_state_json).factory
-    : null;
+  const managed = readPomsManagedStatus(first.management_state_json);
 
   return {
     id: Number(first.eligible_factory_id),
@@ -1371,12 +1371,7 @@ function toOperatorFactoryTableRow(rows: ConnectedFactoryRow[]): OperatorFactory
     requestStatusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
     eligibilityRequest: null,
     canRequestEligibility: false,
-    status:
-      managed?.connectionStatus === 'DISCONNECTED'
-        ? 'ยกเลิกการเชื่อมต่อ'
-        : managed?.visibility === 'HIDDEN'
-          ? 'ซ่อน'
-          : 'แสดง',
+    status: managed.status,
   };
 }
 
@@ -1407,6 +1402,7 @@ function toProfile(factory: PomsFactoryProfileDTO): PomsFactoryProfileDTO {
 function toMeasurementPointDTO(row: ConnectedFactoryRow): PomsMeasurementPointDTO {
   const measurementInstruments = parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json);
   return {
+    ...readPomsManagedStatus(row.management_state_json, Number(row.connected_point_id)),
     connectedPointId: Number(row.connected_point_id),
     sourceMeasurementPointId: Number(row.source_measurement_point_id),
     eligibleFactoryId: Number(row.eligible_factory_id),

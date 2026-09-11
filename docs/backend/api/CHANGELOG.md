@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+## สถานะบริหาร POMS ในรายการ current
+
+- Breaking change: status ของรายการจุดตรวจวัดที่เชื่อมต่อเปลี่ยนจาก label คำขอเป็น `แสดง` / `ซ่อน` / `ยกเลิกการเชื่อมต่อ`; statusCode ยังคงเดิม
+- factory.status ใน status-management ขยาย enum เป็นสามค่า โดยยกเลิกการเชื่อมต่อมีลำดับก่อนซ่อน
+- GET รายละเอียดโรงงานและจุดใน dashboard เพิ่ม effective status fields; รายการโรงงาน dashboard ขยาย enum สถานะเป็นสามค่า
+- Client migration: ใช้ status/effective fields แสดงสถานะบริหาร ใช้ statusCode สำหรับขั้นตอนคำขอ และไม่ส่ง read-only fields กลับเป็น payload แก้ข้อมูล
+- [สัญญาสถานะ](./menus/master-data/status-management.md), [รายการจุดตรวจวัด](./shared/connected-measurement-points/README.md)
+
+
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
 ## 2026-09-11 — เปิดใช้ข้อมูลทั่วไปโรงงานร่วมกันใน canonical mode

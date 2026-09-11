@@ -1,3 +1,4 @@
+import { pomsManagedStatusProperties } from './poms-status-management.openapi';
 import { env } from '../../config/env';
 import {
   CONNECTION_REQUEST_DOCUMENT_TITLE,
@@ -1085,6 +1086,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     required: ['pointName'],
     properties: {
+      ...pomsManagedStatusProperties,
       pointName: { type: 'string', minLength: 1, maxLength: 255 },
       pointCode: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       pointType: {

@@ -1,4 +1,8 @@
-import { statusManagementPaths, statusManagementSchemas } from './poms-status-management.openapi';
+import {
+  pomsManagedStatusProperties,
+  statusManagementPaths,
+  statusManagementSchemas,
+} from './poms-status-management.openapi';
 import { env } from '../../config/env';
 import {
   ALERT_EVENT_ALERT_TYPES,
@@ -1930,6 +1934,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'data',
     ],
     properties: {
+      ...pomsManagedStatusProperties,
       stationId: { type: 'string', nullable: true },
       pointName: { type: 'string' },
       pointCode: { type: 'string', nullable: true },
@@ -2054,7 +2059,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         items: schemaRef('OperatorFactorySystemPointCount'),
       },
-      status: { type: 'string', enum: ['แสดง'] },
+      status: { type: 'string', enum: ['แสดง', 'ซ่อน', 'ยกเลิกการเชื่อมต่อ'] },
       measurementPoints: {
         type: 'array',
         items: schemaRef('OperatorFactoryMeasurementPoint'),
@@ -2441,6 +2446,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'updatedAt',
     ],
     properties: {
+      ...pomsManagedStatusProperties,
       connectedPointId: { type: 'integer', minimum: 1 },
       sourceMeasurementPointId: { type: 'integer', minimum: 1 },
       eligibleFactoryId: { type: 'integer', minimum: 1 },
@@ -2482,6 +2488,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'object',
         required: ['measurementPoints'],
         properties: {
+          ...pomsManagedStatusProperties,
           measurementPoints: {
             type: 'array',
             items: schemaRef('PomsMeasurementPoint'),
@@ -3971,6 +3978,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'data',
     ],
     properties: {
+      ...pomsManagedStatusProperties,
       stationId: { type: 'string', nullable: true },
       pointName: { type: 'string', minLength: 1 },
       pointCode: { type: 'string', nullable: true },
@@ -4094,7 +4102,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
           },
         },
       },
-      status: { type: 'string', enum: ['แสดง'] },
+      status: { type: 'string', enum: ['แสดง', 'ซ่อน', 'ยกเลิกการเชื่อมต่อ'] },
       measurementPoints: {
         type: 'array',
         items: schemaRef('FactoryDashboardMeasurementPoint'),

@@ -1193,3 +1193,7 @@ State transitions:
 Breaking change ด้าน editable fields ของ `BASIC_INFO` ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-05--จำกัด-basic_info-ให้แก้ได้เฉพาะ-7-fields)
 
 Breaking change ด้านสิทธิ์ review ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-01--เพิ่ม-2-แบบฟอร์มคำขอแก้ไขข้อมูลพื้นฐานจาก-poms-และจำกัดผู้อนุมัติเป็น-admin)
+
+### สถานะบริหารในข้อมูลโรงงาน current/live
+
+GET รายละเอียดส่ง `status`, `visibility`, `connectionStatus`, `effectiveVisibility`, `effectiveConnectionStatus` ทั้งระดับโรงงานและจุดตรวจวัด ดู [สัญญาสถานะบริหาร](./status-management.md) ใช้ status สำหรับ dialog รายการจุดตรวจวัด ส่วน monitoringPointStatus เป็นขั้นตอนเชื่อมต่อเดิม ไม่รับ fields สถานะบริหารใหม่ในคำขอแก้ไขข้อมูลโรงงาน

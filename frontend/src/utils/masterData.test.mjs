@@ -11,6 +11,7 @@ import {
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
   getStatusManagementSelection,
+  getPomsDisplayStatus,
 } from './masterData.mjs'
 
 test('keeps cancelled and rejected factory edit requests distinct', () => {
@@ -173,7 +174,7 @@ test('builds a minimal status management patch with exact parameter keys', () =>
     }],
   }), {
     expectedRevision: 3,
-    factory: { visibility: 'HIDDEN' },
+    factory: { visibility: 'HIDDEN', connectionStatus: 'CONNECTED' },
     measurementPoints: [{
       connectedPointId: 11,
       connectionStatus: 'DISCONNECTED',
@@ -192,4 +193,24 @@ test('requires at least one status management change', () => {
     initial,
     factoryStatus: 'VISIBLE',
   }), /เปลี่ยนสถานะอย่างน้อย 1 รายการ/)
+})
+
+for (const [visibility, connectionStatus, expected] of [
+  ['VISIBLE', 'CONNECTED', 'แสดง'], ['HIDDEN', 'CONNECTED', 'ซ่อน'],
+  ['VISIBLE', 'DISCONNECTED', 'ยกเลิกการเชื่อมต่อ'],
+]) {
+  test(`uses effective POMS status ${expected} instead of legacy monitoring status`, () => {
+    assert.equal(getPomsDisplayStatus({monitoringPointStatus: 'เชื่อมต่อครบแล้ว', visibility: 'VISIBLE', connectionStatus: 'CONNECTED', effectiveVisibility: visibility, effectiveConnectionStatus: connectionStatus}), expected)
+  })
+}
+test('prefers the new display status and defaults unmanaged points to visible', () => {
+  assert.equal(getPomsDisplayStatus({status: 'ซ่อน', monitoringPointStatus:'เชื่อมต่อครบแล้ว'}), 'ซ่อน')
+  assert.equal(getPomsDisplayStatus({monitoringPointStatus:'อยู่ระหว่างเชื่อมต่อ'}), 'แสดง')
+})
+
+test('switches a disconnected factory and point to the selected hidden state', () => {
+  const initial = {revision:1, factory:{visibility:'VISIBLE',connectionStatus:'DISCONNECTED'},measurementPoints:[{connectedPointId:11,visibility:'VISIBLE',connectionStatus:'DISCONNECTED',parameters:[]}]}
+  const payload = buildStatusManagementPayload({initial,factoryStatus:'HIDDEN',measurementPoints:[{connectedPointId:11,status:'HIDDEN',parameters:[]}]})
+  assert.deepEqual(payload.factory,{visibility:'HIDDEN',connectionStatus:'CONNECTED'})
+  assert.deepEqual(payload.measurementPoints[0],{connectedPointId:11,visibility:'HIDDEN',connectionStatus:'CONNECTED'})
 })

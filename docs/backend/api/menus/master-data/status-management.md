@@ -37,14 +37,14 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 - จุดใหม่ภายใต้โรงงานเดิมใช้ค่ารายจุดเริ่มต้น แต่ยังได้รับผลจากสถานะโรงงาน
 - `connectionStatus` เป็นสถานะการบริหารในระบบ POMS การตั้งกลับเป็น `CONNECTED` ไม่ใช่การทดสอบการเชื่อมต่อจริงหรือคำสั่งเปิดอุปกรณ์
 - การบันทึกนี้ไม่เปลี่ยนคำขอเชื่อมต่อเดิม, `monitoringPointStatus`, `deleted_at`, config อุปกรณ์, การรับ telemetry หรือข้อมูลรายงานย้อนหลัง
-- การซ่อนเป็นสถานะการแสดงผล ไม่ใช่การถอนสิทธิ์อ่านข้อมูล API เดิม รายการข้อมูลพื้นฐานยังคืนโรงงานที่ซ่อน/ยกเลิกไว้เพื่อให้จัดการต่อได้; frontend ที่แสดงข้อมูลตามสถานะต้องอ่านค่า effective และเชื่อม API นี้ งาน backend นี้ไม่ได้แก้การกรองทุกหน้าของ frontend
+- การซ่อนเป็นสถานะการแสดงผล ไม่ใช่การถอนสิทธิ์อ่านข้อมูล API เดิม รายการข้อมูลพื้นฐานยังคืนโรงงานที่ซ่อน/ยกเลิกไว้เพื่อให้จัดการต่อได้; frontend ที่แสดงข้อมูลตามสถานะต้องอ่านค่า effective และเชื่อม API นี้ รายการ current POMS ใช้สถานะบริหารชุดเดียวกัน โดยไม่ลบแถวหรือเปลี่ยนประวัติคำขอ
 
 ### Mapping ตัวเลือกในหน้าต่าง
 
 | ตัวเลือกโรงงาน/จุด | Patch ที่ส่ง |
 | --- | --- |
 | แสดง | `{"visibility":"VISIBLE","connectionStatus":"CONNECTED"}` |
-| ซ่อน | `{"visibility":"HIDDEN"}` — คงสถานะการเชื่อมต่อเดิม |
+| ซ่อน | `{"visibility":"HIDDEN","connectionStatus":"CONNECTED"}` — dropdown เปลี่ยนเป็นซ่อนแทนสถานะยกเลิกเดิม |
 | ยกเลิกการเชื่อมต่อ | `{"connectionStatus":"DISCONNECTED"}` — คงค่าการแสดงผลเดิม |
 
 หาก frontend ใช้ dropdown เดียว ให้แสดง `ยกเลิกการเชื่อมต่อ` ก่อนเมื่อ connectionStatus เป็น `DISCONNECTED` ส่วนรายการโรงงาน `GET /poms-factories` คืน `status` ตามลำดับนี้แล้ว พารามิเตอร์มีเฉพาะ แสดง=`VISIBLE`, ซ่อน=`HIDDEN`
@@ -60,7 +60,7 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 | `revision` | integer ≥ 0 | เวอร์ชันของสถานะทั้งหน้าต่าง |
 | `updatedAt`, `updatedBy` | ISO date-time/null, integer/null | การแก้สถานะล่าสุด; null เมื่อยังไม่เคยตั้ง |
 | `factory.visibility`, `factory.connectionStatus` | enum | ค่าที่ตั้งรายโรงงาน |
-| `factory.status` | แสดง/ซ่อน | ป้ายของ visibility เท่านั้น |
+| `factory.status` | แสดง/ซ่อน/ยกเลิกการเชื่อมต่อ | ป้ายสถานะบริหารที่มีผลจริง |
 | `factory.connectionStatusLabel` | เชื่อมต่อแล้ว/ยกเลิกการเชื่อมต่อ | ป้ายการเชื่อมต่อ |
 | `measurementPoints[].connectedPointId` | integer | identity ของ current connected point ใช้ส่ง PATCH |
 | `pointCode`, `pointName`, `systemType` | string/null, string, CEMS/WPMS | ข้อมูลระบุจุด |
@@ -144,4 +144,28 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 - Runtime OpenAPI: `backend/src/modules/api-docs/poms-status-management.openapi.ts`
 - Tests: `backend/tests/unit/poms-status-management.*.test.ts`
 - [หลักฐานการตรวจและทดสอบ](../../../evidence/master-data/status-management.md)
-- งาน frontend ถัดไป: ผูก GET/PATCH, ส่ง expectedRevision โดยไม่ส่ง reason, ใช้ key พารามิเตอร์จาก API, แสดงข้อผิดพลาด และโหลดข้อมูลใหม่หลังสำเร็จ
+- Frontend ผูก GET/PATCH และโหลดรายการ/รายละเอียดที่เปิดอยู่ใหม่หลังสำเร็จ; dialog ใช้ status/effective fields แทน monitoringPointStatus
+
+## สถานะเดียวกันใน API อ่านข้อมูล current POMS
+
+GET `/poms-factories/{factoryId}` คืน fields ต่อไปนี้ทั้งระดับโรงงานและใน `measurementPoints[]`:
+
+| Field | Type | ความหมาย |
+| --- | --- | --- |
+| status | แสดง / ซ่อน / ยกเลิกการเชื่อมต่อ | ป้ายสถานะบริหารที่มีผลจริง |
+| visibility | VISIBLE / HIDDEN | ค่าที่ตั้งเฉพาะระดับนั้น |
+| connectionStatus | CONNECTED / DISCONNECTED | ค่าการเชื่อมต่อที่ตั้งเฉพาะระดับนั้น |
+| effectiveVisibility | VISIBLE / HIDDEN | รวมผลจากโรงงานแม่ |
+| effectiveConnectionStatus | CONNECTED / DISCONNECTED | รวมผลจากโรงงานแม่ |
+
+```json
+{"status":"ซ่อน","visibility":"VISIBLE","connectionStatus":"CONNECTED","effectiveVisibility":"HIDDEN","effectiveConnectionStatus":"CONNECTED"}
+```
+
+ตัวอย่างคือจุดที่ตั้งแสดง แต่โรงงานแม่ซ่อน เมื่อแสดงโรงงานกลับจะใช้ค่ารายจุดเดิม `DISCONNECTED` มีลำดับก่อน `HIDDEN` เสมอ
+
+GET `/poms-factories` คืน status ระดับโรงงานจาก state เดียวกัน การซ่อนจุดเดียวไม่เปลี่ยนสถานะโรงงานแม่ จำนวนจุดและแถวที่ซ่อนยังอยู่เพื่อให้จัดการต่อได้
+
+API รายการจุดตรวจวัดที่เชื่อมต่อ (`/connected-measurement-points` และ alias) ใช้สถานะบริหารใน `status` ส่วน `statusCode` ยังคงเป็นสถานะคำขอเดิม จุดในข้อมูลโรงงาน dashboard/overview/map รับ effective fields เดียวกัน และสถานะโรงงานมาจากค่าระดับโรงงาน
+
+`monitoringPointStatus` ยังคงหมายถึงขั้นตอนการเชื่อมต่อเดิมและไม่ถูกเขียนทับ การซ่อน/ยกเลิกนี้ไม่สั่งปิดอุปกรณ์ ไม่หยุดรับ telemetry และไม่เปลี่ยนสถานะรายงานย้อนหลัง

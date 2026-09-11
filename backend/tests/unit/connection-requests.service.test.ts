@@ -3489,6 +3489,38 @@ describe('connectionRequestsService', () => {
       return { point, request };
     }
 
+    it.each(['ซ่อน', 'ยกเลิกการเชื่อมต่อ'] as const)(
+      'uses saved POMS status %s in shared point reads',
+      async (status) => {
+        const { point, request } = setupApprovedRename();
+        mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+          currentFactoryMeasurementPoint({
+            connectedPointId: 9,
+            sourceMeasurementPointId: point.id,
+            eligibleFactoryId: 17,
+            stationId: 'S1125',
+            pointCode: 'S1125',
+            status,
+            visibility: 'HIDDEN',
+            connectionStatus: status === 'ซ่อน' ? 'CONNECTED' : 'DISCONNECTED',
+            effectiveVisibility: 'HIDDEN',
+            effectiveConnectionStatus: status === 'ซ่อน' ? 'CONNECTED' : 'DISCONNECTED',
+          }),
+        ]);
+        const result = await connectionRequestsService.listConnectedMeasurementPoints(
+          { factoryId: request.factoryId },
+          actorUserId,
+          'ALL',
+        );
+        expect(result.data[0]).toMatchObject({
+          status,
+          statusCode: 'CONNECTED',
+          point: { status, effectiveVisibility: 'HIDDEN' },
+        });
+        expect(request.measurementPoints[0]).not.toHaveProperty('status');
+      },
+    );
+
     it('returns the approved live name in the connection page list without changing the request snapshot', async () => {
       const { point, request } = setupApprovedRename();
       const result = await connectionRequestsService.listConnectedMeasurementPoints(

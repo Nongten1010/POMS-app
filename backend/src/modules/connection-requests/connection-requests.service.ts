@@ -820,7 +820,7 @@ export const connectionRequestsService = {
               requestNo: request.requestNo,
               factory: findFactorySummary(request, factoryMap),
               type: request.systemType,
-              status: request.statusLabel,
+              status: point.status ?? request.statusLabel,
               statusCode: request.status,
               connectedAt: request.verifiedAt,
               point,
@@ -1638,6 +1638,7 @@ function toCurrentMeasurementPoint(
   const details = current.details ?? null;
   return {
     ...snapshot,
+    ...currentManagedStatus(current),
     latitude:
       details && ('stackLatitude' in details || 'instrumentLatitude' in details)
         ? (coordinateFromDetails(details, 'stackLatitude') ??
@@ -2536,6 +2537,7 @@ function toOperatorFactoryMeasurementPoint(
   const parameters = uniqueParameterDisplayNames(point.parameters);
 
   return {
+    ...currentManagedStatus(point),
     stationId: point.stationId,
     pointName: point.pointName,
     pointCode: point.pointCode,
@@ -2907,7 +2909,7 @@ function toOperatorFactoryOverviewBaseRow(
     eligibilityStatus:
       factory.eligibilityStatus ?? (factory.isEligible === true ? 'เข้าข่าย' : 'ไม่เข้าข่าย'),
     monitoringPointCountBySystem: countMeasurementPointsBySystem(currentMeasurementPoints),
-    status: 'แสดง',
+    status: currentMeasurementPoints[0]?.factoryStatus ?? 'แสดง',
     measurementPoints: currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint),
   };
 }
@@ -2996,7 +2998,7 @@ function toFactoryDashboardBaseRow(
     isEligible: factory.isEligible ?? false,
     eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
     monitoringPointCountBySystem: countMeasurementPointsBySystem(currentMeasurementPoints),
-    status: 'แสดง',
+    status: currentMeasurementPoints[0]?.factoryStatus ?? 'แสดง',
     measurementPoints: currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint),
   };
 }
@@ -3963,4 +3965,15 @@ function addDays(value: Date, days: number): Date {
   const next = new Date(value);
   next.setUTCDate(next.getUTCDate() + days);
   return next;
+}
+
+function currentManagedStatus(point: CurrentFactoryMeasurementPointDTO) {
+  if (!point.status) return {};
+  return {
+    status: point.status,
+    visibility: point.visibility,
+    connectionStatus: point.connectionStatus,
+    effectiveVisibility: point.effectiveVisibility,
+    effectiveConnectionStatus: point.effectiveConnectionStatus,
+  };
 }

@@ -775,3 +775,14 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(reviewDescription).toContain('submittedBy');
   });
 });
+
+it('documents managed display fields while preserving legacy monitoring status', () => {
+  const point = asObject(schemas().PomsMeasurementPoint, 'point');
+  const fields = asObject(point.properties, 'properties');
+  expect(fields.status).toMatchObject({
+    enum: ['แสดง', 'ซ่อน', 'ยกเลิกการเชื่อมต่อ'],
+    readOnly: true,
+  });
+  expect(fields.effectiveVisibility).toMatchObject({ enum: ['VISIBLE', 'HIDDEN'] });
+  expect(fields.monitoringPointStatus).toBeDefined();
+});
