@@ -749,6 +749,25 @@ export const connectionRequestsService = {
       },
     );
     const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
+    const currentPoints = rows.length
+      ? await connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
+          [...new Set(rows.map((request) => request.factoryId))],
+          [
+            ...new Set(
+              rows.flatMap((request) =>
+                request.eligibleFactoryId != null ? [request.eligibleFactoryId] : [],
+              ),
+            ),
+          ],
+        )
+      : [];
+    const currentNamesBySourcePointId = new Map(
+      currentPoints.flatMap((point) =>
+        point.sourceMeasurementPointId !== undefined
+          ? [[point.sourceMeasurementPointId, point.pointName] as const]
+          : [],
+      ),
+    );
     const details = await Promise.all(
       rows.flatMap((request) =>
         request.measurementPoints
@@ -767,7 +786,12 @@ export const connectionRequestsService = {
               status: request.statusLabel,
               statusCode: request.status,
               connectedAt: request.verifiedAt,
-              point,
+              // Display the approved live name without mutating the historical request
+              // or changing the identifiers used to look up device configuration.
+              point: {
+                ...point,
+                pointName: currentNamesBySourcePointId.get(point.id) ?? point.pointName,
+              },
               deviceConfigs: toDeviceConfigPayloadGroups(pointDeviceConfigs),
             };
           }),

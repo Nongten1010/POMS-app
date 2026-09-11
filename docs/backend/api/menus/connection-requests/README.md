@@ -804,6 +804,8 @@ Minimal response (`200 OK`):
 
 ### Connected points
 
+`data[].point.pointName` ใช้ชื่อ POMS ปัจจุบันที่อนุมัติแล้ว กฎการจับคู่กับข้อมูล current/live และ fallback เป็นไปตาม [Shared connected-point contract](../../shared/connected-measurement-points/README.md) โดยไม่เปลี่ยนชื่อในประวัติคำขอเดิม
+
 Query fields ที่เกี่ยวกับรหัสจุด:
 
 | Field       | Type   | Required | Rules                                      |

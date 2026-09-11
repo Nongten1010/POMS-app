@@ -13,6 +13,8 @@
 
 ## Connection requests
 
+- [ชื่อจุดตรวจวัดในหน้าขอเชื่อมต่อหลังอนุมัติแก้ไข](./connection-requests/current-point-name-after-approval.tdd.md)
+
 - [เลขที่คำขอใช้ลำดับ 4 หลักและปี พ.ศ. เต็ม](./connection-requests/request-number-full-year-format.tdd.md)
 - [เจ้าหน้าที่เลือกใช้รหัสจุดตรวจวัดเดิมหรือให้ระบบออกรหัสอัตโนมัติ](./connection-requests/point-code-assignment-options.tdd.md)
 - [คืนรหัสจุดตรวจวัดเป็น S/W เริ่มที่ 2001](./connection-requests/legacy-point-code-format-restored.tdd.md)

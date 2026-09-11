@@ -351,6 +351,8 @@ const connectedPointFilterParameters = [
   stringQuery('factoryId', 'กรองรหัสโรงงาน', false, 64),
   stringQuery('stationId', 'กรองรหัสจุดตรวจวัด', false, 64),
 ];
+const connectedPointNameDescription =
+  'pointName ใช้ชื่อ current/live จาก active cems_wpms_connected_measurement_points โดยจับคู่ source_measurement_point_id กับ id ของจุดในคำขอ หลังตรวจ data scope; ถ้าไม่พบจุดที่จับคู่ได้ให้ใช้ชื่อ snapshot เดิม ไม่แก้ประวัติคำขอหรือรหัสจุดตรวจวัด';
 const operatorFactoryParameters = [
   enumQuery('systemType', ['CEMS', 'WPMS'], 'กรองระบบตรวจวัด', false, undefined, systemTypeLabels),
   {
@@ -1858,7 +1860,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้วผ่าน alias',
       operationId: 'listConnectedMeasurementPointsAlias',
-      description: 'Permission: cems_wpms_requests:view',
+      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription}`,
       parameters: connectedPointFilterParameters,
     }),
   },
@@ -2231,7 +2233,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้ว',
       operationId: 'listConnectedMeasurementPoints',
-      description: 'Permission: cems_wpms_requests:view',
+      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription}`,
       parameters: connectedPointFilterParameters,
     }),
   },
@@ -2240,7 +2242,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้วของโรงงาน',
       operationId: 'listConnectedMeasurementPointsForFactory',
-      description: 'Permission: cems_wpms_requests:view',
+      description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription}`,
       parameters: [factoryIdPathParameter],
     }),
   },

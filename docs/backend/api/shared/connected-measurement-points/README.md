@@ -6,6 +6,10 @@
 
 API กลุ่มนี้เป็น contract ร่วมสำหรับหน้าขอเชื่อมต่อ หน้าหลัก และหน้าแจ้งแบบ กวภ. Endpoint รายโรงงานคืนรายการจุดตรวจวัดพร้อมข้อมูล prefill ของ กวภ.01 และ กวภ.05 โดย key ของข้อมูล prefill จะอยู่ใน response เสมอและเป็น `null` เมื่อไม่มีข้อมูลต้นทาง
 
+ชื่อ `pointName` ในรายการและรายละเอียดจุดตรวจวัดใช้ชื่อ current/live ที่อนุมัติแล้วจาก active `cems_wpms_connected_measurement_points` โดยจับคู่ `source_measurement_point_id` กับ `id` ของจุดในคำขอ หลังกรองสิทธิ์เข้าถึงโรงงานแล้ว หากไม่พบแถวปัจจุบันที่จับคู่ได้จะใช้ชื่อ snapshot เดิม รหัสจุดและประวัติคำขอยังคงเดิม
+
+กฎนี้ใช้กับ `GET /api/v1/connected-measurement-points`, alias `GET /api/v1/cems-wpms-requests/connected-measurement-points` และ endpoint รายโรงงานด้านล่าง ส่วน `GET /api/v1/connected-measurement-points/:stationId/requests` ยังคงคืนประวัติตามคำขอแต่ละรายการ
+
 ### Main Flow
 
 1. ใช้รหัสโรงงานหรือเลขทะเบียนโรงงานที่อยู่ใน connected request เรียก endpoint รายโรงงาน
@@ -62,7 +66,7 @@ curl --request GET \
 | `data` | array | No | รายการจุดตรวจวัดที่เชื่อมต่อแล้ว |
 | `data[].connectedPointId` | number | Yes | ID จาก active row ใน `cems_wpms_connected_measurement_points` สำหรับส่งเป็น `connectedPointId` ในแบบ กวภ.; เป็น `null` เมื่อหา active row ที่ตรงกับ source point ไม่พบ |
 | `data[].pointCode` | string | Yes | รหัสจุดตรวจวัด |
-| `data[].pointName` | string | No | ชื่อจุดตรวจวัด |
+| `data[].pointName` | string | No | ชื่อ current/live ที่อนุมัติแล้ว; fallback เป็นชื่อ snapshot เมื่อไม่พบแถวปัจจุบันที่จับคู่ได้ |
 | `data[].pointType` | `CEMS` \| `WPMS` | No | ระบบตรวจวัดของจุด |
 | `data[].parameterDetails` | string[] | No | ชื่อพารามิเตอร์พร้อมหน่วย เช่น `CO (ppm)` |
 | `data[].parameterInstrumentDetails` | object[] | No | ข้อมูลเครื่องมือตรวจวัดของแต่ละพารามิเตอร์ เรียงลำดับเดียวกับ `parameterDetails`; เป็น `[]` สำหรับ WPMS |

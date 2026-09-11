@@ -3446,6 +3446,131 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  describe('current connected point names after approval', () => {
+    const approvedName = 'Boiler 35 T [ทดสอบส่งกลับ 20260909]';
+
+    function setupApprovedRename() {
+      const point = Object.freeze({
+        id: 15,
+        pointName: 'Boiler 35 T',
+        pointCode: 'S1125',
+        pointType: 'STACK',
+        latitude: null,
+        longitude: null,
+        parameters: ['CO (ppm)'],
+        description: null,
+      });
+      const request = requestDto({
+        id: 12,
+        eligibleFactoryId: 17,
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        measurementPoints: [point],
+      });
+      mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+      mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
+        new Map([[request.factoryId, factorySummary()]]),
+      );
+      mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+        currentFactoryMeasurementPoint({
+          connectedPointId: 9,
+          sourceMeasurementPointId: point.id,
+          eligibleFactoryId: 17,
+          stationId: point.pointCode,
+          pointCode: point.pointCode,
+          pointName: approvedName,
+        }),
+      ]);
+      return { point, request };
+    }
+
+    it('returns the approved live name in the connection page list without changing the request snapshot', async () => {
+      const { point, request } = setupApprovedRename();
+      const result = await connectionRequestsService.listConnectedMeasurementPoints(
+        { factoryId: request.factoryId, stationId: 'S1125' },
+        actorUserId,
+        'OWN_FACTORY',
+      );
+
+      expect(result.data[0]).toMatchObject({
+        id: 15,
+        requestId: 12,
+        point: { ...point, pointName: approvedName },
+      });
+      expect(request.measurementPoints[0].pointName).toBe('Boiler 35 T');
+      expect(mockedRepository.list).toHaveBeenCalledWith(
+        { factoryId: request.factoryId, status: CONNECTION_REQUEST_STATUS.CONNECTED },
+        {
+          actorUserId,
+          scope: 'OWN_FACTORY',
+          regionalAccess: undefined,
+          useAssignedFactoryAccess: true,
+        },
+      );
+      expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
+        [request.factoryId],
+        [17],
+      );
+      expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
+        stationId: 'S1125',
+      });
+    });
+
+    it('returns the approved live name and connected identity in the factory modal', async () => {
+      const { request } = setupApprovedRename();
+      const result = await connectionRequestsService.getConnectedMeasurementPointDetailsByFactory(
+        request.factoryId,
+        actorUserId,
+        'ALL',
+      );
+
+      expect(result.data[0]).toMatchObject({
+        connectedPointId: 9,
+        pointCode: 'S1125',
+        pointName: approvedName,
+      });
+      expect(request.measurementPoints[0].pointName).toBe('Boiler 35 T');
+    });
+
+    it.each([
+      { currentPoints: [] },
+      {
+        currentPoints: [
+          currentFactoryMeasurementPoint({
+            sourceMeasurementPointId: 999,
+            pointCode: 'S1125',
+            pointName: 'A different point with the same code',
+          }),
+        ],
+      },
+    ])(
+      'preserves the snapshot name when no active source point matches (%j)',
+      async ({ currentPoints }) => {
+        const { request } = setupApprovedRename();
+        mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue(
+          currentPoints,
+        );
+        const result = await connectionRequestsService.listConnectedMeasurementPoints(
+          { factoryId: request.factoryId },
+          actorUserId,
+          'ALL',
+        );
+        expect(result.data[0].point.pointName).toBe('Boiler 35 T');
+      },
+    );
+
+    it('does not read live points when no connected requests are accessible', async () => {
+      mockedRepository.list.mockResolvedValue({ rows: [], total: 0 });
+      mockedRepository.findFactorySummariesForRequests.mockResolvedValue(new Map());
+      const result = await connectionRequestsService.listConnectedMeasurementPoints(
+        { factoryId: 'outside-access-scope' },
+        actorUserId,
+        'OWN_FACTORY',
+      );
+      expect(result).toEqual({ data: [], meta: { total: 0 } });
+      expect(mockedRepository.listConnectedMeasurementPointsForFactories).not.toHaveBeenCalled();
+    });
+  });
+
   it('returns modal detail rows for all connected measurement points in a factory', async () => {
     const request = requestDto({
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
