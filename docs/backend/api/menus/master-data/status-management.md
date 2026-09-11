@@ -32,9 +32,14 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 | พารามิเตอร์ในจุดตรวจวัด | `visibility: VISIBLE / HIDDEN` | ไม่มี field นี้; ใช้สถานะของจุดตรวจวัด |
 
 - ค่าเริ่มต้นของ current/live POMS คือ `VISIBLE` และ `CONNECTED`, `revision=0`
-- ค่าของแต่ละระดับเก็บแยกกัน: ซ่อนโรงงานทำให้ `effectiveVisibility` ของทุกจุดและพารามิเตอร์เป็น `HIDDEN` โดยไม่ทับค่าที่ตั้งไว้รายลูก เมื่อแสดงโรงงานอีกครั้ง ค่ารายลูกยังอยู่
+- สรุป visibility จากลูกขึ้นแม่: พารามิเตอร์ปัจจุบันทั้งหมดซ่อน → จุดซ่อน; มีอย่างน้อยหนึ่งตัวแสดง → จุดแสดง โรงงานสรุปจากจุดที่ยัง `CONNECTED` ด้วยกฎเดียวกัน
+- PATCH visibility ที่โรงงานจะตั้ง visibility ของทุกจุดและทุกพารามิเตอร์ปัจจุบันให้เหมือนกัน; PATCH visibility ที่จุดจะตั้งทุกพารามิเตอร์ของจุดนั้น จากนั้นคำนวณสถานะแม่ใหม่
+- เมื่อส่งหลายระดับใน PATCH เดียว ใช้ลำดับ โรงงาน → จุด → พารามิเตอร์ → สรุปสถานะแม่ การระบุลูกชัดเจนจึงชนะคำสั่งแม่ เช่น ซ่อนโรงงานพร้อมเปิด CO หนึ่งตัวจะทำให้จุดนั้นและโรงงานเป็นแสดง
+- เปิดพารามิเตอร์อย่างน้อยหนึ่งตัวจะเปิด visibility ของจุดและโรงงาน แต่ไม่เปลี่ยน `connectionStatus` ของจุดหรือโรงงานที่ยกเลิกอยู่; ป้ายยกเลิกการเชื่อมต่อมีลำดับก่อนซ่อน/แสดง
+- จุดที่ `DISCONNECTED` ไม่นำมาสรุป visibility โรงงาน ถ้าไม่มีจุดที่ CONNECTED เลย ให้คง visibility โรงงานเดิม ไม่อนุมานว่าต้องยกเลิกโรงงานด้วย ส่วนจุดที่ไม่มีพารามิเตอร์ใช้ visibility ที่บันทึกไว้
+- GET คำนวณจากรายการลูก current/live ทุกครั้ง รวมข้อมูลที่บันทึกก่อนเพิ่มกฎนี้ โดยไม่เขียนฐานข้อมูลหรือเพิ่ม revision ขณะอ่าน ค่าของจุด/พารามิเตอร์ที่ไม่อยู่ในรายการปัจจุบันไม่นำมาสรุป
 - `DISCONNECTED` ของโรงงานทำให้ `effectiveConnectionStatus` ของทุกจุดเป็น `DISCONNECTED` โดยไม่ทับค่ารายจุด ไม่ลบโรงงาน จุดตรวจวัด หรือพารามิเตอร์
-- จุดใหม่ภายใต้โรงงานเดิมใช้ค่ารายจุดเริ่มต้น แต่ยังได้รับผลจากสถานะโรงงาน
+- จุดที่ยังไม่มีค่าบันทึกใช้ visibility โรงงานเป็นค่าเริ่มต้น; พารามิเตอร์ที่ยังไม่มีค่าบันทึกใช้ visibility จุดเป็นค่าเริ่มต้น; connectionStatus รายจุดเริ่มต้นเป็น CONNECTED แต่รับผลการยกเลิกจากโรงงาน
 - `connectionStatus` เป็นสถานะการบริหารในระบบ POMS การตั้งกลับเป็น `CONNECTED` ไม่ใช่การทดสอบการเชื่อมต่อจริงหรือคำสั่งเปิดอุปกรณ์
 - การบันทึกนี้ไม่เปลี่ยนคำขอเชื่อมต่อเดิม, `monitoringPointStatus`, `deleted_at`, config อุปกรณ์, การรับ telemetry หรือข้อมูลรายงานย้อนหลัง
 - การซ่อนเป็นสถานะการแสดงผล ไม่ใช่การถอนสิทธิ์อ่านข้อมูล API เดิม รายการข้อมูลพื้นฐานยังคืนโรงงานที่ซ่อน/ยกเลิกไว้เพื่อให้จัดการต่อได้; frontend ที่แสดงข้อมูลตามสถานะต้องอ่านค่า effective และเชื่อม API นี้ รายการ current POMS ใช้สถานะบริหารชุดเดียวกัน โดยไม่ลบแถวหรือเปลี่ยนประวัติคำขอ
@@ -102,7 +107,7 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 | `factory` | no | object ไม่ว่าง; ส่ง visibility และ/หรือ connectionStatus |
 | `measurementPoints` | no | array 1–200 จุด; ต้องไม่ซ้ำ connectedPointId |
 | `measurementPoints[].connectedPointId` | yes | positive safe integer; ต้องอยู่ในโรงงานเป้าหมาย |
-| `measurementPoints[].visibility`, `.connectionStatus` | no | enum ตามตาราง; field ที่ไม่ส่งคงค่าเดิม |
+| `measurementPoints[].visibility`, `.connectionStatus` | no | enum ตามตาราง; connectionStatus ที่ไม่ส่งคงค่าเดิม; visibility อาจเปลี่ยนตามคำสั่งแม่หรือผลสรุปจากลูก |
 | `measurementPoints[].parameters` | no | array 1–100 รายการ; ห้าม parameter ซ้ำในจุดเดียวกันโดยไม่แยกตัวพิมพ์เล็กใหญ่ |
 | `parameters[].parameter`, `.visibility` | yes | key 1–200 ตัวอักษร และ enum; ต้องเป็นพารามิเตอร์ที่เชื่อมต่ออยู่ในจุดนั้น |
 
@@ -121,6 +126,16 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 ```
 
 สำเร็จตอบ `200` รูปแบบเดียวกับ GET พร้อมสถานะหลังบันทึกและ revision ใหม่ บันทึกสถานะและ audit ทั้งชุดใน transaction เดียว ถ้าพบข้อมูลข้ามโรงงาน, parameter ไม่ถูกต้อง, หรือบันทึก audit ไม่สำเร็จ จะไม่บันทึกส่วนใด การบันทึก state ที่เหมือนเดิมทุกประการด้วย revision ปัจจุบันไม่เพิ่ม revision/audit; ส่ง revision เก่าซ้ำตอบ `409`
+
+### ตัวอย่างเปิดจากลูกขึ้นแม่
+
+เมื่อพารามิเตอร์ของทุกจุดซ่อนอยู่ ส่งเฉพาะพารามิเตอร์ที่ต้องการเปิด:
+
+```json
+{"expectedRevision":4,"measurementPoints":[{"connectedPointId":11,"parameters":[{"parameter":"CO","visibility":"VISIBLE"}]}]}
+```
+
+หากโรงงานและจุดยัง CONNECTED, response ของ PATCH และ GET จะมี `factory.status = "แสดง"`, จุด 11 `status = "แสดง"` และพารามิเตอร์อื่นคงซ่อนอยู่ ไม่ต้องส่ง visibility ของแม่ตามไปด้วย หน้า client ที่ยังไม่คำนวณขณะเลือกจะเห็นผลเมื่อบันทึกและโหลด response ใหม่
 
 ## Errors
 
@@ -153,18 +168,18 @@ GET `/poms-factories/{factoryId}` คืน fields ต่อไปนี้ท�
 | Field | Type | ความหมาย |
 | --- | --- | --- |
 | status | แสดง / ซ่อน / ยกเลิกการเชื่อมต่อ | ป้ายสถานะบริหารที่มีผลจริง |
-| visibility | VISIBLE / HIDDEN | ค่าที่ตั้งเฉพาะระดับนั้น |
+| visibility | VISIBLE / HIDDEN | ค่าที่สรุปจากลูกปัจจุบันตามกฎด้านบน |
 | connectionStatus | CONNECTED / DISCONNECTED | ค่าการเชื่อมต่อที่ตั้งเฉพาะระดับนั้น |
-| effectiveVisibility | VISIBLE / HIDDEN | รวมผลจากโรงงานแม่ |
-| effectiveConnectionStatus | CONNECTED / DISCONNECTED | รวมผลจากโรงงานแม่ |
+| effectiveVisibility | VISIBLE / HIDDEN | visibility หลังสรุปจากลูกและรวมผลโรงงานแม่ |
+| effectiveConnectionStatus | CONNECTED / DISCONNECTED | สถานะการเชื่อมต่อที่รวมผลจากโรงงานแม่ |
 
 ```json
-{"status":"ซ่อน","visibility":"VISIBLE","connectionStatus":"CONNECTED","effectiveVisibility":"HIDDEN","effectiveConnectionStatus":"CONNECTED"}
+{"status":"ซ่อน","visibility":"HIDDEN","connectionStatus":"CONNECTED","effectiveVisibility":"HIDDEN","effectiveConnectionStatus":"CONNECTED"}
 ```
 
-ตัวอย่างคือจุดที่ตั้งแสดง แต่โรงงานแม่ซ่อน เมื่อแสดงโรงงานกลับจะใช้ค่ารายจุดเดิม `DISCONNECTED` มีลำดับก่อน `HIDDEN` เสมอ
+ตัวอย่างคือจุดที่พารามิเตอร์ปัจจุบันทั้งหมดซ่อน เมื่อเปิดพารามิเตอร์หนึ่งตัว visibility จุดกลับเป็น VISIBLE; `DISCONNECTED` มีลำดับก่อน `HIDDEN` เสมอ
 
-GET `/poms-factories` คืน status ระดับโรงงานจาก state เดียวกัน การซ่อนจุดเดียวไม่เปลี่ยนสถานะโรงงานแม่ จำนวนจุดและแถวที่ซ่อนยังอยู่เพื่อให้จัดการต่อได้
+GET `/poms-factories` คืน status ระดับโรงงานจากตัวสรุปเดียวกับ GET รายละเอียดและ status-management เมื่อจุด CONNECTED ทั้งหมดซ่อน โรงงานซ่อน; มีหนึ่งจุดแสดง โรงงานแสดง จำนวนจุดและแถวที่ซ่อนยังอยู่เพื่อให้จัดการต่อได้
 
 API รายการจุดตรวจวัดที่เชื่อมต่อ (`/connected-measurement-points` และ alias) ใช้สถานะบริหารใน `status` ส่วน `statusCode` ยังคงเป็นสถานะคำขอเดิม จุดในข้อมูลโรงงาน dashboard/overview/map รับ effective fields เดียวกัน และสถานะโรงงานมาจากค่าระดับโรงงาน
 

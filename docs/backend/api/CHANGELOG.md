@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+
+## 2026-09-11 — สรุปสถานะจากพารามิเตอร์ขึ้นสู่จุดตรวจวัดและโรงงาน
+
+- Breaking change: yes — visibility ของแม่เป็นผลสรุปจากลูก current/live และ PATCH visibility ที่แม่เปลี่ยนลูกทั้งหมด แทนการเก็บ visibility แม่เป็นตัวบังคับโดยรักษาค่าลูกเดิม
+- Client impact: หลังบันทึกให้ใช้ response/GET ใหม่; ไม่ต้องส่งสถานะแม่เมื่อเปลี่ยนพารามิเตอร์เดียว การตั้งแสดงที่แม่เปิดลูกทั้งหมด หากต้องการเปิดเพียงบางรายการให้ PATCH เฉพาะลูก
+- GET status-management, GET รายชื่อ/รายละเอียดโรงงาน และ shared current point reads ใช้กฎเดียวกัน ข้อมูลเก่าคำนวณใหม่ขณะอ่านโดยไม่ต้อง migration; ไม่เปลี่ยน revision จาก GET
+- คง auth, scope, expectedRevision, transaction/audit และ connectionStatus แยกต่างหาก; ไม่มีการแก้ Frontend ในชุดนี้
+- Canonical docs: [จัดการสถานะ](./menus/master-data/status-management.md), [รายการจุดตรวจวัดปัจจุบัน](./shared/connected-measurement-points/README.md)
+
 ## สถานะบริหาร POMS ในรายการ current
 
 - Breaking change: status ของรายการจุดตรวจวัดที่เชื่อมต่อเปลี่ยนจาก label คำขอเป็น `แสดง` / `ซ่อน` / `ยกเลิกการเชื่อมต่อ`; statusCode ยังคงเดิม

@@ -227,6 +227,82 @@ function connectedFactoryRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe('factory status inheritance in both POMS GET responses', () => {
+  it('derives existing saved parameter statuses on GET without requiring another save', async () => {
+    const state = {
+      factory: { visibility: 'VISIBLE', connectionStatus: 'CONNECTED' },
+      measurementPoints: {
+        '11': {
+          visibility: 'VISIBLE',
+          connectionStatus: 'CONNECTED',
+          parameters: { CO: 'HIDDEN', removed: 'VISIBLE' },
+        },
+        '999': { visibility: 'VISIBLE', connectionStatus: 'CONNECTED', parameters: {} },
+      },
+    };
+    tables.poms_factory_status_management = [
+      {
+        eligible_factory_id: 7,
+        state_json: JSON.stringify(state),
+        revision: 6,
+        updated_at: '2026-09-11T00:00:00Z',
+        updated_by: 42,
+      },
+    ];
+    const saved = await pomsStatusManagementRepository.read('F1', actor);
+    expect(statusManagementDTO(saved.source, saved.snapshot)).toMatchObject({
+      factory: { status: 'ซ่อน' },
+      measurementPoints: [expect.objectContaining({ status: 'ซ่อน' })],
+    });
+    const row = connectedFactoryRow({
+      connected_point_id: 11,
+      management_state_json: JSON.stringify(state),
+    });
+    expect(actualFactories.toPomsFactoryDetailForTests([row], 0)).toMatchObject({
+      status: 'ซ่อน',
+      measurementPoints: [expect.objectContaining({ status: 'ซ่อน' })],
+    });
+    expect(actualFactories.summarizeConnectedFactoryRowsForTests([row])[0]?.status).toBe('ซ่อน');
+    expect(tables.poms_factory_status_events).toHaveLength(0);
+  });
+  it('hides descendants on a parent command, then reopening one parameter reopens the point and factory', async () => {
+    await pomsStatusManagementRepository.update('F1', actor, input);
+    const hidden = await pomsStatusManagementRepository.read('F1', actor);
+    expect(statusManagementDTO(hidden.source, hidden.snapshot).measurementPoints[0]).toMatchObject({
+      visibility: 'HIDDEN',
+      parameters: [expect.objectContaining({ visibility: 'HIDDEN' })],
+    });
+    await pomsStatusManagementRepository.update('F1', actor, {
+      expectedRevision: 1,
+      measurementPoints: [
+        { connectedPointId: 11, parameters: [{ parameter: 'CO', visibility: 'VISIBLE' }] },
+      ],
+    });
+    const opened = await pomsStatusManagementRepository.read('F1', actor);
+    const dto = statusManagementDTO(opened.source, opened.snapshot);
+    expect(dto.factory.status).toBe('แสดง');
+    expect(dto.measurementPoints[0]?.status).toBe('แสดง');
+  });
+  it('rolls all hidden parameters up through save/read, factory detail and factory list', async () => {
+    await pomsStatusManagementRepository.update('F1', actor, {
+      expectedRevision: 0,
+      measurementPoints: [
+        { connectedPointId: 11, parameters: [{ parameter: 'CO', visibility: 'HIDDEN' }] },
+      ],
+    });
+    const saved = await pomsStatusManagementRepository.read('F1', actor);
+    const dto = statusManagementDTO(saved.source, saved.snapshot);
+    expect(dto.measurementPoints[0]).toMatchObject({ status: 'ซ่อน', visibility: 'HIDDEN' });
+    expect(dto.factory).toMatchObject({ status: 'ซ่อน', visibility: 'HIDDEN' });
+    const row = connectedFactoryRow({
+      connected_point_id: 11,
+      management_state_json: tables.poms_factory_status_management![0]!.state_json,
+    });
+    expect(actualFactories.toPomsFactoryDetailForTests([row], 0)).toMatchObject({
+      status: 'ซ่อน',
+      measurementPoints: [expect.objectContaining({ status: 'ซ่อน' })],
+    });
+    expect(actualFactories.summarizeConnectedFactoryRowsForTests([row])[0]?.status).toBe('ซ่อน');
+  });
   it.each([
     ['HIDDEN', 'CONNECTED', 'ซ่อน'],
     ['VISIBLE', 'DISCONNECTED', 'ยกเลิกการเชื่อมต่อ'],
@@ -245,7 +321,7 @@ describe('factory status inheritance in both POMS GET responses', () => {
       expect(detail).toMatchObject({ status: label, visibility, connectionStatus });
       expect(detail?.measurementPoints[0]).toMatchObject({
         status: label,
-        visibility: 'VISIBLE',
+        visibility,
         connectionStatus: 'CONNECTED',
         effectiveVisibility: visibility,
         effectiveConnectionStatus: connectionStatus,
@@ -254,7 +330,7 @@ describe('factory status inheritance in both POMS GET responses', () => {
       expect(actualFactories.summarizeConnectedFactoryRowsForTests([row])[0]?.status).toBe(label);
     },
   );
-  it('restores own point state after showing the parent again', async () => {
+  it('shows every current point after showing the parent again', async () => {
     await pomsStatusManagementRepository.update('F1', actor, {
       expectedRevision: 0,
       factory: { visibility: 'HIDDEN' },
@@ -270,7 +346,7 @@ describe('factory status inheritance in both POMS GET responses', () => {
     });
     expect(
       actualFactories.toPomsFactoryDetailForTests([row], 0)?.measurementPoints[0]?.status,
-    ).toBe('ซ่อน');
+    ).toBe('แสดง');
     expect(actualFactories.summarizeConnectedFactoryRowsForTests([row])[0]?.status).toBe('แสดง');
   });
 });

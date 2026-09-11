@@ -49,7 +49,108 @@ describe('Persistent hierarchy of display and connection statuses', () => {
       effectiveVisibility: 'VISIBLE',
     });
   });
-  it('hides the factory without overwriting point/parameter preferences and restores inheritance', () => {
+  it('rolls visibility up across multiple parameters and points, including one remaining visible child', () => {
+    let snapshot = initial();
+    const save = (
+      measurementPoints: Parameters<typeof applyStatusManagementPatch>[2]['measurementPoints'],
+    ) => {
+      snapshot = {
+        ...snapshot,
+        state: applyStatusManagementPatch(source, snapshot, {
+          expectedRevision: snapshot.revision,
+          measurementPoints,
+        }),
+        revision: snapshot.revision + 1,
+      };
+      return statusManagementDTO(source, snapshot);
+    };
+    let dto = save([
+      { connectedPointId: 11, parameters: [{ parameter: 'CO', visibility: 'HIDDEN' }] },
+    ]);
+    expect(dto.measurementPoints[0]?.status).toBe('แสดง');
+    dto = save([
+      { connectedPointId: 11, parameters: [{ parameter: 'CO2', visibility: 'HIDDEN' }] },
+    ]);
+    expect(dto.measurementPoints[0]?.status).toBe('ซ่อน');
+    expect(dto.factory.status).toBe('แสดง');
+    dto = save([{ connectedPointId: 12, visibility: 'HIDDEN' }]);
+    expect(dto.factory.status).toBe('ซ่อน');
+    dto = save([
+      { connectedPointId: 11, parameters: [{ parameter: 'CO2', visibility: 'VISIBLE' }] },
+    ]);
+    expect(dto.factory.status).toBe('แสดง');
+    expect(dto.measurementPoints.map((point) => point.status)).toEqual(['แสดง', 'ซ่อน']);
+    expect(dto.measurementPoints[0]?.parameters.map((parameter) => parameter.visibility)).toEqual([
+      'HIDDEN',
+      'VISIBLE',
+    ]);
+  });
+  it('applies explicit child changes after a parent command in the same PATCH', () => {
+    const state = applyStatusManagementPatch(source, initial(), {
+      expectedRevision: 0,
+      factory: { visibility: 'HIDDEN' },
+      measurementPoints: [
+        { connectedPointId: 11, parameters: [{ parameter: 'CO', visibility: 'VISIBLE' }] },
+      ],
+    });
+    const dto = statusManagementDTO(source, { ...initial(), state });
+    expect(dto.factory.status).toBe('แสดง');
+    expect(dto.measurementPoints.map((point) => point.status)).toEqual(['แสดง', 'ซ่อน']);
+  });
+  it('keeps disconnect independent when parameters reopen and excludes disconnected children from factory visibility', () => {
+    let state = applyStatusManagementPatch(source, initial(), {
+      expectedRevision: 0,
+      factory: { visibility: 'HIDDEN' },
+      measurementPoints: [{ connectedPointId: 11, connectionStatus: 'DISCONNECTED' }],
+    });
+    state = applyStatusManagementPatch(
+      source,
+      { ...initial(), state },
+      {
+        expectedRevision: 0,
+        measurementPoints: [
+          { connectedPointId: 11, parameters: [{ parameter: 'CO', visibility: 'VISIBLE' }] },
+        ],
+      },
+    );
+    let dto = statusManagementDTO(source, { ...initial(), state });
+    expect(dto.measurementPoints[0]?.status).toBe('ยกเลิกการเชื่อมต่อ');
+    expect(dto.factory.status).toBe('ซ่อน');
+    state = applyStatusManagementPatch(
+      source,
+      { ...initial(), state },
+      {
+        expectedRevision: 0,
+        measurementPoints: [{ connectedPointId: 11, connectionStatus: 'CONNECTED' }],
+      },
+    );
+    dto = statusManagementDTO(source, { ...initial(), state });
+    expect(dto.factory.status).toBe('แสดง');
+    expect(dto.measurementPoints[0]?.status).toBe('แสดง');
+  });
+  it('retains explicit visibility for an empty point and for a factory without connected children', () => {
+    const empty = {
+      ...source,
+      measurementPoints: [{ ...source.measurementPoints[0]!, parameters: [] }],
+    };
+    const state = applyStatusManagementPatch(empty, initial(), {
+      expectedRevision: 0,
+      measurementPoints: [
+        { connectedPointId: 11, visibility: 'HIDDEN', connectionStatus: 'DISCONNECTED' },
+      ],
+    });
+    const dto = statusManagementDTO(empty, { ...initial(), state });
+    expect(dto.factory).toMatchObject({ status: 'แสดง', connectionStatus: 'CONNECTED' });
+    expect(dto.measurementPoints[0]).toMatchObject({
+      status: 'ยกเลิกการเชื่อมต่อ',
+      visibility: 'HIDDEN',
+      parameters: [],
+    });
+    expect(
+      statusManagementDTO({ ...source, measurementPoints: [] }, initial()).factory.status,
+    ).toBe('แสดง');
+  });
+  it('cascades factory visibility to all current descendants on hide and show', () => {
     const state = applyStatusManagementPatch(source, initial(), {
       expectedRevision: 0,
       factory: { visibility: 'HIDDEN' },
@@ -70,9 +171,9 @@ describe('Persistent hierarchy of display and connection statuses', () => {
     });
     const dto = statusManagementDTO(source, { ...current, state: restored });
     expect(dto.measurementPoints[0]!.effectiveVisibility).toBe('VISIBLE');
-    expect(dto.measurementPoints[0]!.parameters[0]!.effectiveVisibility).toBe('HIDDEN');
+    expect(dto.measurementPoints[0]!.parameters[0]!.effectiveVisibility).toBe('VISIBLE');
     expect(dto.measurementPoints[0]!.parameters[1]!.effectiveVisibility).toBe('VISIBLE');
-    expect(dto.measurementPoints[1]!.effectiveVisibility).toBe('HIDDEN');
+    expect(dto.measurementPoints[1]!.effectiveVisibility).toBe('VISIBLE');
   });
   it('disconnects a whole factory without deleting points, parameters, or overriding point states', () => {
     const state = applyStatusManagementPatch(source, initial(), {

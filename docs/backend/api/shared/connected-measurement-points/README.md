@@ -849,4 +849,4 @@ CSV ใช้ identity columns `date_time`, `factory_name`, `factory_registratio
 
 ## สถานะบริหาร POMS ในรายการ current
 
-status ของรายการที่เชื่อมต่อใช้ `แสดง`, `ซ่อน`, `ยกเลิกการเชื่อมต่อ` ตามสถานะที่ Admin บันทึก จุดตรวจวัดส่ง visibility, connectionStatus, effectiveVisibility, effectiveConnectionStatus ด้วย ส่วน statusCode และ monitoringPointStatus ยังคงความหมายของขั้นตอนคำขอเดิม ดู [กติกาสถานะและการสืบทอดจากโรงงาน](../../menus/master-data/status-management.md)
+status ของรายการที่เชื่อมต่อใช้ `แสดง`, `ซ่อน`, `ยกเลิกการเชื่อมต่อ` โดยสรุปจากพารามิเตอร์ current/live: ทั้งหมดซ่อนทำให้จุดซ่อน มีหนึ่งตัวแสดงทำให้จุดแสดง โรงงานสรุปจากจุด CONNECTED ตามกฎเดียวกัน; การยกเลิกการเชื่อมต่อยังมีลำดับก่อน visibility จุดตรวจวัดส่ง visibility, connectionStatus, effectiveVisibility, effectiveConnectionStatus ด้วย ส่วน statusCode และ monitoringPointStatus ยังคงความหมายของขั้นตอนคำขอเดิม ดู [กติกาสถานะและการสืบทอดจากโรงงาน](../../menus/master-data/status-management.md)

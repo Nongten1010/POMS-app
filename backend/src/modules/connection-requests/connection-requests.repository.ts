@@ -1,4 +1,4 @@
-import { readPomsManagedStatus } from '../poms-factories/poms-status-management.state';
+import { readPomsManagedStatuses } from '../poms-factories/poms-status-management.state';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { env } from '../../config/env';
@@ -950,9 +950,10 @@ export const connectionRequestsRepository = {
       .orderBy('point_code', 'asc')
       .orderBy('point_name', 'asc');
 
+    const statuses = currentPointStatuses(rows);
     return rows.map((row) => ({
-      ...readPomsManagedStatus(row.management_state_json, Number(row.id)),
-      factoryStatus: readPomsManagedStatus(row.management_state_json).status,
+      ...statuses.get(row)?.point,
+      factoryStatus: statuses.get(row)?.factory.status,
       connectedPointId: Number(row.id),
       sourceMeasurementPointId: Number(row.source_measurement_point_id),
       sourceRequestId: Number(row.source_request_id),
@@ -990,9 +991,10 @@ export const connectionRequestsRepository = {
       .orderBy('point_code', 'asc')
       .orderBy('point_name', 'asc');
 
+    const statuses = currentPointStatuses(rows);
     return rows.map((row) => ({
-      ...readPomsManagedStatus(row.management_state_json, Number(row.id)),
-      factoryStatus: readPomsManagedStatus(row.management_state_json).status,
+      ...statuses.get(row)?.point,
+      factoryStatus: statuses.get(row)?.factory.status,
       factoryId: row.factory_id,
       eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
       stationId: row.point_code ?? row.point_name,
@@ -3826,6 +3828,41 @@ function applyConnectedFactoryLookup(
       }
     }
   });
+}
+
+function currentPointStatuses(rows: CurrentFactoryMeasurementPointRow[]) {
+  const groups = new Map<string, CurrentFactoryMeasurementPointRow[]>();
+  for (const row of rows) {
+    const key =
+      row.eligible_factory_id == null
+        ? `factory:${row.factory_id}`
+        : `eligible:${row.eligible_factory_id}`;
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+  const result = new Map<
+    CurrentFactoryMeasurementPointRow,
+    {
+      factory: ReturnType<typeof readPomsManagedStatuses>['factory'];
+      point: ReturnType<typeof readPomsManagedStatuses>['factory'] | undefined;
+    }
+  >();
+  for (const group of groups.values()) {
+    const statuses = readPomsManagedStatuses(
+      group[0].management_state_json,
+      group.map((row) => ({
+        connectedPointId: Number(row.id),
+        parameters: parseParameters(row.parameters_json),
+      })),
+    );
+    for (const row of group)
+      result.set(row, {
+        factory: statuses.factory,
+        point: statuses.measurementPoints.get(Number(row.id)),
+      });
+  }
+  return result;
 }
 
 function buildConnectedMeasurementPointsQuery(

@@ -1,4 +1,5 @@
-import { readPomsManagedStatus } from './poms-status-management.state';
+import type { PomsManagedStatusDTO } from './poms-status-management.types';
+import { readPomsManagedStatuses } from './poms-status-management.state';
 import type { Knex } from 'knex';
 import {
   factoryProfileReadTable,
@@ -1264,8 +1265,9 @@ function toFactoryDetail(
   );
   const first = sortedByProfileVersion[0];
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(first.factory_type_sequence);
+  const statuses = readPomsManagedStatuses(first.management_state_json, currentStatusScopes(rows));
   return {
-    ...readPomsManagedStatus(first.management_state_json),
+    ...statuses.factory,
     eligibleFactoryId: Number(first.eligible_factory_id),
     factoryId: first.factory_id,
     factoryRegistrationNo: first.factory_registration_no,
@@ -1292,7 +1294,9 @@ function toFactoryDetail(
     systemTypes: [...new Set(rows.map((row) => row.system_type))].sort(),
     measurementPointCount: rows.length,
     pendingEditRequestCount,
-    measurementPoints: rows.map(toMeasurementPointDTO),
+    measurementPoints: rows.map((row) =>
+      toMeasurementPointDTO(row, statuses.measurementPoints.get(Number(row.connected_point_id))),
+    ),
   };
 }
 
@@ -1346,7 +1350,10 @@ function toOperatorFactoryTableRow(rows: ConnectedFactoryRow[]): OperatorFactory
   const first = sortedByProfileVersion[0];
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(first.factory_type_sequence);
 
-  const managed = readPomsManagedStatus(first.management_state_json);
+  const managed = readPomsManagedStatuses(
+    first.management_state_json,
+    currentStatusScopes(rows),
+  ).factory;
 
   return {
     id: Number(first.eligible_factory_id),
@@ -1399,10 +1406,20 @@ function toProfile(factory: PomsFactoryProfileDTO): PomsFactoryProfileDTO {
   };
 }
 
-function toMeasurementPointDTO(row: ConnectedFactoryRow): PomsMeasurementPointDTO {
+function currentStatusScopes(rows: ConnectedFactoryRow[]) {
+  return rows.map((row) => ({
+    connectedPointId: Number(row.connected_point_id),
+    parameters: parseJsonArray<string>(row.parameters_json),
+  }));
+}
+
+function toMeasurementPointDTO(
+  row: ConnectedFactoryRow,
+  status: PomsManagedStatusDTO | undefined,
+): PomsMeasurementPointDTO {
   const measurementInstruments = parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json);
   return {
-    ...readPomsManagedStatus(row.management_state_json, Number(row.connected_point_id)),
+    ...status,
     connectedPointId: Number(row.connected_point_id),
     sourceMeasurementPointId: Number(row.source_measurement_point_id),
     eligibleFactoryId: Number(row.eligible_factory_id),
