@@ -113,9 +113,11 @@ describe('saved factory status across master data and connection menus', () => {
     const operator = await connectionRequestsService.listOperatorFactories(42, {
       scope: 'OWN_FACTORY',
     });
-    expect(operator.data).toHaveLength(expected === 'แสดง' ? 1 : 0);
+    expect(operator.data).toHaveLength(1);
     expect(operator.meta.total).toBe(operator.data.length);
-    if (expected === 'แสดง') expect(operator.data[0].monitoringPointCount).toBe(1);
+    expect(operator.data[0].status).toBe(expected);
+    expect(operator.data[0].monitoringPointCount).toBe(1);
+    expect(operator.data[0].factoryName).toBe(factories[0].factoryName);
   });
 
   it('matches operator visibility and point counts by eligible id despite a conflicting registration alias', async () => {
@@ -135,9 +137,16 @@ describe('saved factory status across master data and connection menus', () => {
       scope: 'OWN_FACTORY',
     });
     expect(
-      result.data.map((row) => ({ factoryId: row.factoryId, count: row.monitoringPointCount })),
-    ).toEqual([{ factoryId: 'another-factory', count: 1 }]);
-    expect(result.meta.total).toBe(1);
+      result.data.map((row) => ({
+        factoryId: row.factoryId,
+        count: row.monitoringPointCount,
+        status: row.status,
+      })),
+    ).toEqual([
+      { factoryId: '10700000525488', count: 1, status: 'ซ่อน' },
+      { factoryId: 'another-factory', count: 1, status: 'แสดง' },
+    ]);
+    expect(result.meta.total).toBe(2);
     expect(pointQueries.flat()).toEqual(expect.arrayContaining([7, 8]));
   });
 
@@ -168,7 +177,13 @@ describe('saved factory status across master data and connection menus', () => {
     const result = await connectionRequestsService.listOperatorFactories(42, {
       scope: 'OWN_FACTORY',
     });
-    expect(result).toEqual({ data: [], meta: { total: 0 } });
+    expect(result.data).toHaveLength(1);
+    expect(result.meta.total).toBe(1);
+    expect(result.data[0]).toMatchObject({
+      factoryId: '10700000525488',
+      status: 'ซ่อน',
+      monitoringPointCount: 1,
+    });
   });
 
   it('keeps operator activity, missing industry codes and EIA detail aligned with the current profile', async () => {

@@ -1867,7 +1867,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านโรงงานของผู้ประกอบการ',
       operationId: 'listOperatorFactories',
       description:
-        'Permission: factories:view. อ่านสถานะโรงงานปัจจุบันจาก POMS ด้วย eligible factory id และกรองโรงงานที่ซ่อนหรือยกเลิกการเชื่อมต่อออก เหลือเฉพาะ status=แสดง; meta.total นับแถวหลังกรอง. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานไม่เข้าข่ายยังแสดงตามสิทธิ์เดิม. industryType ใช้ businessActivity, ลำดับหลัก/ย่อยที่ไม่มีข้อมูลเป็น null และคงค่า EIA/ชื่อโครงการที่บันทึกไว้. ทุก row คืน eligibilityRequest และ canRequestEligibility เพื่อควบคุมปุ่มแจ้งความประสงค์โดยไม่ต้องเดาสถานะจาก client',
+        'Permission: factories:view. คืนทุกโรงงานที่ผู้ใช้เข้าถึงได้ พร้อม status ปัจจุบันจาก POMS ด้วย eligible factory id: แสดง, ซ่อน หรือ ยกเลิกการเชื่อมต่อ. สถานะใช้เป็นป้ายกำกับ ไม่กรองแถวหรือรายละเอียดออก; meta.total รวมทุกแถวที่คืน. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานไม่เข้าข่ายยังแสดงตามสิทธิ์เดิม. industryType ใช้ businessActivity, ลำดับหลัก/ย่อยที่ไม่มีข้อมูลเป็น null และคงค่า EIA/ชื่อโครงการที่บันทึกไว้. ทุก row คืน eligibilityRequest และ canRequestEligibility เพื่อควบคุมปุ่มแจ้งความประสงค์โดยไม่ต้องเดาสถานะจาก client',
       parameters: operatorFactoryParameters,
       successSchema: schemaRef('OperatorFactoryTableResponse'),
     }),

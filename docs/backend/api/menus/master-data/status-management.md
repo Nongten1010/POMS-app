@@ -43,7 +43,7 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 - `connectionStatus` เป็นสถานะการบริหารในระบบ POMS การตั้งกลับเป็น `CONNECTED` ไม่ใช่การทดสอบการเชื่อมต่อจริงหรือคำสั่งเปิดอุปกรณ์
 - การบันทึกนี้ไม่เปลี่ยนคำขอเชื่อมต่อเดิม, `monitoringPointStatus`, `deleted_at`, config อุปกรณ์, การรับ telemetry หรือข้อมูลรายงานย้อนหลัง
 - การซ่อนเป็นสถานะการแสดงผล ไม่ใช่การถอนสิทธิ์อ่านข้อมูล API เดิม รายการข้อมูลพื้นฐานยังคืนโรงงานที่ซ่อน/ยกเลิกไว้เพื่อให้จัดการต่อได้; frontend ที่แสดงข้อมูลตามสถานะต้องอ่านค่า effective และเชื่อม API นี้ รายการ current POMS ใช้สถานะบริหารชุดเดียวกัน โดยไม่ลบแถวหรือเปลี่ยนประวัติคำขอ
-- [หน้าขอเชื่อมต่อของผู้ประกอบการ](../connection-requests/README.md#operator-factory-list-source) (`GET /cems-wpms-requests/operator-factories`) กรองโรงงานที่ซ่อน/ยกเลิกการเชื่อมต่อออกจากรายการและนับ `meta.total` หลังกรอง ส่วนรายการเจ้าหน้าที่ (`GET /cems-wpms-requests/eligible-factories`) ยังคงคืนแถวพร้อมสถานะจริงเพื่อให้จัดการต่อได้
+- [หน้าขอเชื่อมต่อของผู้ประกอบการ](../connection-requests/README.md#operator-factory-list-source) (`GET /cems-wpms-requests/operator-factories`) และรายการเจ้าหน้าที่ (`GET /cems-wpms-requests/eligible-factories`) ยังคงคืนแถวและรายละเอียดโรงงานทุกสถานะตามสิทธิ์ โดยใช้สถานะจริงเป็นป้ายกำกับ และนับ `meta.total` รวมโรงงานที่ซ่อน/ยกเลิกการเชื่อมต่อด้วย
 
 ### Mapping ตัวเลือกในหน้าต่าง
 

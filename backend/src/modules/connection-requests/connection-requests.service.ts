@@ -258,50 +258,46 @@ export const connectionRequestsService = {
       }
     });
 
-    const data = factories
-      .map<OperatorFactoryTableRowDTO>((factory) => {
-        if (factory.isEligible !== true) {
-          return toNonEligibleOperatorFactoryTableRow(
-            factory,
-            factory.id === null
-              ? undefined
-              : openEligibilityRequestsByFactoryMasterId.get(factory.id),
-          );
-        }
+    const data = factories.map<OperatorFactoryTableRowDTO>((factory) => {
+      if (factory.isEligible !== true) {
+        return toNonEligibleOperatorFactoryTableRow(
+          factory,
+          factory.id === null
+            ? undefined
+            : openEligibilityRequestsByFactoryMasterId.get(factory.id),
+        );
+      }
 
-        const latestRequest = latestRequestByFactory.get(factory.factoryId);
-        const currentPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
-        return {
-          id: factory.id,
-          factoryId: factory.factoryId,
-          factoryName: factory.factoryName,
-          newRegistrationNo: factory.newRegistrationNo,
-          oldRegistrationNo: factory.oldRegistrationNo,
-          industryType: factory.businessActivity,
-          industryMainOrder:
-            factory.industryMainOrder === 'ไม่ระบุ' ? null : factory.industryMainOrder,
-          industrySubOrder:
-            factory.industrySubOrder === 'ไม่ระบุ' ? null : factory.industrySubOrder,
-          businessActivity: factory.businessActivity,
-          eia: factory.eia,
-          ...(factory.eiaOther !== undefined ? { eiaOther: factory.eiaOther } : {}),
-          projectName: factory.projectName,
-          address: factory.address,
-          latitude: factory.latitude,
-          longitude: factory.longitude,
-          province: factory.province,
-          officerNotificationEmails:
-            officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
-          isEligible: factory.isEligible ?? false,
-          eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
-          monitoringPointCount: currentPoints.length,
-          requestStatusCode: latestRequest?.status ?? null,
-          eligibilityRequest: null,
-          canRequestEligibility: false,
-          status: currentPoints[0]?.factoryStatus ?? 'แสดง',
-        };
-      })
-      .filter((factory) => factory.status === 'แสดง');
+      const latestRequest = latestRequestByFactory.get(factory.factoryId);
+      const currentPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
+      return {
+        id: factory.id,
+        factoryId: factory.factoryId,
+        factoryName: factory.factoryName,
+        newRegistrationNo: factory.newRegistrationNo,
+        oldRegistrationNo: factory.oldRegistrationNo,
+        industryType: factory.businessActivity,
+        industryMainOrder:
+          factory.industryMainOrder === 'ไม่ระบุ' ? null : factory.industryMainOrder,
+        industrySubOrder: factory.industrySubOrder === 'ไม่ระบุ' ? null : factory.industrySubOrder,
+        businessActivity: factory.businessActivity,
+        eia: factory.eia,
+        ...(factory.eiaOther !== undefined ? { eiaOther: factory.eiaOther } : {}),
+        projectName: factory.projectName,
+        address: factory.address,
+        latitude: factory.latitude,
+        longitude: factory.longitude,
+        province: factory.province,
+        officerNotificationEmails: officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
+        isEligible: factory.isEligible ?? false,
+        eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
+        monitoringPointCount: currentPoints.length,
+        requestStatusCode: latestRequest?.status ?? null,
+        eligibilityRequest: null,
+        canRequestEligibility: false,
+        status: currentPoints[0]?.factoryStatus ?? 'แสดง',
+      };
+    });
 
     return { data, meta: { total: data.length } };
   },

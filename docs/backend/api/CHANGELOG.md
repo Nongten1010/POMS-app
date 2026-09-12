@@ -1,5 +1,12 @@
 # API Breaking Changes
 
+## 2026-09-12 — คงข้อมูลโรงงานทุกสถานะในรายการผู้ประกอบการ
+
+- **Affected canonical docs:** [หน้าขอเชื่อมต่อ](./menus/connection-requests/README.md#operator-factory-list-source), [จัดการสถานะ](./menus/master-data/status-management.md)
+- **Impact:** `GET /api/v1/cems-wpms-requests/operator-factories` คืนแถวและรายละเอียดโรงงานทุกสถานะที่ผู้ใช้มีสิทธิ์เข้าถึง รวม `ซ่อน` และ `ยกเลิกการเชื่อมต่อ`. `status` ใช้เป็นป้ายกำกับเท่านั้น และ `meta.total` นับทุกแถวที่คืน. ข้อนี้แทนกฎกรองรายการของ release ก่อนหน้าในวันเดียวกัน.
+- **Migration:** client โหลดรายการใหม่และแสดง `status` ตามค่าที่ได้รับ โดยไม่กรองแถวออกเพราะป้ายสถานะ. `eligible-factories` ของเจ้าหน้าที่ยังคงคืนข้อมูลทุกสถานะตามเดิม. การแก้ EIA ชื่อโครงการ ประเภทกิจการ และรหัสลำดับจาก release ก่อนหน้ายังคงอยู่; ไม่มี database migration/backfill และไม่เปลี่ยน permission.
+- **Breaking change:** yes — รายการผู้ประกอบการคืนสถานะ `ซ่อน`/`ยกเลิกการเชื่อมต่อ` พร้อมข้อมูล แทนการตัดแถวออก
+
 ## 2026-09-12 — แก้สถานะและข้อมูลโรงงานในหน้าขอเชื่อมต่อ
 
 - **Affected canonical docs:** [หน้าขอเชื่อมต่อ](./menus/connection-requests/README.md#operator-factory-list-source), [จัดการสถานะ](./menus/master-data/status-management.md)
