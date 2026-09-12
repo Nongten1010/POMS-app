@@ -717,13 +717,13 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, is
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     {
-      field: 'factoryRegistration',
+      field: 'factoryId',
       headerName: 'เลขทะเบียนโรงงาน',
       width: 190,
       sortable: false,
       renderCell: (params) => (
         <Stack sx={{ justifyContent: 'center', minHeight: '100%' }}>
-          <Typography variant="body2">{params.row.factoryRegistrationNo || '-'}</Typography>
+          <Typography variant="body2">{params.value || '-'}</Typography>
         </Stack>
       ),
     },
