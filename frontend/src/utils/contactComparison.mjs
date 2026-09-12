@@ -12,6 +12,7 @@ const contactValue = (contact, field) => field === 'email'
   : normalizedText(contact?.[field])
 
 export function getMeasurementPointComparisonPair(raw = {}) {
+  raw ??= {}
   const before = Array.isArray(raw.currentMeasurementPoints) ? raw.currentMeasurementPoints : []
   const after = Array.isArray(raw.proposedMeasurementPoints) ? raw.proposedMeasurementPoints : []
   const selected = after[0] ?? before[0]
@@ -55,6 +56,7 @@ function getContactFieldChanges(before, after, variant) {
 }
 
 export function getContactComparison(raw = {}, variant = 'after') {
+  raw ??= {}
   const points = getMeasurementPointComparisonPair(raw)
   const systemType = points.after?.systemType ?? points.before?.systemType
   const snapshotFor = (side) => {

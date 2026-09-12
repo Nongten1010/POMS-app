@@ -1806,6 +1806,8 @@ function RequestMonitoringPointPreview({ request, factory, measurementPoints, hi
 }
 
 function RequestComparisonContent({ request, variant = 'after' }) {
+  if (!request) return null
+
   const raw = request?.raw ?? request
   const baseFactory = request?.factory ?? request
   const factory = normalizeFactoryDetail({

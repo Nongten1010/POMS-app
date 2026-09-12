@@ -11,6 +11,25 @@ const snapshot = (overrides = {}) => ({
   ...overrides,
 })
 
+test('comparison helpers accept a cleared request during bottomsheet close', () => {
+  for (const request of [null, undefined]) {
+    assert.deepEqual(getMeasurementPointComparisonPair(request), { before: undefined, after: undefined })
+    for (const variant of ['before', 'after']) {
+      const result = getContactComparison(request, variant)
+      assert.deepEqual(result.values, { contactPersons: [], notificationEmails: [], officerNotificationEmails: [] })
+      assert.deepEqual(result.highlightedFieldNames, [])
+      assert.deepEqual(result.unavailableFields, ['contactPersons', 'notificationEmails', 'officerNotificationEmails'])
+    }
+  }
+})
+
+test('comparison tolerates clearing a reviewed request and opening another request', () => {
+  const request = { currentContacts: snapshot(), proposedContacts: snapshot({ notificationEmails: ['new@example.com'] }) }
+  assert.deepEqual(getContactComparison(request).highlightedFieldNames, ['notificationEmail-0'])
+  assert.deepEqual(getContactComparison(null).highlightedFieldNames, [])
+  assert.deepEqual(getContactComparison(request).highlightedFieldNames, ['notificationEmail-0'])
+})
+
 test('comparison reads each contact snapshot instead of root or live factory values', () => {
   const raw = {
     currentContacts: snapshot(),
