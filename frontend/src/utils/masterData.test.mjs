@@ -77,11 +77,16 @@ test('builds factory edit review payloads and requires a revision reason', () =>
     revisionReason: 'กรุณาแก้ไขข้อมูลจุดตรวจวัด',
     officerNote: null,
   })
-  assert.deepEqual(buildFactoryEditReviewPayload('REJECT'), {
+  assert.deepEqual(buildFactoryEditReviewPayload('REJECT', { officerNote: '  ข้อมูลไม่ครบถ้วน\nเอกสารไม่ถูกต้อง  ' }), {
     decision: 'REJECT',
     revisionReason: null,
-    officerNote: 'ไม่อนุมัติ',
+    officerNote: 'ข้อมูลไม่ครบถ้วน\nเอกสารไม่ถูกต้อง',
   })
+  assert.deepEqual(buildFactoryEditReviewPayload('APPROVE'), {
+    decision: 'APPROVE', revisionReason: null, officerNote: null,
+  })
+  assert.throws(() => buildFactoryEditReviewPayload('REJECT', { officerNote: ' \n ' }), /กรุณากรอกเหตุผลที่ไม่อนุมัติ/)
+  assert.throws(() => buildFactoryEditReviewPayload('REJECT', { officerNote: 'ก'.repeat(1001) }), /1,000/)
   assert.throws(() => buildFactoryEditReviewPayload('REQUEST_REVISION'), /กรุณากรอกเหตุผล/)
 })
 

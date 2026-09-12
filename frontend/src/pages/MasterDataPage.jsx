@@ -2179,6 +2179,9 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionReason, setRevisionReason] = useState('')
   const [revisionDialogError, setRevisionDialogError] = useState('')
+  const [reviewDecision, setReviewDecision] = useState(null)
+  const [rejectionReason, setRejectionReason] = useState('')
+  const [reviewConfirmError, setReviewConfirmError] = useState('')
   const [cancelRequestTarget, setCancelRequestTarget] = useState(null)
   const [activeSubMenu, setActiveSubMenu] = useState('factories')
   const [factoryRows, setFactoryRows] = useState([])
@@ -2668,28 +2671,45 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     setRevisionDialogError('')
   }, [actionLoading])
 
+  const openReviewConfirm = (decision) => {
+    setRejectionReason('')
+    setReviewConfirmError('')
+    setReviewDecision(decision)
+  }
+
+  const closeReviewConfirm = () => {
+    if (actionLoading) return
+    setReviewDecision(null)
+    setRejectionReason('')
+    setReviewConfirmError('')
+  }
+
   const reviewEditRequest = useCallback(async (decision, reason = '') => {
     const requestId = reviewingRequest?.requestId ?? reviewingRequest?.id
     if (!accessToken || !requestId) {
       const message = 'ไม่พบรหัสคำขอสำหรับพิจารณา'
       if (decision === 'REQUEST_REVISION') setRevisionDialogError(message)
-      else setTableError(message)
+      else setReviewConfirmError(message)
       return
     }
 
     let body
     try {
-      body = buildFactoryEditReviewPayload(decision, { revisionReason: reason })
+      body = buildFactoryEditReviewPayload(decision, {
+        revisionReason: decision === 'REQUEST_REVISION' ? reason : '',
+        officerNote: decision === 'REJECT' ? reason : '',
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'ข้อมูลการพิจารณาไม่ถูกต้อง'
       if (decision === 'REQUEST_REVISION') setRevisionDialogError(message)
-      else setTableError(message)
+      else setReviewConfirmError(message)
       return
     }
 
     setActionLoading(true)
     setTableError('')
     setRevisionDialogError('')
+    setReviewConfirmError('')
     try {
       const result = await fetch(`${pomsFactoriesApiBaseUrl}/edit-requests/${encodeURIComponent(requestId)}/review`, {
         method: 'POST',
@@ -2703,6 +2723,8 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
       await readMasterDataResponse(result, 'พิจารณาคำขอไม่สำเร็จ')
       setRevisionDialogOpen(false)
       setRevisionReason('')
+      setReviewDecision(null)
+      setRejectionReason('')
       setReviewingRequest(null)
       await Promise.all([loadFactories(), loadRequests()])
       setSnackbarMessage(
@@ -2715,7 +2737,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     } catch (error) {
       const message = error instanceof Error ? error.message : 'พิจารณาคำขอไม่สำเร็จ'
       if (decision === 'REQUEST_REVISION') setRevisionDialogError(message)
-      else setTableError(message)
+      else setReviewConfirmError(message)
     } finally {
       setActionLoading(false)
     }
@@ -2897,11 +2919,57 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         request={reviewingRequest}
         showReviewActions
         reviewSubmitting={actionLoading}
-        onApprove={() => reviewEditRequest('APPROVE')}
+        onApprove={() => openReviewConfirm('APPROVE')}
         onRequestRevision={openRevisionDialog}
-        onReject={() => reviewEditRequest('REJECT')}
+        onReject={() => openReviewConfirm('REJECT')}
         onClose={() => setReviewingRequest(null)}
       />
+      <Dialog open={Boolean(reviewDecision)} onClose={closeReviewConfirm} fullWidth maxWidth="sm">
+        <DialogTitle>{reviewDecision === 'REJECT' ? 'ยืนยันการไม่อนุมัติคำขอ' : 'ยืนยันการอนุมัติคำขอ'}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography>
+              {reviewDecision === 'REJECT' ? 'ยืนยันไม่อนุมัติคำขอ' : 'ยืนยันอนุมัติคำขอ'} {reviewingRequest?.requestNo ?? ''}
+            </Typography>
+            {reviewDecision === 'REJECT' ? (
+              <TextField
+                label="เหตุผลที่ไม่อนุมัติ"
+                value={rejectionReason}
+                onChange={(event) => {
+                  setRejectionReason(event.target.value)
+                  setReviewConfirmError('')
+                }}
+                required
+                multiline
+                minRows={4}
+                fullWidth
+                autoFocus
+                disabled={actionLoading}
+                slotProps={{ htmlInput: { maxLength: 1000 } }}
+              />
+            ) : null}
+            {reviewConfirmError ? (
+              <Typography color="error" variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {reviewConfirmError}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', gap: 1 }}>
+          <Button variant="outlined" color="inherit" disabled={actionLoading} onClick={closeReviewConfirm}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            color={reviewDecision === 'REJECT' ? 'error' : 'primary'}
+            disabled={actionLoading || (reviewDecision === 'REJECT' && !rejectionReason.trim())}
+            startIcon={actionLoading ? <CircularProgress size={16} color="inherit" /> : null}
+            onClick={() => reviewEditRequest(reviewDecision, rejectionReason)}
+          >
+            {actionLoading ? 'กำลังบันทึก' : reviewDecision === 'REJECT' ? 'ยืนยันไม่อนุมัติ' : 'ยืนยันอนุมัติ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
         <DialogTitle>แจ้งแก้ไข</DialogTitle>
         <DialogContent dividers>

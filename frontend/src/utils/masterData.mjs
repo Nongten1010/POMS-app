@@ -227,23 +227,30 @@ export function buildFactoryBasicInfoPayload(options = {}) {
   }
 }
 
-export function buildFactoryEditReviewPayload(decision, { revisionReason = '' } = {}) {
+export function buildFactoryEditReviewPayload(decision, { revisionReason = '', officerNote = '' } = {}) {
   if (!['APPROVE', 'REQUEST_REVISION', 'REJECT'].includes(decision)) {
     throw new Error('ผลการพิจารณาไม่ถูกต้อง')
   }
 
   const normalizedReason = String(revisionReason ?? '').trim()
+  const normalizedOfficerNote = String(officerNote ?? '').trim()
   if (decision === 'REQUEST_REVISION' && !normalizedReason) {
     throw new Error('กรุณากรอกเหตุผลที่ต้องการให้แก้ไข')
   }
   if (normalizedReason.length > 1000) {
     throw new Error('เหตุผลต้องไม่เกิน 1,000 ตัวอักษร')
   }
+  if (decision === 'REJECT' && !normalizedOfficerNote) {
+    throw new Error('กรุณากรอกเหตุผลที่ไม่อนุมัติ')
+  }
+  if (normalizedOfficerNote.length > 1000) {
+    throw new Error('เหตุผลต้องไม่เกิน 1,000 ตัวอักษร')
+  }
 
   return {
     decision,
     revisionReason: decision === 'REQUEST_REVISION' ? normalizedReason : null,
-    officerNote: decision === 'REJECT' ? 'ไม่อนุมัติ' : null,
+    officerNote: decision === 'REJECT' ? normalizedOfficerNote : null,
   }
 }
 
