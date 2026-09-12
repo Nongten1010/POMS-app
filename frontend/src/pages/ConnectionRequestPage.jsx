@@ -6927,7 +6927,7 @@ export function RequestFormBottomSheet({
   const requestOfficerNotificationEmails = normalizeEmailList(
     useInitialRequestValues ? initialRequest?.officerNotificationEmails : formFactory?.officerNotificationEmails,
   )
-  const initialOfficerNotificationEmails = officerNotificationEmailsEditable && pointOfficerNotificationEmails.length
+  const initialOfficerNotificationEmails = officerNotificationEmailsEditable
     ? pointOfficerNotificationEmails
     : requestOfficerNotificationEmails
   const initialMonitoringPointType = useInitialRequestValues && initialRequest ? getRequestSystemType(initialRequest) : ''
@@ -7587,6 +7587,9 @@ export function RequestFormBottomSheet({
                       slotProps={{
                         input: {
                           readOnly: !officerNotificationEmailsEditable,
+                        },
+                        htmlInput: {
+                          maxLength: 254,
                         },
                       }}
                       fullWidth

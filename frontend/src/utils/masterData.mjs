@@ -47,6 +47,31 @@ export function formatFactoryEditRequestDate(value) {
   return normalizedValue.split(/[T\s]/, 1)[0]
 }
 
+export function normalizeOfficerNotificationEmails(values = []) {
+  if (!Array.isArray(values)) {
+    throw new Error('อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่ต้องเป็นรายการ')
+  }
+
+  const emails = values
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .filter(Boolean)
+
+  if (emails.length > 20) {
+    throw new Error('อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่ต้องไม่เกิน 20 รายการ')
+  }
+
+  emails.forEach((email, index) => {
+    if (email.length > 254) {
+      throw new Error(`อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่รายการที่ ${index + 1} ต้องไม่เกิน 254 ตัวอักษร`)
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error(`อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่รายการที่ ${index + 1} ไม่ถูกต้อง`)
+    }
+  })
+
+  return [...new Set(emails)]
+}
+
 const MAX_DOCUMENT_SIZE = 5 * 1024 * 1024
 const allowedDocumentTypes = new Set(['image/jpeg', 'image/png', 'application/pdf'])
 const allowedDocumentExtensions = ['.jpg', '.jpeg', '.png', '.pdf']

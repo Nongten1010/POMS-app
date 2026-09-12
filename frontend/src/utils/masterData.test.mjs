@@ -12,6 +12,7 @@ import {
   getFactoryEditRequestStatusLabel,
   getStatusManagementSelection,
   getPomsDisplayStatus,
+  normalizeOfficerNotificationEmails,
 } from './masterData.mjs'
 
 test('keeps cancelled and rejected factory edit requests distinct', () => {
@@ -33,6 +34,20 @@ test('formats factory edit request timestamps as Thai dates without time', () =>
   assert.equal(formatFactoryEditRequestDate('2026-08-24T02:00:00.000Z'), '24/08/2569')
   assert.equal(formatFactoryEditRequestDate('27/08/2569 10:30'), '27/08/2569')
   assert.equal(formatFactoryEditRequestDate(null), '-')
+})
+
+test('normalizes and validates officer notification emails', () => {
+  assert.deepEqual(normalizeOfficerNotificationEmails([
+    ' Officer@Example.go.th ',
+    'officer@example.go.th',
+    '',
+  ]), ['officer@example.go.th'])
+  assert.deepEqual(normalizeOfficerNotificationEmails([]), [])
+  assert.throws(() => normalizeOfficerNotificationEmails(['invalid']), /ไม่ถูกต้อง/)
+  assert.throws(() => normalizeOfficerNotificationEmails([`${'a'.repeat(243)}@example.go.th`]), /254 ตัวอักษร/)
+  assert.throws(() => normalizeOfficerNotificationEmails(
+    Array.from({ length: 21 }, (_, index) => `officer-${index}@example.go.th`),
+  ), /20 รายการ/)
 })
 
 test('validates POMS factory document files', () => {

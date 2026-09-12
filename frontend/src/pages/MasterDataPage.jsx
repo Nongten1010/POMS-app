@@ -45,6 +45,7 @@ import {
   getFactoryEditRequestStatusLabel,
   getStatusManagementSelection,
   getPomsDisplayStatus,
+  normalizeOfficerNotificationEmails,
 } from '../utils/masterData.mjs'
 
 const pomsFactoriesApiBaseUrl = window.location.hostname === 'localhost'
@@ -475,10 +476,15 @@ function mergeFormMeasurementPointIds(formData = {}, factory = {}) {
         )
       })
       const matchedIdentity = getPointIdentity(matchedPoint)
+      const hasPointOfficerEmails = matchedPoint
+        && Object.prototype.hasOwnProperty.call(matchedPoint, 'officerNotificationEmails')
 
       return {
         ...point,
         connectedPointId: point.connectedPointId ?? matchedIdentity.connectedPointId,
+        ...(hasPointOfficerEmails
+          ? { officerNotificationEmails: matchedPoint.officerNotificationEmails }
+          : {}),
       }
     }),
   }
@@ -1897,6 +1903,9 @@ function makeMasterDataInitialRequest(factory) {
     measurementPoints: [
       {
         connectedPointId: firstPoint?.connectedPointId ?? firstPoint?.id ?? null,
+        officerNotificationEmails: Array.isArray(firstPoint?.officerNotificationEmails)
+          ? firstPoint.officerNotificationEmails
+          : [],
         monitoringPointStatus: firstPoint?.monitoringPointStatus ?? firstPoint?.status ?? null,
         pointCode,
         code: pointCode,
@@ -1977,15 +1986,7 @@ function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}
   })
   const documentsAndImages = sanitizeDocuments(point.documentsAndImages ?? initialPoint.documentsAndImages)
     .filter((document) => hasStoredDocument(document) && !factoryGeneralDocumentTitles.has(document.title))
-  const officerNotificationEmails = Array.isArray(requestBody?.officerNotificationEmails)
-    ? requestBody.officerNotificationEmails.map((email) => String(email).trim()).filter(Boolean)
-    : []
-
-  officerNotificationEmails.forEach((email, index) => {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new Error(`อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่รายการที่ ${index + 1} ไม่ถูกต้อง`)
-    }
-  })
+  const officerNotificationEmails = normalizeOfficerNotificationEmails(requestBody?.officerNotificationEmails)
 
   return {
     formType: 'MEASUREMENT_POINTS',
