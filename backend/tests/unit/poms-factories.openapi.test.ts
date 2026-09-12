@@ -596,13 +596,22 @@ describe('POMS factory master-data OpenAPI contract', () => {
           example: 'base-00001/2569',
           description: expect.stringContaining('point-00001/2569'),
         }),
-        factoryRegistrationNo: expect.any(Object),
+        factoryRegistrationNo: expect.objectContaining({
+          description: expect.stringContaining('eligible_factories.factory_registration_no_old'),
+        }),
         formType: expect.objectContaining({ enum: ['BASIC_INFO', 'MEASUREMENT_POINTS'] }),
         revisionNo: expect.objectContaining({ minimum: 0 }),
         approvedAt: expect.objectContaining({ nullable: true, format: 'date-time' }),
         currentMeasurementPoints: expect.objectContaining({ nullable: true }),
         proposedMeasurementPoints: expect.objectContaining({ nullable: true }),
       }),
+    );
+
+    expect(operation('/poms-factories/{factoryId}/form', 'get').description).toEqual(
+      expect.stringContaining('เลขทะเบียนเดิม'),
+    );
+    expect(operation('/poms-factories/edit-requests/{id}', 'get').description).toEqual(
+      expect.stringContaining('ไม่เขียนทับ JSON snapshots'),
     );
 
     expect(operation('/poms-factories/{factoryId}/edit-requests', 'post').responses).toEqual(

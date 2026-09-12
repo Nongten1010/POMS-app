@@ -152,10 +152,8 @@ function cancellationHarness(status: string, createdBy = 42) {
     ],
   });
   const queues = new Map<string, unknown[]>([
-    [
-      'poms_factory_edit_requests',
-      [lockedRequest, makeChain({ update: requestUpdate }), reloadRequest],
-    ],
+    ['poms_factory_edit_requests', [lockedRequest, makeChain({ update: requestUpdate })]],
+    ['poms_factory_edit_requests as req', [reloadRequest]],
     ['poms_factory_edit_request_events', [makeChain({ insert: eventInsert }), eventList]],
   ]);
   const trx = Object.assign(

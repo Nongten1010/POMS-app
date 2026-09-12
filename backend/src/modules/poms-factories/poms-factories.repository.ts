@@ -130,6 +130,8 @@ interface EditRequestRow {
   eligible_factory_id: number | string;
   factory_id: string;
   factory_registration_no: string;
+  factory_registration_no_new?: string | null;
+  factory_registration_no_old?: string | null;
   factory_name: string;
   form_type: PomsFactoryEditRequestFormType;
   status: PomsFactoryEditRequestStatus;
@@ -242,12 +244,12 @@ export const pomsFactoriesRepository = {
     eligibleFactoryId: number,
     formType?: PomsFactoryEditRequestFormType,
   ): Promise<PomsFactoryEditRequestDTO | null> {
-    const query = db<EditRequestRow>('poms_factory_edit_requests')
-      .where('eligible_factory_id', eligibleFactoryId)
-      .where('is_open', true)
-      .whereNull('deleted_at')
-      .orderBy('id', 'desc');
-    if (formType) query.where('form_type', formType);
+    const query = buildStoredEditRequestQuery(db)
+      .where('req.eligible_factory_id', eligibleFactoryId)
+      .where('req.is_open', true)
+      .whereNull('req.deleted_at')
+      .orderBy('req.id', 'desc');
+    if (formType) query.where('req.form_type', formType);
     const row = await query.first();
     return row ? hydrateEditRequest(row, db) : null;
   },
@@ -358,6 +360,8 @@ export const pomsFactoriesRepository = {
           .where('req.request_no', 'like', search)
           .orWhere('req.factory_id', 'like', search)
           .orWhere('req.factory_registration_no', 'like', search)
+          .orWhere('ef.factory_registration_no_new', 'like', search)
+          .orWhere('ef.factory_registration_no_old', 'like', search)
           .orWhere('req.factory_name', 'like', search);
       });
     }
@@ -1097,7 +1101,8 @@ function buildEditRequestsQuery(
     })
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
     .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
-    .whereNull('req.deleted_at');
+    .whereNull('req.deleted_at')
+    .select('ef.factory_registration_no_new', 'ef.factory_registration_no_old');
   applyFactoryAccess(builder, access);
   return builder as unknown as Knex.QueryBuilder<EditRequestRow, EditRequestRow[]>;
 }
@@ -1296,7 +1301,7 @@ function toFactoryDetail(
     ...statuses.factory,
     eligibleFactoryId: Number(first.eligible_factory_id),
     factoryId: first.factory_id,
-    factoryRegistrationNo: first.factory_registration_no,
+    factoryRegistrationNo: displayFactoryRegistration(first),
     factoryName: first.factory_name,
     industryMainOrder: factoryClass,
     industryMainOrderLabel: factoryClass ? `ประเภทโรงงานลำดับที่ ${factoryClass}` : null,
@@ -1563,12 +1568,32 @@ async function requireEditRequestInTransaction(
   trx: Knex.Transaction,
   id: number,
 ): Promise<PomsFactoryEditRequestDTO> {
-  const row = await trx<EditRequestRow>('poms_factory_edit_requests')
-    .where('id', id)
-    .whereNull('deleted_at')
+  const row = await buildStoredEditRequestQuery(trx)
+    .where('req.id', id)
+    .whereNull('req.deleted_at')
     .first();
   if (!row) throw new Error('POMS factory edit request could not be reloaded');
   return hydrateEditRequest(row, trx);
+}
+
+function buildStoredEditRequestQuery(executor: DbExecutor) {
+  return executor<EditRequestRow>('poms_factory_edit_requests as req')
+    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
+      this.on('ef.id', '=', 'req.eligible_factory_id').andOnNull('ef.deleted_at');
+    })
+    .select('req.*', 'ef.factory_registration_no_new', 'ef.factory_registration_no_old');
+}
+
+function displayFactoryRegistration(row: {
+  factory_registration_no: string;
+  factory_registration_no_new?: string | null;
+  factory_registration_no_old?: string | null;
+}): string {
+  return (
+    row.factory_registration_no_old?.trim() ||
+    row.factory_registration_no_new?.trim() ||
+    row.factory_registration_no
+  );
 }
 
 function toEditRequestDTO(
@@ -1576,6 +1601,8 @@ function toEditRequestDTO(
   events: PomsFactoryEditRequestEventDTO[],
 ): PomsFactoryEditRequestDTO {
   const proposed = requireProfileSnapshot(row.proposed_factory_json);
+  // Registration is read-only display metadata; never rewrite persisted snapshots.
+  const registrationNo = displayFactoryRegistration(row);
   const currentMeasurementPoints =
     row.current_measurement_points_json == null
       ? null
@@ -1589,7 +1616,7 @@ function toEditRequestDTO(
     requestNo: row.request_no,
     eligibleFactoryId: Number(row.eligible_factory_id),
     factoryId: row.factory_id,
-    factoryRegistrationNo: row.factory_registration_no,
+    factoryRegistrationNo: registrationNo,
     factoryName: proposed.factoryName,
     formType: row.form_type,
     status: row.status,
@@ -1599,8 +1626,11 @@ function toEditRequestDTO(
     requestNote: row.request_note,
     revisionReason: row.revision_reason,
     officerNote: row.officer_note,
-    currentFactory: requireProfileSnapshot(row.current_factory_json),
-    proposedFactory: proposed,
+    currentFactory: {
+      ...requireProfileSnapshot(row.current_factory_json),
+      factoryRegistrationNo: registrationNo,
+    },
+    proposedFactory: { ...proposed, factoryRegistrationNo: registrationNo },
     currentMeasurementPoints,
     proposedMeasurementPoints,
     submittedBy: Number(row.submitted_by),

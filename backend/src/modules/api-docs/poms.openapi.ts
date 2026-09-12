@@ -964,6 +964,15 @@ const faqRequestProperties: Record<string, OpenApiObject> = {
   },
 };
 
+const pomsFactoryRegistrationSchema: OpenApiObject = {
+  type: 'string',
+  minLength: 1,
+  maxLength: 80,
+  description:
+    'เลขทะเบียนสำหรับแสดงผล: ใช้ active eligible_factories.factory_registration_no_old เมื่อไม่ว่าง มิฉะนั้นใช้ factory_registration_no_new และ fallback เลขที่บันทึกไว้เมื่อไม่มี metadata; factoryId คงเดิม',
+  example: '3-88(2)-5/48รบ',
+};
+
 const pomsFactoryEditRequestSchema: OpenApiObject = {
   type: 'object',
   additionalProperties: false,
@@ -1008,7 +1017,7 @@ const pomsFactoryEditRequestSchema: OpenApiObject = {
     },
     eligibleFactoryId: { type: 'integer', minimum: 1 },
     factoryId: { type: 'string', minLength: 1, maxLength: 64 },
-    factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 80 },
+    factoryRegistrationNo: pomsFactoryRegistrationSchema,
     factoryName: { type: 'string', minLength: 1, maxLength: 500 },
     formType: { type: 'string', enum: ['BASIC_INFO', 'MEASUREMENT_POINTS'] },
     status: schemaRef('PomsFactoryEditRequestStatus'),
@@ -2362,7 +2371,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: {
       eligibleFactoryId: { type: 'integer', minimum: 1 },
       factoryId: { type: 'string', minLength: 1, maxLength: 64 },
-      factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 80 },
+      factoryRegistrationNo: pomsFactoryRegistrationSchema,
       factoryName: { type: 'string', minLength: 1, maxLength: 500 },
       industryMainOrder: {
         ...nullableStringSchema(128),
@@ -5011,7 +5020,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get current/live POMS factory as connection-request form',
       operationId: 'getPomsFactoryForm',
       description:
-        'คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ข้อมูลโรงงาน/จุดตรวจวัดมาจาก current/live POMS และ active eligible metadata. สำหรับ measurementPoints[].details: eligibleParameters คงรายการพารามิเตอร์ที่เข้าข่าย, connectedParameters และ requestedParameters เป็นพารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active cems_wpms_connected_measurement_points.parameters_json และ pendingParameters = eligibleParameters - connectedParameters. contactPersons, notificationEmails, informationProviderName และ informationProviderPosition hydrate จาก cems_wpms_connection_requests ที่ผูกผ่าน active point.source_request_id ล่าสุดของ systemType ที่เลือก โดย fallback เป็นค่าว่างเมื่อไม่มี source request. officerNotificationEmails รวมค่าของ active points ใน systemType ที่เลือกแบบไม่ซ้ำ โดยใช้ค่าที่อนุมัติแล้วก่อน source request; [] ที่บันทึกไว้ไม่ fallback. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity',
+        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ข้อมูลโรงงาน/จุดตรวจวัดมาจาก current/live POMS และ active eligible metadata. สำหรับ measurementPoints[].details: eligibleParameters คงรายการพารามิเตอร์ที่เข้าข่าย, connectedParameters และ requestedParameters เป็นพารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active cems_wpms_connected_measurement_points.parameters_json และ pendingParameters = eligibleParameters - connectedParameters. contactPersons, notificationEmails, informationProviderName และ informationProviderPosition hydrate จาก cems_wpms_connection_requests ที่ผูกผ่าน active point.source_request_id ล่าสุดของ systemType ที่เลือก โดย fallback เป็นค่าว่างเมื่อไม่มี source request. officerNotificationEmails รวมค่าของ active points ใน systemType ที่เลือกแบบไม่ซ้ำ โดยใช้ค่าที่อนุมัติแล้วก่อน source request; [] ที่บันทึกไว้ไม่ fallback. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity',
       parameters: [
         factoryIdParameter,
         queryEnum(
@@ -5135,7 +5144,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get POMS factory edit request detail',
       operationId: 'getPomsFactoryEditRequest',
       description:
-        'คืน currentFactory, proposedFactory, currentMeasurementPoints, proposedMeasurementPoints และ events เรียงตามเวลา. currentMeasurementPoints[].details.connectedParameters และ requestedParameters ใช้ค่าที่เชื่อมต่อจริงจาก snapshot parameters_json ส่วน pendingParameters คำนวณจาก eligibleParameters ลบค่าที่เชื่อมต่อ; proposedMeasurementPoints คง proposed snapshot ตามคำขอแก้ไข. contactPersons, notificationEmails, informationProviderName และ informationProviderPosition hydrate จาก source connection request ของระบบที่แก้ไขหลังตรวจ factories:view แล้ว. BASIC_INFO ใช้ source ล่าสุดของโรงงานข้ามระบบ เรียง req.created_at DESC, req.id DESC; MEASUREMENT_POINTS ที่ระบุระบบเดียวไม่ได้คืน contact/email arrays ว่างและ provider null. officerNotificationEmails ใช้ proposedMeasurementPoints ของระบบที่แก้ไข (รวมแบบไม่ซ้ำ); snapshot เก่าที่ไม่มี field และ BASIC_INFO fallback จาก source. currentMeasurementPoints และ proposedMeasurementPoints คืน officerNotificationEmails รายจุดสำหรับเปรียบเทียบก่อน/หลัง. ข้อมูลผู้ติดต่ออื่นเป็นบริบทจาก source ปัจจุบัน ไม่ใช่ผู้ลงนามในคำขอแก้ไข; resource นอก data scope ตอบ 404',
+        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. currentFactory.factoryRegistrationNo และ proposedFactory.factoryRegistrationNo ใช้เลขแสดงผลเดียวกัน โดยไม่เขียนทับ JSON snapshots หรือ events ในฐานข้อมูล. คืน currentFactory, proposedFactory, currentMeasurementPoints, proposedMeasurementPoints และ events เรียงตามเวลา. currentMeasurementPoints[].details.connectedParameters และ requestedParameters ใช้ค่าที่เชื่อมต่อจริงจาก snapshot parameters_json ส่วน pendingParameters คำนวณจาก eligibleParameters ลบค่าที่เชื่อมต่อ; proposedMeasurementPoints คง proposed snapshot ตามคำขอแก้ไข. contactPersons, notificationEmails, informationProviderName และ informationProviderPosition hydrate จาก source connection request ของระบบที่แก้ไขหลังตรวจ factories:view แล้ว. BASIC_INFO ใช้ source ล่าสุดของโรงงานข้ามระบบ เรียง req.created_at DESC, req.id DESC; MEASUREMENT_POINTS ที่ระบุระบบเดียวไม่ได้คืน contact/email arrays ว่างและ provider null. officerNotificationEmails ใช้ proposedMeasurementPoints ของระบบที่แก้ไข (รวมแบบไม่ซ้ำ); snapshot เก่าที่ไม่มี field และ BASIC_INFO fallback จาก source. currentMeasurementPoints และ proposedMeasurementPoints คืน officerNotificationEmails รายจุดสำหรับเปรียบเทียบก่อน/หลัง. ข้อมูลผู้ติดต่ออื่นเป็นบริบทจาก source ปัจจุบัน ไม่ใช่ผู้ลงนามในคำขอแก้ไข; resource นอก data scope ตอบ 404',
       parameters: [idParameter],
       successSchema: schemaRef('PomsFactoryEditRequestDetailResponse'),
     }),
@@ -5146,7 +5155,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get proposed POMS edit request as connection-request form',
       operationId: 'getPomsFactoryEditRequestForm',
       description:
-        'คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ทั้ง BASIC_INFO และ MEASUREMENT_POINTS overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. ผู้ติดต่อ อีเมลแจ้งเตือน informationProviderName และ informationProviderPosition อ่านจาก source connection request ล่าสุดของ systemType ที่เลือก โดย fallback provider เป็น null เมื่อไม่มีค่า. Permission: factories:view; ถ้ามีทั้ง CEMS และ WPMS ต้องระบุ systemType',
+        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ทั้ง BASIC_INFO และ MEASUREMENT_POINTS overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. ผู้ติดต่อ อีเมลแจ้งเตือน informationProviderName และ informationProviderPosition อ่านจาก source connection request ล่าสุดของ systemType ที่เลือก โดย fallback provider เป็น null เมื่อไม่มีค่า. Permission: factories:view; ถ้ามีทั้ง CEMS และ WPMS ต้องระบุ systemType',
       parameters: [
         idParameter,
         queryEnum(
