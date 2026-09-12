@@ -34,6 +34,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestDocumentDialog, RequestFormBottomSheet } from './ConnectionRequestPage'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
+import { getContactComparison, getMeasurementPointComparisonPair } from '../utils/contactComparison.mjs'
 import {
   FACTORY_BASIC_INFO_EIA_OPTIONS,
   buildFactoryBasicInfoPayload,
@@ -1695,8 +1696,9 @@ function mapEditRequestToPdfRequest(request = {}) {
 
 function getChangedMeasurementPointFieldNames(raw = {}) {
   const changedFields = new Set()
-  const beforePoint = Array.isArray(raw.currentMeasurementPoints) ? raw.currentMeasurementPoints[0] ?? {} : {}
-  const afterPoint = Array.isArray(raw.proposedMeasurementPoints) ? raw.proposedMeasurementPoints[0] ?? {} : {}
+  const pointPair = getMeasurementPointComparisonPair(raw)
+  const beforePoint = pointPair.before ?? {}
+  const afterPoint = pointPair.after ?? {}
   ;['pointCode', 'pointName'].forEach((field) => {
     if (comparisonValuesDiffer(beforePoint[field], afterPoint[field])) {
       changedFields.add(field)
@@ -1757,8 +1759,15 @@ function getChangedMeasurementPointFieldNames(raw = {}) {
 function RequestMonitoringPointPreview({ request, factory, measurementPoints, highlightedFieldNames, variant }) {
   const raw = request?.raw ?? request
   const firstPoint = Array.isArray(measurementPoints) ? measurementPoints[0] : null
+  const contactComparison = getContactComparison(raw, variant)
+  const contactLabels = {
+    contactPersons: 'ผู้ติดต่อประสานงาน',
+    notificationEmails: 'อีเมลแจ้งเตือนโรงงาน',
+    officerNotificationEmails: 'อีเมลแจ้งเตือนเจ้าหน้าที่',
+  }
   const previewRequest = {
     ...raw,
+    ...contactComparison.values,
     id: `${raw?.id ?? 'request'}-${variant}-${firstPoint?.connectedPointId ?? firstPoint?.id ?? 'point'}`,
     factory,
     factoryId: factory?.factoryId,
@@ -1769,22 +1778,30 @@ function RequestMonitoringPointPreview({ request, factory, measurementPoints, hi
   }
 
   return (
-    <RequestFormBottomSheet
-      key={previewRequest.id}
-      embedded
-      readOnlyPreview
-      highlightedFieldNames={highlightedFieldNames}
-      open
-      formType="เพิ่มจุดตรวจวัด"
-      factory={factory}
-      mode="edit"
-      requestId={raw?.id}
-      initialRequest={previewRequest}
-      generalFactoryFieldsReadOnly
-      factoryProfilePatchMode
-      footerActions={null}
-      onClose={() => {}}
-    />
+    <Stack spacing={2}>
+      {contactComparison.unavailableFields.length > 0 ? (
+        <Alert severity="info">
+          ไม่มีข้อมูลก่อนและหลังแก้ไขครบถ้วนสำหรับ {contactComparison.unavailableFields.map((field) => contactLabels[field]).join(', ')}
+          {' '}ค่าที่ไม่มีข้อมูลย้อนหลังจะแสดงข้อมูลประกอบของคำขอ ไม่ใช่หลักฐานข้อมูลก่อนแก้ไข และไม่ระบุความเปลี่ยนแปลง
+        </Alert>
+      ) : null}
+      <RequestFormBottomSheet
+        key={previewRequest.id}
+        embedded
+        readOnlyPreview
+        highlightedFieldNames={[...highlightedFieldNames, ...contactComparison.highlightedFieldNames]}
+        open
+        formType="เพิ่มจุดตรวจวัด"
+        factory={factory}
+        mode="edit"
+        requestId={raw?.id}
+        initialRequest={previewRequest}
+        generalFactoryFieldsReadOnly
+        factoryProfilePatchMode
+        footerActions={null}
+        onClose={() => {}}
+      />
+    </Stack>
   )
 }
 
@@ -1801,9 +1818,9 @@ function RequestComparisonContent({ request, variant = 'after' }) {
     ),
     factoryName: (variant === 'before' ? raw?.currentFactory?.factoryName : raw?.proposedFactory?.factoryName) ?? baseFactory?.factoryName,
   })
-  const measurementPoints = variant === 'before'
-    ? raw?.currentMeasurementPoints
-    : raw?.proposedMeasurementPoints
+  const pointPair = getMeasurementPointComparisonPair(raw)
+  const selectedPoint = pointPair[variant]
+  const measurementPoints = selectedPoint ? [selectedPoint] : []
   const isPointForm = request?.form === 'แก้ไขข้อมูลจุดตรวจวัด'
   const highlightedFieldNames = isPointForm
     ? getChangedMeasurementPointFieldNames(raw)
@@ -2847,6 +2864,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         requestId={editingFactory?.id ?? ''}
         initialRequest={makeMasterDataInitialRequest(editingFactory)}
         titleOverride="แก้ไขข้อมูลจุดตรวจวัด"
+        submitPreviewContentMode="measurement-point"
         accessToken={accessToken}
         submitButtonLabel="บันทึก"
         customSubmit={canSubmitMasterData ? handleSubmitMeasurementPoints : null}
@@ -2854,6 +2872,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         generalFactoryFieldsReadOnly
         factoryProfilePatchMode
         monitoringPointTypeReadOnly
+        pointCodeReadOnly
         officerNotificationEmailsEditable={canSubmitMasterData}
         footerActions={canSubmitMasterData ? undefined : null}
         onClose={() => setEditingFactoryOpen(false)}

@@ -5607,6 +5607,7 @@ function CemsMonitoringPointDetails({
   onRequestedParametersChange,
   isOperator = false,
   isDirectConnectionMode = false,
+  pointCodeReadOnly = false,
 }) {
   const initialDetails = { ...emptyCemsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
@@ -5638,7 +5639,7 @@ function CemsMonitoringPointDetails({
             defaultValue={pointCodeValue}
             slotProps={{
               input: {
-                readOnly: isOperator,
+                readOnly: isOperator || pointCodeReadOnly,
               },
             }}
             fullWidth
@@ -6484,6 +6485,7 @@ function WpmsMonitoringPointDetails({
   onRequestedParametersChange,
   isOperator = false,
   isDirectConnectionMode = false,
+  pointCodeReadOnly = false,
 }) {
   const initialDetails = { ...emptyWpmsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
@@ -6503,7 +6505,7 @@ function WpmsMonitoringPointDetails({
             defaultValue={pointCodeValue}
             slotProps={{
               input: {
-                readOnly: isOperator,
+                readOnly: isOperator || pointCodeReadOnly,
               },
             }}
             fullWidth
@@ -6814,10 +6816,12 @@ function MonitoringPointDetails({
   onRequestedParametersChange,
   isOperator = false,
   isDirectConnectionMode = false,
+  pointCodeReadOnly = false,
 }) {
   if (point.type === 'CEMS') {
     return (
       <CemsMonitoringPointDetails
+        pointCodeReadOnly={pointCodeReadOnly}
         initialPoint={initialPoint}
         connectedParameters={connectedParameters}
         onConnectedParametersChange={onConnectedParametersChange}
@@ -6831,6 +6835,7 @@ function MonitoringPointDetails({
   if (point.type === 'WPMS') {
     return (
       <WpmsMonitoringPointDetails
+        pointCodeReadOnly={pointCodeReadOnly}
         initialPoint={initialPoint}
         connectedParameters={connectedParameters}
         onConnectedParametersChange={onConnectedParametersChange}
@@ -6868,11 +6873,13 @@ export function RequestFormBottomSheet({
   footerActions = undefined,
   submitButtonLabel = 'ส่งแบบฟอร์มคำขอ',
   submitWithoutPreview = false,
+  submitPreviewContentMode = undefined,
   customSubmit = null,
   documentImagesUploadUrl = '',
   generalFactoryFieldsReadOnly = false,
   factoryProfilePatchMode = false,
   monitoringPointTypeReadOnly = false,
+  pointCodeReadOnly = false,
   officerNotificationEmailsEditable = false,
   embedded = false,
   readOnlyPreview = false,
@@ -6966,11 +6973,11 @@ export function RequestFormBottomSheet({
 
     return {
       ...styles,
-      [`& .MuiFormControl-root:has(${fieldSelector}) .MuiOutlinedInput-notchedOutline`]: {
+      [`& .MuiFormControl-root:has(${fieldSelector}) .MuiOutlinedInput-notchedOutline, & .MuiFormControl-root${dataFieldSelector} .MuiOutlinedInput-notchedOutline`]: {
         borderColor: '#f97316',
         borderWidth: 2,
       },
-      [`& .MuiFormControl-root:has(${fieldSelector}) .MuiInputLabel-root`]: {
+      [`& .MuiFormControl-root:has(${fieldSelector}) .MuiInputLabel-root, & .MuiFormControl-root${dataFieldSelector} .MuiInputLabel-root`]: {
         color: '#f97316',
       },
       [`& ${dataFieldSelector} > .MuiButton-root`]: {
@@ -6983,6 +6990,12 @@ export function RequestFormBottomSheet({
       },
       [`& ${dataFieldSelector}`]: {
         borderColor: '#f97316',
+      },
+      [`& .MuiPaper-root${dataFieldSelector}`]: {
+        borderWidth: 2,
+      },
+      [`& .MuiPaper-root${dataFieldSelector} > .MuiStack-root > .MuiStack-root > .MuiTypography-root`]: {
+        color: '#f97316',
       },
       [`& ${dataFieldSelector} > .MuiStack-root > .MuiTypography-root:first-of-type`]: {
         color: '#f97316',
@@ -7108,7 +7121,7 @@ export function RequestFormBottomSheet({
     setSubmitPreviewPdfLoading(true)
 
     try {
-      const pdfBytes = await createConnectionRequestPdf(requestBody)
+      const pdfBytes = await createConnectionRequestPdf(requestBody, { contentMode: submitPreviewContentMode })
       const blob = new Blob([pdfBytes], { type: 'application/pdf' })
       const pdfUrl = URL.createObjectURL(blob)
       if (submitPreviewSessionRef.current !== previewSessionId) {
@@ -7471,7 +7484,7 @@ export function RequestFormBottomSheet({
               </Stack>
             </Paper>
 
-            <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+            <Paper data-field-name="contactPersons" elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
               <Stack spacing={2}>
                 <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -7485,23 +7498,23 @@ export function RequestFormBottomSheet({
                     เพิ่มข้อมูล
                   </Button>
                 </Stack>
-                {contacts.map((contact) => (
+                {contacts.map((contact, index) => (
                   <Grid
                     container
                     spacing={2}
                     key={contact.id}
                   >
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="contactName" label="ชื่อ-นามสกุล" size="small" defaultValue={contact.name ?? ''} fullWidth />
+                      <TextField data-field-name={`contactName-${index}`} name="contactName" label="ชื่อ-นามสกุล" size="small" defaultValue={contact.name ?? ''} fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="contactPosition" label="ตำแหน่ง" size="small" defaultValue={contact.position ?? ''} fullWidth />
+                      <TextField data-field-name={`contactPosition-${index}`} name="contactPosition" label="ตำแหน่ง" size="small" defaultValue={contact.position ?? ''} fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="contactPhone" label="เบอร์โทร" size="small" defaultValue={contact.phone ?? ''} fullWidth />
+                      <TextField data-field-name={`contactPhone-${index}`} name="contactPhone" label="เบอร์โทร" size="small" defaultValue={contact.phone ?? ''} fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="contactEmail" label="อีเมล" size="small" defaultValue={contact.email ?? ''} fullWidth />
+                      <TextField data-field-name={`contactEmail-${index}`} name="contactEmail" label="อีเมล" size="small" defaultValue={contact.email ?? ''} fullWidth />
                     </Grid>
                   </Grid>
                 ))}
@@ -7510,7 +7523,7 @@ export function RequestFormBottomSheet({
 
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
+                <Paper data-field-name="notificationEmails" elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
                 <Stack spacing={2}>
                   <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -7526,8 +7539,9 @@ export function RequestFormBottomSheet({
                       เพิ่มข้อมูล
                     </Button>
                   </Stack>
-                  {factoryEmails.map((email) => (
+                  {factoryEmails.map((email, index) => (
                     <TextField
+                      data-field-name={`notificationEmail-${index}`}
                       key={email.id}
                       label="อีเมล"
                       name="notificationEmail"
@@ -7542,7 +7556,7 @@ export function RequestFormBottomSheet({
               </Grid>
 
               <Grid size={{ xs: 12, md: 6 }}>
-                <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
+                <Paper data-field-name="officerNotificationEmails" elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', height: '100%' }}>
                 <Stack spacing={2}>
                   <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -7561,6 +7575,7 @@ export function RequestFormBottomSheet({
                   </Stack>
                   {officerEmails.map((email, index) => (
                     <TextField
+                      data-field-name={`officerNotificationEmail-${index}`}
                       key={`officer-email-${index}`}
                       name="officerNotificationEmail"
                       label="อีเมล"
@@ -7632,6 +7647,7 @@ export function RequestFormBottomSheet({
                   {monitoringPoints.map((point) => (
                     <Box key={point.id} sx={{ display: point.id === selectedMonitoringPoint?.id ? 'block' : 'none' }}>
                       <MonitoringPointDetails
+                        pointCodeReadOnly={pointCodeReadOnly}
                         point={point}
                         initialPoint={point.type === initialMonitoringPointType ? initialPoint : {}}
                         connectedParameters={connectedParameters}
