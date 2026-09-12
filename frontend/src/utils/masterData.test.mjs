@@ -9,6 +9,7 @@ import {
   buildStatusManagementPayload,
   canCancelFactoryEditRequest,
   formatFactoryEditRequestDate,
+  getChangedFactoryGeneralInfoFieldNames,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
   getStatusManagementSelection,
@@ -51,6 +52,34 @@ test('builds factory edit review payloads and requires a revision reason', () =>
     officerNote: 'ไม่อนุมัติ',
   })
   assert.throws(() => buildFactoryEditReviewPayload('REQUEST_REVISION'), /กรุณากรอกเหตุผล/)
+})
+
+test('finds changed editable factory fields for the review comparison', () => {
+  assert.deepEqual(getChangedFactoryGeneralInfoFieldNames({
+    currentFactory: {
+      eia: 'ไม่มี',
+      projectName: 'โครงการเดิม',
+      latitude: 13.5,
+      longitude: 100.5,
+      factoryFrontPhotos: [{ id: 1, fileUrl: 'https://example.com/front.jpg' }],
+      factoryLogo: null,
+    },
+    proposedFactory: {
+      eia: 'มี EIA',
+      projectName: 'โครงการใหม่',
+      latitude: '13.5',
+      longitude: 100.5,
+      factoryFrontPhotos: [{ id: 99, fileUrl: 'https://example.com/front.jpg' }],
+      factoryLogo: { fileUrl: 'https://example.com/logo.png' },
+    },
+  }), ['eia', 'projectName', 'factoryLogo'])
+})
+
+test('does not mark factory fields omitted from a sparse proposed patch', () => {
+  assert.deepEqual(getChangedFactoryGeneralInfoFieldNames({
+    currentFactory: { eia: 'ไม่มี', projectName: 'โครงการเดิม' },
+    proposedFactory: { projectName: 'โครงการใหม่' },
+  }), ['projectName'])
 })
 
 test('normalizes and validates officer notification emails', () => {

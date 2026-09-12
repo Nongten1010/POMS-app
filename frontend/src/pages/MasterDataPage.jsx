@@ -42,6 +42,7 @@ import {
   buildStatusManagementPayload,
   canCancelFactoryEditRequest,
   formatFactoryEditRequestDate,
+  getChangedFactoryGeneralInfoFieldNames,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
   getStatusManagementSelection,
@@ -1167,6 +1168,7 @@ function FactoryDocumentUploadField({
   maxFiles = 1,
   accessToken = '',
   disabled = false,
+  highlighted = false,
   onChange,
 }) {
   const [uploading, setUploading] = useState(false)
@@ -1198,7 +1200,7 @@ function FactoryDocumentUploadField({
 
   return (
     <Stack spacing={1}>
-      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+      <Typography variant="body2" sx={{ fontWeight: 700, color: highlighted ? '#f97316' : undefined }}>
         {label}
       </Typography>
       <Button
@@ -1210,8 +1212,17 @@ function FactoryDocumentUploadField({
           justifyContent: 'flex-start',
           height: 40,
           borderStyle: 'dashed',
-          color: 'text.secondary',
+          borderColor: highlighted ? '#f97316' : undefined,
+          color: highlighted ? '#f97316' : 'text.secondary',
           fontWeight: 400,
+          ...(highlighted
+            ? {
+                '&.Mui-disabled': {
+                  borderColor: '#f97316',
+                  color: '#f97316',
+                },
+              }
+            : {}),
         }}
       >
         {uploading ? 'กำลังอัปโหลด' : 'ภาพ/ไฟล์/QR Code'}
@@ -1238,7 +1249,13 @@ function FactoryDocumentUploadField({
             key={`${document.fileUrl ?? document.fileName ?? 'document'}-${index}`}
             direction="row"
             spacing={1}
-            sx={{ alignItems: 'center', border: 1, borderColor: 'divider', p: 1, minWidth: 0 }}
+            sx={{
+              alignItems: 'center',
+              border: highlighted ? 2 : 1,
+              borderColor: highlighted ? '#f97316' : 'divider',
+              p: 1,
+              minWidth: 0,
+            }}
           >
             {showImagePreview ? (
               <Box
@@ -1484,7 +1501,7 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
   )
 }
 
-function ReadOnlyFormField({ label, value, sx }) {
+function ReadOnlyFormField({ label, value, sx, highlighted = false }) {
   return (
     <TextField
       label={label}
@@ -1493,7 +1510,20 @@ function ReadOnlyFormField({ label, value, sx }) {
       fullWidth
       multiline
       maxRows={3}
-      sx={sx}
+      sx={{
+        ...sx,
+        ...(highlighted
+          ? {
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#f97316',
+                borderWidth: 2,
+              },
+              '& .MuiInputLabel-root': {
+                color: '#f97316',
+              },
+            }
+          : {}),
+      }}
       slotProps={{
         input: {
           readOnly: true,
@@ -1503,7 +1533,9 @@ function ReadOnlyFormField({ label, value, sx }) {
   )
 }
 
-function RequestGeneralInfoPreview({ factory }) {
+function RequestGeneralInfoPreview({ factory, highlightedFieldNames = [] }) {
+  const highlightedFields = new Set(highlightedFieldNames)
+
   return (
     <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
       <Stack spacing={2}>
@@ -1523,14 +1555,39 @@ function RequestGeneralInfoPreview({ factory }) {
           <ReadOnlyFormField label="การประกอบกิจการ" value={factory?.businessActivity} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
           <ReadOnlyFormField label="ลำดับประเภทโรงงาน (หลัก)" value={factory?.industryMainOrder} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="ลำดับประเภทโรงงาน (รอง)" value={factory?.industrySubOrder} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-          <ReadOnlyFormField label="การประเมินผลกระทบสิ่งแวดล้อม" value={factory?.eia ?? 'ไม่มี'} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+          <ReadOnlyFormField
+            label="การประเมินผลกระทบสิ่งแวดล้อม"
+            value={factory?.eia ?? 'ไม่มี'}
+            highlighted={highlightedFields.has('eia')}
+            sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
+          />
           {factory?.eia === 'อื่นๆ' ? (
-            <ReadOnlyFormField label="ระบุ" value={factory?.eiaOther} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+            <ReadOnlyFormField
+              label="ระบุ"
+              value={factory?.eiaOther}
+              highlighted={highlightedFields.has('eiaOther')}
+              sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
+            />
           ) : null}
-          <ReadOnlyFormField label="ชื่อโครงการ" value={factory?.projectName} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+          <ReadOnlyFormField
+            label="ชื่อโครงการ"
+            value={factory?.projectName}
+            highlighted={highlightedFields.has('projectName')}
+            sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
+          />
           <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={factory?.address} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
-          <ReadOnlyFormField label="ละติจูด" value={factory?.latitude} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-          <ReadOnlyFormField label="ลองจิจูด" value={factory?.longitude} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+          <ReadOnlyFormField
+            label="ละติจูด"
+            value={factory?.latitude}
+            highlighted={highlightedFields.has('latitude')}
+            sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
+          />
+          <ReadOnlyFormField
+            label="ลองจิจูด"
+            value={factory?.longitude}
+            highlighted={highlightedFields.has('longitude')}
+            sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
+          />
           <Box sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}>
             <FactoryDocumentUploadField
               label="ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน"
@@ -1538,6 +1595,7 @@ function RequestGeneralInfoPreview({ factory }) {
               documents={sanitizeDocuments(factory?.factoryFrontPhotos)}
               maxFiles={3}
               disabled
+              highlighted={highlightedFields.has('factoryFrontPhotos')}
             />
           </Box>
           <Box sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}>
@@ -1547,6 +1605,7 @@ function RequestGeneralInfoPreview({ factory }) {
               documents={factory?.factoryLogo ? [sanitizeDocumentItem(factory.factoryLogo)] : []}
               maxFiles={1}
               disabled
+              highlighted={highlightedFields.has('factoryLogo')}
             />
           </Box>
         </Box>
@@ -1722,11 +1781,13 @@ function RequestComparisonContent({ request, variant = 'after' }) {
     ? raw?.currentMeasurementPoints
     : raw?.proposedMeasurementPoints
   const isPointForm = request?.form === 'แก้ไขข้อมูลจุดตรวจวัด'
-  const highlightedFieldNames = isPointForm ? getChangedMeasurementPointFieldNames(raw) : []
+  const highlightedFieldNames = isPointForm
+    ? getChangedMeasurementPointFieldNames(raw)
+    : getChangedFactoryGeneralInfoFieldNames(raw)
 
   return isPointForm
     ? <RequestMonitoringPointPreview request={request} factory={factory} measurementPoints={measurementPoints} highlightedFieldNames={highlightedFieldNames} variant={variant} />
-    : <RequestGeneralInfoPreview factory={factory} />
+    : <RequestGeneralInfoPreview factory={factory} highlightedFieldNames={highlightedFieldNames} />
 }
 
 function RequestViewBottomSheet({

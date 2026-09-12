@@ -233,6 +233,42 @@ export function buildFactoryEditReviewPayload(decision, { revisionReason = '' } 
   }
 }
 
+const comparableFactoryFields = [
+  'eia',
+  'eiaOther',
+  'projectName',
+  'latitude',
+  'longitude',
+  'factoryFrontPhotos',
+  'factoryLogo',
+]
+
+function normalizeComparableValue(value) {
+  if (value === null || value === undefined || value === '') return null
+  if (Array.isArray(value)) {
+    return value
+      .map(normalizeComparableValue)
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
+  }
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .filter((key) => !['id', 'createdAt', 'updatedAt'].includes(key))
+        .sort()
+        .map((key) => [key, normalizeComparableValue(value[key])]),
+    )
+  }
+  return String(value).trim()
+}
+
+export function getChangedFactoryGeneralInfoFieldNames({ currentFactory = {}, proposedFactory = {} } = {}) {
+  return comparableFactoryFields.filter((field) => (
+    Object.prototype.hasOwnProperty.call(proposedFactory, field)
+    && JSON.stringify(normalizeComparableValue(currentFactory[field]))
+      !== JSON.stringify(normalizeComparableValue(proposedFactory[field]))
+  ))
+}
+
 export function getStatusManagementSelection(scope = {}, { parameter = false } = {}) {
   if (!parameter && scope.connectionStatus === 'DISCONNECTED') {
     return 'DISCONNECTED'
