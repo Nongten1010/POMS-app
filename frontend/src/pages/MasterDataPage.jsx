@@ -236,6 +236,21 @@ function hasStoredDocument(document = {}) {
   return Boolean(document.fileUrl || document.link)
 }
 
+function getFactoryDocumentPreviewUrl(document = {}) {
+  const url = document.fileUrl ?? document.link ?? ''
+  if (!url || /^(blob:|data:|https?:\/\/)/i.test(url)) {
+    return url
+  }
+
+  return `https://d-poms.diw.go.th${url.startsWith('/') ? url : `/${url}`}`
+}
+
+function isFactoryImageDocument(document = {}) {
+  const fileType = String(document.fileType ?? '').toLowerCase()
+  const candidate = `${document.fileName ?? ''} ${document.fileUrl ?? ''}`
+  return fileType.startsWith('image/') || /\.(png|jpe?g|webp)(\?.*)?$/i.test(candidate)
+}
+
 function documentValuesEqual(left, right) {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
 }
@@ -1212,27 +1227,67 @@ function FactoryDocumentUploadField({
         {helperText}
       </Typography>
       {uploadError ? <Alert severity="error">{uploadError}</Alert> : null}
-      {items.map((document, index) => (
-        <Stack
-          key={`${document.fileUrl ?? document.fileName ?? 'document'}-${index}`}
-          direction="row"
-          spacing={1}
-          sx={{ alignItems: 'center', border: 1, borderColor: 'divider', p: 1, minWidth: 0 }}
-        >
-          <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>
-            {document.fileName ?? document.title ?? 'เอกสารแนบ'}
-          </Typography>
-          {!disabled ? (
-            <IconButton
-              size="small"
-              aria-label={`นำ ${document.fileName ?? document.title ?? 'เอกสารแนบ'} ออก`}
-              onClick={() => onChange?.(items.filter((_, itemIndex) => itemIndex !== index))}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          ) : null}
-        </Stack>
-      ))}
+      {items.map((document, index) => {
+        const fileName = document.fileName ?? document.title ?? 'เอกสารแนบ'
+        const previewUrl = getFactoryDocumentPreviewUrl(document)
+        const showImagePreview = previewUrl && isFactoryImageDocument(document)
+
+        return (
+          <Stack
+            key={`${document.fileUrl ?? document.fileName ?? 'document'}-${index}`}
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', border: 1, borderColor: 'divider', p: 1, minWidth: 0 }}
+          >
+            {showImagePreview ? (
+              <Box
+                component="img"
+                src={previewUrl}
+                alt={fileName}
+                sx={{
+                  width: 48,
+                  height: 48,
+                  objectFit: 'cover',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  flex: '0 0 auto',
+                }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  width: 48,
+                  height: 48,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  bgcolor: 'neutral.50',
+                  color: 'text.secondary',
+                  flex: '0 0 auto',
+                }}
+              >
+                <UploadFileIcon fontSize="small" />
+              </Box>
+            )}
+            <Typography variant="body2" noWrap title={fileName} sx={{ flex: 1, minWidth: 0 }}>
+              {fileName}
+            </Typography>
+            {!disabled ? (
+              <IconButton
+                size="small"
+                aria-label={`นำ ${fileName} ออก`}
+                onClick={() => onChange?.(items.filter((_, itemIndex) => itemIndex !== index))}
+              >
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            ) : null}
+          </Stack>
+        )
+      })}
     </Stack>
   )
 }
