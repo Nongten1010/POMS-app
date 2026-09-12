@@ -38,8 +38,8 @@
 
 ### Capability Boundary
 
-- `BASIC_INFO` แก้ได้เฉพาะการประเมินผลกระทบสิ่งแวดล้อม (`eia`), ชื่อโครงการ (`projectName`), อื่นๆ ของ EIA (`eiaOther`), ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน (`factoryFrontPhotos`), สัญลักษณ์ของโรงงานหรือโลโก้บริษัท (`factoryLogo`), ละติจูด (`latitude`) และลองติจูด (`longitude`); เมื่ออนุมัติจะ sync ตาม target mapping โดยคงชื่อและที่อยู่โรงงานเดิม
-- `MEASUREMENT_POINTS` ใช้ patch `pointName`, `monitoringPointStatus`, `details`, `documentsAndImages`, `measurementInstruments` และ `officerNotificationEmails` พร้อมข้อมูลทั่วไปของโรงงาน 7 fields เดียวกับ `BASIC_INFO` ได้ในคำขอเดียวกัน
+- `BASIC_INFO` แก้ได้เฉพาะการประเมินผลกระทบสิ่งแวดล้อม (`eia`), ชื่อโครงการ (`projectName`), อื่นๆ ของ EIA (`eiaOther`), ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน (`factoryFrontPhotos`), สัญลักษณ์ของโรงงานหรือโลโก้บริษัท (`factoryLogo`), ละติจูด (`latitude`) และลองติจูด (`longitude`) รวมถึง [ข้อมูลติดต่อและอีเมล](#contact-comparison); เมื่ออนุมัติจะ sync ตาม target mapping โดยคงชื่อและที่อยู่โรงงานเดิม
+- `MEASUREMENT_POINTS` ใช้ patch `pointName`, `monitoringPointStatus`, `details`, `documentsAndImages`, `measurementInstruments` และ `officerNotificationEmails` พร้อมข้อมูลทั่วไปของโรงงานและ [ข้อมูลติดต่อ](#contact-comparison) เดียวกับ `BASIC_INFO` ได้ในคำขอเดียวกัน
 - binary upload รับครั้งละหนึ่งไฟล์และคืน metadata เท่านั้น การผูกไฟล์กับคำขอเกิดเมื่อ client ส่ง metadata นั้นใน create/resubmission payload
 - เฉพาะ `createdBy` ยกเลิกคำขอของตนเองได้ และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`
 - โรงงานที่อ่านหรือแก้ได้ต้องอยู่ใน effective data scope ของ permission ที่ endpoint ใช้ และหนึ่งโรงงานมี open request ได้สูงสุดหนึ่งรายการต่อ `formType`
@@ -336,7 +336,7 @@ Minimal response (`200 OK`):
 
 คืน prefill โดยให้ข้อมูลโรงงานและจุดตรวจวัดมาจาก current/live POMS ใช้ชื่อและ shape ของ `data` ตรงกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) และไม่คืน wrapper `formDefaults`, workflow metadata, `factoryAddress`, `systemTypes`, `connectedPointId` หรือ `sourceMeasurementPointId`
 
-ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; เฉพาะ `contactPersons`, `notificationEmails`, `informationProviderName` และ `informationProviderPosition` (รวม legacy `contactName`, `contactPhone`, `contactEmail`) จะ hydrate จาก `cems_wpms_connection_requests` ที่ผูกผ่าน `source_request_id` ของ active point ล่าสุดใน `systemType` ที่เลือก `officerNotificationEmails` ใช้ค่าของ active points ในระบบที่เลือกก่อน source request ตามหัวข้อ [อีเมลเจ้าหน้าที่](#เพิ่มแก้ไขอีเมลสำหรับแจ้งเตือนเจ้าหน้าที่); ถ้าไม่มี source request ให้ fallback เป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
+ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; `contactPersons` และ `notificationEmails` (รวม legacy `contactName`, `contactPhone`, `contactEmail`) ใช้ค่าที่อนุมัติบน active connected point ก่อน หากไม่มี override จึงใช้ source; `[]` ที่ล้างไว้ไม่ fallback. ส่วน `informationProviderName` และ `informationProviderPosition` จะ hydrate จาก `cems_wpms_connection_requests` ที่ผูกผ่าน `source_request_id` ของ active point ล่าสุดใน `systemType` ที่เลือก `officerNotificationEmails` ใช้ค่าของ active points ในระบบที่เลือกก่อน source request ตามหัวข้อ [อีเมลเจ้าหน้าที่](#เพิ่มแก้ไขอีเมลสำหรับแจ้งเตือนเจ้าหน้าที่); ถ้าไม่มี source request ให้ fallback เป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
 
 response prefill ยังคืนชื่อโรงงาน ที่อยู่ เลขทะเบียน และ field อื่นของ shared contract เพื่อแสดงข้อมูลประกอบเท่านั้น สำหรับ `BASIC_INFO` ให้เปิดแก้เฉพาะ [7 fields ที่อนุญาต](#shared-basic-info-fields) และสร้าง write payload จาก allowlist นี้ ห้ามส่ง response ทั้ง object กลับเป็น create/resubmission body; `remarks` ใน response ไม่ใช่ field ที่แก้ได้ของ `BASIC_INFO`
 
@@ -369,7 +369,7 @@ curl --request GET \
 | `industryMainOrder`, `industryMainOrderLabel`, `industrySubOrder`, `businessActivity` | active `eligible_factories.factory_type_sequence` และ `eligible_factories.business_activity` ที่ผูกกับ current/live POMS | `null` เมื่อ eligible metadata ไม่มีค่า |
 | รหัสพื้นที่, พิกัด/คำอธิบายเฉพาะจุด | POMS ไม่เก็บ | `null` |
 | `contactName`, `contactPhone`, `contactEmail` | source connection request ล่าสุดของ active point ใน `systemType` ที่เลือก | `""`, `""`, `null` |
-| `contactPersons`, `notificationEmails` | JSON snapshots ใน source connection request เดียวกัน | `[]`; `notificationEmails` fallback จาก `contactEmail` เมื่อ JSON ว่าง |
+| `contactPersons`, `notificationEmails` | approved override บน active connected point ก่อน source request | `[]` ที่บันทึกไม่ fallback; ถ้าไม่มี override ใช้ source และ legacy fallback เดิม |
 | `informationProviderName`, `informationProviderPosition` | `information_provider_name`, `information_provider_position` จาก source row เดียวกัน | `null` เมื่อไม่มีค่า; ไม่ fallback เป็นผู้ติดต่อ |
 | `remarks` | ไม่มีคำขอแก้ไขใน endpoint นี้ | `null` |
 
@@ -484,7 +484,7 @@ Multer failure เช่นเกิน 5 MiB หรือส่งไฟล์/
 
 ### Shared Basic-info Fields
 
-เมื่อ body ไม่ส่ง `formType` backend จะตีความเป็นฟอร์ม `BASIC_INFO`; client ใหม่ควรส่ง `formType = "BASIC_INFO"` ให้ชัดเจน โดย `formType` เป็นเพียงตัวเลือกแบบฟอร์ม และแก้ได้เฉพาะ 7 fields ต่อไปนี้
+เมื่อ body ไม่ส่ง `formType` backend จะตีความเป็นฟอร์ม `BASIC_INFO`; client ใหม่ควรส่ง `formType = "BASIC_INFO"` ให้ชัดเจน โดย `formType` เป็นเพียงตัวเลือกแบบฟอร์ม และแก้ข้อมูลทั่วไป 7 fields ต่อไปนี้และ [ข้อมูลติดต่อ](#contact-comparison) ได้
 
 | Field                | Type           | Required | Rules                                                                                               |
 | -------------------- | -------------- | -------- | --------------------------------------------------------------------------------------------------- |
@@ -534,7 +534,7 @@ field ที่ห้ามส่งเพิ่มเติม ได้แก�
 
 การเชื่อมต่อ frontend: ปลด `generalFactoryFieldsReadOnly` ในฟอร์มแก้ไขจุดตรวจวัด แล้วให้ตัวสร้าง payload ส่ง 7 fields นี้ที่ root ของ body; metadata รูปโรงงานและโลโก้ต้องส่งใน `factoryFrontPhotos` / `factoryLogo` โดยเฉพาะ การส่งไว้เฉพาะ `measurementPoints[].documentsAndImages` ไม่ถือเป็นการแก้ข้อมูลทั่วไปของโรงงาน ใช้ `GET /poms-factories/edit-requests/:id/form` เพื่อโหลด proposed values เมื่อแก้คำขอที่ถูกส่งกลับ
 
-ข้อมูลทั่วไปที่ไม่ส่งคงค่าเดิม ยังคงส่ง `measurementPoints` อย่างน้อยหนึ่งรายการตามตารางด้านล่างได้แม้ค่าในจุดนั้นไม่เปลี่ยน โดยคำขอต้องมีการเปลี่ยนข้อมูลทั่วไปหรือข้อมูลจุดอย่างน้อยหนึ่งส่วน หากทั้งสองส่วนเหมือนเดิมตอบ `409 CONFLICT`
+ข้อมูลทั่วไปที่ไม่ส่งคงค่าเดิม ยังคงส่ง `measurementPoints` อย่างน้อยหนึ่งรายการตามตารางด้านล่างได้แม้ค่าในจุดนั้นไม่เปลี่ยน โดยคำขอต้องมีการเปลี่ยนข้อมูลทั่วไป ข้อมูลจุด หรือข้อมูลติดต่ออย่างน้อยหนึ่งส่วน หากทุกส่วนเหมือนเดิมตอบ `409 CONFLICT`
 
 ```json
 {
@@ -560,13 +560,74 @@ field ที่ห้ามส่งเพิ่มเติม ได้แก�
 | `remarks`                                    | string \| null   | no       | canonical field ของหมายเหตุผู้ส่ง; ไม่เกิน 1000 ตัวอักษร                                  |
 | `note`                                       | string \| null   | no       | legacy alias ของ `remarks`; หากส่งทั้งคู่ค่าต้องตรงกัน                                                |
 
-แต่ละ `measurementPoints[]` ต้องส่งอย่างน้อยหนึ่ง field ที่แก้ได้ นอกเหนือจาก `connectedPointId` ค่า `monitoringPointStatus` ที่รับคือ `เชื่อมต่อครบแล้ว`, `ได้รับการยกเว้นทั้งหมด`, `เชื่อมต่อแล้วแต่ยังไม่ครบ`, `อยู่ระหว่างขยายเวลา`, `ยังไม่ได้ดำเนินการเชื่อมต่อ`, `อยู่ระหว่างการตรวจสอบของจังหวัด` หรือ `อยู่ระหว่างเชื่อมต่อ`
+แต่ละ `measurementPoints[]` ต้องส่งอย่างน้อยหนึ่ง field ที่แก้ได้ นอกเหนือจาก `connectedPointId` เว้นแต่ส่ง contact field ที่ root เพื่อแก้ข้อมูลติดต่อของระบบที่เลือก ค่า `monitoringPointStatus` ที่รับคือ `เชื่อมต่อครบแล้ว`, `ได้รับการยกเว้นทั้งหมด`, `เชื่อมต่อแล้วแต่ยังไม่ครบ`, `อยู่ระหว่างขยายเวลา`, `ยังไม่ได้ดำเนินการเชื่อมต่อ`, `อยู่ระหว่างการตรวจสอบของจังหวัด` หรือ `อยู่ระหว่างเชื่อมต่อ`
 
 field ที่ห้ามส่งในฟอร์มนี้ ได้แก่ `pointCode`, `pointType`, `systemType`, `parameters`, `sourceMeasurementPointId`, `eligibleFactoryId`, `factoryId`, `factoryName`, `updatedAt`, device configuration และ field identity/audit อื่น ๆ เพราะ approval อัปเดตเฉพาะ fields ที่อนุญาตของข้อมูลโรงงานและจุดตรวจวัด
 
+<a id="contact-comparison"></a>
+
+### ผู้ติดต่อและอีเมล: การแก้ไขและเปรียบเทียบก่อน–หลัง
+
+ใช้กับ `POST /api/v1/poms-factories/:factoryId/edit-requests` และ `PUT /api/v1/poms-factories/edit-requests/:id/resubmission` ภายใต้ permission/data scope และสถานะเดิม ส่งเฉพาะข้อมูลติดต่อที่เปลี่ยนได้; field ที่ไม่ส่งคงค่าปัจจุบัน, `[]` ล้างรายการ และ `null` ไม่อนุญาต
+
+| Field ใน body | Type | Required | Validation |
+| --- | --- | --- | --- |
+| `contactPersons` | object[] | no | สูงสุด 20 คน; `name` trim แล้ว 1–255, `phone` trim แล้ว 1–64; `email` optional/nullable รูปแบบ email ไม่เกิน 255; `position` optional/nullable ไม่เกิน 255 ตาม `ContactPerson` |
+| `notificationEmails` | string[] | no | สูงสุด 20 รายการ; email ไม่เกิน 254 ตัวอักษร; trim, lowercase, ตัดซ้ำ |
+| `officerNotificationEmails` | string[] | no | สูงสุด 20 รายการ; email ไม่เกิน 254 ตัวอักษร; trim, lowercase, ตัดซ้ำ; ห้ามส่งพร้อม `measurementPoints[].officerNotificationEmails` |
+
+`BASIC_INFO` แก้ข้อมูลติดต่อของ active points ทั้งโรงงาน โดยอ่านค่าก่อนแก้จาก source ล่าสุดข้ามระบบตามกติกาฟอร์มเดิม ส่วน `MEASUREMENT_POINTS` ต้องเลือกจุดจากระบบเดียว (`CEMS` หรือ `WPMS`) เมื่อส่ง contact field ที่ root และจะมีผลกับ active points ทั้งระบบนั้น; ส่งเฉพาะ `connectedPointId` เพื่อเลือกระบบได้โดยไม่ต้องแก้ชื่อจุด หากต้องการแก้อีเมลเจ้าหน้าที่เฉพาะจุด ให้ใช้ field รายจุดตามหัวข้อถัดไป
+
+ตัวอย่างยื่นคำขอแก้เฉพาะข้อมูลติดต่อ:
+
+```json
+{
+  "formType": "BASIC_INFO",
+  "contactPersons": [{ "name": "ผู้ประสานงานใหม่", "phone": "0800000000", "email": null, "position": "วิศวกร" }],
+  "notificationEmails": ["new@example.com"],
+  "officerNotificationEmails": []
+}
+```
+
+ทุก workflow response ที่มี edit-request DTO (create, list, detail, resubmission, review และ cancel) เพิ่ม `currentContacts` และ `proposedContacts` เป็น snapshot ณ รอบที่ยื่นล่าสุด:
+
+| Field ในแต่ละ snapshot | Type | ความหมาย |
+| --- | --- | --- |
+| `systemType` | `CEMS` \| `WPMS` \| null | ระบบที่เลือก; `null` ภายใน object หมายถึงทั้งโรงงาน |
+| `contactPersons` | object[] | รายชื่อผู้ติดต่อ ณ ฝั่งก่อน/หลัง ตาม `ContactPerson` |
+| `notificationEmails` | string[] | อีเมลโรงงาน ณ ฝั่งก่อน/หลัง |
+| `officerNotificationEmails` | string[] | รายชื่อเจ้าหน้าที่รวมในขอบเขตแบบไม่ซ้ำ; รายจุดยังเทียบด้วย `connectedPointId` ใน current/proposed measurement points |
+
+ตัวอย่างส่วนข้อมูลเปรียบเทียบของ response:
+
+```json
+{
+  "currentContacts": {
+    "systemType": null,
+    "contactPersons": [],
+    "notificationEmails": ["old@example.com"],
+    "officerNotificationEmails": ["officer@example.com"]
+  },
+  "proposedContacts": {
+    "systemType": null,
+    "contactPersons": [{ "name": "ผู้ประสานงานใหม่", "phone": "0800000000", "email": null, "position": "วิศวกร" }],
+    "notificationEmails": ["new@example.com"],
+    "officerNotificationEmails": []
+  }
+}
+```
+
+รายละเอียดคำขอยังคง 3 contact fields ที่ root เพื่อรองรับผู้เรียกเดิม โดยใช้ค่าจาก `proposedContacts` เมื่อมี snapshot. ฝั่งแสดงผลเปรียบเทียบให้อ่าน snapshot ทั้งสองฝั่ง ไม่ใช้ root เป็นค่าก่อนแก้ และไม่ใช้ข้อมูลโรงงานล่าสุดแทนประวัติ `/edit-requests/:id/form` ใช้ proposed contacts รวมถึง `[]` ที่ล้างไว้เมื่อ snapshot ครอบคลุมระบบที่เลือก
+
+คำขอเก่าที่ไม่เคยเก็บ contact snapshots คืน `currentContacts: null` และ `proposedContacts: null` พร้อม root fields สำหรับแสดงบริบทตามเดิม; ห้ามตีความ `null` ว่าไม่มีผู้ติดต่อหรือไม่มีอีเมล คำขอจุดตรวจวัดข้ามระบบที่ไม่มี contact patch และระบุขอบเขตเดียวไม่ได้ก็คืน snapshot pair เป็น `null` โดยยังเก็บค่าก่อน–หลังอีเมลเจ้าหน้าที่รายจุด หากส่งคำขอเก่ากลับมาแก้ไขในสถานะ `REVISION_REQUESTED` ระบบจะสร้าง snapshot จากข้อมูลปัจจุบันสำหรับรอบใหม่เท่านั้น ไม่เติมประวัติย้อนหลัง
+
+ก่อนอนุมัติข้อมูลที่ใช้งานอยู่ยังไม่เปลี่ยน เมื่ออนุมัติจะอัปเดตเฉพาะ contact fields ที่เปลี่ยนบน active `cems_wpms_connected_measurement_points` ภายใน transaction เดียวกับสถานะคำขอและ audit event ทั้ง legacy และ canonical mode ไม่เขียนทับ `cems_wpms_connection_requests` ต้นทาง. หากข้อมูลติดต่อไม่ตรงกับค่าที่จับไว้ก่อนยื่น ตอบ `409 CONFLICT` และ rollback ทั้งรายการ; create/resubmission ตรวจซ้ำใน transaction เช่นกัน. การปฏิเสธ ส่งกลับ หรือยกเลิกไม่เปลี่ยนข้อมูลติดต่อที่ใช้งานอยู่
+
+สำหรับ backend: ต้องรัน migration [0117](../../../../../backend/src/db/migrations/0117_add_poms_contact_snapshots.ts) ก่อนใช้ code รุ่นนี้ เพิ่ม nullable live override และ contact snapshot columns โดยไม่ backfill ข้อมูลเก่า ทดสอบเส้นทาง capture/resubmit/approve/stale/rollback ใน [approval tests](../../../../../backend/tests/unit/poms-factories.general-info-approval.test.ts), [canonical tests](../../../../../backend/tests/unit/poms-factories.canonical-profiles.repository.test.ts) และ [service tests](../../../../../backend/tests/unit/poms-factories.service.test.ts)
+
 ### เพิ่ม/แก้ไขอีเมลสำหรับแจ้งเตือนเจ้าหน้าที่
 
-ใช้ API เดิม `POST /api/v1/poms-factories/:factoryId/edit-requests` และ `PUT /api/v1/poms-factories/edit-requests/:id/resubmission` โดยส่งรายชื่อ **ภายในแต่ละ `measurementPoints[]`**:
+ใช้ API เดิม `POST /api/v1/poms-factories/:factoryId/edit-requests` และ `PUT /api/v1/poms-factories/edit-requests/:id/resubmission` เมื่อต้องการกำหนดรายชื่อแยกแต่ละจุด ให้ส่ง **ภายในแต่ละ `measurementPoints[]`** ส่วนการกำหนดรายชื่อทั้งขอบเขตให้ใช้ root field ตาม [ข้อมูลติดต่อ](#contact-comparison):
 
 ```json
 {
@@ -756,9 +817,9 @@ Minimal response (`200 OK`):
 
 สำหรับ `MEASUREMENT_POINTS` ฝั่ง `currentMeasurementPoints[].details.connectedParameters` และ `requestedParameters` ยึดรายการที่เชื่อมต่อจริงจาก `currentMeasurementPoints[].parameters` ซึ่ง snapshot มาจาก active `cems_wpms_connected_measurement_points.parameters_json`; `pendingParameters` คำนวณเป็น `eligibleParameters - connectedParameters` ส่วน `proposedMeasurementPoints[].details` คงค่าที่ผู้ใช้ส่งมากับคำขอแก้ไข จึงแสดงก่อน/หลังต่างกันเมื่อรายการพารามิเตอร์เปลี่ยน
 
-`contactPersons`, `notificationEmails`, `informationProviderName` และ `informationProviderPosition` อ่านจาก source connection request หลังคำขอผ่าน `factories:view` data scope โดยใช้ชื่อและตำแหน่งจาก source row เดียวกัน: `BASIC_INFO` ใช้ source ล่าสุดของโรงงานข้าม CEMS/WPMS (เรียง `req.created_at DESC, req.id DESC`); `MEASUREMENT_POINTS` ใช้ source ล่าสุดของระบบที่แก้ไขตาม snapshots ถ้าระบุระบบเดียวไม่ได้ให้คืน arrays เป็น `[]` และ provider เป็น `null` แทนการเลือกระบบใดระบบหนึ่ง
+`contactPersons`, `notificationEmails` และ `officerNotificationEmails` ที่ root ใช้ `proposedContacts` เมื่อมี snapshot ตาม [ข้อมูลเปรียบเทียบก่อน–หลัง](#contact-comparison). สำหรับคำขอเก่า contact arrays ใช้ข้อมูลปัจจุบันเพื่อเป็นบริบทเท่านั้น ส่วน `informationProviderName` และ `informationProviderPosition` อ่านจาก source connection request หลังคำขอผ่าน `factories:view` data scope โดยใช้ชื่อและตำแหน่งจาก source row เดียวกัน: `BASIC_INFO` ใช้ source ล่าสุดของโรงงานข้าม CEMS/WPMS (เรียง `req.created_at DESC, req.id DESC`); `MEASUREMENT_POINTS` ใช้ source ล่าสุดของระบบที่แก้ไขตาม snapshots ถ้าระบุระบบเดียวไม่ได้ให้คืน arrays เป็น `[]` และ provider เป็น `null` แทนการเลือกระบบใดระบบหนึ่ง
 
-ข้อมูลกลุ่มนี้เป็นบริบทจากคำขอเชื่อมต่อที่ผูกกับ active POMS point ปัจจุบัน ไม่ใช่ snapshot ผู้ลงนามของคำขอแก้ไขและอาจเปลี่ยนเมื่อ source เปลี่ยน ถ้าต้นทางไม่มีข้อมูลผู้ให้ข้อมูลจะคืนสอง field เป็น `null` โดยไม่แทนด้วยผู้ติดต่อหรือผู้สร้างคำขอ
+ข้อมูลผู้ให้ข้อมูล (`informationProviderName`/`informationProviderPosition`) เป็นบริบทจากคำขอเชื่อมต่อที่ผูกกับ active POMS point ปัจจุบัน ไม่ใช่ snapshot ผู้ลงนามของคำขอแก้ไขและอาจเปลี่ยนเมื่อ source เปลี่ยน ถ้าต้นทางไม่มีข้อมูลผู้ให้ข้อมูลจะคืนสอง field เป็น `null` โดยไม่แทนด้วยผู้ติดต่อหรือผู้สร้างคำขอ
 
 #### Request Fields
 
@@ -790,15 +851,17 @@ Minimal request JSON:
 | `data.requestNote`           | string                                                                | yes      | หมายเหตุผู้ส่ง; `BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้เป็น `null` |
 | `data.revisionReason`        | string                                                                | yes      | เหตุผลที่เจ้าหน้าที่ขอแก้ไข                                                      |
 | `data.officerNote`           | string                                                                | yes      | หมายเหตุการพิจารณา                                                               |
+| `data.currentContacts` | object \| null | yes | snapshot ผู้ติดต่อและอีเมลก่อนส่งคำขอรอบล่าสุด; โครงสร้างตาม [contact comparison](#contact-comparison) |
+| `data.proposedContacts` | object \| null | yes | snapshot ผู้ติดต่อและอีเมลที่เสนอ; `null` เมื่อไม่มีหลักฐาน snapshot |
 | `data.currentFactory`        | object                                                                | no       | snapshot ก่อนส่งคำขอรอบล่าสุด                                                    |
 | `data.proposedFactory`       | object                                                                | no       | snapshot ที่เสนอแก้ไขรอบล่าสุด                                                   |
 | `data.currentMeasurementPoints`  | object[]                                                           | yes      | snapshot จุดตรวจวัดก่อนแก้; กลุ่มพารามิเตอร์ current derive จาก `parameters`; เป็น `null` สำหรับ `BASIC_INFO` |
 | `data.proposedMeasurementPoints` | object[]                                                           | yes      | snapshot จุดตรวจวัดที่เสนอ โดยคง `details.*Parameters` ตามคำขอ; เป็น `null` สำหรับ `BASIC_INFO` |
-| `data.contactPersons`            | object[]                                                           | no       | ผู้ติดต่อประสานงานจาก source connection request ของระบบที่แก้ไข; fallback `[]` |
+| `data.contactPersons`            | object[]                                                           | no       | `proposedContacts.contactPersons`; คำขอเก่า fallback live/source หรือ `[]` |
 | `data.informationProviderName` | string | yes | ชื่อผู้ให้ข้อมูลหรือผู้รับมอบอำนาจจาก source connection request; `null` เมื่อไม่มีข้อมูล |
 | `data.informationProviderPosition` | string | yes | ตำแหน่งจาก source row เดียวกับชื่อ; `null` เมื่อไม่มีข้อมูล |
-| `data.notificationEmails`        | string[]                                                           | no       | อีเมลสำหรับแจ้งเตือนโรงงาน; fallback `[]`                                       |
-| `data.officerNotificationEmails` | string[]                                                           | no       | รายชื่อ proposed ของระบบที่แก้ไขแบบไม่ซ้ำ; snapshot เก่า/BASIC_INFO fallback source หรือ `[]`                                  |
+| `data.notificationEmails`        | string[]                                                           | no       | `proposedContacts.notificationEmails`; คำขอเก่า fallback live/source หรือ `[]`                                       |
+| `data.officerNotificationEmails` | string[]                                                           | no       | `proposedContacts.officerNotificationEmails`; คำขอเก่าใช้ proposed points แล้ว fallback source หรือ `[]`                                  |
 | `data.submittedBy`           | number                                                                | no       | user ID ผู้ส่งรอบล่าสุด                                                          |
 | `data.submittedAt`           | ISO 8601 string                                                       | no       | เวลาส่งรอบล่าสุด                                                                 |
 | `data.reviewedBy`            | number                                                                | yes      | user ID ผู้พิจารณาล่าสุด                                                         |
@@ -917,7 +980,7 @@ Minimal response (`200 OK`):
 
 คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้เฉพาะ 7 editable fields จาก proposed factory profile โดยชื่อ ที่อยู่ และข้อมูลอ่านอย่างเดียวยึด current/live รวมถึงเมื่อเปิดคำขอเก่า; `MEASUREMENT_POINTS` ใช้ proposed measurement points และใช้ 7 editable fields จาก proposed factory profile เมื่อมีการแก้ข้อมูลทั่วไป; ถ้าแก้เฉพาะจุดใช้ข้อมูลทั่วไป current/live และทั้งสองแบบใช้ `requestNote` เป็น `remarks` (`BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้คืน `null`)
 
-endpoint edit-request form อ่านผู้ติดต่อ อีเมลแจ้งเตือน และ `informationProviderName`/`informationProviderPosition` จากคำขอเชื่อมต่อต้นทางล่าสุดของ `systemType` ที่เลือก เช่นเดียวกับ factory form; ถ้าไม่มีต้นทางใช้ `""`, `[]` หรือ `null` ตาม shared contract ส่วน proposed values ของจุดตรวจวัดยังคงเดิม และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`
+endpoint edit-request form ใช้ผู้ติดต่อและอีเมลจาก `proposedContacts` เมื่อ snapshot ครอบคลุม `systemType` ที่เลือก โดยคง `[]` ที่ล้างไว้; คำขอเก่า fallback เช่นเดียวกับ factory form. `informationProviderName`/`informationProviderPosition` อ่านจากคำขอเชื่อมต่อต้นทางล่าสุด; ถ้าไม่มีต้นทางใช้ `""`, `[]` หรือ `null` ตาม shared contract ส่วน proposed values ของจุดตรวจวัดยังคงเดิม และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`
 
 ชื่อ ที่อยู่ และ identity fields ใน prefill เป็นข้อมูลอ่านอย่างเดียวสำหรับ `BASIC_INFO`; ให้ส่งกลับเฉพาะ [7 editable fields](#shared-basic-info-fields) รวมถึงเมื่อเปิดแก้ไขคำขอเก่า ส่วน `remarks` ยังคงเป็น field ของ shared response แต่ห้ามส่งใน `BASIC_INFO` resubmission
 
@@ -1209,12 +1272,12 @@ State transitions:
 | ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | `400`       | `VALIDATION_ERROR` | path/query/body ไม่ตรง strict schema, `BASIC_INFO` ไม่มี editable field, พิกัดไม่ส่งเป็นคู่, `eiaOther` ผิดเงื่อนไข หรือมี field นอก allowlist                                | แสดง validation ตาม `error.issues[].pathString` |
 | `400`       | `FILE_UPLOAD_FAILED` | multipart upload เกิน limit เช่นไฟล์เกิน 5 MiB หรือส่งไฟล์/part เกินจำนวน                                                            | แสดงข้อผิดพลาดอัปโหลดและให้เลือกไฟล์ใหม่        |
-| `400`       | `BAD_REQUEST`      | upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
+| `400`       | `BAD_REQUEST`      | แก้ข้อมูลติดต่อโดยเลือกจุดข้าม CEMS/WPMS, upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
 | `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกไม่ใช่ `createdBy`, reviewer ไม่ใช่ admin หรือผู้พิจารณาซ้ำกับ `createdBy`/`submittedBy`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
 | `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
-| `409`       | `CONFLICT`         | ไม่มี profile field เปลี่ยน, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version/revision เปลี่ยน, canonical profile ยังไม่พร้อม, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |
+| `409`       | `CONFLICT`         | ไม่มีข้อมูลที่แก้ไขเปลี่ยน, ข้อมูลติดต่อเปลี่ยนหลังยื่นคำขอ, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version/revision เปลี่ยน, canonical profile ยังไม่พร้อม, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |
 
 ## Business Flow And Explanations
 

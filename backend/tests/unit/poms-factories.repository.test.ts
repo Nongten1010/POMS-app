@@ -166,6 +166,28 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     });
   });
 
+  it('uses approved contact overrides and never restores source recipients after a clear', () => {
+    const result = toPomsFactoryFormContactsForTests({
+      contact_name: 'Old',
+      contact_phone: '0800000000',
+      contact_email: 'old@example.com',
+      contact_persons_json: null,
+      notification_emails_json: null,
+      officer_notification_emails_json: null,
+      live_contact_persons_json: '[]',
+      live_notification_emails_json: '[]',
+      information_provider_name: null,
+      information_provider_position: null,
+    });
+    expect(result).toMatchObject({
+      contactName: '',
+      contactPhone: '',
+      contactEmail: null,
+      contactPersons: [],
+      notificationEmails: [],
+    });
+  });
+
   it('searches by both current/live and eligible registration numbers', () => {
     const compiled = buildConnectedFactoryRowsQueryForTests(
       {

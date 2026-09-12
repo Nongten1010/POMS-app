@@ -119,7 +119,18 @@ export interface PomsFactoryFormContactsDTO {
   informationProviderPosition: string | null;
 }
 
+export interface PomsFactoryContactsSnapshot {
+  /** null means factory-wide; a missing snapshot is represented by a null object. */
+  systemType: 'CEMS' | 'WPMS' | null;
+  contactPersons: ContactPersonInput[];
+  notificationEmails: string[];
+  officerNotificationEmails: string[];
+}
+
 export interface PomsFactoryProfilePatchInput {
+  contactPersons?: ContactPersonInput[];
+  notificationEmails?: string[];
+  officerNotificationEmails?: string[];
   latitude?: number | null;
   longitude?: number | null;
   eia?: ConnectionRequestEiaAssessment | null;
@@ -178,6 +189,8 @@ export interface PomsFactoryEditRequestEventDTO {
 }
 
 export interface PomsFactoryEditRequestDTO {
+  currentContacts?: PomsFactoryContactsSnapshot | null;
+  proposedContacts?: PomsFactoryContactsSnapshot | null;
   id: number;
   requestNo: string;
   eligibleFactoryId: number;

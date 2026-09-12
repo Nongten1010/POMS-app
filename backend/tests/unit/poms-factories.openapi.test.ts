@@ -196,7 +196,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(operatorList.description).not.toEqual(pomsList.description);
   });
 
-  it('limits create and resubmission payloads to the seven-field profile allowlist', () => {
+  it('limits create and resubmission payloads to profile and contact fields', () => {
     const schema = asObject(schemas().PomsFactoryEditableProfileRequest, 'edit profile request');
     const properties = asObject(schema.properties, 'edit profile properties');
 
@@ -205,6 +205,9 @@ describe('POMS factory master-data OpenAPI contract', () => {
         'formType',
         'latitude',
         'longitude',
+        'contactPersons',
+        'notificationEmails',
+        'officerNotificationEmails',
         'eia',
         'eiaOther',
         'projectName',
@@ -223,6 +226,9 @@ describe('POMS factory master-data OpenAPI contract', () => {
         'factoryLogo',
         'latitude',
         'longitude',
+        'contactPersons',
+        'notificationEmails',
+        'officerNotificationEmails',
       ].map((field) => ({ required: [field] })),
     );
     expect(properties).not.toHaveProperty('measurementPoints');
@@ -822,4 +828,26 @@ describe('POMS officer email contract', () => {
       });
     }
   });
+});
+
+it('publishes nullable contact comparison snapshots and contact-only input examples', () => {
+  const schema = asObject(schemas().PomsFactoryEditRequest, 'request');
+  const properties = asObject(schema.properties, 'properties');
+  expect(schema.required).toEqual(expect.arrayContaining(['currentContacts', 'proposedContacts']));
+  expect(properties.currentContacts).toMatchObject({
+    nullable: true,
+    allOf: [{ $ref: '#/components/schemas/PomsFactoryContactsSnapshot' }],
+  });
+  const fields = asObject(
+    asObject(schemas().PomsFactoryEditableProfileRequest, 'input').properties,
+    'fields',
+  );
+  expect(fields.notificationEmails).toMatchObject({ type: 'array', maxItems: 20 });
+  expect(
+    createPomsFactoryEditRequestSchema.safeParse({
+      contactPersons: [],
+      notificationEmails: [],
+      officerNotificationEmails: [],
+    }).success,
+  ).toBe(true);
 });

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { requestedPointParametersSchema } from './poms-measurement-point-parameters';
 import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
 import {
+  contactPersonSchema,
   measurementInstrumentsSchema,
   measurementPointDetailsSchema,
   requestDocumentImageSchema,
@@ -64,6 +65,20 @@ export const listPomsFactoryEditRequestsQuerySchema = z
   })
   .strict();
 
+const editableContactFields = {
+  contactPersons: z.array(contactPersonSchema).max(20).optional(),
+  notificationEmails: z
+    .array(z.string().trim().max(254).email().toLowerCase())
+    .max(20)
+    .transform((emails) => [...new Set(emails)])
+    .optional(),
+  officerNotificationEmails: z
+    .array(z.string().trim().max(254).email().toLowerCase())
+    .max(20)
+    .transform((emails) => [...new Set(emails)].sort())
+    .optional(),
+};
+
 const editableFactoryProfileFields = {
   latitude: z.number().finite().min(-90).max(90).nullable().optional(),
   longitude: z.number().finite().min(-180).max(180).nullable().optional(),
@@ -112,10 +127,14 @@ const editableFactoryProfileSchema = z
   .object({
     formType: z.literal(POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO).optional(),
     ...editableFactoryProfileFields,
+    ...editableContactFields,
   })
   .strict()
   .superRefine((value, ctx) => {
     const editableKeys = [
+      'contactPersons',
+      'notificationEmails',
+      'officerNotificationEmails',
       'eia',
       'eiaOther',
       'projectName',
@@ -169,20 +188,6 @@ const editableMeasurementPointPatchSchema: z.ZodType<PomsMeasurementPointPatchIn
         }
       }
     }
-    const editableKeys = [
-      'officerNotificationEmails',
-      'pointName',
-      'monitoringPointStatus',
-      'details',
-      'documentsAndImages',
-      'measurementInstruments',
-    ];
-    if (editableKeys.some((key) => Object.prototype.hasOwnProperty.call(value, key))) return;
-    ctx.addIssue({
-      code: 'custom',
-      path: ['connectedPointId'],
-      message: 'measurement point patch must include at least one editable field',
-    });
   });
 
 const editableMeasurementPointsSchema: z.ZodType<CreatePomsFactoryMeasurementPointsEditRequestInput> =
@@ -190,6 +195,7 @@ const editableMeasurementPointsSchema: z.ZodType<CreatePomsFactoryMeasurementPoi
     .object({
       formType: z.literal(POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS),
       ...editableFactoryProfileFields,
+      ...editableContactFields,
       remarks: optionalNullableTrimmedString(1000),
       measurementPoints: z.array(editableMeasurementPointPatchSchema).min(1).max(100),
       note: optionalNullableTrimmedString(1000),
@@ -197,6 +203,28 @@ const editableMeasurementPointsSchema: z.ZodType<CreatePomsFactoryMeasurementPoi
     .strict()
     .superRefine((value, ctx) => {
       validateFactoryProfileFields(value, ctx);
+      if (
+        value.officerNotificationEmails !== undefined &&
+        value.measurementPoints.some((point) => point.officerNotificationEmails !== undefined)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['officerNotificationEmails'],
+          message: 'Use either top-level or point-specific officerNotificationEmails, not both',
+        });
+      }
+      const hasContactPatch =
+        value.contactPersons !== undefined ||
+        value.notificationEmails !== undefined ||
+        value.officerNotificationEmails !== undefined;
+      value.measurementPoints.forEach((point, index) => {
+        if (!hasContactPatch && Object.keys(point).length === 1)
+          ctx.addIssue({
+            code: 'custom',
+            path: ['measurementPoints', index, 'connectedPointId'],
+            message: 'measurement point patch must include at least one editable field',
+          });
+      });
       const seen = new Set<number>();
       value.measurementPoints.forEach((point, index) => {
         if (!seen.has(point.connectedPointId)) {

@@ -329,3 +329,39 @@ describe.each([
     expect(schema.safeParse(payload(emails)).success).toBe(false);
   });
 });
+
+describe('contact edit contract', () => {
+  it('accepts contact-only edits and explicit clears', () => {
+    expect(
+      createPomsFactoryEditRequestSchema.safeParse({
+        contactPersons: [],
+        notificationEmails: [],
+        officerNotificationEmails: [],
+      }).success,
+    ).toBe(true);
+  });
+  it('rejects invalid contact email addresses', () => {
+    expect(
+      createPomsFactoryEditRequestSchema.safeParse({
+        contactPersons: [{ name: 'A', phone: '0800000000', email: 'invalid' }],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+it('accepts point IDs as scope when editing contacts and rejects conflicting officer sources', () => {
+  expect(
+    createPomsFactoryEditRequestSchema.safeParse({
+      formType: 'MEASUREMENT_POINTS',
+      measurementPoints: [{ connectedPointId: 15 }],
+      notificationEmails: [],
+    }).success,
+  ).toBe(true);
+  expect(
+    createPomsFactoryEditRequestSchema.safeParse({
+      formType: 'MEASUREMENT_POINTS',
+      measurementPoints: [{ connectedPointId: 15, officerNotificationEmails: [] }],
+      officerNotificationEmails: [],
+    }).success,
+  ).toBe(false);
+});

@@ -127,7 +127,7 @@ const wpmsOnlyDetailFields = new Set([
   'dischargeReceivingSource',
 ]);
 
-const contactPersonSchema = z
+export const contactPersonSchema = z
   .object({
     name: trimmedString(255),
     phone: trimmedString(64),

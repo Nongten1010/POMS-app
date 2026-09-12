@@ -26,6 +26,123 @@ describe('measurement-point approval with general factory information', () => {
     jest.clearAllMocks();
   });
 
+  it.each([true, false])('persists approved contacts atomically (basic=%s)', async (basicInfo) => {
+    const harness = approvalHarness({ basicInfo, profileChanged: false, pointChanged: false });
+    const currentContacts = {
+      systemType: basicInfo ? null : 'CEMS',
+      contactPersons: [],
+      notificationEmails: ['old@example.com'],
+      officerNotificationEmails: [],
+    };
+    const proposedContacts = {
+      ...currentContacts,
+      contactPersons: [{ name: 'New', phone: '0811111111', email: null, position: null }],
+      notificationEmails: [],
+    };
+    Object.assign(harness.row, {
+      current_contacts_json: JSON.stringify(currentContacts),
+      proposed_contacts_json: JSON.stringify(proposedContacts),
+    });
+    transaction.mockImplementationOnce(harness.runTransaction);
+    const result = await pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77);
+    expect(result).toMatchObject({ currentContacts, proposedContacts, status: 'APPROVED' });
+    expect(harness.committed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'cems_wpms_connected_measurement_points',
+          values: expect.objectContaining({
+            contact_persons_json: JSON.stringify(proposedContacts.contactPersons),
+            notification_emails_json: '[]',
+          }),
+        }),
+      ]),
+    );
+    expect(harness.committed.some((write) => write.table === 'cems_wpms_connection_requests')).toBe(
+      false,
+    );
+    if (!basicInfo) expect(harness.contactScopes).toContainEqual(['system_type', 'CEMS']);
+    const event = harness.committed.find(
+      (write) => write.table === 'poms_factory_edit_request_events',
+    );
+    expect(JSON.parse(String(event?.values.factory_snapshot_json))).toMatchObject({
+      currentContacts,
+      proposedContacts,
+    });
+  });
+
+  it('rolls contact writes back if a later factory update fails', async () => {
+    const harness = approvalHarness({ basicInfo: true, missingEligible: true });
+    const before = {
+      systemType: null,
+      contactPersons: [],
+      notificationEmails: ['old@example.com'],
+      officerNotificationEmails: [],
+    };
+    Object.assign(harness.row, {
+      current_contacts_json: JSON.stringify(before),
+      proposed_contacts_json: JSON.stringify({ ...before, notificationEmails: [] }),
+    });
+    transaction.mockImplementationOnce(harness.runTransaction);
+    await expect(
+      pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(harness.attempted.some((write) => 'notification_emails_json' in write.values)).toBe(
+      true,
+    );
+    expect(harness.committed).toEqual([]);
+  });
+
+  it('refuses stale contacts without committing approval or any data writes', async () => {
+    const harness = approvalHarness({ basicInfo: true });
+    const currentContacts = {
+      systemType: null,
+      contactPersons: [],
+      notificationEmails: ['outdated@example.com'],
+      officerNotificationEmails: [],
+    };
+    Object.assign(harness.row, {
+      current_contacts_json: JSON.stringify(currentContacts),
+      proposed_contacts_json: JSON.stringify({ ...currentContacts, notificationEmails: [] }),
+    });
+    transaction.mockImplementationOnce(harness.runTransaction);
+    await expect(
+      pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(harness.committed).toEqual([]);
+    expect(harness.attempted).toEqual([]);
+  });
+
+  it.each(['create', 'resubmit'] as const)(
+    'stores both contact snapshots on %s',
+    async (operation) => {
+      const harness = approvalHarness({ basicInfo: true, resubmit: operation === 'resubmit' });
+      const currentContacts = {
+        systemType: null,
+        contactPersons: [],
+        notificationEmails: ['old@example.com'],
+        officerNotificationEmails: [],
+      };
+      const proposedContacts = { ...currentContacts, notificationEmails: [] };
+      const payload = {
+        formType: 'BASIC_INFO' as const,
+        currentContacts,
+        proposedContacts,
+        proposedFactory: harness.current,
+        proposedMeasurementPoints: null,
+      };
+      transaction.mockImplementationOnce(harness.runTransaction);
+      const result =
+        operation === 'create'
+          ? await pomsFactoriesRepository.createEditRequest(harness.current, payload, null, 42)
+          : await pomsFactoriesRepository.resubmitEditRequest(11, payload, null, 42);
+      expect(result).toMatchObject({ currentContacts, proposedContacts });
+      expect(harness.row).toMatchObject({
+        current_contacts_json: JSON.stringify(currentContacts),
+        proposed_contacts_json: JSON.stringify(proposedContacts),
+      });
+    },
+  );
+
   it('approves BASIC_INFO and exposes all seven updated fields through the live detail mapper', async () => {
     const harness = approvalHarness({ basicInfo: true, pointChanged: false });
     transaction.mockImplementationOnce(harness.runTransaction);
@@ -348,6 +465,19 @@ function approvalHarness(
     created_at: current.updatedAt,
     updated_at: current.updatedAt,
   };
+  const contactSource = {
+    contact_name: 'Old',
+    contact_phone: '0800000000',
+    contact_email: null,
+    contact_persons_json: '[]',
+    notification_emails_json: '["old@example.com"]',
+    officer_notification_emails_json: null,
+    live_contact_persons_json: '[]',
+    live_notification_emails_json: null,
+    information_provider_name: null,
+    information_provider_position: null,
+  };
+  const contactScopes: unknown[][] = [];
   const attempted: Array<{ table: string; values: Record<string, unknown> }> = [];
   const committed: typeof attempted = [];
   const trx = Object.assign(
@@ -365,7 +495,16 @@ function approvalHarness(
       ]) {
         chain[method] = jest.fn(() => chain);
       }
-      chain.first = async (column?: string) => (column === 'id' ? undefined : row);
+      chain.where = jest.fn((...args: unknown[]) => {
+        if (table === 'cems_wpms_connected_measurement_points') contactScopes.push(args);
+        return chain;
+      });
+      chain.first = async (column?: string) =>
+        table === 'cems_wpms_connected_measurement_points as cp'
+          ? contactSource
+          : column === 'id'
+            ? undefined
+            : row;
       chain.update = async (values: Record<string, unknown>) => {
         attempted.push({ table, values });
         if (table === 'eligible_factories' && options.missingEligible) return 0;
@@ -402,6 +541,8 @@ function approvalHarness(
   return {
     current,
     row,
+    contactSource,
+    contactScopes,
     attempted,
     committed,
     runTransaction: async (...args: unknown[]) => {

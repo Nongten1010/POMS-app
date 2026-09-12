@@ -1,3 +1,4 @@
+import { contactSnapshot, contactsChanged } from './poms-factory-contacts';
 import type { PomsManagedStatusDTO } from './poms-status-management.types';
 import { readPomsManagedStatuses } from './poms-status-management.state';
 import type { Knex } from 'knex';
@@ -42,6 +43,7 @@ import {
 import { splitFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import type {
   ListPomsFactoryEditRequestsQuery,
+  PomsFactoryContactsSnapshot,
   PomsFactoryDetailDTO,
   PomsFactoryEditRequestAction,
   PomsFactoryFormContactsDTO,
@@ -114,6 +116,8 @@ interface ConnectedFactoryRow {
 }
 
 interface FactoryFormContactRow {
+  live_contact_persons_json?: string | null;
+  live_notification_emails_json?: string | null;
   contact_name: string;
   contact_phone: string;
   contact_email: string | null;
@@ -125,6 +129,8 @@ interface FactoryFormContactRow {
 }
 
 interface EditRequestRow {
+  current_contacts_json?: string | null;
+  proposed_contacts_json?: string | null;
   id: number | string;
   request_no: string;
   eligible_factory_id: number | string;
@@ -176,6 +182,8 @@ interface PendingCountRow {
 }
 
 interface EditRequestPayload {
+  currentContacts?: PomsFactoryContactsSnapshot | null;
+  proposedContacts?: PomsFactoryContactsSnapshot | null;
   currentFactory?: PomsFactoryDetailDTO;
   formType: PomsFactoryEditRequestFormType;
   proposedFactory: PomsFactoryProfileDTO;
@@ -265,6 +273,12 @@ export const pomsFactoriesRepository = {
         const requestNo = await allocatePomsFactoryEditRequestNo(trx, payload.formType);
         const live = await lockCurrentFactoryProfile(trx, current.eligibleFactoryId);
         ensurePreparedRequestStillCurrent(current, payload, live);
+        await ensureContactSnapshotStillCurrent(
+          trx,
+          current.eligibleFactoryId,
+          payload.currentContacts,
+          live,
+        );
 
         const openRequest = await trx<EditRequestRow>('poms_factory_edit_requests')
           .where('eligible_factory_id', current.eligibleFactoryId)
@@ -293,6 +307,12 @@ export const pomsFactoriesRepository = {
             status: POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW,
             revision_no: 0,
             is_open: true,
+            current_contacts_json: payload.currentContacts
+              ? JSON.stringify(payload.currentContacts)
+              : null,
+            proposed_contacts_json: payload.proposedContacts
+              ? JSON.stringify(payload.proposedContacts)
+              : null,
             current_factory_json: JSON.stringify(toProfile(current)),
             proposed_factory_json: JSON.stringify(payload.proposedFactory),
             current_measurement_points_json:
@@ -449,6 +469,12 @@ export const pomsFactoriesRepository = {
       const baseline = isCanonicalFactoryProfilesEnabled() ? payload.currentFactory : undefined;
       if (baseline) ensurePreparedRequestStillCurrent(baseline, payload, live);
       else ensureSameProfileVersion(payload.proposedFactory.updatedAt, live.updatedAt);
+      await ensureContactSnapshotStillCurrent(
+        trx,
+        live.eligibleFactoryId,
+        payload.currentContacts,
+        live,
+      );
       await trx('poms_factory_edit_requests')
         .where('id', id)
         .update({
@@ -460,6 +486,12 @@ export const pomsFactoriesRepository = {
           status: POMS_FACTORY_EDIT_REQUEST_STATUS.REVISED_PENDING_REVIEW,
           revision_no: Number(request.revision_no) + 1,
           is_open: true,
+          current_contacts_json: payload.currentContacts
+            ? JSON.stringify(payload.currentContacts)
+            : null,
+          proposed_contacts_json: payload.proposedContacts
+            ? JSON.stringify(payload.proposedContacts)
+            : null,
           current_factory_json: JSON.stringify(toProfile(baseline ?? live)),
           proposed_factory_json: JSON.stringify(payload.proposedFactory),
           current_measurement_points_json:
@@ -651,11 +683,22 @@ async function applyApprovedRequestInTransaction(
   request: EditRequestRow,
   actorUserId: number,
 ): Promise<void> {
+  const currentContacts = readContactSnapshot(request.current_contacts_json);
+  const proposedContacts = readContactSnapshot(request.proposed_contacts_json);
+  if (Boolean(currentContacts) !== Boolean(proposedContacts))
+    throw new ConflictError('Stored contact snapshot pair is incomplete');
+  const contactChanges = contactsChanged(currentContacts, proposedContacts);
   if (request.form_type === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS) {
     const currentMeasurementPoints = requireMeasurementPointSnapshotArray(
       request.current_measurement_points_json,
     );
     const latestProfile = await lockCurrentFactoryProfile(trx, Number(request.eligible_factory_id));
+    await ensureContactSnapshotStillCurrent(
+      trx,
+      latestProfile.eligibleFactoryId,
+      currentContacts,
+      latestProfile,
+    );
     const currentLiveMeasurementPoints = latestProfile.measurementPoints;
     ensureSameMeasurementPointsVersion(currentMeasurementPoints, currentLiveMeasurementPoints);
     const proposedMeasurementPoints = requireMeasurementPointSnapshotArray(
@@ -670,7 +713,7 @@ async function applyApprovedRequestInTransaction(
       currentMeasurementPoints,
       proposedMeasurementPoints,
     );
-    if (!profileChanged && pointUpdates.length === 0) {
+    if (!profileChanged && pointUpdates.length === 0 && !contactChanges) {
       throw new ConflictError('POMS measurement-point edit request does not contain any changes');
     }
     if (profileChanged) {
@@ -683,6 +726,7 @@ async function applyApprovedRequestInTransaction(
         latestProfile.factoryProfileRevision,
       );
     }
+    await applyApprovedContacts(trx, request, currentContacts, proposedContacts, actorUserId);
     await applyApprovedMeasurementPointsInTransaction(
       trx,
       Number(request.eligible_factory_id),
@@ -694,6 +738,13 @@ async function applyApprovedRequestInTransaction(
 
   const latestProfile = await lockCurrentFactoryProfile(trx, Number(request.eligible_factory_id));
   ensurePendingProfileStillCurrent(request, latestProfile);
+  await ensureContactSnapshotStillCurrent(
+    trx,
+    latestProfile.eligibleFactoryId,
+    currentContacts,
+    latestProfile,
+  );
+  await applyApprovedContacts(trx, request, currentContacts, proposedContacts, actorUserId);
   const proposed = requireProfileSnapshot(request.proposed_factory_json);
   await applyApprovedFactoryProfileInTransaction(
     trx,
@@ -947,13 +998,16 @@ function immutableMeasurementPointState(point: PomsMeasurementPointDTO) {
 function buildFactoryFormContactsQuery(
   eligibleFactoryId: number,
   systemType?: ConnectionSystemType,
+  executor: DbExecutor = db,
 ): Knex.QueryBuilder<FactoryFormContactRow, FactoryFormContactRow[]> {
-  const query = db<FactoryFormContactRow>('cems_wpms_connected_measurement_points as cp')
+  const query = executor<FactoryFormContactRow>('cems_wpms_connected_measurement_points as cp')
     .innerJoin('cems_wpms_connection_requests as req', 'req.id', 'cp.source_request_id')
     .where('cp.eligible_factory_id', eligibleFactoryId)
     .whereNull('cp.deleted_at')
     .whereNull('req.deleted_at')
     .select(
+      'cp.contact_persons_json as live_contact_persons_json',
+      'cp.notification_emails_json as live_notification_emails_json',
       'req.contact_name',
       'req.contact_phone',
       'req.contact_email',
@@ -1355,19 +1409,28 @@ function toPomsFactoryFormContacts(row: FactoryFormContactRow): PomsFactoryFormC
   const notificationEmails = parseJsonArray<string>(row.notification_emails_json).filter(
     (email) => typeof email === 'string' && email.length > 0,
   );
+  const liveContacts =
+    row.live_contact_persons_json == null
+      ? null
+      : parseJsonArray<ContactPersonInput>(row.live_contact_persons_json);
+  const liveEmails =
+    row.live_notification_emails_json == null
+      ? null
+      : parseJsonArray<string>(row.live_notification_emails_json);
   return {
-    contactName: row.contact_name,
-    contactPhone: row.contact_phone,
-    contactEmail: row.contact_email,
+    contactName: liveContacts ? (liveContacts[0]?.name ?? '') : row.contact_name,
+    contactPhone: liveContacts ? (liveContacts[0]?.phone ?? '') : row.contact_phone,
+    contactEmail: liveContacts ? (liveContacts[0]?.email ?? null) : row.contact_email,
     informationProviderName: row.information_provider_name ?? null,
     informationProviderPosition: row.information_provider_position ?? null,
-    contactPersons,
+    contactPersons: liveContacts ?? contactPersons,
     notificationEmails:
-      notificationEmails.length > 0
+      liveEmails ??
+      (notificationEmails.length > 0
         ? notificationEmails
         : row.contact_email
           ? [row.contact_email]
-          : [],
+          : []),
     officerNotificationEmails: parseJsonArray<string>(row.officer_notification_emails_json).filter(
       (email) => typeof email === 'string' && email.length > 0,
     ),
@@ -1617,6 +1680,8 @@ function toEditRequestDTO(
     eligibleFactoryId: Number(row.eligible_factory_id),
     factoryId: row.factory_id,
     factoryRegistrationNo: registrationNo,
+    currentContacts: readContactSnapshot(row.current_contacts_json),
+    proposedContacts: readContactSnapshot(row.proposed_contacts_json),
     factoryName: proposed.factoryName,
     formType: row.form_type,
     status: row.status,
@@ -1885,6 +1950,14 @@ function ensureSameMeasurementPointsVersion(
 function buildEventSnapshot(
   payload: EditRequestPayload,
 ): Record<string, unknown> | PomsFactoryProfileDTO {
+  if (payload.currentContacts && payload.proposedContacts)
+    return {
+      formType: payload.formType,
+      proposedFactory: payload.proposedFactory,
+      proposedMeasurementPoints: payload.proposedMeasurementPoints,
+      currentContacts: payload.currentContacts,
+      proposedContacts: payload.proposedContacts,
+    };
   return payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
     ? {
         formType: payload.formType,
@@ -1897,6 +1970,17 @@ function buildEventSnapshot(
 function toStoredEventSnapshot(
   request: EditRequestRow,
 ): Record<string, unknown> | PomsFactoryProfileDTO {
+  if (request.current_contacts_json && request.proposed_contacts_json)
+    return {
+      formType: request.form_type,
+      proposedFactory: requireProfileSnapshot(request.proposed_factory_json),
+      proposedMeasurementPoints:
+        request.proposed_measurement_points_json == null
+          ? null
+          : requireMeasurementPointSnapshotArray(request.proposed_measurement_points_json),
+      currentContacts: readContactSnapshot(request.current_contacts_json),
+      proposedContacts: readContactSnapshot(request.proposed_contacts_json),
+    };
   if (request.form_type === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS) {
     return {
       formType: request.form_type,
@@ -1978,4 +2062,78 @@ function currentPointOfficerEmails(row: ConnectedFactoryRow): string[] {
         .map((email) => email.trim().toLowerCase()),
     ),
   ];
+}
+
+function readContactSnapshot(value: string | null | undefined): PomsFactoryContactsSnapshot | null {
+  if (value == null) return null;
+  const parsed = parseJsonObject<PomsFactoryContactsSnapshot>(value);
+  if (
+    !parsed ||
+    ![null, 'CEMS', 'WPMS'].includes(parsed.systemType) ||
+    !Array.isArray(parsed.contactPersons) ||
+    !Array.isArray(parsed.notificationEmails) ||
+    !Array.isArray(parsed.officerNotificationEmails) ||
+    !parsed.notificationEmails.every((email) => typeof email === 'string') ||
+    !parsed.officerNotificationEmails.every((email) => typeof email === 'string') ||
+    !parsed.contactPersons.every(
+      (contact) => contact && typeof contact.name === 'string' && typeof contact.phone === 'string',
+    )
+  ) {
+    throw new ConflictError('Stored POMS contact snapshot is invalid');
+  }
+  return parsed;
+}
+
+async function ensureContactSnapshotStillCurrent(
+  trx: Knex.Transaction,
+  eligibleFactoryId: number,
+  before: PomsFactoryContactsSnapshot | null | undefined,
+  live: PomsFactoryDetailDTO,
+): Promise<void> {
+  if (!before) return;
+  const source = await buildFactoryFormContactsQuery(
+    eligibleFactoryId,
+    before.systemType ?? undefined,
+    trx,
+  )
+    .forUpdate()
+    .first();
+  const latest = contactSnapshot(
+    source ? toPomsFactoryFormContacts(source) : null,
+    live.measurementPoints,
+    before.systemType,
+  );
+  if (contactsChanged(before, latest))
+    throw new ConflictError('POMS factory contacts changed after the edit request was prepared');
+}
+
+async function applyApprovedContacts(
+  trx: Knex.Transaction,
+  request: EditRequestRow,
+  before: PomsFactoryContactsSnapshot | null,
+  after: PomsFactoryContactsSnapshot | null,
+  actorUserId: number,
+): Promise<void> {
+  if (!before || !after) return;
+  if (before.systemType !== after.systemType)
+    throw new ConflictError('Stored contact scope changed');
+  const patch: Record<string, unknown> = {};
+  if (JSON.stringify(before.contactPersons) !== JSON.stringify(after.contactPersons))
+    patch.contact_persons_json = JSON.stringify(after.contactPersons);
+  if (JSON.stringify(before.notificationEmails) !== JSON.stringify(after.notificationEmails))
+    patch.notification_emails_json = JSON.stringify(after.notificationEmails);
+  // Measurement-point requests write officer recipients per point, preserving distinct lists.
+  if (
+    request.form_type === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO &&
+    JSON.stringify(before.officerNotificationEmails) !==
+      JSON.stringify(after.officerNotificationEmails)
+  )
+    patch.officer_notification_emails_json = JSON.stringify(after.officerNotificationEmails);
+  if (Object.keys(patch).length === 0) return;
+  const query = trx('cems_wpms_connected_measurement_points')
+    .where('eligible_factory_id', request.eligible_factory_id)
+    .whereNull('deleted_at');
+  if (after.systemType) query.where('system_type', after.systemType);
+  const count = await query.update({ ...patch, updated_by: actorUserId, updated_at: trx.fn.now() });
+  if (count === 0) throw new ConflictError('Connected POMS factory is no longer active');
 }

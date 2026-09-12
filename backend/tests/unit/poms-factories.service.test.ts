@@ -47,6 +47,188 @@ describe('pomsFactoriesService edit-request workflow', () => {
     mockedRepository.reviewEditRequest.mockResolvedValue(editRequest('APPROVED'));
   });
 
+  it('captures before/after contacts for a contact-only request', async () => {
+    mockedRepository.findFactoryFormContacts.mockResolvedValue({
+      contactName: 'Old',
+      contactPhone: '0800000000',
+      contactEmail: null,
+      contactPersons: [{ name: 'Old', phone: '0800000000', email: null, position: null }],
+      notificationEmails: ['old@example.com'],
+      officerNotificationEmails: ['old-officer@example.com'],
+      informationProviderName: null,
+      informationProviderPosition: null,
+    });
+    await pomsFactoriesService.createEditRequest(
+      'factory-001',
+      {
+        contactPersons: [{ name: 'New', phone: '0811111111', email: null, position: 'Engineer' }],
+        notificationEmails: [],
+        officerNotificationEmails: ['new-officer@example.com'],
+      },
+      42,
+      ownFactoryScope,
+      null,
+    );
+    expect(mockedRepository.createEditRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        currentContacts: expect.objectContaining({
+          notificationEmails: ['old@example.com'],
+          contactPersons: [expect.objectContaining({ name: 'Old' })],
+        }),
+        proposedContacts: expect.objectContaining({
+          notificationEmails: [],
+          officerNotificationEmails: ['new-officer@example.com'],
+          contactPersons: [expect.objectContaining({ name: 'New' })],
+        }),
+      }),
+      null,
+      42,
+    );
+  });
+
+  it('keeps contact comparisons frozen when the source changes later', async () => {
+    const currentContacts = {
+      systemType: null,
+      contactPersons: [],
+      notificationEmails: ['old@example.com'],
+      officerNotificationEmails: [],
+    };
+    const proposedContacts = { ...currentContacts, notificationEmails: ['new@example.com'] };
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('PENDING_REVIEW', { currentContacts, proposedContacts }),
+    );
+    const result = await pomsFactoriesService.getEditRequest(11, 42, ownFactoryScope, null);
+    expect(result).toMatchObject({
+      currentContacts,
+      proposedContacts,
+      notificationEmails: ['new@example.com'],
+    });
+  });
+
+  it('returns null comparisons for a historical request without inventing old contacts', async () => {
+    const result = await pomsFactoriesService.getEditRequest(11, 42, ownFactoryScope, null);
+    expect(result.currentContacts).toBeNull();
+    expect(result.proposedContacts).toBeNull();
+  });
+
+  it('resubmits a contact-only edit using fresh contacts and keeps omitted lists', async () => {
+    mockedRepository.findEditRequestById.mockResolvedValue(editRequest('REVISION_REQUESTED'));
+    mockedRepository.findFactoryFormContacts.mockResolvedValue({
+      contactName: '',
+      contactPhone: '',
+      contactEmail: null,
+      contactPersons: [],
+      notificationEmails: ['latest@example.com'],
+      officerNotificationEmails: [],
+      informationProviderName: null,
+      informationProviderPosition: null,
+    });
+    await pomsFactoriesService.resubmitEditRequest(
+      11,
+      { contactPersons: [{ name: 'New', phone: '0811111111', email: null, position: null }] },
+      42,
+      ownFactoryScope,
+      null,
+    );
+    expect(mockedRepository.resubmitEditRequest).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        currentContacts: expect.objectContaining({
+          notificationEmails: ['latest@example.com'],
+          contactPersons: [],
+        }),
+        proposedContacts: expect.objectContaining({
+          notificationEmails: ['latest@example.com'],
+          contactPersons: [expect.objectContaining({ name: 'New' })],
+        }),
+      }),
+      null,
+      42,
+    );
+  });
+
+  it('preserves an explicit officer-email clear in the edit form after the source changes', async () => {
+    const snapshot = {
+      systemType: null,
+      contactPersons: [],
+      notificationEmails: [],
+      officerNotificationEmails: [],
+    };
+    const detail = factoryDetail();
+    detail.measurementPoints[0].officerNotificationEmails = ['live@example.com'];
+    mockedRepository.findFactoryDetail.mockResolvedValue(detail);
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('PENDING_REVIEW', {
+        currentContacts: { ...snapshot, officerNotificationEmails: ['old@example.com'] },
+        proposedContacts: snapshot,
+      }),
+    );
+    const form = await pomsFactoriesService.getEditRequestForm(
+      11,
+      42,
+      ownFactoryScope,
+      { systemType: 'CEMS' },
+      null,
+    );
+    expect(form.officerNotificationEmails).toEqual([]);
+    expect(form.notificationEmails).toEqual([]);
+  });
+
+  it('scopes top-level contact edits to the selected measurement system', async () => {
+    const detail = factoryDetail();
+    detail.measurementPoints.push({
+      ...detail.measurementPoints[0],
+      connectedPointId: 16,
+      systemType: 'WPMS',
+      officerNotificationEmails: ['wpms@example.com'],
+    });
+    mockedRepository.findFactoryDetail.mockResolvedValue(detail);
+    await pomsFactoriesService.createEditRequest(
+      'factory-001',
+      {
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [{ connectedPointId: 15 }],
+        notificationEmails: ['new@example.com'],
+        officerNotificationEmails: ['cems@example.com'],
+      },
+      42,
+      ownFactoryScope,
+      null,
+    );
+    expect(mockedRepository.findFactoryFormContacts).toHaveBeenCalledWith(7, 'CEMS');
+    const payload = mockedRepository.createEditRequest.mock.calls[0][1];
+    expect(payload.proposedContacts?.systemType).toBe('CEMS');
+    expect(
+      payload.proposedMeasurementPoints?.find((point) => point.connectedPointId === 16)
+        ?.officerNotificationEmails,
+    ).toEqual(['wpms@example.com']);
+  });
+
+  it('rejects contact changes across multiple measurement systems', async () => {
+    const detail = factoryDetail();
+    detail.measurementPoints.push({
+      ...detail.measurementPoints[0],
+      connectedPointId: 16,
+      systemType: 'WPMS',
+    });
+    mockedRepository.findFactoryDetail.mockResolvedValue(detail);
+    await expect(
+      pomsFactoriesService.createEditRequest(
+        'factory-001',
+        {
+          formType: 'MEASUREMENT_POINTS',
+          measurementPoints: [{ connectedPointId: 15 }, { connectedPointId: 16 }],
+          notificationEmails: [],
+        },
+        42,
+        ownFactoryScope,
+        null,
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(mockedRepository.createEditRequest).not.toHaveBeenCalled();
+  });
+
   it('proposes an email-only edit for the selected point while keeping the current snapshot', async () => {
     const detail = factoryDetail();
     detail.measurementPoints[0].officerNotificationEmails = ['old@example.com'];

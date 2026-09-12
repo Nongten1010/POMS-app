@@ -4,6 +4,7 @@ jest.mock('../../src/modules/poms-factories/poms-factories.repository', () => ({
   pomsFactoriesRepository: {
     listFactories: jest.fn(),
     findFactoryDetail: jest.fn(),
+    findFactoryFormContacts: jest.fn(),
     findOpenEditRequestForFactory: jest.fn(),
     createEditRequest: jest.fn(),
     listEditRequests: jest.fn(),
@@ -21,6 +22,7 @@ const mockedRepository = jest.mocked(pomsFactoriesRepository);
 describe('integrated POMS measurement-point edit service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedRepository.findFactoryFormContacts.mockResolvedValue(null);
     mockedRepository.findFactoryDetail.mockResolvedValue(factoryDetail() as never);
     mockedRepository.findOpenEditRequestForFactory.mockResolvedValue(null);
     mockedRepository.createEditRequest.mockResolvedValue(editRequest() as never);

@@ -52,6 +52,39 @@ beforeEach(() => {
 });
 
 describe('POMS canonical factory profile lifecycle', () => {
+  it('writes approved contact overrides to connected rows in canonical mode', async () => {
+    const harness = setup({ sourceRevision: 8 });
+    const currentContacts = {
+      systemType: null,
+      contactPersons: [],
+      notificationEmails: [],
+      officerNotificationEmails: [],
+    };
+    const proposedContacts = {
+      ...currentContacts,
+      notificationEmails: ['new@example.com'],
+      officerNotificationEmails: ['officer@example.com'],
+    };
+    Object.assign(harness.row, {
+      current_contacts_json: JSON.stringify(currentContacts),
+      proposed_contacts_json: JSON.stringify(proposedContacts),
+    });
+    const result = await pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77);
+    expect(result).toMatchObject({ currentContacts, proposedContacts });
+    expect(harness.committed).toContainEqual(
+      expect.objectContaining({
+        table: 'cems_wpms_connected_measurement_points',
+        values: expect.objectContaining({
+          notification_emails_json: '["new@example.com"]',
+          officer_notification_emails_json: '["officer@example.com"]',
+        }),
+      }),
+    );
+    expect(harness.committed.some((write) => write.table === 'cems_wpms_connection_requests')).toBe(
+      false,
+    );
+  });
+
   it('reads current profile views with separate profile and point versions', () => {
     const query = buildConnectedFactoryRowsQueryForTests({ actorUserId: 77, scope: 'ALL' }).toSQL();
     expect(query.sql).toContain('[current_connected_measurement_points] as [cp]');
@@ -330,7 +363,12 @@ function setup(options: {
       ]) {
         chain[method] = jest.fn(() => chain);
       }
-      chain.first = async (column?: string) => (column === 'id' ? undefined : row);
+      chain.first = async (column?: string) =>
+        table === 'cems_wpms_connected_measurement_points as cp'
+          ? null
+          : column === 'id'
+            ? undefined
+            : row;
       chain.update = async (values: Record<string, unknown>) => {
         attempted.push({ table, values });
         if (table === 'poms_factory_edit_requests') Object.assign(row, values);
@@ -372,7 +410,7 @@ function setup(options: {
     committed.push(...attempted);
     return result;
   });
-  return { trx, reads, attempted, committed };
+  return { trx, reads, attempted, committed, row };
 }
 
 function connectedRow(overrides: Record<string, unknown> = {}) {

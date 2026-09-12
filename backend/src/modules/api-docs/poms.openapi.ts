@@ -546,6 +546,28 @@ const reviewEligibleFactoryAddRequestExample = {
 
 const favoriteExample = { isFavorite: true };
 
+const pomsFactoryContactProperties = {
+  contactPersons: {
+    type: 'array',
+    maxItems: 20,
+    items: schemaRef('ContactPerson'),
+    description: 'รายชื่อผู้ติดต่อ; ไม่ส่งคงเดิม, [] ล้างทั้งหมด, null ไม่ได้',
+  },
+  notificationEmails: {
+    type: 'array',
+    maxItems: 20,
+    items: { type: 'string', format: 'email', maxLength: 254 },
+    description: 'อีเมลแจ้งเตือนโรงงาน; trim, lowercase, ตัดซ้ำ; ไม่ส่งคงเดิม, [] ล้างทั้งหมด',
+  },
+  officerNotificationEmails: {
+    type: 'array',
+    maxItems: 20,
+    items: { type: 'string', format: 'email', maxLength: 254 },
+    description:
+      'กำหนดอีเมลเจ้าหน้าที่ให้ active points ในขอบเขตคำขอ; BASIC_INFO ทั้งโรงงาน, MEASUREMENT_POINTS ระบบเดียวที่เลือก. ห้ามส่งพร้อม officerNotificationEmails รายจุด; ไม่ส่งคงเดิม, [] ล้างทั้งหมด; trim, lowercase, ตัดซ้ำ',
+  },
+};
+
 const pomsFactoryEditableProfileProperties = {
   latitude: {
     type: 'number',
@@ -600,6 +622,11 @@ const pomsFactoryEditableProfileProperties = {
 
 const pomsFactoryEditRequestExample = {
   formType: 'BASIC_INFO',
+  contactPersons: [
+    { name: 'ผู้ประสานงานใหม่', phone: '0800000000', email: null, position: 'วิศวกร' },
+  ],
+  notificationEmails: ['factory@example.com'],
+  officerNotificationEmails: [],
   latitude: 13.7563,
   longitude: 100.5018,
   eia: 'มี',
@@ -993,6 +1020,8 @@ const pomsFactoryEditRequestSchema: OpenApiObject = {
     'officerNote',
     'currentFactory',
     'proposedFactory',
+    'currentContacts',
+    'proposedContacts',
     'currentMeasurementPoints',
     'proposedMeasurementPoints',
     'createdBy',
@@ -1035,6 +1064,17 @@ const pomsFactoryEditRequestSchema: OpenApiObject = {
     },
     revisionReason: nullableStringSchema(1000),
     officerNote: nullableStringSchema(1000),
+    currentContacts: {
+      allOf: [schemaRef('PomsFactoryContactsSnapshot')],
+      nullable: true,
+      description:
+        'ข้อมูลก่อนส่งคำขอรอบล่าสุด; null สำหรับคำขอเก่าหรือคำขอข้ามระบบที่ระบุขอบเขตไม่ได้ ห้ามใช้ข้อมูลล่าสุดแทนประวัติ',
+    },
+    proposedContacts: {
+      allOf: [schemaRef('PomsFactoryContactsSnapshot')],
+      nullable: true,
+      description: 'ข้อมูลที่เสนอในคำขอรอบล่าสุด; คงเดิมหลังอนุมัติ',
+    },
     currentFactory: schemaRef('PomsFactoryProfile'),
     proposedFactory: schemaRef('PomsFactoryProfile'),
     currentMeasurementPoints: {
@@ -2132,7 +2172,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     minProperties: 1,
     description:
-      'แก้ไขได้เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude โดยต้องส่งอย่างน้อยหนึ่ง field; field ที่ไม่ส่งคงค่าเดิม ส่วน null ใช้ล้าง nullable field. latitude และ longitude ต้องส่งมาคู่กัน; ไม่รับ factoryName, address, factoryAddress, remarks หรือ note',
+      'แก้ไขได้เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude, longitude, contactPersons, notificationEmails และ officerNotificationEmails โดยต้องส่งอย่างน้อยหนึ่ง field; field ที่ไม่ส่งคงค่าเดิม ส่วน null ใช้ล้าง nullable field. latitude และ longitude ต้องส่งมาคู่กัน; ไม่รับ factoryName, address, factoryAddress, remarks หรือ note',
     anyOf: [
       { required: ['eia'] },
       { required: ['eiaOther'] },
@@ -2141,6 +2181,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
       { required: ['factoryLogo'] },
       { required: ['latitude'] },
       { required: ['longitude'] },
+      { required: ['contactPersons'] },
+      { required: ['notificationEmails'] },
+      { required: ['officerNotificationEmails'] },
     ],
     properties: {
       formType: {
@@ -2149,6 +2192,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         description: 'Optional เพื่อรองรับ client เดิม; omitted จะตีความเป็น BASIC_INFO',
       },
       ...pomsFactoryEditableProfileProperties,
+      ...pomsFactoryContactProperties,
     },
     example: pomsFactoryEditRequestExample,
   },
@@ -2156,9 +2200,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
     type: 'object',
     additionalProperties: false,
     required: ['connectedPointId'],
-    minProperties: 2,
+    minProperties: 1,
     description:
-      'ต้องส่ง connectedPointId และอย่างน้อยหนึ่ง field ที่อนุญาตให้แก้ไข; field ที่ไม่ส่งคงค่าเดิม',
+      'ต้องส่ง connectedPointId และอย่างน้อยหนึ่ง field ที่อนุญาตให้แก้ไข เว้นแต่ส่ง contactPersons, notificationEmails หรือ officerNotificationEmails ที่ root ซึ่งใช้ connectedPointId อย่างเดียวเพื่อเลือกระบบได้; field ที่ไม่ส่งคงค่าเดิม',
     properties: {
       officerNotificationEmails: {
         type: 'array',
@@ -2205,13 +2249,14 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     required: ['formType', 'measurementPoints'],
     description:
-      'รองรับข้อมูลทั่วไปของโรงงานทั้ง 7 field เช่นเดียวกับ BASIC_INFO ควบคู่กับจุดตรวจวัด. ต้องมีการเปลี่ยนแปลงอย่างน้อยหนึ่งส่วน; อนุมัติทั้งสองส่วนใน transaction เดียวกัน',
+      'รองรับข้อมูลทั่วไปของโรงงานและข้อมูลติดต่อเช่นเดียวกับ BASIC_INFO ควบคู่กับจุดตรวจวัด. ถ้าแก้ข้อมูลติดต่อ ต้องเลือกจุดจากระบบเดียว; contact fields ที่ root มีผลกับ active points ทั้งระบบที่เลือก. ต้องมีการเปลี่ยนแปลงอย่างน้อยหนึ่งส่วน; อนุมัติข้อมูลโรงงาน จุดตรวจวัด และข้อมูลติดต่อใน transaction เดียวกัน. ถ้าข้อมูลติดต่อเปลี่ยนหลังยื่นคำขอ ตอบ 409 CONFLICT โดยไม่บันทึก; resubmit อ่านค่าปัจจุบันใหม่',
     properties: {
       formType: {
         type: 'string',
         enum: ['MEASUREMENT_POINTS'],
       },
       ...pomsFactoryEditableProfileProperties,
+      ...pomsFactoryContactProperties,
       measurementPoints: {
         type: 'array',
         minItems: 1,
@@ -2580,6 +2625,34 @@ const componentSchemas: Record<string, OpenApiObject> = {
       createdAt: '2026-08-24T03:00:00.000Z',
     },
   },
+  PomsFactoryContactsSnapshot: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['systemType', 'contactPersons', 'notificationEmails', 'officerNotificationEmails'],
+    properties: {
+      systemType: {
+        type: 'string',
+        enum: ['CEMS', 'WPMS'],
+        nullable: true,
+        description: 'null = ทั้งโรงงาน; ค่า CEMS/WPMS = ระบบที่เลือก',
+      },
+      contactPersons: { type: 'array', items: schemaRef('ContactPerson') },
+      notificationEmails: { type: 'array', items: { type: 'string', format: 'email' } },
+      officerNotificationEmails: {
+        type: 'array',
+        uniqueItems: true,
+        items: { type: 'string', format: 'email' },
+        description:
+          'รวมรายชื่อในขอบเขตแบบไม่ซ้ำ; รายจุดอ่าน currentMeasurementPoints/proposedMeasurementPoints',
+      },
+    },
+    example: {
+      systemType: 'CEMS',
+      contactPersons: [],
+      notificationEmails: ['factory@example.com'],
+      officerNotificationEmails: ['officer@example.com'],
+    },
+  },
   PomsFactoryEditRequest: pomsFactoryEditRequestSchema,
   PomsFactoryEditRequestDetail: {
     ...pomsFactoryEditRequestSchema,
@@ -2597,19 +2670,22 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         maxItems: 20,
         items: schemaRef('ContactPerson'),
-        description: 'ผู้ติดต่อประสานงานจาก source connection request ของระบบที่แก้ไข',
+        description:
+          'ใช้ proposedContacts.contactPersons เมื่อมี snapshot; คำขอเก่า fallback ข้อมูลติดต่อปัจจุบัน',
       },
       notificationEmails: {
         type: 'array',
         maxItems: 20,
         items: { type: 'string', format: 'email', maxLength: 255 },
-        description: 'อีเมลสำหรับแจ้งเตือนโรงงานจาก source connection request',
+        description:
+          'ใช้ proposedContacts.notificationEmails เมื่อมี snapshot; คำขอเก่า fallback ข้อมูลติดต่อปัจจุบัน',
       },
       officerNotificationEmails: {
         type: 'array',
         maxItems: 20,
         items: { type: 'string', format: 'email', maxLength: 255 },
-        description: 'อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่จาก source connection request',
+        description:
+          'ใช้ proposedContacts.officerNotificationEmails เมื่อมี snapshot; คำขอเก่าใช้ proposed points แล้ว fallback source',
       },
       informationProviderName: {
         ...nullableStringSchema(255),
@@ -5020,7 +5096,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get current/live POMS factory as connection-request form',
       operationId: 'getPomsFactoryForm',
       description:
-        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ข้อมูลโรงงาน/จุดตรวจวัดมาจาก current/live POMS และ active eligible metadata. สำหรับ measurementPoints[].details: eligibleParameters คงรายการพารามิเตอร์ที่เข้าข่าย, connectedParameters และ requestedParameters เป็นพารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active cems_wpms_connected_measurement_points.parameters_json และ pendingParameters = eligibleParameters - connectedParameters. contactPersons, notificationEmails, informationProviderName และ informationProviderPosition hydrate จาก cems_wpms_connection_requests ที่ผูกผ่าน active point.source_request_id ล่าสุดของ systemType ที่เลือก โดย fallback เป็นค่าว่างเมื่อไม่มี source request. officerNotificationEmails รวมค่าของ active points ใน systemType ที่เลือกแบบไม่ซ้ำ โดยใช้ค่าที่อนุมัติแล้วก่อน source request; [] ที่บันทึกไว้ไม่ fallback. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity',
+        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ข้อมูลโรงงาน/จุดตรวจวัดมาจาก current/live POMS และ active eligible metadata. สำหรับ measurementPoints[].details: eligibleParameters คงรายการพารามิเตอร์ที่เข้าข่าย, connectedParameters และ requestedParameters เป็นพารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active cems_wpms_connected_measurement_points.parameters_json และ pendingParameters = eligibleParameters - connectedParameters. contactPersons และ notificationEmails ใช้ approved overrides ของ active connected points ก่อน source; [] ที่ล้างแล้วไม่ fallback. informationProviderName และ informationProviderPosition hydrate จาก cems_wpms_connection_requests ที่ผูกผ่าน active point.source_request_id ล่าสุดของ systemType ที่เลือก โดย fallback เป็นค่าว่างเมื่อไม่มี source request. officerNotificationEmails รวมค่าของ active points ใน systemType ที่เลือกแบบไม่ซ้ำ โดยใช้ค่าที่อนุมัติแล้วก่อน source request; [] ที่บันทึกไว้ไม่ fallback. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity',
       parameters: [
         factoryIdParameter,
         queryEnum(
@@ -5144,7 +5220,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get POMS factory edit request detail',
       operationId: 'getPomsFactoryEditRequest',
       description:
-        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. currentFactory.factoryRegistrationNo และ proposedFactory.factoryRegistrationNo ใช้เลขแสดงผลเดียวกัน โดยไม่เขียนทับ JSON snapshots หรือ events ในฐานข้อมูล. คืน currentFactory, proposedFactory, currentMeasurementPoints, proposedMeasurementPoints และ events เรียงตามเวลา. currentMeasurementPoints[].details.connectedParameters และ requestedParameters ใช้ค่าที่เชื่อมต่อจริงจาก snapshot parameters_json ส่วน pendingParameters คำนวณจาก eligibleParameters ลบค่าที่เชื่อมต่อ; proposedMeasurementPoints คง proposed snapshot ตามคำขอแก้ไข. contactPersons, notificationEmails, informationProviderName และ informationProviderPosition hydrate จาก source connection request ของระบบที่แก้ไขหลังตรวจ factories:view แล้ว. BASIC_INFO ใช้ source ล่าสุดของโรงงานข้ามระบบ เรียง req.created_at DESC, req.id DESC; MEASUREMENT_POINTS ที่ระบุระบบเดียวไม่ได้คืน contact/email arrays ว่างและ provider null. officerNotificationEmails ใช้ proposedMeasurementPoints ของระบบที่แก้ไข (รวมแบบไม่ซ้ำ); snapshot เก่าที่ไม่มี field และ BASIC_INFO fallback จาก source. currentMeasurementPoints และ proposedMeasurementPoints คืน officerNotificationEmails รายจุดสำหรับเปรียบเทียบก่อน/หลัง. ข้อมูลผู้ติดต่ออื่นเป็นบริบทจาก source ปัจจุบัน ไม่ใช่ผู้ลงนามในคำขอแก้ไข; resource นอก data scope ตอบ 404',
+        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. currentFactory.factoryRegistrationNo และ proposedFactory.factoryRegistrationNo ใช้เลขแสดงผลเดียวกัน โดยไม่เขียนทับ JSON snapshots หรือ events ในฐานข้อมูล. คืน currentFactory, proposedFactory, currentMeasurementPoints, proposedMeasurementPoints และ events เรียงตามเวลา. currentMeasurementPoints[].details.connectedParameters และ requestedParameters ใช้ค่าที่เชื่อมต่อจริงจาก snapshot parameters_json ส่วน pendingParameters คำนวณจาก eligibleParameters ลบค่าที่เชื่อมต่อ; proposedMeasurementPoints คง proposed snapshot ตามคำขอแก้ไข. currentContacts/proposedContacts เก็บ snapshot ทั้ง 3 contact arrays ตั้งแต่ create/resubmit และคงเดิมหลังอนุมัติ; คำขอเก่าหรือข้ามระบบที่ระบุ scope ไม่ได้คืน null. contactPersons/notificationEmails/officerNotificationEmails ที่ root ใช้ proposedContacts เมื่อมี snapshot. คำขอเก่า fallback live/source; informationProviderName และ informationProviderPosition อ่าน source หลังตรวจ factories:view แล้ว. BASIC_INFO ใช้ source ล่าสุดของโรงงานข้ามระบบ เรียง req.created_at DESC, req.id DESC; MEASUREMENT_POINTS ที่ระบุระบบเดียวไม่ได้คืน contact/email arrays ว่างและ provider null. เมื่อไม่มี contact snapshot: officerNotificationEmails ใช้ proposedMeasurementPoints ของระบบที่แก้ไข (รวมแบบไม่ซ้ำ); snapshot เก่าที่ไม่มี field และ BASIC_INFO fallback จาก source. currentMeasurementPoints และ proposedMeasurementPoints คืน officerNotificationEmails รายจุดสำหรับเปรียบเทียบก่อน/หลัง. provider fields เป็นบริบทจาก source ปัจจุบัน ไม่ใช่ snapshot ผู้ลงนามในคำขอแก้ไข; resource นอก data scope ตอบ 404',
       parameters: [idParameter],
       successSchema: schemaRef('PomsFactoryEditRequestDetailResponse'),
     }),

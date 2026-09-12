@@ -1,3 +1,4 @@
+import { contactSnapshot, contactsChanged } from './poms-factory-contacts';
 import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
 import {
   AppError,
@@ -120,13 +121,17 @@ export const pomsFactoriesService = {
     if (isMeasurementPointsRequest(input)) {
       const proposed = buildProposedMeasurementPoints(current.measurementPoints, input);
       const proposedFactory = buildProposedProfile(current, input);
-      ensureMeasurementRequestChanged(current, proposedFactory, proposed);
+      const contacts = await prepareContactSnapshots(current, input, proposed);
+      if (!contactsChanged(contacts.currentContacts, contacts.proposedContacts)) {
+        ensureMeasurementRequestChanged(current, proposedFactory, proposed);
+      }
       return pomsFactoriesRepository.createEditRequest(
         current,
         {
           formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
           proposedFactory,
           proposedMeasurementPoints: proposed,
+          ...contacts,
         },
         input.note ?? null,
         actorUserId,
@@ -134,13 +139,16 @@ export const pomsFactoriesService = {
     }
 
     const proposed = buildProposedProfile(current, input);
-    ensureProfileChanged(current, proposed);
+    const contacts = await prepareContactSnapshots(current, input, current.measurementPoints);
+    if (!contactsChanged(contacts.currentContacts, contacts.proposedContacts))
+      ensureProfileChanged(current, proposed);
     return pomsFactoriesRepository.createEditRequest(
       current,
       {
         formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO,
         proposedFactory: proposed,
         proposedMeasurementPoints: null,
+        ...contacts,
       },
       null,
       actorUserId,
@@ -174,8 +182,9 @@ export const pomsFactoriesService = {
     });
     if (!request) throw new NotFoundError('POMS factory edit request not found');
     // BASIC_INFO is factory-wide; null means an ambiguous measurement-point request.
-    const systemType =
-      request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO
+    const systemType = request.proposedContacts
+      ? (request.proposedContacts.systemType ?? undefined)
+      : request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO
         ? undefined
         : resolveEditRequestContactSystemType(request);
     const formContacts =
@@ -187,14 +196,24 @@ export const pomsFactoriesService = {
           );
     return {
       ...request,
-      contactPersons: (formContacts?.contactPersons ?? []).map((contact) => ({ ...contact })),
-      notificationEmails: [...(formContacts?.notificationEmails ?? [])],
-      officerNotificationEmails: measurementPointOfficerEmails(
-        (request.proposedMeasurementPoints ?? []).filter(
-          (point) => systemType === undefined || point.systemType === systemType,
+      currentContacts: request.currentContacts ?? null,
+      proposedContacts: request.proposedContacts ?? null,
+      contactPersons: (
+        request.proposedContacts?.contactPersons ??
+        formContacts?.contactPersons ??
+        []
+      ).map((contact) => ({ ...contact })),
+      notificationEmails: [
+        ...(request.proposedContacts?.notificationEmails ?? formContacts?.notificationEmails ?? []),
+      ],
+      officerNotificationEmails:
+        request.proposedContacts?.officerNotificationEmails ??
+        measurementPointOfficerEmails(
+          (request.proposedMeasurementPoints ?? []).filter(
+            (point) => systemType === undefined || point.systemType === systemType,
+          ),
+          formContacts?.officerNotificationEmails,
         ),
-        formContacts?.officerNotificationEmails,
-      ),
       informationProviderName: formContacts?.informationProviderName ?? null,
       informationProviderPosition: formContacts?.informationProviderPosition ?? null,
       currentMeasurementPoints:
@@ -251,13 +270,33 @@ export const pomsFactoriesService = {
       request.eligibleFactoryId,
       systemType,
     );
-    return toPomsConnectionRequestForm(
+    const proposedContacts =
+      request.proposedContacts &&
+      (request.proposedContacts.systemType === null ||
+        request.proposedContacts.systemType === systemType)
+        ? request.proposedContacts
+        : null;
+    const form = toPomsConnectionRequestForm(
       profile,
       points,
       systemType,
       request.requestNote,
-      formContacts,
+      proposedContacts
+        ? {
+            ...formContacts,
+            ...proposedContacts,
+            contactName: proposedContacts.contactPersons[0]?.name ?? '',
+            contactPhone: proposedContacts.contactPersons[0]?.phone ?? '',
+            contactEmail: proposedContacts.contactPersons[0]?.email ?? null,
+            informationProviderName: formContacts?.informationProviderName ?? null,
+            informationProviderPosition: formContacts?.informationProviderPosition ?? null,
+          }
+        : formContacts,
     );
+    if (proposedContacts) {
+      form.officerNotificationEmails = [...proposedContacts.officerNotificationEmails];
+    }
+    return form;
   },
 
   async resubmitEditRequest(
@@ -293,7 +332,10 @@ export const pomsFactoriesService = {
       }
       const proposed = buildProposedMeasurementPoints(current.measurementPoints, input);
       const proposedFactory = buildProposedProfile(current, input);
-      ensureMeasurementRequestChanged(current, proposedFactory, proposed);
+      const contacts = await prepareContactSnapshots(current, input, proposed);
+      if (!contactsChanged(contacts.currentContacts, contacts.proposedContacts)) {
+        ensureMeasurementRequestChanged(current, proposedFactory, proposed);
+      }
       return pomsFactoriesRepository.resubmitEditRequest(
         id,
         {
@@ -301,6 +343,7 @@ export const pomsFactoriesService = {
           ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
           proposedFactory,
           proposedMeasurementPoints: proposed,
+          ...contacts,
         },
         input.note ?? null,
         actorUserId,
@@ -311,7 +354,9 @@ export const pomsFactoriesService = {
       throw new ConflictError('POMS factory edit request form type cannot change on resubmission');
     }
     const proposed = buildProposedProfile(current, input);
-    ensureProfileChanged(current, proposed);
+    const contacts = await prepareContactSnapshots(current, input, current.measurementPoints);
+    if (!contactsChanged(contacts.currentContacts, contacts.proposedContacts))
+      ensureProfileChanged(current, proposed);
     return pomsFactoriesRepository.resubmitEditRequest(
       id,
       {
@@ -319,6 +364,7 @@ export const pomsFactoriesService = {
         ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
         proposedFactory: proposed,
         proposedMeasurementPoints: null,
+        ...contacts,
       },
       null,
       actorUserId,
@@ -358,9 +404,16 @@ export const pomsFactoriesService = {
     const reviewed = await pomsFactoriesRepository.reviewEditRequest(id, input, actorUserId);
     return {
       ...reviewed,
-      contactPersons: request.contactPersons.map((contact) => ({ ...contact })),
-      notificationEmails: [...request.notificationEmails],
-      officerNotificationEmails: [...request.officerNotificationEmails],
+      contactPersons: (reviewed.proposedContacts?.contactPersons ?? request.contactPersons).map(
+        (contact) => ({ ...contact }),
+      ),
+      notificationEmails: [
+        ...(reviewed.proposedContacts?.notificationEmails ?? request.notificationEmails),
+      ],
+      officerNotificationEmails: [
+        ...(reviewed.proposedContacts?.officerNotificationEmails ??
+          request.officerNotificationEmails),
+      ],
       informationProviderName: request.informationProviderName,
       informationProviderPosition: request.informationProviderPosition,
       currentMeasurementPoints:
@@ -703,8 +756,20 @@ function buildProposedMeasurementPoints(
     throw new NotFoundError(`POMS measurement point ${pointId} not found for this factory`);
   }
 
+  const selectedSystems = new Set(
+    currentPoints
+      .filter((candidate) => patchById.has(candidate.connectedPointId))
+      .map((candidate) => candidate.systemType),
+  );
   return currentPoints.map((point) => {
-    const patch = patchById.get(point.connectedPointId);
+    let patch = patchById.get(point.connectedPointId);
+    if (input.officerNotificationEmails !== undefined && selectedSystems.has(point.systemType)) {
+      patch = {
+        ...patch,
+        connectedPointId: point.connectedPointId,
+        officerNotificationEmails: input.officerNotificationEmails,
+      };
+    }
     if (!patch) return point;
 
     const measurementInstruments = Object.prototype.hasOwnProperty.call(
@@ -781,4 +846,51 @@ function measurementPointOfficerEmails(
 ): string[] {
   if (!points.some((point) => point.officerNotificationEmails !== undefined)) return [...fallback];
   return [...new Set(points.flatMap((point) => point.officerNotificationEmails ?? fallback))];
+}
+
+async function prepareContactSnapshots(
+  current: PomsFactoryDetailDTO,
+  input: CreateAnyPomsFactoryEditRequestInput,
+  proposedPoints: PomsMeasurementPointDTO[],
+) {
+  const systems = isMeasurementPointsRequest(input)
+    ? [
+        ...new Set(
+          current.measurementPoints
+            .filter((point) =>
+              input.measurementPoints.some(
+                (patch) => patch.connectedPointId === point.connectedPointId,
+              ),
+            )
+            .map((point) => point.systemType),
+        ),
+      ]
+    : [];
+  if (systems.length > 1) {
+    if (
+      input.contactPersons !== undefined ||
+      input.notificationEmails !== undefined ||
+      input.officerNotificationEmails !== undefined
+    ) {
+      throw new BadRequestError('Contact edits must select measurement points from one system');
+    }
+    return { currentContacts: null, proposedContacts: null };
+  }
+  const systemType = systems[0] ?? null;
+  const source = await pomsFactoriesRepository.findFactoryFormContacts(
+    current.eligibleFactoryId,
+    systemType ?? undefined,
+  );
+  const currentContacts = contactSnapshot(source, current.measurementPoints, systemType);
+  const proposedContacts = {
+    ...contactSnapshot(source, proposedPoints, systemType),
+    contactPersons: (input.contactPersons ?? currentContacts.contactPersons).map((contact) => ({
+      ...contact,
+    })),
+    notificationEmails: [...(input.notificationEmails ?? currentContacts.notificationEmails)],
+    ...(input.officerNotificationEmails === undefined
+      ? {}
+      : { officerNotificationEmails: [...input.officerNotificationEmails].sort() }),
+  };
+  return { currentContacts, proposedContacts };
 }
