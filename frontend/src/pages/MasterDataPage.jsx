@@ -47,6 +47,7 @@ import {
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
   getLatestFactoryRevisionMessage,
+  getMasterDataFactoryRegistrationFields,
   getStatusManagementSelection,
   getPomsDisplayStatus,
   normalizeOfficerNotificationEmails,
@@ -325,11 +326,8 @@ function mapFactoryRows(rows) {
   return rows.map((row, index) => ({
     id: row.factoryId || row.factoryRegistrationNo || `factory-${index}`,
     eligibleFactoryId: row.eligibleFactoryId ?? null,
-    factoryId: row.factoryId ?? row.factoryRegistrationNo ?? '',
-    factoryRegistrationNo: row.factoryRegistrationNo ?? row.newRegistrationNo ?? row.factoryId ?? '',
+    ...getMasterDataFactoryRegistrationFields(row),
     factoryName: row.factoryName ?? '',
-    newRegistrationNo: row.factoryRegistrationNo ?? row.newRegistrationNo ?? row.factoryId ?? '',
-    oldRegistrationNo: row.oldRegistrationNo ?? '',
     industryType: row.industryType ?? row.industryMainOrderLabel ?? '-',
     industryMainOrder: row.industryMainOrder ?? '',
     industryMainOrderLabel: row.industryMainOrderLabel ?? '',
@@ -418,9 +416,8 @@ function mapEditRequestRows(rows, factories = []) {
       statusCode: row.status ?? '',
       status: getFactoryEditRequestStatusLabel(row.status, row.statusLabel),
       statusLabel: row.statusLabel ?? '',
-      factoryId: row.factoryId ?? '',
+      ...getMasterDataFactoryRegistrationFields(row),
       factoryName: row.factoryName ?? '',
-      factoryRegistrationNo: row.factoryRegistrationNo ?? row.factoryId ?? '',
       province: getFirstNonBlankValue(
         row.provinceName,
         row.province,
@@ -553,11 +550,8 @@ function normalizeFactoryFormData(formData = {}, factory = {}, extra = {}) {
     ...mergedFormData,
     ...extra,
     id: extra.id ?? mergedFormData.id ?? factory.id ?? factory.factoryId ?? factory.newRegistrationNo,
-    factoryId: mergedFormData.factoryId ?? factory.factoryId ?? factory.newRegistrationNo ?? '',
+    ...getMasterDataFactoryRegistrationFields(mergedFormData, factory),
     factoryName: mergedFormData.factoryName ?? factory.factoryName ?? '',
-    newRegistrationNo: mergedFormData.newRegistrationNo ?? mergedFormData.factoryId ?? factory.newRegistrationNo ?? factory.factoryId ?? '',
-    oldRegistrationNo: mergedFormData.oldRegistrationNo ?? mergedFormData.factoryRegistrationNo ?? factory.oldRegistrationNo ?? '',
-    factoryRegistrationNo: mergedFormData.factoryRegistrationNo ?? factory.factoryRegistrationNo ?? factory.oldRegistrationNo ?? '',
     industryMainOrder: mergedFormData.industryMainOrder ?? factory.industryMainOrder ?? factory.industryType ?? '',
     industryMainOrderLabel: mergedFormData.industryMainOrderLabel ?? factory.industryMainOrderLabel ?? '',
     industrySubOrder: mergedFormData.industrySubOrder ?? factory.industrySubOrder ?? '',
@@ -1035,7 +1029,7 @@ function FactoryStatusManagementDialog({ factory, open, submitting = false, erro
                 <TableBody>
                   <TableRow>
                     <TableCell>{displayValue(factory?.factoryName)}</TableCell>
-                    <TableCell>{displayValue(factory?.newRegistrationNo ?? factory?.factoryRegistrationNo)}</TableCell>
+                    <TableCell>{displayValue(factory?.factoryId ?? factory?.newRegistrationNo)}</TableCell>
                     <TableCell>{displayValue(factory?.province)}</TableCell>
                     <TableCell>
                       <ManagedStatusSelect
@@ -1682,8 +1676,7 @@ function mapEditRequestToPdfRequest(request = {}) {
   const systemType = measurementPoints[0]?.systemType ?? raw.systemType ?? request.systemType
   const factory = normalizeFactoryDetail({
     ...factorySnapshot,
-    factoryId: raw.factoryId ?? factorySnapshot.factoryId,
-    factoryRegistrationNo: raw.factoryRegistrationNo ?? factorySnapshot.factoryRegistrationNo,
+    ...getMasterDataFactoryRegistrationFields(raw, factorySnapshot),
     factoryName: raw.factoryName ?? factorySnapshot.factoryName,
   })
 
@@ -1801,8 +1794,11 @@ function RequestComparisonContent({ request, variant = 'after' }) {
   const factory = normalizeFactoryDetail({
     ...baseFactory,
     ...(variant === 'before' ? raw?.currentFactory : raw?.proposedFactory),
-    factoryId: raw?.factoryId ?? baseFactory?.factoryId,
-    factoryRegistrationNo: raw?.factoryRegistrationNo ?? baseFactory?.factoryRegistrationNo,
+    ...getMasterDataFactoryRegistrationFields(
+      raw,
+      variant === 'before' ? raw?.currentFactory : raw?.proposedFactory,
+      baseFactory,
+    ),
     factoryName: (variant === 'before' ? raw?.currentFactory?.factoryName : raw?.proposedFactory?.factoryName) ?? baseFactory?.factoryName,
   })
   const measurementPoints = variant === 'before'
@@ -2046,11 +2042,8 @@ function makeMasterDataInitialRequest(factory) {
 
   return {
     id: `master-data-${factory?.id ?? 'mock'}`,
-    factoryId: factory?.newRegistrationNo ?? factory?.factoryId ?? factory?.id ?? '',
+    ...getMasterDataFactoryRegistrationFields(factory),
     factoryName: factory?.factoryName ?? '',
-    newRegistrationNo: factory?.newRegistrationNo ?? '',
-    oldRegistrationNo: factory?.oldRegistrationNo ?? '',
-    factoryRegistrationNo: factory?.oldRegistrationNo ?? '',
     industryMainOrder: factory?.industryMainOrder ?? '',
     industryMainOrderLabel: factory?.industryMainOrderLabel ?? '',
     industrySubOrder: factory?.industrySubOrder ?? '',
@@ -2095,7 +2088,7 @@ function makeMasterDataInitialRequest(factory) {
 }
 
 function getFactoryRowId(factory) {
-  return factory?.factoryId ?? factory?.newRegistrationNo ?? factory?.factoryRegistrationNo ?? factory?.id ?? ''
+  return factory?.factoryId ?? factory?.newRegistrationNo ?? ''
 }
 
 function buildBasicInfoPayload(factory, formData, documentPatch = {}) {
@@ -2324,7 +2317,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     return {
       ...response?.data,
       id: factory.id ?? response?.data?.factoryId,
-      newRegistrationNo: factory.newRegistrationNo ?? factory.factoryRegistrationNo ?? response?.data?.factoryId,
+      ...getMasterDataFactoryRegistrationFields(response?.data, factory),
       province: factory.province ?? response?.data?.provinceName ?? '',
     }
   }, [accessToken])

@@ -28,6 +28,20 @@ export function canCancelFactoryEditRequest(status) {
   return CANCELLABLE_FACTORY_EDIT_REQUEST_STATUSES.includes(String(status ?? '').trim())
 }
 
+export function getMasterDataFactoryRegistrationFields(...sources) {
+  const factoryId = sources.map((source) => source?.factoryId ?? source?.newRegistrationNo)
+    .find((value) => value != null) ?? ''
+  const factoryRegistrationNo = sources.map((source) => source?.factoryRegistrationNo ?? source?.oldRegistrationNo)
+    .find((value) => value != null) ?? ''
+
+  return {
+    factoryId,
+    factoryRegistrationNo,
+    newRegistrationNo: factoryId,
+    oldRegistrationNo: factoryRegistrationNo,
+  }
+}
+
 export function formatFactoryEditRequestDate(value) {
   const normalizedValue = String(value ?? '').trim()
   if (!normalizedValue || normalizedValue === '-') {

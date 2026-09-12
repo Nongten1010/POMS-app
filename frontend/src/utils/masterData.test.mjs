@@ -13,10 +13,40 @@ import {
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
   getLatestFactoryRevisionMessage,
+  getMasterDataFactoryRegistrationFields,
   getStatusManagementSelection,
   getPomsDisplayStatus,
   normalizeOfficerNotificationEmails,
 } from './masterData.mjs'
+
+test('keeps canonical new and old factory registrations distinct even with stale aliases', () => {
+  assert.deepEqual(getMasterDataFactoryRegistrationFields({
+    factoryId: '91090100125393',
+    factoryRegistrationNo: 'ข3-42(1)-11/58รย',
+    newRegistrationNo: 'wrong-new',
+    oldRegistrationNo: 'wrong-old',
+  }), {
+    factoryId: '91090100125393',
+    newRegistrationNo: '91090100125393',
+    factoryRegistrationNo: 'ข3-42(1)-11/58รย',
+    oldRegistrationNo: 'ข3-42(1)-11/58รย',
+  })
+})
+
+test('fills missing registration fields from the snapshot without swapping old and new', () => {
+  assert.deepEqual(getMasterDataFactoryRegistrationFields(
+    { factoryId: '91090100125393' },
+    { factoryRegistrationNo: 'old-registration' },
+  ), {
+    factoryId: '91090100125393', newRegistrationNo: '91090100125393',
+    factoryRegistrationNo: 'old-registration', oldRegistrationNo: 'old-registration',
+  })
+  assert.equal(getMasterDataFactoryRegistrationFields({ factoryId: '91090100125393' }).oldRegistrationNo, '')
+  assert.equal(getMasterDataFactoryRegistrationFields({ factoryRegistrationNo: 'old-registration' }).newRegistrationNo, '')
+  assert.deepEqual(getMasterDataFactoryRegistrationFields(null), {
+    factoryId: '', factoryRegistrationNo: '', newRegistrationNo: '', oldRegistrationNo: '',
+  })
+})
 
 test('keeps cancelled and rejected factory edit requests distinct', () => {
   assert.equal(getFactoryEditRequestStatusLabel('CANCELLED', 'ยกเลิก'), 'ยกเลิก')
