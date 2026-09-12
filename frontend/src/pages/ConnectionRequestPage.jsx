@@ -6900,6 +6900,7 @@ export function RequestFormBottomSheet({
   readOnlyPreview = false,
   highlightedFieldNames = [],
   onClose,
+  onExited,
   onSubmitted,
 }) {
   const formRef = useRef(null)
@@ -7289,6 +7290,10 @@ export function RequestFormBottomSheet({
             borderTopLeftRadius: 2,
             borderTopRightRadius: 2,
           },
+        },
+        transition: {
+          direction: 'up',
+          onExited,
         },
       }}
     >

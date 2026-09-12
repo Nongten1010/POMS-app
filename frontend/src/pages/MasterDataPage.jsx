@@ -1292,7 +1292,7 @@ function FactoryDocumentUploadField({
   )
 }
 
-function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClose, showSaveButton = true, submitting = false, onSubmit }) {
+function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClose, onExited, showSaveButton = true, submitting = false, onSubmit }) {
   const [eiaAssessment, setEiaAssessment] = useState(() => factory?.eia ?? 'ไม่มี')
   const [frontPhotos, setFrontPhotos] = useState(() => sanitizeDocuments(factory?.factoryFrontPhotos))
   const [factoryLogo, setFactoryLogo] = useState(() => factory?.factoryLogo ? sanitizeDocumentItem(factory.factoryLogo) : null)
@@ -1330,6 +1330,10 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
             borderTopRightRadius: 2,
             overflow: 'hidden',
           },
+        },
+        transition: {
+          direction: 'up',
+          onExited,
         },
       }}
     >
@@ -2065,6 +2069,8 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   const [selectedFactory, setSelectedFactory] = useState(null)
   const [editingFactory, setEditingFactory] = useState(null)
   const [editingGeneralFactory, setEditingGeneralFactory] = useState(null)
+  const [editingFactoryOpen, setEditingFactoryOpen] = useState(false)
+  const [editingGeneralFactoryOpen, setEditingGeneralFactoryOpen] = useState(false)
   const [statusManagingFactory, setStatusManagingFactory] = useState(null)
   const [viewingRequest, setViewingRequest] = useState(null)
   const [reviewingRequest, setReviewingRequest] = useState(null)
@@ -2090,6 +2096,22 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   )
   const effectiveSubMenu = isAdmin || isOperator ? activeSubMenu : 'factories'
   const rows = factoryRows
+
+  const openEditingFactory = useCallback((factory) => {
+    setEditingFactoryOpen(false)
+    setEditingFactory(factory)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setEditingFactoryOpen(true))
+    })
+  }, [])
+
+  const openEditingGeneralFactory = useCallback((factory) => {
+    setEditingGeneralFactoryOpen(false)
+    setEditingGeneralFactory(factory)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setEditingGeneralFactoryOpen(true))
+    })
+  }, [])
 
   const loadFactories = useCallback(async () => {
     if (!accessToken) {
@@ -2287,26 +2309,26 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     setActionLoading(true)
     setTableError('')
     try {
-      setEditingFactory(await loadFactoryForm(factory, 'MEASUREMENT_POINTS'))
+      openEditingFactory(await loadFactoryForm(factory, 'MEASUREMENT_POINTS'))
     } catch (error) {
       setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลแบบฟอร์มไม่สำเร็จ')
     } finally {
       setActionLoading(false)
     }
-  }, [loadFactoryForm])
+  }, [loadFactoryForm, openEditingFactory])
   const handleEditGeneralFactory = useCallback(async (factory) => {
     setSelectedFactory(null)
     setActionLoading(true)
     setTableError('')
     try {
       const detail = await loadFactoryDetail(factory)
-      setEditingGeneralFactory(await loadFactoryForm(detail, 'BASIC_INFO'))
+      openEditingGeneralFactory(await loadFactoryForm(detail, 'BASIC_INFO'))
     } catch (error) {
       setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลโรงงานไม่สำเร็จ')
     } finally {
       setActionLoading(false)
     }
-  }, [loadFactoryDetail, loadFactoryForm])
+  }, [loadFactoryDetail, loadFactoryForm, openEditingGeneralFactory])
   const handleManageFactoryStatus = useCallback(async (factory) => {
     setActionLoading(true)
     setTableError('')
@@ -2373,16 +2395,16 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
       const detail = await loadRequestDetail(request)
       const formData = await loadRequestForm(detail)
       if ((detail?.formType ?? formData.__formType) === 'MEASUREMENT_POINTS') {
-        setEditingFactory(formData)
+        openEditingFactory(formData)
       } else {
-        setEditingGeneralFactory(formData)
+        openEditingGeneralFactory(formData)
       }
     } catch (error) {
       setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลแบบฟอร์มไม่สำเร็จ')
     } finally {
       setActionLoading(false)
     }
-  }, [loadRequestDetail, loadRequestForm])
+  }, [loadRequestDetail, loadRequestForm, openEditingFactory, openEditingGeneralFactory])
   const handleOpenRequest = useCallback(async (request, review = false) => {
     setActionLoading(true)
     setTableError('')
@@ -2446,7 +2468,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
       const payload = buildBasicInfoPayload(factory, formData, documentPatch)
       setActionLoading(true)
       await submitFactoryEditRequest(factory, payload)
-      setEditingGeneralFactory(null)
+      setEditingGeneralFactoryOpen(false)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'ข้อมูลในแบบฟอร์มไม่ถูกต้อง'
       setValidationSnackbarMessage(message)
@@ -2459,7 +2481,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     const initialRequest = makeMasterDataInitialRequest(editingFactory)
     const payload = buildMeasurementPointsPayload(requestBody, initialRequest, context)
     const response = await submitFactoryEditRequest(editingFactory, payload)
-    setEditingFactory(null)
+    setEditingFactoryOpen(false)
     return response
   }, [editingFactory, submitFactoryEditRequest])
 
@@ -2630,7 +2652,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
 
       <RequestFormBottomSheet
         key={editingFactory?.__editRequestId ?? editingFactory?.id ?? editingFactory?.factoryId ?? 'master-data-request-form'}
-        open={Boolean(editingFactory)}
+        open={editingFactoryOpen}
         formType="เพิ่มจุดตรวจวัด"
         factory={editingFactory}
         mode="edit"
@@ -2647,18 +2669,20 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         monitoringPointTypeReadOnly
         officerNotificationEmailsEditable={canSubmitMasterData}
         footerActions={canSubmitMasterData ? undefined : null}
-        onClose={() => setEditingFactory(null)}
+        onClose={() => setEditingFactoryOpen(false)}
+        onExited={() => setEditingFactory(null)}
       />
 
       <FactoryGeneralInfoBottomSheet
         key={editingGeneralFactory?.__editRequestId ?? editingGeneralFactory?.id ?? editingGeneralFactory?.factoryId ?? 'master-data-general-info'}
-        open={Boolean(editingGeneralFactory)}
+        open={editingGeneralFactoryOpen}
         factory={editingGeneralFactory}
         accessToken={accessToken}
         showSaveButton={canSubmitMasterData}
         submitting={actionLoading}
         onSubmit={handleSubmitGeneralInfo}
-        onClose={() => setEditingGeneralFactory(null)}
+        onClose={() => setEditingGeneralFactoryOpen(false)}
+        onExited={() => setEditingGeneralFactory(null)}
       />
 
       <RequestPdfPreviewDialog
