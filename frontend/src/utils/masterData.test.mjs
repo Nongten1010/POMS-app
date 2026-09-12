@@ -122,6 +122,14 @@ test('keeps project names independent from EIA and preserves resubmission values
   })
 
   assert.deepEqual(buildFactoryBasicInfoPayload({
+    initial: { eia: 'มี', projectName: null, latitude: 13, longitude: 100 },
+    values: { eia: '', projectName: null, latitude: '13', longitude: '100' },
+  }), {
+    formType: 'BASIC_INFO',
+    eia: null,
+  })
+
+  assert.deepEqual(buildFactoryBasicInfoPayload({
     initial: { eia: 'อื่นๆ', eiaOther: 'เดิม', projectName: 'โครงการ', latitude: 13, longitude: 100 },
     values: { eia: 'อื่นๆ', eiaOther: 'แก้ไข', projectName: 'โครงการ', latitude: '13', longitude: '100' },
     documentPatch: { factoryFrontPhotos: [{ title: 'ภาพ', fileUrl: 'https://example.com/a.jpg' }] },

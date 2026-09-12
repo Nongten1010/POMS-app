@@ -71,7 +71,7 @@ const borderedTableSx = {
   },
 }
 
-const eiaAssessmentOptions = FACTORY_BASIC_INFO_EIA_OPTIONS
+const eiaAssessmentOptions = FACTORY_BASIC_INFO_EIA_OPTIONS.filter((option) => option !== 'มี')
 const actionableRequestStatuses = ['แก้ไขแล้ว/รอพิจารณา', 'รอพิจารณา']
 const visibleStatus = 'VISIBLE'
 const hiddenStatus = 'HIDDEN'
@@ -1293,7 +1293,9 @@ function FactoryDocumentUploadField({
 }
 
 function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClose, onExited, showSaveButton = true, submitting = false, onSubmit }) {
-  const [eiaAssessment, setEiaAssessment] = useState(() => factory?.eia ?? 'ไม่มี')
+  const [eiaAssessment, setEiaAssessment] = useState(() => (
+    factory?.eia && factory.eia !== 'มี' ? factory.eia : ''
+  ))
   const [frontPhotos, setFrontPhotos] = useState(() => sanitizeDocuments(factory?.factoryFrontPhotos))
   const [factoryLogo, setFactoryLogo] = useState(() => factory?.factoryLogo ? sanitizeDocumentItem(factory.factoryLogo) : null)
   const [frontPhotosChanged, setFrontPhotosChanged] = useState(false)
@@ -1389,8 +1391,13 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
                   size="small"
                   value={eiaAssessment}
                   onChange={(event) => setEiaAssessment(event.target.value)}
+                  slotProps={{
+                    inputLabel: { shrink: true },
+                    select: { displayEmpty: true },
+                  }}
                   sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
                 >
+                  <MenuItem value="">-</MenuItem>
                   {eiaAssessmentOptions.map((option) => (
                     <MenuItem key={option} value={option}>
                       {option}
