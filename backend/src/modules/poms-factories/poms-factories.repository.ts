@@ -303,7 +303,7 @@ export const pomsFactoriesRepository = {
               payload.proposedMeasurementPoints == null
                 ? null
                 : JSON.stringify(payload.proposedMeasurementPoints),
-            source_profile_updated_at: new Date(current.updatedAt),
+            source_profile_updated_at: toSqlDateTime2String(current.updatedAt),
             ...(isCanonicalFactoryProfilesEnabled()
               ? { source_factory_profile_revision: live.factoryProfileRevision }
               : {}),
@@ -470,7 +470,7 @@ export const pomsFactoriesRepository = {
             payload.proposedMeasurementPoints == null
               ? null
               : JSON.stringify(payload.proposedMeasurementPoints),
-          source_profile_updated_at: new Date(payload.proposedFactory.updatedAt),
+          source_profile_updated_at: toSqlDateTime2String(payload.proposedFactory.updatedAt),
           ...(isCanonicalFactoryProfilesEnabled()
             ? { source_factory_profile_revision: live.factoryProfileRevision }
             : {}),
@@ -1746,10 +1746,7 @@ function ensurePendingProfileStillCurrent(
   current: LockedFactoryProfile,
 ): void {
   if (!isCanonicalFactoryProfilesEnabled()) {
-    ensureSameProfileVersion(
-      toIsoStringRequired(request.source_profile_updated_at),
-      current.updatedAt,
-    );
+    ensureSameProfileVersion(legacySourceProfileVersion(request), current.updatedAt);
     return;
   }
   if (request.source_factory_profile_revision != null) {
@@ -1767,6 +1764,31 @@ function ensurePendingProfileStillCurrent(
   ) {
     throw new ConflictError('POMS factory profile changed while the request was pending');
   }
+}
+
+function legacySourceProfileVersion(request: EditRequestRow): string {
+  const stored = toIsoStringRequired(request.source_profile_updated_at);
+  const snapshot = requireProfileSnapshot(request.current_factory_json).updatedAt;
+  if (typeof snapshot !== 'string' || !Number.isFinite(Date.parse(snapshot))) return stored;
+
+  const exact = new Date(snapshot);
+  const storedMs = Date.parse(stored);
+  const exactMs = exact.getTime();
+  // Older writes bound a JS Date as SQL DATETIME (1/300-second ticks), even
+  // though the target column is DATETIME2. SQL compatibility levels retain
+  // either the fractional tick or rounded milliseconds when converting it.
+  const roundedMs = (Math.round(exact.getUTCMilliseconds() * 0.3) * 1_000) / 300;
+  const secondStart = exactMs - exact.getUTCMilliseconds();
+  if (
+    storedMs === exactMs ||
+    storedMs === secondStart + Math.floor(roundedMs) ||
+    storedMs === secondStart + Math.round(roundedMs)
+  ) {
+    // Recover only a recognized storage conversion, then compare the original
+    // snapshot to live data exactly. Never allow a tolerance on the live version.
+    return exact.toISOString();
+  }
+  return stored;
 }
 
 function ensureSameProfileVersion(expected: string, current: string): void {
@@ -1934,6 +1956,12 @@ function toIsoStringRequired(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) throw new ConflictError('Stored timestamp is invalid');
   return date.toISOString();
+}
+
+function toSqlDateTime2String(value: Date | string): string {
+  // Knex binds Date as DATETIME, which loses milliseconds. Bind ISO UTC text
+  // without an offset so SQL converts it directly to the DATETIME2 column.
+  return toIsoStringRequired(value).slice(0, -1);
 }
 
 function toNullableIsoString(value: Date | string | null): string | null {

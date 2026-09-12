@@ -1,7 +1,11 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import knex from 'knex';
 
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), { transaction: jest.fn() }),
+}));
+jest.mock('../../src/modules/poms-factories/poms-factory-edit-request-number', () => ({
+  allocatePomsFactoryEditRequestNo: jest.fn(async () => 'base-00001/2569'),
 }));
 
 import { db } from '../../src/config/database';
@@ -13,6 +17,9 @@ import {
 const transaction = db.transaction as unknown as jest.Mock<
   (...args: unknown[]) => Promise<unknown>
 >;
+// Use the installed MSSQL driver's real parameter serializer without opening a connection.
+const bindingDb = knex({ client: 'mssql' });
+afterAll(async () => bindingDb.destroy());
 
 describe('measurement-point approval with general factory information', () => {
   beforeEach(() => {
@@ -142,6 +149,110 @@ describe('measurement-point approval with general factory information', () => {
     expect(harness.committed).toEqual([]);
   });
 
+  it.each(['create', 'resubmit'] as const)(
+    'preserves the exact profile milliseconds through SQL parameter binding on %s and approval',
+    async (operation) => {
+      const timestamp = '2026-08-19T21:54:02.944Z';
+      const harness = approvalHarness({
+        basicInfo: true,
+        pointChanged: false,
+        snapshotTime: timestamp,
+        resubmit: operation === 'resubmit',
+      });
+      transaction.mockImplementation(harness.runTransaction);
+      const payload = {
+        formType: 'BASIC_INFO' as const,
+        proposedFactory: { ...harness.current, projectName: 'new project' },
+        proposedMeasurementPoints: null,
+      };
+      if (operation === 'create') {
+        await pomsFactoriesRepository.createEditRequest(harness.current, payload, null, 42);
+      } else {
+        await pomsFactoriesRepository.resubmitEditRequest(11, payload, null, 42);
+      }
+      expect(harness.row.source_profile_updated_at).toBe(timestamp);
+      const result = await pomsFactoriesRepository.reviewEditRequest(
+        11,
+        { decision: 'APPROVE' },
+        77,
+      );
+      expect(result.status).toBe('APPROVED');
+    },
+  );
+
+  it.each([
+    ['2026-08-19T21:54:02.944Z', '2026-08-19T21:54:02.943Z'],
+    ['2026-08-19T21:54:02.445Z', '2026-08-19T21:54:02.446Z'],
+    ['2026-08-19T21:54:02.445Z', '2026-08-19T21:54:02.447Z'],
+    ['2026-08-19T23:59:59.999Z', '2026-08-20T00:00:00.000Z'],
+  ])(
+    'approves an unchanged pending snapshot at %s despite legacy DATETIME rounding to %s',
+    async (snapshotTime, sourceTime) => {
+      const harness = approvalHarness({
+        basicInfo: true,
+        pointChanged: false,
+        snapshotTime,
+        sourceTime,
+      });
+      transaction.mockImplementationOnce(harness.runTransaction);
+      const result = await pomsFactoriesRepository.reviewEditRequest(
+        11,
+        { decision: 'APPROVE' },
+        77,
+      );
+      expect(result.status).toBe('APPROVED');
+    },
+  );
+
+  it.each(['2026-08-19T21:54:02.943Z', '2026-08-19T21:54:02.945Z'])(
+    'still rejects a real one-millisecond live change to %s for a rounded pending version',
+    async (liveTime) => {
+      const harness = approvalHarness({
+        basicInfo: true,
+        pointChanged: false,
+        snapshotTime: '2026-08-19T21:54:02.944Z',
+        sourceTime: '2026-08-19T21:54:02.943Z',
+        liveTime,
+      });
+      transaction.mockImplementationOnce(harness.runTransaction);
+      await expect(
+        pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77),
+      ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+      expect(harness.attempted).toEqual([]);
+    },
+  );
+
+  it('rejects a source mismatch that is not the snapshot DATETIME conversion', async () => {
+    const harness = approvalHarness({
+      basicInfo: true,
+      snapshotTime: '2026-08-19T21:54:02.944Z',
+      sourceTime: '2026-08-19T21:54:02.942Z',
+    });
+    transaction.mockImplementationOnce(harness.runTransaction);
+    await expect(
+      pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77),
+    ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+    expect(harness.attempted).toEqual([]);
+  });
+
+  it.each([undefined, 'invalid timestamp'])(
+    'keeps the exact stored-version guard for older snapshots with updatedAt = %s',
+    async (updatedAt) => {
+      for (const staleProfile of [false, true]) {
+        const harness = approvalHarness({ basicInfo: true, staleProfile });
+        harness.row.current_factory_json = JSON.stringify({ ...harness.current, updatedAt });
+        transaction.mockImplementationOnce(harness.runTransaction);
+        const result = pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77);
+        if (staleProfile) {
+          await expect(result).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+          expect(harness.attempted).toEqual([]);
+        } else {
+          await expect(result).resolves.toMatchObject({ status: 'APPROVED' });
+        }
+      }
+    },
+  );
+
   it('rejects an entirely unchanged proposal', async () => {
     const harness = approvalHarness({ profileChanged: false, pointChanged: false });
     transaction.mockImplementationOnce(harness.runTransaction);
@@ -174,9 +285,16 @@ function approvalHarness(
     pointChanged?: boolean;
     staleProfile?: boolean;
     missingEligible?: boolean;
+    snapshotTime?: string;
+    sourceTime?: string;
+    liveTime?: string;
+    resubmit?: boolean;
   } = {},
 ) {
-  const current = toPomsFactoryDetailForTests([connectedFactoryRow()], 0);
+  const currentRow = connectedFactoryRow(
+    options.snapshotTime ? { updated_at: options.snapshotTime } : {},
+  );
+  const current = toPomsFactoryDetailForTests([currentRow], 0);
   const proposed =
     options.profileChanged === false
       ? current
@@ -208,7 +326,7 @@ function approvalHarness(
     factory_registration_no: current.factoryRegistrationNo,
     factory_name: current.factoryName,
     form_type: options.basicInfo ? 'BASIC_INFO' : 'MEASUREMENT_POINTS',
-    status: 'PENDING_REVIEW',
+    status: options.resubmit ? 'REVISION_REQUESTED' : 'PENDING_REVIEW',
     revision_no: 0,
     is_open: 1,
     current_factory_json: JSON.stringify(current),
@@ -217,7 +335,7 @@ function approvalHarness(
     proposed_measurement_points_json: JSON.stringify(proposedPoints),
     source_profile_updated_at: options.staleProfile
       ? '2020-01-01T00:00:00.000Z'
-      : current.updatedAt,
+      : (options.sourceTime ?? current.updatedAt),
     request_note: null,
     revision_reason: null,
     officer_note: null,
@@ -247,22 +365,27 @@ function approvalHarness(
       ]) {
         chain[method] = jest.fn(() => chain);
       }
-      chain.first = async () => row;
+      chain.first = async (column?: string) => (column === 'id' ? undefined : row);
       chain.update = async (values: Record<string, unknown>) => {
         attempted.push({ table, values });
         if (table === 'eligible_factories' && options.missingEligible) return 0;
-        if (table === 'poms_factory_edit_requests') Object.assign(row, values);
+        if (table === 'poms_factory_edit_requests') saveRequest(values);
         return 1;
       };
-      chain.insert = async (values: Record<string, unknown>) => {
+      chain.insert = (values: Record<string, unknown>) => {
         attempted.push({ table, values });
-        return 1;
+        if (table === 'poms_factory_edit_requests') saveRequest(values);
+        return {
+          returning: async () => [{ id: 11 }],
+          then: (resolve: (value: unknown) => void) => resolve(1),
+        };
       };
       chain.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-        Promise.resolve(table === 'locked-profile' ? [connectedFactoryRow()] : []).then(
-          resolve,
-          reject,
-        );
+        Promise.resolve(
+          table === 'locked-profile'
+            ? [{ ...currentRow, updated_at: options.liveTime ?? current.updatedAt }]
+            : [],
+        ).then(resolve, reject);
       return chain;
     },
     {
@@ -270,7 +393,15 @@ function approvalHarness(
       raw: () => 'locked-profile',
     },
   );
+  function saveRequest(values: Record<string, unknown>) {
+    Object.assign(row, values);
+    if ('source_profile_updated_at' in values) {
+      row.source_profile_updated_at = roundTripProfileTimestamp(values.source_profile_updated_at);
+    }
+  }
   return {
+    current,
+    row,
     attempted,
     committed,
     runTransaction: async (...args: unknown[]) => {
@@ -280,6 +411,35 @@ function approvalHarness(
       return result;
     },
   };
+}
+
+function roundTripProfileTimestamp(value: unknown): string {
+  const client = bindingDb.client as typeof bindingDb.client & {
+    _typeForBinding(value: unknown): [
+      unknown,
+      {
+        name: string;
+        generateParameterData(
+          parameter: { value: unknown },
+          options: { useUTC: boolean },
+        ): Iterable<Buffer>;
+      },
+    ];
+  };
+  const [parameter, type] = client._typeForBinding(value);
+  if (type.name === 'DateTime') {
+    const bytes = Buffer.concat([
+      ...type.generateParameterData({ value: parameter }, { useUTC: true }),
+    ]);
+    return new Date(
+      Date.UTC(1900, 0, 1) +
+        bytes.readInt32LE(0) * 86_400_000 +
+        (bytes.readUInt32LE(4) * 1_000) / 300,
+    ).toISOString();
+  }
+  expect(type.name).toBe('NVarChar');
+  expect(parameter).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/);
+  return new Date(`${parameter}Z`).toISOString();
 }
 
 function connectedFactoryRow(overrides: Record<string, unknown> = {}) {
