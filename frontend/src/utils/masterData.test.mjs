@@ -12,6 +12,7 @@ import {
   getChangedFactoryGeneralInfoFieldNames,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
+  getLatestFactoryRevisionMessage,
   getStatusManagementSelection,
   getPomsDisplayStatus,
   normalizeOfficerNotificationEmails,
@@ -80,6 +81,16 @@ test('does not mark factory fields omitted from a sparse proposed patch', () => 
     currentFactory: { eia: 'ไม่มี', projectName: 'โครงการเดิม' },
     proposedFactory: { projectName: 'โครงการใหม่' },
   }), ['projectName'])
+})
+
+test('reads the latest factory revision reason from direct fields and events', () => {
+  assert.equal(getLatestFactoryRevisionMessage({ revisionReason: 'แก้ไขพิกัด' }), 'แก้ไขพิกัด')
+  assert.equal(getLatestFactoryRevisionMessage({
+    events: [
+      { id: 1, action: 'REQUEST_REVISION', note: 'แก้ไขข้อมูลเก่า', createdAt: '2026-09-10T00:00:00Z' },
+      { id: 2, action: 'REQUEST_REVISION', note: 'แก้ไขข้อมูลล่าสุด', createdAt: '2026-09-11T00:00:00Z' },
+    ],
+  }), 'แก้ไขข้อมูลล่าสุด')
 })
 
 test('normalizes and validates officer notification emails', () => {

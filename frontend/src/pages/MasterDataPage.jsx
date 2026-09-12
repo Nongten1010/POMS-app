@@ -30,6 +30,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import EditIcon from '@mui/icons-material/Edit'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestDocumentDialog, RequestFormBottomSheet } from './ConnectionRequestPage'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
@@ -45,6 +46,7 @@ import {
   getChangedFactoryGeneralInfoFieldNames,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
+  getLatestFactoryRevisionMessage,
   getStatusManagementSelection,
   getPomsDisplayStatus,
   normalizeOfficerNotificationEmails,
@@ -1318,6 +1320,7 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
   const [factoryLogo, setFactoryLogo] = useState(() => factory?.factoryLogo ? sanitizeDocumentItem(factory.factoryLogo) : null)
   const [frontPhotosChanged, setFrontPhotosChanged] = useState(false)
   const [factoryLogoChanged, setFactoryLogoChanged] = useState(false)
+  const latestRevisionMessage = factory?.__isResubmission ? getLatestFactoryRevisionMessage(factory) : ''
 
   const handleSubmit = (event) => {
     event.preventDefault()
@@ -1384,6 +1387,31 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
           noValidate
           sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 }, bgcolor: 'background.default' }}
         >
+          {latestRevisionMessage ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                mb: 2,
+                border: 1,
+                borderColor: 'warning.main',
+                bgcolor: 'warning.50',
+                color: 'text.primary',
+              }}
+            >
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                <WarningAmberIcon color="warning" fontSize="small" sx={{ mt: 0.25 }} />
+                <Stack spacing={0.75}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    รายละเอียดการแก้ไข
+                  </Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                    {latestRevisionMessage}
+                  </Typography>
+                </Stack>
+              </Stack>
+            </Paper>
+          ) : null}
           <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
             <Stack spacing={2}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>

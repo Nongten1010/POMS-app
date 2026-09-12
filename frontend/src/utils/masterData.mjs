@@ -269,6 +269,42 @@ export function getChangedFactoryGeneralInfoFieldNames({ currentFactory = {}, pr
   ))
 }
 
+export function getLatestFactoryRevisionMessage(request = {}) {
+  const directMessage = request.revisionReason
+    ?? request.officerNote
+    ?? request.revisionNote
+    ?? request.raw?.revisionReason
+    ?? request.raw?.officerNote
+    ?? request.raw?.revisionNote
+  if (directMessage) return directMessage
+
+  const statusHistory = Array.isArray(request.statusHistory) ? request.statusHistory : []
+  const events = Array.isArray(request.events)
+    ? request.events
+    : Array.isArray(request.raw?.events)
+      ? request.raw.events
+      : []
+  const revisionHistory = [...statusHistory, ...events]
+    .filter((item) => (
+      [item.status, item.statusLabel, item.statusCode].includes('WAITING_FACTORY_REVISION')
+      || [item.status, item.statusLabel, item.statusCode].includes('รอโรงงานแก้ไข')
+      || [item.status, item.statusLabel, item.statusCode, item.toStatus].includes('REVISION_REQUESTED')
+      || item.action === 'REQUEST_REVISION'
+    ))
+    .sort((left, right) => {
+      const leftDate = left.changedAt ?? left.createdAt
+      const rightDate = right.changedAt ?? right.createdAt
+      const dateDifference = (rightDate ? new Date(rightDate).getTime() : 0)
+        - (leftDate ? new Date(leftDate).getTime() : 0)
+      return dateDifference || Number(right.id ?? 0) - Number(left.id ?? 0)
+    })
+
+  return revisionHistory[0]?.revisionReason
+    ?? revisionHistory[0]?.officerNote
+    ?? revisionHistory[0]?.note
+    ?? ''
+}
+
 export function getStatusManagementSelection(scope = {}, { parameter = false } = {}) {
   if (!parameter && scope.connectionStatus === 'DISCONNECTED') {
     return 'DISCONNECTED'
