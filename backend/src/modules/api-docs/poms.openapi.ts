@@ -2528,7 +2528,16 @@ const componentSchemas: Record<string, OpenApiObject> = {
   PomsFactoryEditRequestEvent: {
     type: 'object',
     additionalProperties: false,
-    required: ['id', 'action', 'fromStatus', 'toStatus', 'note', 'actorUserId', 'createdAt'],
+    required: [
+      'id',
+      'action',
+      'fromStatus',
+      'toStatus',
+      'note',
+      'actorUserId',
+      'actorName',
+      'createdAt',
+    ],
     properties: {
       id: { type: 'integer', minimum: 1 },
       action: {
@@ -2542,7 +2551,24 @@ const componentSchemas: Record<string, OpenApiObject> = {
       toStatus: schemaRef('PomsFactoryEditRequestStatus'),
       note: nullableStringSchema(1000),
       actorUserId: { type: 'integer', minimum: 1 },
+      actorName: {
+        type: 'string',
+        nullable: true,
+        description:
+          'ชื่อผู้ทำ action จาก users.first_name และ users.last_name ณ เวลาอ่าน โดย trim แต่ละส่วนแล้วเชื่อมส่วนที่มีค่าด้วยช่องว่างหนึ่งตัว; ไม่ใช่ snapshot และอาจเปลี่ยนตามข้อมูลผู้ใช้. คืน null เมื่อไม่มีชื่อหรือไม่พบผู้ใช้ โดยยังคง event และ actorUserId',
+        example: 'สมชาย ใจดี',
+      },
       createdAt: { type: 'string', format: 'date-time' },
+    },
+    example: {
+      id: 2,
+      action: 'REQUEST_REVISION',
+      fromStatus: 'PENDING_REVIEW',
+      toStatus: 'REVISION_REQUESTED',
+      note: 'กรุณาแนบภาพด้านหน้าโรงงานล่าสุด',
+      actorUserId: 77,
+      actorName: 'สมชาย ใจดี',
+      createdAt: '2026-08-24T03:00:00.000Z',
     },
   },
   PomsFactoryEditRequest: pomsFactoryEditRequestSchema,

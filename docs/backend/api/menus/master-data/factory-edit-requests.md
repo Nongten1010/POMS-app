@@ -747,6 +747,8 @@ Minimal response (`200 OK`):
 
 คืน current/proposed snapshot, ข้อมูลผู้ติดต่อ, อีเมลแจ้งเตือน, workflow events และ audit metadata ของคำขอเดียว
 
+`events[].actorName` คืนชื่อผู้ทำ action จาก `users.first_name` และ `users.last_name` ณ เวลาอ่าน โดย trim แต่ละส่วนแล้วเชื่อมส่วนที่มีค่าด้วยช่องว่างหนึ่งตัว ถ้ามีเพียงชื่อหรือนามสกุลให้ใช้ส่วนที่มีค่า ถ้าไม่มีชื่อทั้งสองส่วนหรือไม่พบผู้ใช้ให้คืน `null` โดยยังคง event และ `actorUserId` เดิม ชื่อนี้ไม่ใช่ snapshot และอาจเปลี่ยนตามข้อมูลผู้ใช้ กติกานี้ใช้กับทุก response ที่คืน edit-request events รวมถึง list, create, resubmission, review และ cancel
+
 `currentFactory` และ `proposedFactory` ยังคง profile response ที่มีชื่อ ที่อยู่ และ identity fields เพื่อแสดงบริบท; การมี field ใน response ไม่ทำให้ field นั้นแก้ไขได้ สำหรับ `BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้ ชื่อและที่อยู่ใน proposed snapshot คงค่าปัจจุบัน ส่วนคำขอเก่าอาจยังมี proposed ชื่อ/ที่อยู่เดิมในประวัติ แต่ approval จะไม่เขียนสอง field นี้
 
 สำหรับ `MEASUREMENT_POINTS` ฝั่ง `currentMeasurementPoints[].details.connectedParameters` และ `requestedParameters` ยึดรายการที่เชื่อมต่อจริงจาก `currentMeasurementPoints[].parameters` ซึ่ง snapshot มาจาก active `cems_wpms_connected_measurement_points.parameters_json`; `pendingParameters` คำนวณเป็น `eligibleParameters - connectedParameters` ส่วน `proposedMeasurementPoints[].details` คงค่าที่ผู้ใช้ส่งมากับคำขอแก้ไข จึงแสดงก่อน/หลังต่างกันเมื่อรายการพารามิเตอร์เปลี่ยน
@@ -807,6 +809,7 @@ Minimal request JSON:
 | `data.events[].toStatus`     | string                                                                | no       | status หลัง action                                                               |
 | `data.events[].note`         | string                                                                | yes      | note หรือเหตุผลของ event                                                         |
 | `data.events[].actorUserId`  | number                                                                | no       | user ID ผู้ทำ action                                                             |
+| `data.events[].actorName`    | string                                                                | yes      | ชื่อผู้ทำ action ณ เวลาอ่าน; คืน field เสมอ โดยใช้ `null` เมื่อไม่มีชื่อหรือไม่พบผู้ใช้ |
 | `data.events[].createdAt`    | ISO 8601 string                                                       | no       | เวลาเกิด event                                                                   |
 | `data.createdAt`             | ISO 8601 string                                                       | no       | เวลาสร้างคำขอ                                                                    |
 | `data.updatedAt`             | ISO 8601 string                                                       | no       | เวลาเปลี่ยนแปลงล่าสุด                                                            |
@@ -862,6 +865,7 @@ Minimal response (`200 OK`):
         "toStatus": "REVISION_REQUESTED",
         "note": "กรุณาแนบภาพด้านหน้าโรงงานล่าสุด",
         "actorUserId": 77,
+        "actorName": "สมชาย ใจดี",
         "createdAt": "2026-08-24T03:00:00.000Z"
       }
     ],
@@ -1087,6 +1091,7 @@ Minimal response (`200 OK`):
         "toStatus": "CANCELLED",
         "note": null,
         "actorUserId": 42,
+        "actorName": "สมหญิง รักษ์สิ่งแวดล้อม",
         "createdAt": "2026-09-04T10:30:00.000Z"
       }
     ],

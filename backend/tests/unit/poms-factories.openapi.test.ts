@@ -690,6 +690,19 @@ describe('POMS factory master-data OpenAPI contract', () => {
     ]);
   });
 
+  it('publishes a required nullable actor name on shared edit-request events', () => {
+    const event = asObject(schemas().PomsFactoryEditRequestEvent, 'event');
+    const properties = asObject(event.properties, 'event properties');
+
+    expect(event.required).toEqual(expect.arrayContaining(['actorUserId', 'actorName']));
+    expect(properties.actorName).toEqual(
+      expect.objectContaining({ type: 'string', nullable: true, example: 'สมชาย ใจดี' }),
+    );
+    expect(event.example).toEqual(
+      expect.objectContaining({ actorUserId: 77, actorName: 'สมชาย ใจดี' }),
+    );
+  });
+
   it('documents owner-only cancellation without a body and with explicit transition errors', () => {
     const documented = operation('/poms-factories/edit-requests/{id}/cancel', 'post');
     expect(documented).not.toHaveProperty('requestBody');

@@ -162,6 +162,8 @@ interface EditRequestEventRow {
   to_status: PomsFactoryEditRequestStatus;
   event_note: string | null;
   actor_user_id: number | string;
+  actor_first_name: string | null;
+  actor_last_name: string | null;
   created_at: Date | string;
 }
 
@@ -1618,10 +1620,16 @@ async function listEvents(
   requestIds: number[],
 ): Promise<Map<number, PomsFactoryEditRequestEventDTO[]>> {
   const rows = await executor<EditRequestEventRow>('poms_factory_edit_request_events')
-    .whereIn('request_id', requestIds)
-    .whereNull('deleted_at')
-    .orderBy('created_at', 'asc')
-    .orderBy('id', 'asc');
+    .leftJoin('users as actor', 'actor.id', 'poms_factory_edit_request_events.actor_user_id')
+    .select(
+      'poms_factory_edit_request_events.*',
+      'actor.first_name as actor_first_name',
+      'actor.last_name as actor_last_name',
+    )
+    .whereIn('poms_factory_edit_request_events.request_id', requestIds)
+    .whereNull('poms_factory_edit_request_events.deleted_at')
+    .orderBy('poms_factory_edit_request_events.created_at', 'asc')
+    .orderBy('poms_factory_edit_request_events.id', 'asc');
   const map = new Map<number, PomsFactoryEditRequestEventDTO[]>();
   rows.forEach((row) => {
     const requestId = Number(row.request_id);
@@ -1634,6 +1642,11 @@ async function listEvents(
         toStatus: row.to_status,
         note: row.event_note,
         actorUserId: Number(row.actor_user_id),
+        actorName:
+          [row.actor_first_name, row.actor_last_name]
+            .map((part) => part?.trim())
+            .filter(Boolean)
+            .join(' ') || null,
         createdAt: toIsoStringRequired(row.created_at),
       },
     ]);

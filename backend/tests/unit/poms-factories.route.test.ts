@@ -44,6 +44,18 @@ describe('POMS factory routes', () => {
     });
     mockedService.getEditRequest.mockResolvedValue({
       ...editRequest('PENDING_REVIEW'),
+      events: [
+        {
+          id: 1,
+          action: 'SUBMIT',
+          fromStatus: null,
+          toStatus: 'PENDING_REVIEW',
+          note: null,
+          actorUserId: 42,
+          actorName: 'สมชาย ใจดี',
+          createdAt: '2026-09-12T00:00:00.000Z',
+        },
+      ],
       contactPersons: [
         {
           name: 'สมหญิง ใจดี',
@@ -305,6 +317,7 @@ describe('POMS factory routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual(
       expect.objectContaining({
+        events: [expect.objectContaining({ actorUserId: 42, actorName: 'สมชาย ใจดี' })],
         contactPersons: [expect.objectContaining({ name: 'สมหญิง ใจดี' })],
         notificationEmails: ['factory-alert@example.com'],
         officerNotificationEmails: ['officer-alert@example.go.th'],

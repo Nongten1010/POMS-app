@@ -186,6 +186,8 @@ function makeChain(options: {
 }) {
   const chain: Record<string, unknown> = {};
   Object.assign(chain, {
+    leftJoin: jest.fn(() => chain),
+    select: jest.fn(() => chain),
     where: jest.fn(() => chain),
     whereNull: jest.fn(() => chain),
     whereIn: jest.fn(() => chain),

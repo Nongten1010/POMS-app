@@ -173,6 +173,7 @@ export interface PomsFactoryEditRequestEventDTO {
   toStatus: PomsFactoryEditRequestStatus;
   note: string | null;
   actorUserId: number;
+  actorName: string | null;
   createdAt: string;
 }
 
