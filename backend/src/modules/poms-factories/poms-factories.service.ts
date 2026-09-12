@@ -396,11 +396,6 @@ export const pomsFactoriesService = {
         },
       );
     }
-    if (request.createdBy === actorUserId || request.submittedBy === actorUserId) {
-      throw new ForbiddenError(
-        'The request creator or latest submitter cannot review their own POMS factory edit request',
-      );
-    }
     const reviewed = await pomsFactoriesRepository.reviewEditRequest(id, input, actorUserId);
     return {
       ...reviewed,

@@ -26,6 +26,41 @@ describe('measurement-point approval with general factory information', () => {
     jest.clearAllMocks();
   });
 
+  it.each([
+    [true, 42],
+    [true, 55],
+    [false, 42],
+    [false, 55],
+  ] as const)(
+    'persists self-approval and its audit actor (basic=%s, actor=%s)',
+    async (basicInfo, actorUserId) => {
+      const harness = approvalHarness({ basicInfo });
+      Object.assign(harness.row, {
+        status: 'REVISED_PENDING_REVIEW',
+        created_by: 42,
+        submitted_by: 55,
+      });
+      transaction.mockImplementationOnce(harness.runTransaction);
+
+      const result = await pomsFactoriesRepository.reviewEditRequest(
+        11,
+        { decision: 'APPROVE' },
+        actorUserId,
+      );
+
+      expect(result).toMatchObject({ status: 'APPROVED', reviewedBy: actorUserId });
+      expect(harness.committed).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ table: 'cems_wpms_connected_measurement_points' }),
+          expect.objectContaining({
+            table: 'poms_factory_edit_request_events',
+            values: expect.objectContaining({ action: 'APPROVE', actor_user_id: actorUserId }),
+          }),
+        ]),
+      );
+    },
+  );
+
   it.each([true, false])('persists approved contacts atomically (basic=%s)', async (basicInfo) => {
     const harness = approvalHarness({ basicInfo, profileChanged: false, pointChanged: false });
     const currentContacts = {

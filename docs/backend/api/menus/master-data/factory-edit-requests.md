@@ -137,7 +137,7 @@ curl --request POST \
 | Edit scope           | `POST .../document-images` ใช้ `factories:edit`; ส่วน `POST .../edit-requests`, `PUT .../resubmission` และ `POST .../cancel` ต้องผ่านทั้ง `factories:view` และ `factories:edit` โดยการคัด resource สำหรับ mutation ยึด scope ของ `factories:edit` |
 | Approval scope       | `POST .../review` ต้องผ่านทั้ง `factories:view` และ `factories:approve`, ยึด scope ของ `factories:approve` และบังคับ role `admin` ใน JWT (ไม่บังคับ `userType`)                |
 | Object scope         | รายการถูกกรองตาม effective scope ของ endpoint; detail หรือ mutation ที่อ้างโรงงาน/คำขอนอก scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่าข้อมูลมีอยู่                       |
-| Separation of duties | ผู้พิจารณาต้องไม่ตรงกับทั้ง `createdBy` และ `submittedBy` ของคำขอ; กฎนี้ใช้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT`; ถ้าซ้ำตอบ `403 FORBIDDEN`                     |
+| Self-review | ผู้มี role `admin` พิจารณาคำขอของตนเองได้ แม้ตรงกับ `createdBy` หรือ `submittedBy`; ใช้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT` โดยยังต้องผ่าน permission และ data scope                     |
 | Cancel ownership     | `POST .../cancel` อนุญาตเฉพาะผู้ใช้ที่ตรงกับ `createdBy`; ผู้มี permission แต่ไม่ใช่เจ้าของตอบ `403 FORBIDDEN`                                                              |
 
 ## Contracts
@@ -1171,7 +1171,7 @@ Minimal response (`200 OK`):
 
 ### `POST /api/v1/poms-factories/edit-requests/:id/review`
 
-admin พิจารณาคำขอที่อยู่ใน `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` และอยู่ใน data scope ของ `factories:approve` ผู้พิจารณาต้องไม่ใช่ทั้งผู้สร้างคำขอครั้งแรก (`createdBy`) และผู้ส่งรอบล่าสุด (`submittedBy`) แม้จะเป็นคนละคนกัน
+admin พิจารณาคำขอที่อยู่ใน `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` และอยู่ใน data scope ของ `factories:approve` ผู้มี role `admin` พิจารณาคำขอของตนเองได้ แม้เป็นผู้สร้างคำขอครั้งแรก (`createdBy`) หรือผู้ส่งรอบล่าสุด (`submittedBy`) โดยใช้ได้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT`
 
 เมื่อพิจารณาสำเร็จ response ใช้ detail contract เดียวกับ `GET /api/v1/poms-factories/edit-requests/:id` จึงคืน `contactPersons`, `notificationEmails`, `informationProviderName` และ `informationProviderPosition` ที่ hydrate จาก source connection request แล้วด้วย
 
@@ -1274,7 +1274,7 @@ State transitions:
 | `400`       | `FILE_UPLOAD_FAILED` | multipart upload เกิน limit เช่นไฟล์เกิน 5 MiB หรือส่งไฟล์/part เกินจำนวน                                                            | แสดงข้อผิดพลาดอัปโหลดและให้เลือกไฟล์ใหม่        |
 | `400`       | `BAD_REQUEST`      | แก้ข้อมูลติดต่อโดยเลือกจุดข้าม CEMS/WPMS, upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
-| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกไม่ใช่ `createdBy`, reviewer ไม่ใช่ admin หรือผู้พิจารณาซ้ำกับ `createdBy`/`submittedBy`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
+| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกไม่ใช่ `createdBy`, reviewer ไม่มี role `admin`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
 | `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
 | `409`       | `CONFLICT`         | ไม่มีข้อมูลที่แก้ไขเปลี่ยน, ข้อมูลติดต่อเปลี่ยนหลังยื่นคำขอ, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version/revision เปลี่ยน, canonical profile ยังไม่พร้อม, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |

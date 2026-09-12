@@ -803,6 +803,8 @@ describe('POMS factory master-data OpenAPI contract', () => {
     );
     expect(reviewDescription).toContain('createdBy');
     expect(reviewDescription).toContain('submittedBy');
+    expect(reviewDescription).toContain('ผู้มี role admin พิจารณาคำขอของตนเองได้');
+    expect(reviewDescription).toContain('APPROVE, REQUEST_REVISION และ REJECT');
   });
 });
 

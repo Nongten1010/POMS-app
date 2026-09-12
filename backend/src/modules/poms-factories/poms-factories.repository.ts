@@ -551,15 +551,6 @@ export const pomsFactoriesRepository = {
           },
         );
       }
-      if (
-        Number(request.created_by) === actorUserId ||
-        Number(request.submitted_by) === actorUserId
-      ) {
-        throw new ForbiddenError(
-          'The request creator or latest submitter cannot review their own POMS factory edit request',
-        );
-      }
-
       const transition = reviewTransition(input);
       if (transition.status === POMS_FACTORY_EDIT_REQUEST_STATUS.APPROVED) {
         await applyApprovedRequestInTransaction(trx, request, actorUserId);

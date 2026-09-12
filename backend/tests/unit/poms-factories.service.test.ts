@@ -1398,7 +1398,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
   });
 
   it.each(['admin', 'officer'] as const)(
-    'prevents %s with admin role from reviewing their own request',
+    'allows %s with admin role to approve their own request',
     async (userType) => {
       mockedRepository.findEditRequestById.mockResolvedValue(
         editRequest('PENDING_REVIEW', { submittedBy: 42 }),
@@ -1413,27 +1413,63 @@ describe('pomsFactoriesService edit-request workflow', () => {
           { scope: 'ALL' },
           null,
         ),
-      ).rejects.toBeInstanceOf(ForbiddenError);
-      expect(mockedRepository.reviewEditRequest).not.toHaveBeenCalled();
-    },
-  );
-
-  it('prevents the original creator from reviewing after another user resubmits', async () => {
-    mockedRepository.findEditRequestById.mockResolvedValue(
-      editRequest('REVISED_PENDING_REVIEW', { createdBy: 42, submittedBy: 55 }),
-    );
-
-    await expect(
-      pomsFactoriesService.reviewEditRequest(
+      ).resolves.toEqual(expect.objectContaining({ status: 'APPROVED' }));
+      expect(mockedRepository.reviewEditRequest).toHaveBeenCalledWith(
         11,
         { decision: 'APPROVE', officerNote: null },
         42,
-        { userType: 'admin', roles: ['admin'] },
-        { scope: 'ALL' },
-        null,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenError);
-    expect(mockedRepository.reviewEditRequest).not.toHaveBeenCalled();
+      );
+    },
+  );
+
+  it.each([
+    ['original creator', 42],
+    ['latest submitter', 55],
+  ] as const)(
+    'allows the %s with admin role to approve a resubmitted request',
+    async (_, actorUserId) => {
+      mockedRepository.findEditRequestById.mockResolvedValue(
+        editRequest('REVISED_PENDING_REVIEW', { createdBy: 42, submittedBy: 55 }),
+      );
+
+      await expect(
+        pomsFactoriesService.reviewEditRequest(
+          11,
+          { decision: 'APPROVE', officerNote: null },
+          actorUserId,
+          { userType: 'admin', roles: ['admin'] },
+          { scope: 'ALL' },
+          null,
+        ),
+      ).resolves.toEqual(expect.objectContaining({ status: 'APPROVED' }));
+      expect(mockedRepository.reviewEditRequest).toHaveBeenCalledWith(
+        11,
+        { decision: 'APPROVE', officerNote: null },
+        actorUserId,
+      );
+    },
+  );
+
+  it.each([
+    ['REQUEST_REVISION', 'REVISION_REQUESTED'],
+    ['REJECT', 'REJECTED'],
+  ] as const)('allows admin to %s their own request', async (decision, expectedStatus) => {
+    mockedRepository.reviewEditRequest.mockResolvedValue(
+      editRequest(expectedStatus, { reviewedBy: 42 }),
+    );
+    const input = { decision, revisionReason: 'กรุณาแก้ไขข้อมูล', officerNote: 'ข้อมูลไม่ครบ' };
+
+    const result = await pomsFactoriesService.reviewEditRequest(
+      11,
+      input,
+      42,
+      { userType: 'admin', roles: ['admin'] },
+      { scope: 'ALL' },
+      null,
+    );
+
+    expect(result.status).toBe(expectedStatus);
+    expect(mockedRepository.reviewEditRequest).toHaveBeenCalledWith(11, input, 42);
   });
 
   it.each([

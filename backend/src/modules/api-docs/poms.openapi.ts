@@ -5297,7 +5297,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Review a POMS factory edit request',
       operationId: 'reviewPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องมี JWT role admin; userType อาจเป็น officer หรือ admin และ userType=admin อย่างเดียวไม่เพียงพอ; ห้ามทั้ง original creator (createdBy) และ latest submitter (submittedBy) พิจารณาคำขอของตนเอง. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องมี JWT role admin; userType อาจเป็น officer หรือ admin และ userType=admin อย่างเดียวไม่เพียงพอ; ผู้มี role admin พิจารณาคำขอของตนเองได้ ทั้งกรณีเป็น original creator (createdBy) หรือ latest submitter (submittedBy) โดยใช้ได้กับ APPROVE, REQUEST_REVISION และ REJECT. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditReviewRequest'),
@@ -5307,7 +5307,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       extraResponses: {
         '409': {
           description:
-            'สถานะไม่อนุญาต ผู้สร้างพยายามพิจารณาคำขอตนเอง หรือ current/live profile เปลี่ยนก่อนอนุมัติ หรือ canonical profile ยังไม่พร้อม',
+            'สถานะไม่อนุญาต หรือ current/live profile เปลี่ยนก่อนอนุมัติ หรือ canonical profile ยังไม่พร้อม',
           content: {
             'application/json': { schema: schemaRef('ErrorEnvelope') },
           },
