@@ -57,6 +57,12 @@ import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
+import {
+  EIA_ASSESSMENT_OPTIONS as eiaAssessmentOptions,
+  buildConnectionEnvironmentalAssessment,
+  getEiaAssessmentValue,
+  getEnvironmentalAssessmentValues,
+} from '../utils/environmentalAssessment.mjs'
 
 const subMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
@@ -116,8 +122,6 @@ const isBiomassOption = (value = '') => {
   const normalizedValue = String(value ?? '')
   return normalizedValue.includes('ชีวมวล') || normalizedValue.toLowerCase().includes('biomass')
 }
-const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
-const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
 const combustionControlSystemOptions = ['ระบบปิด', 'ระบบเปิด']
 const cemsLegalAnnexRequiredOptions = cemsInstallationRequiredOptions.slice(0, 2).map((option) => option.value)
 const connectionDeviceOptions = ['POMS Box (กรอ.)', 'POMS Box (กนอ.)', 'D-POMS Client (ใหม่)', 'อื่นๆ']
@@ -524,28 +528,6 @@ function syncInstrumentRowsWithRequestedParameters(currentRows = [], requestedPa
     const existingRow = currentRows.find((row) => row.parameter === parameter)
     return existingRow ?? createInstrumentRowForParameter(parameter)
   })
-}
-
-function getEiaAssessmentValue(factory = {}) {
-  const eia = factory.eia ?? ''
-
-  if (eiaAssessmentOptions.includes(eia)) {
-    return eia
-  }
-
-  if (eia === 'มี') {
-    return 'มี EIA'
-  }
-
-  return eia || 'ไม่มี'
-}
-
-function getEiaFormValue(formData, factory = {}) {
-  return getFormValue(formData, 'eia', getEiaAssessmentValue(factory))
-}
-
-function getHasEiaFormValue(formData, factory = {}) {
-  return eiaProjectOptions.includes(getEiaFormValue(formData, factory))
 }
 
 function createCriteriaRowsFromStandardValue(standardValue) {
@@ -1107,6 +1089,7 @@ function mapOperatorFactoryRow(row) {
     industrySubOrder: row.industrySubOrder ?? '',
     businessActivity: row.businessActivity ?? '',
     eia: row.eia ?? '',
+    eiaOther: row.eiaOther ?? '',
     projectName: row.projectName ?? '',
     address: row.address ?? '',
     latitude: row.latitude ?? '',
@@ -1283,10 +1266,8 @@ function getInitialRequestFactory(request = {}, fallbackFactory = {}) {
     industryMainOrder: safeRequest.industryMainOrder ?? factory.industryMainOrder ?? safeFallbackFactory.industryMainOrder ?? '',
     industrySubOrder: safeRequest.industrySubOrder ?? factory.industrySubOrder ?? safeFallbackFactory.industrySubOrder ?? '',
     businessActivity: safeRequest.businessActivity ?? factory.businessActivity ?? safeFallbackFactory.businessActivity ?? '',
-    eia: safeRequest.eia ?? factory.eia ?? safeFallbackFactory.eia ?? '',
-    eiaOther: safeRequest.eiaOther ?? factory.eiaOther ?? safeFallbackFactory.eiaOther ?? '',
+    ...getEnvironmentalAssessmentValues(safeRequest, factory, safeFallbackFactory),
     hasEia: safeRequest.hasEia ?? factory.hasEia ?? safeFallbackFactory.hasEia,
-    projectName: safeRequest.projectName ?? factory.projectName ?? safeFallbackFactory.projectName ?? '',
     address: safeRequest.address ?? factory.address ?? safeFallbackFactory.address ?? '',
     latitude: safeRequest.latitude ?? factory.latitude ?? safeFallbackFactory.latitude ?? '',
     longitude: safeRequest.longitude ?? factory.longitude ?? safeFallbackFactory.longitude ?? '',
@@ -2143,10 +2124,7 @@ function buildMeasurementPointRequestBody(
     industryMainOrder: factory.industryMainOrder ?? factory.industryMainOrderNo ?? null,
     industrySubOrder: factory.industrySubOrder ?? factory.industrySubOrderNo ?? null,
     businessActivity: factory.businessActivity ?? null,
-    eia: getEiaFormValue(formData, factory),
-    eiaOther: getOptionalFormValue(formData, 'eiaOther'),
-    hasEia: getHasEiaFormValue(formData, factory),
-    projectName: getOptionalFormValue(formData, 'projectName') ?? null,
+    ...buildConnectionEnvironmentalAssessment(formData, factory, { readOnly: options.generalFactoryFieldsReadOnly }),
     address: factory.address ?? null,
     latitude: toNumberOrNull(getFormValue(formData, 'latitude', factory.latitude ?? '')),
     longitude: toNumberOrNull(getFormValue(formData, 'longitude', factory.longitude ?? '')),
@@ -6959,7 +6937,7 @@ export function RequestFormBottomSheet({
   const [submitValidationSnackbarOpen, setSubmitValidationSnackbarOpen] = useState(false)
   const submitPreviewSessionRef = useRef(0)
   const [eiaAssessment, setEiaAssessment] = useState(
-    factoryProfilePatchMode ? (formFactory?.eia ?? 'ไม่มี') : getEiaAssessmentValue(formFactory),
+    getEiaAssessmentValue(formFactory),
   )
   const [officerEmails, setOfficerEmails] = useState(
     initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : [''],
@@ -7042,7 +7020,7 @@ export function RequestFormBottomSheet({
       formData,
       [],
       measurementInstrumentRows,
-      { includePreviewUrls: true, existingDocuments: initialDocuments },
+      { includePreviewUrls: true, existingDocuments: initialDocuments, generalFactoryFieldsReadOnly },
     )
 
     if (isEditMode) {
@@ -7170,7 +7148,7 @@ export function RequestFormBottomSheet({
         formData,
         uploadedDocuments,
         measurementInstrumentRows,
-        { existingDocuments: initialDocuments },
+        { existingDocuments: initialDocuments, generalFactoryFieldsReadOnly },
       )
       if (isEditMode) {
         requestBody.remarks = 'แก้ไขตามเจ้าหน้าที่แจ้ง'
@@ -7401,8 +7379,10 @@ export function RequestFormBottomSheet({
                         value={eiaAssessment}
                         onChange={(event) => setEiaAssessment(event.target.value)}
                         fullWidth
+                        slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }}
                       >
-                        {(factoryProfilePatchMode ? ['มี', ...eiaAssessmentOptions] : eiaAssessmentOptions).map((option) => (
+                        <MenuItem value="">-</MenuItem>
+                        {eiaAssessmentOptions.map((option) => (
                           <MenuItem key={option} value={option}>
                             {option}
                           </MenuItem>
@@ -7426,22 +7406,20 @@ export function RequestFormBottomSheet({
                       )}
                     </Grid>
                   ) : null}
-                  {(factoryProfilePatchMode || eiaProjectOptions.includes(eiaAssessment)) ? (
-                    <Grid size={{ xs: 12, md: 3 }}>
-                      {generalFactoryFieldsReadOnly ? (
-                        <ReadOnlyField name={readOnlyPreview ? 'projectName' : undefined} label="ชื่อโครงการ" value={formFactory?.projectName ?? ''} />
-                      ) : (
-                        <TextField
-                          name="projectName"
-                          label="ชื่อโครงการ"
-                          size="small"
-                          defaultValue={formFactory?.projectName ?? ''}
-                          slotProps={{ htmlInput: { maxLength: 500 } }}
-                          fullWidth
-                        />
-                      )}
-                    </Grid>
-                  ) : null}
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    {generalFactoryFieldsReadOnly ? (
+                      <ReadOnlyField name={readOnlyPreview ? 'projectName' : undefined} label="ชื่อโครงการ" value={formFactory?.projectName ?? ''} />
+                    ) : (
+                      <TextField
+                        name="projectName"
+                        label="ชื่อโครงการ"
+                        size="small"
+                        defaultValue={formFactory?.projectName ?? ''}
+                        slotProps={{ htmlInput: { maxLength: 500 } }}
+                        fullWidth
+                      />
+                    )}
+                  </Grid>
                   <Grid size={{ xs: 12 }}>
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 12, md: 6 }}>

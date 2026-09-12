@@ -2,6 +2,7 @@ import fontkit from '@pdf-lib/fontkit'
 import { PDFDocument, PDFName, PDFString, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
+import { getEiaAssessmentValue, getEnvironmentalAssessmentValues } from './environmentalAssessment.mjs'
 
 const colors = {
   black: rgb(0, 0, 0),
@@ -1582,17 +1583,16 @@ function renderGeneralFactorySection(layout, request, context, options = {}) {
   ])
   layout.labelValue('ประกอบกิจการ : ', request?.businessActivity ?? factory.businessActivity)
   layout.labelValue('เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี) : ', request?.industrialEstate ?? factory.industrialEstate)
-  layout.labelValue('การประเมินผลกระทบสิ่งแวดล้อม : ', request?.eia ?? factory.eia)
-  if (showExtendedFields) {
-    const eiaOther = request?.eiaOther ?? factory.eiaOther
-    const projectName = request?.projectName ?? factory.projectName
+  const assessment = getEnvironmentalAssessmentValues(request, factory)
+  const eia = getEiaAssessmentValue(assessment)
+  layout.labelValue('การประเมินผลกระทบสิ่งแวดล้อม : ', eia)
+  if (eia === 'อื่นๆ') {
+    const eiaOther = assessment.eiaOther
     if (!isBlankValue(eiaOther)) {
       layout.labelValue('รายละเอียดการประเมินผลกระทบสิ่งแวดล้อม (อื่นๆ) : ', eiaOther)
     }
-    if (!isBlankValue(projectName)) {
-      layout.labelValue('ชื่อโครงการ : ', projectName)
-    }
   }
+  layout.labelValue('ชื่อโครงการ : ', assessment.projectName)
   layout.labelValue('ที่ตั้ง เลขที่ : ', request?.address ?? factory.address)
   layout.labelValueRow([
     { label: 'พิกัดโรงงาน ละติจูด : ', value: request?.latitude ?? factory.latitude },
