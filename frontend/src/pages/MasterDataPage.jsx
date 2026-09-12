@@ -2664,7 +2664,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         submitWithoutPreview
         customSubmit={canSubmitMasterData ? handleSubmitMeasurementPoints : null}
         documentImagesUploadUrl={`${pomsFactoriesApiBaseUrl}/document-images`}
-        generalFactoryFieldsReadOnly={!canSubmitMasterData}
+        generalFactoryFieldsReadOnly
         factoryProfilePatchMode
         monitoringPointTypeReadOnly
         officerNotificationEmailsEditable={canSubmitMasterData}
