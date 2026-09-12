@@ -1,6 +1,33 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildConnectionEnvironmentalAssessment, getEiaAssessmentValue, getEnvironmentalAssessmentValues } from './environmentalAssessment.mjs'
+import { buildConnectionEnvironmentalAssessment, getEiaAssessmentFormState, getEiaAssessmentValue, getEnvironmentalAssessmentValues } from './environmentalAssessment.mjs'
+
+test('opening a factory form fills EIA from the supplied response after the closed empty state', () => {
+  const closed = getEiaAssessmentFormState(null, undefined, 'closed')
+  const factory = { factoryId: '10700000525488', eia: 'มี EIA', projectName: 'ทดสอบ EIA' }
+  const opened = getEiaAssessmentFormState(closed, factory, 'open')
+  assert.equal(opened.value, 'มี EIA')
+  const form = new FormData()
+  form.set('eia', opened.value)
+  assert.equal(buildConnectionEnvironmentalAssessment(form, factory).eia, 'มี EIA')
+})
+
+test('EIA keeps user changes through rerenders but resets on reopening or changing factories', () => {
+  const factory = { factoryId: '10700000525488', eia: 'มี EIA' }
+  const opened = getEiaAssessmentFormState(null, factory, 'open')
+  const edited = { ...opened, value: 'ไม่มี' }
+  assert.equal(getEiaAssessmentFormState(edited, { ...factory }, 'open'), edited)
+  const closed = getEiaAssessmentFormState(edited, factory, 'closed')
+  assert.equal(getEiaAssessmentFormState(closed, factory, 'open').value, 'มี EIA')
+  assert.equal(getEiaAssessmentFormState(edited, { ...factory, factoryId: 'another' }, 'open').value, 'มี EIA')
+})
+
+test('EIA refreshes when asynchronous source data arrives and supports a null assessment', () => {
+  const pending = getEiaAssessmentFormState(null, { factoryId: '10700000525488' }, 'edit')
+  const loaded = getEiaAssessmentFormState(pending, { factoryId: '10700000525488', eia: 'มี EIA' }, 'edit')
+  assert.equal(loaded.value, 'มี EIA')
+  assert.equal(getEiaAssessmentFormState(loaded, { factoryId: '10700000525488', eia: null }, 'edit').value, '')
+})
 
 test('empty and legacy EIA selections display a dash and submit null without restoring defaults', () => {
   for (const value of [null, undefined, '', 'มี']) {

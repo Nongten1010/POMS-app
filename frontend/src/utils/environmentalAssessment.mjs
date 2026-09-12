@@ -5,6 +5,12 @@ export function getEiaAssessmentValue(factory = {}) {
   return value === 'มี' ? '' : value
 }
 
+export function getEiaAssessmentFormState(previous, factory, sessionKey) {
+  const value = getEiaAssessmentValue(factory)
+  const sourceKey = JSON.stringify([sessionKey, factory?.factoryId ?? factory?.id ?? null, value])
+  return previous?.sourceKey === sourceKey ? previous : { sourceKey, value }
+}
+
 export function getEnvironmentalAssessmentValues(...sources) {
   const read = (key) => {
     const source = sources.find((item) => item && Object.hasOwn(item, key))

@@ -60,7 +60,7 @@ import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCri
 import {
   EIA_ASSESSMENT_OPTIONS as eiaAssessmentOptions,
   buildConnectionEnvironmentalAssessment,
-  getEiaAssessmentValue,
+  getEiaAssessmentFormState,
   getEnvironmentalAssessmentValues,
 } from '../utils/environmentalAssessment.mjs'
 
@@ -6936,9 +6936,14 @@ export function RequestFormBottomSheet({
   const [submitError, setSubmitError] = useState('')
   const [submitValidationSnackbarOpen, setSubmitValidationSnackbarOpen] = useState(false)
   const submitPreviewSessionRef = useRef(0)
-  const [eiaAssessment, setEiaAssessment] = useState(
-    getEiaAssessmentValue(formFactory),
-  )
+  const eiaSessionKey = JSON.stringify([open, mode, requestId, initialPoint.pointCode])
+  const [eiaFormState, setEiaFormState] = useState(() => getEiaAssessmentFormState(null, formFactory, eiaSessionKey))
+  const nextEiaFormState = getEiaAssessmentFormState(eiaFormState, formFactory, eiaSessionKey)
+  // Refresh source values before rendering children without remounting the drawer.
+  if (nextEiaFormState !== eiaFormState) {
+    setEiaFormState(nextEiaFormState)
+  }
+  const eiaAssessment = nextEiaFormState.value
   const [officerEmails, setOfficerEmails] = useState(
     initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : [''],
   )
@@ -7377,7 +7382,7 @@ export function RequestFormBottomSheet({
                         label="การประเมินผลกระทบสิ่งแวดล้อม"
                         size="small"
                         value={eiaAssessment}
-                        onChange={(event) => setEiaAssessment(event.target.value)}
+                        onChange={(event) => setEiaFormState({ ...nextEiaFormState, value: event.target.value })}
                         fullWidth
                         slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }}
                       >
