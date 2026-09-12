@@ -261,7 +261,10 @@ function normalizeComparableValue(value) {
   return String(value).trim()
 }
 
-export function getChangedFactoryGeneralInfoFieldNames({ currentFactory = {}, proposedFactory = {} } = {}) {
+export function getChangedFactoryGeneralInfoFieldNames(request = {}) {
+  const currentFactory = request?.currentFactory ?? {}
+  const proposedFactory = request?.proposedFactory ?? {}
+
   return comparableFactoryFields.filter((field) => (
     Object.prototype.hasOwnProperty.call(proposedFactory, field)
     && JSON.stringify(normalizeComparableValue(currentFactory[field]))

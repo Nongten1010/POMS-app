@@ -81,6 +81,7 @@ test('does not mark factory fields omitted from a sparse proposed patch', () => 
     currentFactory: { eia: 'ไม่มี', projectName: 'โครงการเดิม' },
     proposedFactory: { projectName: 'โครงการใหม่' },
   }), ['projectName'])
+  assert.deepEqual(getChangedFactoryGeneralInfoFieldNames(null), [])
 })
 
 test('reads the latest factory revision reason from direct fields and events', () => {
