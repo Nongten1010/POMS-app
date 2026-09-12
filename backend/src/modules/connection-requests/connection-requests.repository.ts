@@ -479,7 +479,7 @@ export const connectionRequestsRepository = {
       : buildFactoriesForAccessQuery(access);
 
     const rows = await builder;
-    return rows.map(toFactorySummaryDTO);
+    return rows.map((row) => toFactorySummaryDTO(row, true));
   },
 
   async listOpenEligibleFactoryAddRequestsForFactoryMasterIds(
@@ -2511,7 +2511,10 @@ function applyFactorySnapshotFilters(
   });
 }
 
-function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
+function toFactorySummaryDTO(
+  row: FactoryRow,
+  includeEiaOther = isCanonicalFactoryProfilesEnabled(),
+): FactorySummaryDTO {
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(row.factory_type_sequence);
   const environmentalAssessment = resolveStoredConnectionRequestEia({
     eiaAssessment: row.eia_assessment,
@@ -2533,7 +2536,7 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
     industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
     businessActivity: row.business_activity,
     eia: environmentalAssessment.eia,
-    ...(isCanonicalFactoryProfilesEnabled() ? { eiaOther: environmentalAssessment.eiaOther } : {}),
+    ...(includeEiaOther ? { eiaOther: environmentalAssessment.eiaOther } : {}),
     hasEia,
     projectName: row.project_name ?? null,
     address: row.address,

@@ -559,10 +559,10 @@ describe('connectionRequestsService', () => {
     ]);
     expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith(['factory-001']);
     expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
-    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
-      'factory-001',
-      '3-106-33/50สบ',
-    ]);
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
+      [],
+      [17],
+    );
     expect(mockedParameterValuesService.latestHourly).not.toHaveBeenCalled();
     expect(result.data[0]).toEqual({
       id: 1,
@@ -2178,7 +2178,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('keeps all seven owned factories on the connection-request picker', async () => {
+  it('keeps visible, unconnected and non-eligible owned factories on the connection-request picker', async () => {
     const ownedFactories = Array.from({ length: 7 }, (_, index) => {
       const isEligible = index < 2;
       return factorySummary({
@@ -2210,12 +2210,8 @@ describe('connectionRequestsService', () => {
     );
 
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
-      expect.arrayContaining(['factory-1', 'REG-1', 'factory-2', 'REG-2']),
-    );
-    const connectedFactoryLookupKeys = mockedRepository.listConnectedMeasurementPointsForFactories
-      .mock.calls[0]?.[0] as string[];
-    expect(connectedFactoryLookupKeys).not.toEqual(
-      expect.arrayContaining(['factory-3', 'REG-3', 'factory-7', 'REG-7']),
+      [],
+      [17, 18],
     );
     expect(result.data).toHaveLength(7);
     expect(result.data.filter((factory) => factory.isEligible)).toHaveLength(2);

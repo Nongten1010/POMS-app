@@ -69,4 +69,22 @@ describe('factory general canonical prefill', () => {
     });
     expect(result).toMatchObject({ eia: 'อื่นๆ', eiaOther: 'รายงานเฉพาะ', projectName: null });
   });
+
+  it.each(['legacy', 'canonical'] as const)(
+    'keeps EIA detail in accessible factory summaries in %s mode',
+    async (mode) => {
+      env.FACTORY_PROFILE_MODE = mode;
+      jest.spyOn(db.client, 'runner').mockImplementation(((query: Query) => ({
+        run: async () => {
+          queries.push(query.toSQL());
+          return [currentRow];
+        },
+      })) as never);
+      const result = await connectionRequestsRepository.listFactoriesForAccess({
+        actorUserId: 7,
+        scope: 'OWN_FACTORY',
+      });
+      expect(result[0]).toMatchObject({ eia: 'อื่นๆ', eiaOther: 'รายงานเฉพาะ' });
+    },
+  );
 });

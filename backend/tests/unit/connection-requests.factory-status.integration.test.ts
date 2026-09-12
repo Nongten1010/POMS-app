@@ -5,16 +5,19 @@ import { connectionRequestsRepository } from '../../src/modules/connection-reque
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
 import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
 import type { SelectedEligibleFactoryDTO } from '../../src/modules/eligible-factories/eligible-factories.types';
+import type { FactorySummaryDTO } from '../../src/modules/connection-requests/connection-requests.types';
 import { pomsFactoriesService } from '../../src/modules/poms-factories/poms-factories.service';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
 
 let states = new Map<number, string>();
 let pointQueries: unknown[][];
 let factories: SelectedEligibleFactoryDTO[];
+let pointFactoryIds: Map<number, string>;
 
 beforeEach(() => {
   states = new Map();
   pointQueries = [];
+  pointFactoryIds = new Map();
   factories = [
     selectedEligibleFactory({
       id: 7,
@@ -27,6 +30,13 @@ beforeEach(() => {
     .mockImplementation(async () => ({ data: factories, meta: { total: factories.length } }));
   jest
     .spyOn(connectionRequestsRepository, 'listOfficerNotificationEmailsForFactories')
+    .mockResolvedValue(new Map());
+  jest
+    .spyOn(connectionRequestsRepository, 'listFactoriesForAccess')
+    .mockImplementation(async () => factories.map(toFactorySummary));
+  jest.spyOn(connectionRequestsRepository, 'listRequestsForFactories').mockResolvedValue([]);
+  jest
+    .spyOn(connectionRequestsRepository, 'listOpenEligibleFactoryAddRequestsForFactoryMasterIds')
     .mockResolvedValue(new Map());
   // Run the real query builders and mappers; replace only the database I/O.
   jest.spyOn(db.client, 'runner').mockImplementation((value: unknown) => ({
@@ -41,7 +51,7 @@ beforeEach(() => {
             ...connectedFactoryRow(),
             id: 15,
             eligible_factory_id: f.id,
-            factory_id: f.factoryId,
+            factory_id: pointFactoryIds.get(f.id) ?? f.factoryId,
             source_request_id: 1,
             management_state_json: states.get(f.id) ?? null,
           }));
@@ -65,7 +75,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('saved factory status across master data and officer connection menus', () => {
+describe('saved factory status across master data and connection menus', () => {
   it.each([
     [null, 'แสดง'],
     [{ factory: { visibility: 'VISIBLE', connectionStatus: 'CONNECTED' } }, 'แสดง'],
@@ -82,6 +92,13 @@ describe('saved factory status across master data and officer connection menus',
       },
       'ซ่อน',
     ],
+    [
+      {
+        factory: { visibility: 'VISIBLE', connectionStatus: 'CONNECTED' },
+        measurementPoints: { '15': { visibility: 'VISIBLE', parameters: { CO: 'HIDDEN' } } },
+      },
+      'ซ่อน',
+    ],
   ])('returns the same saved status %j => %s', async (state, expected) => {
     if (state) states.set(7, JSON.stringify(state));
     const master = await pomsFactoriesService.listFactories(42, { scope: 'ALL' });
@@ -93,6 +110,103 @@ describe('saved factory status across master data and officer connection menus',
     expect(master.data[0].status).toBe(expected);
     expect(officer.data[0].status).toBe(master.data[0].status);
     expect(officer.data[0].monitoringPointCount).toBe(1);
+    const operator = await connectionRequestsService.listOperatorFactories(42, {
+      scope: 'OWN_FACTORY',
+    });
+    expect(operator.data).toHaveLength(expected === 'แสดง' ? 1 : 0);
+    expect(operator.meta.total).toBe(operator.data.length);
+    if (expected === 'แสดง') expect(operator.data[0].monitoringPointCount).toBe(1);
+  });
+
+  it('matches operator visibility and point counts by eligible id despite a conflicting registration alias', async () => {
+    factories.push(
+      selectedEligibleFactory({
+        id: 8,
+        factoryId: 'another-factory',
+        factoryRegistrationNo: '10700000525488',
+      }),
+    );
+    pointFactoryIds.set(7, 'old-connected-factory-id');
+    states.set(
+      7,
+      JSON.stringify({ factory: { visibility: 'HIDDEN', connectionStatus: 'CONNECTED' } }),
+    );
+    const result = await connectionRequestsService.listOperatorFactories(42, {
+      scope: 'OWN_FACTORY',
+    });
+    expect(
+      result.data.map((row) => ({ factoryId: row.factoryId, count: row.monitoringPointCount })),
+    ).toEqual([{ factoryId: 'another-factory', count: 1 }]);
+    expect(result.meta.total).toBe(1);
+    expect(pointQueries.flat()).toEqual(expect.arrayContaining([7, 8]));
+  });
+
+  it('preserves the stored EIA assessment, detail and project name in officer factory rows', async () => {
+    factories = [
+      selectedEligibleFactory({
+        eia: 'อื่นๆ',
+        eiaOther: 'อยู่ระหว่างตรวจสอบ',
+        hasEia: true,
+        projectName: 'โครงการปัจจุบัน',
+      }),
+    ];
+    const result = await connectionRequestsService.listOfficerEligibleFactories(42, {
+      scope: 'ALL',
+    });
+    expect(result.data[0]).toMatchObject({
+      eia: 'อื่นๆ',
+      eiaOther: 'อยู่ระหว่างตรวจสอบ',
+      projectName: 'โครงการปัจจุบัน',
+    });
+  });
+
+  it('uses the saved visibility for legacy summaries without an eligible id', async () => {
+    jest
+      .mocked(connectionRequestsRepository.listFactoriesForAccess)
+      .mockResolvedValue([{ ...toFactorySummary(factories[0]), eligibleFactoryId: undefined }]);
+    states.set(7, JSON.stringify({ factory: { visibility: 'HIDDEN' } }));
+    const result = await connectionRequestsService.listOperatorFactories(42, {
+      scope: 'OWN_FACTORY',
+    });
+    expect(result).toEqual({ data: [], meta: { total: 0 } });
+  });
+
+  it('keeps operator activity, missing industry codes and EIA detail aligned with the current profile', async () => {
+    jest.mocked(connectionRequestsRepository.listFactoriesForAccess).mockResolvedValue([
+      {
+        ...toFactorySummary(factories[0]),
+        industryType: null,
+        industryMainOrder: 'ไม่ระบุ',
+        industrySubOrder: 'ไม่ระบุ',
+        eia: 'อื่นๆ',
+        eiaOther: 'รายละเอียด',
+        projectName: 'โครงการปัจจุบัน',
+      },
+    ]);
+    const result = await connectionRequestsService.listOperatorFactories(42, {
+      scope: 'OWN_FACTORY',
+    });
+    expect(result.data[0]).toMatchObject({
+      industryType: factories[0].businessActivity,
+      industryMainOrder: null,
+      industrySubOrder: null,
+      eia: 'อื่นๆ',
+      eiaOther: 'รายละเอียด',
+      projectName: 'โครงการปัจจุบัน',
+    });
+  });
+
+  it('loads operator statuses in bounded queries for a large accessible factory list', async () => {
+    factories = Array.from({ length: 2101 }, (_, index) =>
+      selectedEligibleFactory({
+        id: index + 1,
+        factoryId: `new-${index}`,
+        factoryRegistrationNo: `old-${index}`,
+      }),
+    );
+    const result = await connectionRequestsService.listOperatorFactories(42, { scope: 'ALL' });
+    expect(result.data).toHaveLength(2101);
+    expect(pointQueries.map((bindings) => bindings.length)).toEqual([500, 500, 500, 500, 101]);
   });
 
   it('matches saved states by eligible id with mixed statuses and registration aliases', async () => {
@@ -160,6 +274,28 @@ describe('saved factory status across master data and officer connection menus',
     ]);
   });
 });
+
+function toFactorySummary(factory: SelectedEligibleFactoryDTO): FactorySummaryDTO {
+  return {
+    id: factory.id + 100,
+    eligibleFactoryId: factory.id,
+    factoryId: factory.factoryId,
+    factoryName: factory.factoryName,
+    newRegistrationNo: factory.factoryId,
+    oldRegistrationNo: factory.factoryRegistrationNo,
+    industryType: factory.businessActivity,
+    industryMainOrder: factory.factoryClass,
+    industrySubOrder: factory.factorySubclass,
+    businessActivity: factory.businessActivity,
+    eia: factory.eia ?? null,
+    projectName: factory.projectName ?? null,
+    address: factory.address,
+    latitude: String(factory.latitude),
+    longitude: String(factory.longitude),
+    province: factory.provinceName,
+    isEligible: true,
+  };
+}
 function selectedEligibleFactory(
   overrides: Partial<SelectedEligibleFactoryDTO> = {},
 ): SelectedEligibleFactoryDTO {

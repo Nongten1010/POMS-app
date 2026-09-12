@@ -225,13 +225,13 @@ export const connectionRequestsService = {
       .filter((factory) => factory.isEligible !== true && factory.id !== null)
       .map((factory) => factory.id as number);
     const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
-    const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
+    const factoryIdByEligibleFactoryId = buildEligibleFactoryIdMap(eligibleFactories);
     const [requests, connectedPoints, openEligibilityRequestsByFactoryMasterId] = await Promise.all(
       [
         connectionRequestsRepository.listRequestsForFactories(
           eligibleFactories.map((factory) => factory.factoryId),
         ),
-        connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryLookupKeys),
+        listCurrentPointsForOperatorFactories(eligibleFactories),
         connectionRequestsRepository.listOpenEligibleFactoryAddRequestsForFactoryMasterIds(
           nonEligibleFactoryMasterIds,
         ),
@@ -246,15 +246,11 @@ export const connectionRequestsService = {
         })),
       );
     const latestRequestByFactory = new Map<string, ConnectionRequestDTO>();
-    const connectedPointCountByFactory = new Map<string, number>();
-
-    connectedPoints.forEach((point) => {
-      const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
-      connectedPointCountByFactory.set(
-        factoryId,
-        (connectedPointCountByFactory.get(factoryId) ?? 0) + 1,
-      );
-    });
+    const measurementPointsByFactory = mapConnectedMeasurementPointsToDashboardFactories(
+      connectedPoints,
+      factoryIdByLookupKey,
+      factoryIdByEligibleFactoryId,
+    );
 
     requests.forEach((request) => {
       if (!latestRequestByFactory.has(request.factoryId)) {
@@ -274,17 +270,21 @@ export const connectionRequestsService = {
         }
 
         const latestRequest = latestRequestByFactory.get(factory.factoryId);
+        const currentPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
         return {
           id: factory.id,
           factoryId: factory.factoryId,
           factoryName: factory.factoryName,
           newRegistrationNo: factory.newRegistrationNo,
           oldRegistrationNo: factory.oldRegistrationNo,
-          industryType: factory.industryType,
-          industryMainOrder: factory.industryMainOrder,
-          industrySubOrder: factory.industrySubOrder,
+          industryType: factory.businessActivity,
+          industryMainOrder:
+            factory.industryMainOrder === 'ไม่ระบุ' ? null : factory.industryMainOrder,
+          industrySubOrder:
+            factory.industrySubOrder === 'ไม่ระบุ' ? null : factory.industrySubOrder,
           businessActivity: factory.businessActivity,
           eia: factory.eia,
+          ...(factory.eiaOther !== undefined ? { eiaOther: factory.eiaOther } : {}),
           projectName: factory.projectName,
           address: factory.address,
           latitude: factory.latitude,
@@ -294,11 +294,11 @@ export const connectionRequestsService = {
             officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
           isEligible: factory.isEligible ?? false,
           eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
-          monitoringPointCount: connectedPointCountByFactory.get(factory.factoryId) ?? 0,
+          monitoringPointCount: currentPoints.length,
           requestStatusCode: latestRequest?.status ?? null,
           eligibilityRequest: null,
           canRequestEligibility: false,
-          status: 'แสดง',
+          status: currentPoints[0]?.factoryStatus ?? 'แสดง',
         };
       })
       .filter((factory) => factory.status === 'แสดง');
@@ -2604,6 +2604,30 @@ function buildEligibleFactoryIdMap(factories: FactorySummaryDTO[]): Map<number, 
   );
 }
 
+async function listCurrentPointsForOperatorFactories(
+  factories: FactorySummaryDTO[],
+): Promise<CurrentFactoryMeasurementPointDTO[]> {
+  const points: CurrentFactoryMeasurementPointDTO[] = [];
+  // Match authorized eligible ids first. Legacy summaries without an eligible id
+  // need at most three aliases each, so 500 factories stay below 2,100 bindings.
+  for (let offset = 0; offset < factories.length; offset += 500) {
+    const batch = factories.slice(offset, offset + 500);
+    const eligibleIds = [...buildEligibleFactoryIdMap(batch).keys()];
+    const legacyKeys = [
+      ...buildFactoryLookupKeyMap(
+        batch.filter((factory) => factory.eligibleFactoryId == null),
+      ).keys(),
+    ];
+    points.push(
+      ...(await connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
+        legacyKeys,
+        eligibleIds,
+      )),
+    );
+  }
+  return points;
+}
+
 const parameterUnitLabels: Record<string, string> = {
   co: 'CO (ppm)',
   nox: 'NOx (ppm)',
@@ -3046,8 +3070,9 @@ function toOfficerEligibleFactoryTableRow(
     industryMainOrder: factory.factoryClass,
     industrySubOrder: factory.factorySubclass,
     businessActivity: factory.businessActivity,
-    eia: toEiaLabel(factory.hasEia),
-    projectName: null,
+    eia: factory.eia ?? toEiaLabel(factory.hasEia),
+    ...(factory.eiaOther !== undefined ? { eiaOther: factory.eiaOther } : {}),
+    projectName: factory.projectName ?? null,
     address: factory.address,
     latitude: toStringOrNull(factory.latitude),
     longitude: toStringOrNull(factory.longitude),

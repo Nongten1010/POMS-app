@@ -1,5 +1,13 @@
 # API Breaking Changes
 
+## 2026-09-12 — แก้สถานะและข้อมูลโรงงานในหน้าขอเชื่อมต่อ
+
+- **Affected canonical docs:** [หน้าขอเชื่อมต่อ](./menus/connection-requests/README.md#operator-factory-list-source), [จัดการสถานะ](./menus/master-data/status-management.md)
+- **Impact:** `GET /api/v1/cems-wpms-requests/operator-factories` กรองโรงงานที่สถานะปัจจุบันเป็น `ซ่อน`/`ยกเลิกการเชื่อมต่อ` ออก แทนการกำหนดเป็น `แสดง` ทุกแถว; `meta.total` นับหลังกรอง. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานไม่เข้าข่ายยังแสดงตามสิทธิ์เดิม.
+- **ข้อมูลประกอบ:** operator list ใช้ `businessActivity` เป็น `industryType` และคืนรหัสลำดับหลัก/ย่อยที่ไม่มีข้อมูลเป็น `null` แทน `ไม่ระบุ`. ทั้งสอง list คงรายละเอียด `eiaOther` เมื่อแหล่งข้อมูลมี field นี้; officer `eligible-factories` คงค่า EIA และชื่อโครงการที่บันทึกไว้ แทนการย่อเป็น `มี`/`ไม่มี` และส่งชื่อโครงการเป็น `null`.
+- **Migration:** client โหลดรายการใหม่หลังแก้สถานะ ใช้ `meta.total` จาก response และไม่ถือว่า owner list เป็นรายชื่อโรงงานทั้งหมด. หน้าจัดการเจ้าหน้าที่ใช้ `eligible-factories` ซึ่งยังคืนแถวที่ซ่อน/ยกเลิกพร้อมสถานะจริง. แสดง `eia` ตามค่าที่ได้รับและรองรับ nullable industry codes; ไม่เปลี่ยน URL, request, permission หรือ error envelope และไม่ต้อง database migration/backfill.
+- **Breaking change:** yes — การกรองรายการและค่าบาง field ที่ client เคยได้รับเปลี่ยนไปจากพฤติกรรมเดิมที่ผิดพลาด
+
 
 ## 2026-09-11 — สรุปสถานะจากพารามิเตอร์ขึ้นสู่จุดตรวจวัดและโรงงาน
 

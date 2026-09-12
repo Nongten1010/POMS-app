@@ -401,9 +401,17 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 หากยังไม่มีสถานะที่บันทึกไว้ ใช้ `แสดง`. สถานะโรงงานใช้การคำนวณเดียวกับข้อมูลพื้นฐาน รวมการสรุปสถานะจากจุดตรวจวัดและพารามิเตอร์ปัจจุบันตามกติกาจัดการสถานะ. แถวที่ซ่อนหรือยกเลิกการเชื่อมต่อยังอยู่ในรายการตามสิทธิ์เดิม และการนับจุดตรวจวัดไม่เปลี่ยนแปลง. Backend จับคู่สถานะด้วย `eligible_factory_id` ของโรงงานที่ผ่านการตรวจสิทธิ์แล้ว ไม่ใช้ชื่อหรือเลขทะเบียนเก่า โดยใช้สถานะโรงงานที่คำนวณพร้อมข้อมูลจุดตรวจวัดปัจจุบัน จึงไม่เพิ่ม query แยกสำหรับแต่ละโรงงาน.
 
+`eia`, `eiaOther` และ `projectName` คืนค่าที่บันทึกในข้อมูลโรงงานเข้าข่าย ไม่ย่อค่า EIA เป็น boolean และไม่ทิ้งชื่อโครงการ. หากแหล่งข้อมูลเดิมไม่มีค่า `eia` จึง fallback จาก `hasEia` เป็น `มี`/`ไม่มี`/`null`; `eiaOther` เป็น optional nullable ตามแหล่งข้อมูล.
+
+```json
+{ "eia": "อื่นๆ", "eiaOther": "อยู่ระหว่างตรวจสอบ", "projectName": "โครงการปัจจุบัน" }
+```
+
 ### Operator factory list source
 
-`GET /api/v1/cems-wpms-requests/operator-factories` คืนทุกโรงงานที่ user เข้าถึงได้จากความสัมพันธ์ใน `factories` และสิทธิ์ `factories:view` แม้โรงงานนั้นจะยังไม่มี active row ใน `eligible_factories`. Endpoint นี้ใช้เป็น owner/request list ไม่ใช่ connected-only dashboard list.
+`GET /api/v1/cems-wpms-requests/operator-factories` คืนโรงงานที่ user เข้าถึงได้จากความสัมพันธ์ใน `factories` และสิทธิ์ `factories:view` โดยกรองโรงงานที่มีสถานะปัจจุบัน `ซ่อน` หรือ `ยกเลิกการเชื่อมต่อ` ออก. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานที่ยังไม่มี active row ใน `eligible_factories` ยังคงแสดงตามสิทธิ์เดิม. Endpoint นี้ใช้เป็น owner/request list ไม่ใช่ connected-only dashboard list.
+
+สถานะและจำนวนจุดตรวจวัดอ่านจาก active `cems_wpms_connected_measurement_points` พร้อมสถานะบริหาร POMS ชุดเดียวกับข้อมูลพื้นฐาน โดยจับคู่ `eligible_factory_id` ก่อนเลขทะเบียน; ใช้ identifier/เลขทะเบียนเป็น fallback เฉพาะแหล่งข้อมูลเดิมที่ไม่มี eligible id. การเปลี่ยนเลขทะเบียนจึงไม่ทำให้โรงงานที่ซ่อนกลับมาแสดง. `data[].status` ของรายการที่คืนเป็น `แสดง` และ `meta.total` เท่ากับจำนวนแถวหลังกรอง. หน้ารายการเจ้าหน้าที่ใช้ `eligible-factories` ซึ่งยังคืนแถวที่ซ่อนหรือยกเลิกเพื่อจัดการต่อได้. ดู [ผลกระทบต่อ client](../../CHANGELOG.md#2026-09-12--แก้สถานะและข้อมูลโรงงานในหน้าขอเชื่อมต่อ).
 
 โรงงานที่เข้าข่ายได้รับรายละเอียดจาก active `eligible_factories` และข้อมูล current/live ที่จับคู่ได้. โรงงานที่ไม่เข้าข่ายส่งข้อมูลที่มีความหมายเฉพาะ `factoryId`, `factoryName`, `isEligible: false` และ `eligibilityStatus: "ไม่เข้าข่าย"`; descriptive fields อื่นเป็น `null`. ฟิลด์โครงสร้างที่ frontend ใช้วนแสดงยังคง type เดิม ได้แก่ `officerNotificationEmails: []`, `monitoringPointCount: 0`, `requestStatusCode: null` และ `status: "แสดง"`. ทุก row คืน `eligibilityRequest` และ `canRequestEligibility` เพื่อให้ UI แสดงปุ่ม `แจ้งความประสงค์` จากสถานะ server โดยตรง. Eligibility ใช้ field แยกใน response แทนการกรองรายการออก:
 
@@ -414,7 +422,7 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 - โรงงานไม่เข้าข่ายที่มีคำขอ `PENDING_REVIEW` คืน request summary และ `canRequestEligibility: false`
 - โรงงานไม่เข้าข่ายที่ไม่มีคำขอค้าง รวมกรณีคำขอล่าสุดถูก `REJECTED` คืน `eligibilityRequest: null` และ `canRequestEligibility: true`
 
-จำนวนจุดตรวจวัดและสถานะคำขอคำนวณเฉพาะโรงงานที่เข้าข่าย. Public map และ authenticated `GET /api/v1/operator-factory-dashboard` ยังคงเป็น connected/current-live only สำหรับทุก scope รวม `OWN_FACTORY`; รายการโรงงานทั้งหมดของ owner พร้อมแถวข้อมูลขั้นต่ำสำหรับโรงงานไม่เข้าข่ายใช้เฉพาะ `GET /api/v1/cems-wpms-requests/operator-factories` ในหน้าขอเชื่อมต่อ.
+จำนวนจุดตรวจวัดและสถานะคำขอคำนวณเฉพาะโรงงานที่เข้าข่าย. `requestStatusCode` ยังคงเป็นสถานะคำขอล่าสุด แยกจากสถานะแสดง/ซ่อนปัจจุบัน. Public map และ authenticated `GET /api/v1/operator-factory-dashboard` ยังคงเป็น connected/current-live only สำหรับทุก scope รวม `OWN_FACTORY`; รายการโรงงานที่แสดงของ owner พร้อมแถวข้อมูลขั้นต่ำสำหรับโรงงานไม่เข้าข่ายใช้เฉพาะ `GET /api/v1/cems-wpms-requests/operator-factories` ในหน้าขอเชื่อมต่อ.
 
 | Response field                                        | Type                            | Source/Meaning                                                                                              |
 | ----------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -423,10 +431,11 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 | `data[].factoryName`                                  | string                          | ชื่อโรงงานที่ owner เข้าถึงได้; ใช้ factory master เป็นฐานและอาจถูกเสริมด้วยข้อมูลที่ sync แล้ว             |
 | `data[].newRegistrationNo`                            | string \| null                  | เลขทะเบียนโรงงานใหม่เมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                             |
 | `data[].oldRegistrationNo`                            | string \| null                  | เลขทะเบียนเก่าเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                                   |
-| `data[].industryType`                                 | string \| null                  | คำอธิบายประเภทกิจการเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                             |
-| `data[].industryMainOrder`, `data[].industrySubOrder` | string \| null                  | ลำดับหลัก/ย่อยจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                 |
+| `data[].industryType`                                 | string \| null                  | คำอธิบายการประกอบกิจการจาก `businessActivity`; เป็น `null` เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย                                             |
+| `data[].industryMainOrder`, `data[].industrySubOrder` | string \| null                  | ลำดับหลัก/ย่อยจาก active `eligible_factories`; เป็น `null` เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย ไม่ใช้ข้อความ `ไม่ระบุ` แทนรหัส                                 |
 | `data[].businessActivity`                             | string \| null                  | การประกอบกิจการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                |
 | `data[].eia`, `data[].projectName`                    | string \| null                  | ข้อมูล EIA/ชื่อโครงการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                         |
+| `data[].eiaOther` | string \| null (optional) | รายละเอียด EIA ที่บันทึกไว้สำหรับโรงงานเข้าข่าย ทั้งโหมดข้อมูลเดิมและ canonical; ไม่มีรายละเอียดเป็น `null` |
 | `data[].address`                                      | string \| null                  | ที่อยู่จาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                        |
 | `data[].province`                                     | string \| null                  | จังหวัดจาก eligible data; เป็น `null` เมื่อไม่เข้าข่าย                                                      |
 | `data[].latitude`, `data[].longitude`                 | string \| null                  | พิกัดจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                          |
@@ -441,7 +450,8 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 | `data[].eligibilityRequest.statusLabel`               | `"รอพิจารณา"`                  | สถานะสำหรับแสดงผล                                                                                           |
 | `data[].eligibilityRequest.submittedAt`               | ISO 8601 string                 | เวลาที่ส่งคำขอ                                                                                              |
 | `data[].canRequestEligibility`                        | boolean                         | `true` เฉพาะโรงงานที่ยังไม่เข้าข่ายและไม่มีคำขอค้าง; ใช้ตัดสินใจแสดงปุ่ม `แจ้งความประสงค์`                  |
-| `data[].status`                                       | `"แสดง"`                        | สถานะการแสดงผลของ owner list ปัจจุบัน                                                                       |
+| `data[].status`                                       | `"แสดง"`                        | สถานะปัจจุบันหลังกรองแถวที่ซ่อน/ยกเลิกการเชื่อมต่อออก                                                                       |
+| `meta.total` | number | จำนวนแถวที่คืนหลังกรองสถานะ เท่ากับ `data.length` |
 
 Minimal response:
 
