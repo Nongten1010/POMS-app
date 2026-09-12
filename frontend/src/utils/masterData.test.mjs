@@ -5,6 +5,7 @@ import {
   buildFactoryBasicInfoPayload,
   buildFactoryEditableProfilePatch,
   buildFactoryDocumentPatch,
+  buildFactoryEditReviewPayload,
   buildStatusManagementPayload,
   canCancelFactoryEditRequest,
   formatFactoryEditRequestDate,
@@ -34,6 +35,22 @@ test('formats factory edit request timestamps as Thai dates without time', () =>
   assert.equal(formatFactoryEditRequestDate('2026-08-24T02:00:00.000Z'), '24/08/2569')
   assert.equal(formatFactoryEditRequestDate('27/08/2569 10:30'), '27/08/2569')
   assert.equal(formatFactoryEditRequestDate(null), '-')
+})
+
+test('builds factory edit review payloads and requires a revision reason', () => {
+  assert.deepEqual(buildFactoryEditReviewPayload('REQUEST_REVISION', {
+    revisionReason: '  กรุณาแก้ไขข้อมูลจุดตรวจวัด  ',
+  }), {
+    decision: 'REQUEST_REVISION',
+    revisionReason: 'กรุณาแก้ไขข้อมูลจุดตรวจวัด',
+    officerNote: null,
+  })
+  assert.deepEqual(buildFactoryEditReviewPayload('REJECT'), {
+    decision: 'REJECT',
+    revisionReason: null,
+    officerNote: 'ไม่อนุมัติ',
+  })
+  assert.throws(() => buildFactoryEditReviewPayload('REQUEST_REVISION'), /กรุณากรอกเหตุผล/)
 })
 
 test('normalizes and validates officer notification emails', () => {

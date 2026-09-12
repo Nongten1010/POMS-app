@@ -7203,6 +7203,7 @@ export function RequestFormBottomSheet({
             !removedDocumentKeys.has(getDocumentRemovalKey(document))
           )),
         })
+        closeSubmitConfirm()
         setIsSubmitting(false)
         await onSubmitted?.(responseData ?? null, {
           successMessage: 'บันทึกข้อมูลสำเร็จ',

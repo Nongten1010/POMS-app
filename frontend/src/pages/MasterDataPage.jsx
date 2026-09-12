@@ -37,6 +37,7 @@ import {
   FACTORY_BASIC_INFO_EIA_OPTIONS,
   buildFactoryBasicInfoPayload,
   buildFactoryDocumentPatch,
+  buildFactoryEditReviewPayload,
   buildFactoryEditableProfilePatch,
   buildStatusManagementPayload,
   canCancelFactoryEditRequest,
@@ -1856,7 +1857,15 @@ function RequestViewBottomSheet({
   )
 }
 
-function RequestPdfPreviewDialog({ open, request, onClose }) {
+function RequestPdfPreviewDialog({
+  open,
+  request,
+  onClose,
+  title = '',
+  showRequestMetaHeader = true,
+  footerContent,
+  footerActions,
+}) {
   const previewKey = request
     ? `${request.requestId ?? request.id ?? ''}-${request.formType ?? ''}-${request.raw?.updatedAt ?? ''}`
     : ''
@@ -1888,7 +1897,7 @@ function RequestPdfPreviewDialog({ open, request, onClose }) {
       : 'factory-general-info'
 
     createConnectionRequestPdf(documentRequest, {
-      showRequestMetaHeader: true,
+      showRequestMetaHeader,
       contentMode,
       approvalStatusLabel: isApproved ? 'ผ่านการพิจารณา' : '',
     })
@@ -1917,17 +1926,19 @@ function RequestPdfPreviewDialog({ open, request, onClose }) {
         URL.revokeObjectURL(nextUrl)
       }
     }
-  }, [documentRequest, isApproved, open, previewKey, request])
+  }, [documentRequest, isApproved, open, previewKey, request, showRequestMetaHeader])
 
   return (
     <RequestDocumentDialog
       open={open}
       request={documentRequest}
-      title={`${request?.form ?? 'รายละเอียดคำขอ'}${request?.requestNo ? ` - ${request.requestNo}` : ''}`}
+      title={title || `${request?.form ?? 'รายละเอียดคำขอ'}${request?.requestNo ? ` - ${request.requestNo}` : ''}`}
       onClose={onClose}
       pdfPreviewUrl={previewUrl}
       pdfPreviewLoading={previewLoading}
       pdfPreviewError={previewError}
+      footerContent={footerContent}
+      footerActions={footerActions}
     />
   )
 }
@@ -2081,6 +2092,11 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   const [statusManagingFactory, setStatusManagingFactory] = useState(null)
   const [viewingRequest, setViewingRequest] = useState(null)
   const [reviewingRequest, setReviewingRequest] = useState(null)
+  const [generalInfoSubmitPreview, setGeneralInfoSubmitPreview] = useState(null)
+  const [generalInfoSubmitError, setGeneralInfoSubmitError] = useState('')
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
+  const [revisionReason, setRevisionReason] = useState('')
+  const [revisionDialogError, setRevisionDialogError] = useState('')
   const [cancelRequestTarget, setCancelRequestTarget] = useState(null)
   const [activeSubMenu, setActiveSubMenu] = useState('factories')
   const [factoryRows, setFactoryRows] = useState([])
@@ -2468,21 +2484,58 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     return response?.data
   }, [accessToken, loadFactories, loadRequests])
 
-  const handleSubmitGeneralInfo = useCallback(async (factory, formData, documentPatch) => {
+  const handleSubmitGeneralInfo = useCallback((factory, formData, documentPatch) => {
     setTableError('')
     setValidationSnackbarMessage('')
+    setGeneralInfoSubmitError('')
     try {
       const payload = buildBasicInfoPayload(factory, formData, documentPatch)
-      setActionLoading(true)
-      await submitFactoryEditRequest(factory, payload)
-      setEditingGeneralFactoryOpen(false)
+      const { formType, ...factoryPatch } = payload
+      const proposedFactory = normalizeFactoryDetail({ ...factory, ...factoryPatch })
+      setGeneralInfoSubmitPreview({
+        factory,
+        payload,
+        request: {
+          id: `general-info-submit-${Date.now()}`,
+          form: 'แก้ไขข้อมูลทั่วไปของโรงงาน',
+          formType,
+          factoryId: getFactoryRowId(factory),
+          factoryName: proposedFactory.factoryName,
+          currentFactory: factory,
+          proposedFactory,
+          systemType: factory.systemType,
+        },
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'ข้อมูลในแบบฟอร์มไม่ถูกต้อง'
       setValidationSnackbarMessage(message)
+    }
+  }, [])
+
+  const closeGeneralInfoSubmitPreview = useCallback(() => {
+    if (actionLoading) return
+    setGeneralInfoSubmitPreview(null)
+    setGeneralInfoSubmitError('')
+  }, [actionLoading])
+
+  const confirmSubmitGeneralInfo = useCallback(async () => {
+    if (!generalInfoSubmitPreview) return
+
+    setActionLoading(true)
+    setGeneralInfoSubmitError('')
+    try {
+      await submitFactoryEditRequest(
+        generalInfoSubmitPreview.factory,
+        generalInfoSubmitPreview.payload,
+      )
+      setGeneralInfoSubmitPreview(null)
+      setEditingGeneralFactoryOpen(false)
+    } catch (error) {
+      setGeneralInfoSubmitError(error instanceof Error ? error.message : 'ส่งคำขอแก้ไขไม่สำเร็จ')
     } finally {
       setActionLoading(false)
     }
-  }, [submitFactoryEditRequest])
+  }, [generalInfoSubmitPreview, submitFactoryEditRequest])
 
   const handleSubmitMeasurementPoints = useCallback(async (requestBody, context) => {
     const initialRequest = makeMasterDataInitialRequest(editingFactory)
@@ -2520,21 +2573,41 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     }
   }, [accessToken, cancelRequestTarget, loadFactories, loadRequests])
 
-  const reviewEditRequest = useCallback(async (decision) => {
+  const openRevisionDialog = useCallback(() => {
+    setRevisionReason('')
+    setRevisionDialogError('')
+    setRevisionDialogOpen(true)
+  }, [])
+
+  const closeRevisionDialog = useCallback(() => {
+    if (actionLoading) return
+    setRevisionDialogOpen(false)
+    setRevisionReason('')
+    setRevisionDialogError('')
+  }, [actionLoading])
+
+  const reviewEditRequest = useCallback(async (decision, reason = '') => {
     const requestId = reviewingRequest?.requestId ?? reviewingRequest?.id
     if (!accessToken || !requestId) {
-      setTableError('ไม่พบรหัสคำขอสำหรับพิจารณา')
+      const message = 'ไม่พบรหัสคำขอสำหรับพิจารณา'
+      if (decision === 'REQUEST_REVISION') setRevisionDialogError(message)
+      else setTableError(message)
       return
     }
 
-    const body = {
-      decision,
-      revisionReason: decision === 'REQUEST_REVISION' ? 'กรุณาแก้ไขข้อมูลให้ถูกต้อง' : null,
-      officerNote: decision === 'REJECT' ? 'ไม่อนุมัติ' : null,
+    let body
+    try {
+      body = buildFactoryEditReviewPayload(decision, { revisionReason: reason })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'ข้อมูลการพิจารณาไม่ถูกต้อง'
+      if (decision === 'REQUEST_REVISION') setRevisionDialogError(message)
+      else setTableError(message)
+      return
     }
 
     setActionLoading(true)
     setTableError('')
+    setRevisionDialogError('')
     try {
       const result = await fetch(`${pomsFactoriesApiBaseUrl}/edit-requests/${encodeURIComponent(requestId)}/review`, {
         method: 'POST',
@@ -2546,6 +2619,8 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         body: JSON.stringify(body),
       })
       await readMasterDataResponse(result, 'พิจารณาคำขอไม่สำเร็จ')
+      setRevisionDialogOpen(false)
+      setRevisionReason('')
       setReviewingRequest(null)
       await Promise.all([loadFactories(), loadRequests()])
       setSnackbarMessage(
@@ -2556,7 +2631,9 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
             : 'ไม่อนุมัติคำขอสำเร็จ',
       )
     } catch (error) {
-      setTableError(error instanceof Error ? error.message : 'พิจารณาคำขอไม่สำเร็จ')
+      const message = error instanceof Error ? error.message : 'พิจารณาคำขอไม่สำเร็จ'
+      if (decision === 'REQUEST_REVISION') setRevisionDialogError(message)
+      else setTableError(message)
     } finally {
       setActionLoading(false)
     }
@@ -2668,7 +2745,6 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         titleOverride="แก้ไขข้อมูลจุดตรวจวัด"
         accessToken={accessToken}
         submitButtonLabel="บันทึก"
-        submitWithoutPreview
         customSubmit={canSubmitMasterData ? handleSubmitMeasurementPoints : null}
         documentImagesUploadUrl={`${pomsFactoriesApiBaseUrl}/document-images`}
         generalFactoryFieldsReadOnly
@@ -2698,16 +2774,95 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         onClose={() => setViewingRequest(null)}
       />
 
+      <RequestPdfPreviewDialog
+        open={Boolean(generalInfoSubmitPreview)}
+        request={generalInfoSubmitPreview?.request}
+        title="ยืนยันการบันทึกคำขอแก้ไขข้อมูล"
+        showRequestMetaHeader={false}
+        onClose={closeGeneralInfoSubmitPreview}
+        footerContent={(
+          <Stack spacing={0.5} sx={{ alignItems: 'center', textAlign: 'center', mb: 1.5 }}>
+            <Typography>กรุณาตรวจสอบความถูกต้องของข้อมูลในแบบฟอร์ม</Typography>
+            <Typography color="text.secondary">
+              เมื่อบันทึกคำขอแล้วจะไม่สามารถแก้ไขได้ จนกว่าจะได้รับการแจ้งแก้ไขจากเจ้าหน้าที่
+            </Typography>
+            {generalInfoSubmitError ? (
+              <Typography color="error" variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {generalInfoSubmitError}
+              </Typography>
+            ) : null}
+          </Stack>
+        )}
+        footerActions={(
+          <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'center' }}>
+            <Button variant="outlined" color="inherit" disabled={actionLoading} onClick={closeGeneralInfoSubmitPreview}>
+              ยกเลิก
+            </Button>
+            <Button
+              variant="contained"
+              disabled={actionLoading}
+              startIcon={actionLoading ? <CircularProgress size={16} color="inherit" /> : null}
+              onClick={confirmSubmitGeneralInfo}
+            >
+              {actionLoading ? 'กำลังบันทึก' : 'ยืนยันบันทึก'}
+            </Button>
+          </Stack>
+        )}
+      />
+
       <RequestViewBottomSheet
         open={Boolean(reviewingRequest)}
         request={reviewingRequest}
         showReviewActions
         reviewSubmitting={actionLoading}
         onApprove={() => reviewEditRequest('APPROVE')}
-        onRequestRevision={() => reviewEditRequest('REQUEST_REVISION')}
+        onRequestRevision={openRevisionDialog}
         onReject={() => reviewEditRequest('REJECT')}
         onClose={() => setReviewingRequest(null)}
       />
+      <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
+        <DialogTitle>แจ้งแก้ไข</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              กรุณาระบุรายละเอียดที่ต้องการให้ผู้ประกอบการแก้ไข
+            </Typography>
+            <TextField
+              label="รายละเอียด"
+              value={revisionReason}
+              onChange={(event) => {
+                setRevisionReason(event.target.value)
+                setRevisionDialogError('')
+              }}
+              multiline
+              minRows={4}
+              fullWidth
+              autoFocus
+              disabled={actionLoading}
+              inputProps={{ maxLength: 1000 }}
+            />
+            {revisionDialogError ? (
+              <Typography color="error" variant="body2">
+                {revisionDialogError}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', gap: 1 }}>
+          <Button variant="outlined" color="inherit" disabled={actionLoading} onClick={closeRevisionDialog}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={actionLoading || !revisionReason.trim()}
+            startIcon={actionLoading ? <CircularProgress size={16} color="inherit" /> : null}
+            onClick={() => reviewEditRequest('REQUEST_REVISION', revisionReason)}
+          >
+            {actionLoading ? 'กำลังแจ้งแก้ไข' : 'ยืนยันแจ้งแก้ไข'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={Boolean(cancelRequestTarget)}
         onClose={actionLoading ? undefined : () => setCancelRequestTarget(null)}
