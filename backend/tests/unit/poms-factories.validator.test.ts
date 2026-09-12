@@ -365,3 +365,109 @@ it('accepts point IDs as scope when editing contacts and rejects conflicting off
     }).success,
   ).toBe(false);
 });
+
+it('accepts the WPMS submission shape after removing an officer email', () => {
+  const payload = {
+    formType: 'MEASUREMENT_POINTS',
+    measurementPoints: [
+      {
+        connectedPointId: 10015,
+        pointName: 'จุดที่ 1',
+        officerNotificationEmails: ['officer@example.go.th'],
+        monitoringPointStatus: null,
+        details: {
+          monitoringPointKind: 'WPMS',
+          averageWastewaterDischarge: 560,
+          minWastewaterDischarge: 367,
+          maxWastewaterDischarge: 695,
+          eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+          connectedParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+          pendingParameters: [],
+          requestedParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+          hasTreatmentSystem: 'มี',
+          treatmentSystem: ['อื่นๆ'],
+          treatmentSystemOther: 'Chemical treatment',
+          maxTreatmentCapacity: null,
+          instrumentLatitude: 13.59096,
+          instrumentLongitude: 99.88756,
+          dischargeLatitude: null,
+          dischargeLongitude: null,
+          wastewaterSource: '',
+          dischargeReceivingSource: '',
+          connectionDevice: '',
+          connectionDeviceOther: '',
+        },
+        documentsAndImages: [],
+        measurementInstruments: {
+          converterBrand: null,
+          converterModel: null,
+          parameters: [
+            {
+              parameter: 'BOD (mg/l)',
+              technique: 'COD-BOD Correlation',
+              range: '0-40',
+              brand: 'GST',
+              supplier: 'Example supplier',
+              eiaStandard: null,
+              standardCondition: false,
+              dryBasis: false,
+              oxygenOrExcessAir: false,
+              standardCriteria: {
+                enabled: true,
+                standardValue: '27',
+                rows: [
+                  { level: 'normal', min: 0, max: 21.6 },
+                  { level: 'warning', min: 21.6, max: 27 },
+                  { level: 'critical', min: 27, max: null },
+                ],
+              },
+              eiaCriteria: { enabled: false, standardValue: '', rows: [] },
+            },
+            {
+              parameter: 'COD (mg/l)',
+              technique: 'Chemical Titration',
+              range: '0-200',
+              brand: 'GST',
+              supplier: 'Example supplier',
+              eiaStandard: null,
+              standardCondition: false,
+              dryBasis: false,
+              oxygenOrExcessAir: false,
+              standardCriteria: {
+                enabled: true,
+                standardValue: '144',
+                rows: [
+                  { level: 'normal', min: 0, max: 115.2 },
+                  { level: 'warning', min: 115.2, max: 144 },
+                  { level: 'critical', min: 144, max: null },
+                ],
+              },
+              eiaCriteria: { enabled: false, standardValue: '', rows: [] },
+            },
+            ...['Flow rate (m3/hr)', 'Watt (kW/hr)'].map((parameter) => ({
+              parameter,
+              technique: null,
+              range: null,
+              brand: null,
+              supplier: null,
+              eiaStandard: null,
+              standardCondition: false,
+              dryBasis: false,
+              oxygenOrExcessAir: false,
+              standardCriteria: { enabled: false, standardValue: '', rows: [] },
+              eiaCriteria: { enabled: false, standardValue: '', rows: [] },
+            })),
+          ],
+        },
+      },
+    ],
+    remarks: 'แก้ไขข้อมูลจุดตรวจวัด',
+  };
+  const result = createPomsFactoryEditRequestSchema.safeParse(payload);
+  expect(result.success).toBe(true);
+  if (result.success && result.data.formType === 'MEASUREMENT_POINTS') {
+    expect(result.data.measurementPoints[0].officerNotificationEmails).toEqual([
+      'officer@example.go.th',
+    ]);
+  }
+});

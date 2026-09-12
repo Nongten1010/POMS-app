@@ -364,7 +364,7 @@ function setup(options: {
         chain[method] = jest.fn(() => chain);
       }
       chain.first = async (column?: string) =>
-        table === 'cems_wpms_connected_measurement_points as cp'
+        table === 'cems_wpms_connected_measurement_points as cp' || table === 'locked-points'
           ? null
           : column === 'id'
             ? undefined

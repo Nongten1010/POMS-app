@@ -616,8 +616,9 @@ export function buildConnectedFactoryRowsQueryForTests(
 export function buildFactoryFormContactsQueryForTests(
   eligibleFactoryId: number,
   systemType?: ConnectionSystemType,
+  lockForUpdate = false,
 ): Knex.QueryBuilder<FactoryFormContactRow, FactoryFormContactRow[]> {
-  return buildFactoryFormContactsQuery(eligibleFactoryId, systemType);
+  return buildFactoryFormContactsQuery(eligibleFactoryId, systemType, db, lockForUpdate);
 }
 
 export function toPomsFactoryFormContactsForTests(
@@ -999,9 +1000,18 @@ function buildFactoryFormContactsQuery(
   eligibleFactoryId: number,
   systemType?: ConnectionSystemType,
   executor: DbExecutor = db,
+  lockForUpdate = false,
 ): Knex.QueryBuilder<FactoryFormContactRow, FactoryFormContactRow[]> {
-  const query = executor<FactoryFormContactRow>('cems_wpms_connected_measurement_points as cp')
-    .innerJoin('cems_wpms_connection_requests as req', 'req.id', 'cp.source_request_id')
+  // Knex MSSQL forUpdate() appends WITH after JOIN ON (invalid SQL Server syntax).
+  // Lock each table at its reference, including the source contact row, until commit.
+  const pointTable = lockForUpdate
+    ? executor.raw('?? AS ?? WITH (UPDLOCK)', ['cems_wpms_connected_measurement_points', 'cp'])
+    : 'cems_wpms_connected_measurement_points as cp';
+  const sourceTable = lockForUpdate
+    ? executor.raw('?? AS ?? WITH (UPDLOCK)', ['cems_wpms_connection_requests', 'req'])
+    : 'cems_wpms_connection_requests as req';
+  const query = executor<FactoryFormContactRow>(pointTable)
+    .innerJoin(sourceTable, 'req.id', 'cp.source_request_id')
     .where('cp.eligible_factory_id', eligibleFactoryId)
     .whereNull('cp.deleted_at')
     .whereNull('req.deleted_at')
@@ -2095,9 +2105,8 @@ async function ensureContactSnapshotStillCurrent(
     eligibleFactoryId,
     before.systemType ?? undefined,
     trx,
-  )
-    .forUpdate()
-    .first();
+    true,
+  ).first();
   const latest = contactSnapshot(
     source ? toPomsFactoryFormContacts(source) : null,
     live.measurementPoints,

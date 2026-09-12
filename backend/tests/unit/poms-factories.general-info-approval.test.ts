@@ -500,7 +500,7 @@ function approvalHarness(
         return chain;
       });
       chain.first = async (column?: string) =>
-        table === 'cems_wpms_connected_measurement_points as cp'
+        table === 'cems_wpms_connected_measurement_points as cp' || table === 'locked-profile'
           ? contactSource
           : column === 'id'
             ? undefined
