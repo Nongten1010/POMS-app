@@ -2545,14 +2545,19 @@ function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints
   )
 }
 
+function getRequestActionStatuses(request) {
+  const statusCode = String(request?.statusCode ?? '').trim()
+  return statusCode ? [statusCode] : [request?.status, request?.statusLabel]
+}
+
 function OfficerRequestActions({ row, canProcessRequest = false, onOpenRequestDocument, onOpenRequestProcess }) {
+  const statuses = getRequestActionStatuses(row)
   const isProcessDisabled = !canProcessRequest
-    || [row?.status, row?.statusLabel, row?.statusCode].includes('รอโรงงานแก้ไข')
-    || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_FACTORY_REVISION')
-    || [row?.status, row?.statusLabel, row?.statusCode].includes('รอเชื่อมต่อ')
-    || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_CONNECTION')
-    || [row?.status, row?.statusLabel, row?.statusCode].includes('เชื่อมต่อแล้ว')
-    || [row?.status, row?.statusLabel, row?.statusCode].includes('CONNECTED')
+    || statuses.some((status) => [
+      'รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION',
+      'รอเชื่อมต่อ', 'WAITING_CONNECTION',
+      'เชื่อมต่อแล้ว', 'CONNECTED',
+    ].includes(status))
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
@@ -3166,15 +3171,16 @@ function ConnectedPointRequestsDialog({ open, rows, loading, error, selectedInde
 }
 
 function isPendingDesignReview(request) {
-  return [request?.status, request?.statusLabel, request?.statusCode].includes('รอพิจารณาแบบ')
-    || [request?.status, request?.statusLabel, request?.statusCode].includes('PENDING_DESIGN_REVIEW')
-    || [request?.status, request?.statusLabel, request?.statusCode].includes('แก้ไขแล้ว/รอพิจารณาแบบ')
-    || [request?.status, request?.statusLabel, request?.statusCode].includes('REVISED_PENDING_DESIGN_REVIEW')
+  return getRequestActionStatuses(request).some((status) => [
+    'รอพิจารณาแบบ', 'PENDING_DESIGN_REVIEW',
+    'แก้ไขแล้ว/รอพิจารณาแบบ', 'REVISED_PENDING_DESIGN_REVIEW',
+  ].includes(status))
 }
 
 function isConnectionConfirmed(request) {
-  return [request?.status, request?.statusLabel, request?.statusCode].includes('ยืนยันการเชื่อมต่อ')
-    || [request?.status, request?.statusLabel, request?.statusCode].includes('CONNECTION_CONFIRMED')
+  return getRequestActionStatuses(request).some((status) => (
+    ['ยืนยันการเชื่อมต่อ', 'CONNECTION_CONFIRMED'].includes(status)
+  ))
 }
 
 function StatusHistoryContent({ history = [] }) {

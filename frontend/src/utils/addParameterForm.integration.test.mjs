@@ -32,7 +32,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow };`
+          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed };`
         }
       },
     }],
@@ -42,7 +42,48 @@ test('add-parameter form and payload preserve live groups without affecting othe
       RequestFormBottomSheet, validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody,
       syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload,
       MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow,
+      OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('officer processing prioritizes statusCode over display labels and still requires permission', () => {
+      const row = {
+        id: 10048, requestNo: 'CEMS-0024/2569', requestType: 'ADD_PARAMETER',
+        statusCode: 'CONNECTION_CONFIRMED', status: 'รอเชื่อมต่อ',
+      }
+      let openedRequest
+      const action = (request, canProcessRequest = true) => OfficerRequestActions({
+        row: request, canProcessRequest, onOpenRequestProcess: (value) => { openedRequest = value },
+      }).props.children[1]
+      assert.equal(action(row).props.disabled, false)
+      action(row).props.onClick()
+      assert.equal(openedRequest, row)
+      assert.equal(action(row, false).props.disabled, true)
+      assert.equal(isConnectionConfirmed(row), true)
+      assert.equal(isPendingDesignReview(row), false)
+
+      for (const requestType of ['ADD_PARAMETER', 'ADD_MEASUREMENT_POINT']) {
+        for (const statusCode of ['WAITING_FACTORY_REVISION', 'WAITING_CONNECTION', 'CONNECTED']) {
+          const request = { ...row, requestType, statusCode, status: 'ยืนยันการเชื่อมต่อ', statusLabel: 'รอพิจารณาแบบ' }
+          assert.equal(action(request).props.disabled, true)
+          assert.equal(isConnectionConfirmed(request), false)
+          assert.equal(isPendingDesignReview(request), false)
+        }
+        for (const statusCode of ['PENDING_DESIGN_REVIEW', 'REVISED_PENDING_DESIGN_REVIEW']) {
+          const request = { ...row, requestType, statusCode, status: 'ยืนยันการเชื่อมต่อ', statusLabel: 'เชื่อมต่อแล้ว' }
+          assert.equal(action(request).props.disabled, false)
+          assert.equal(isPendingDesignReview(request), true)
+          assert.equal(isConnectionConfirmed(request), false)
+        }
+      }
+      for (const statusCode of [undefined, null, '', '   ']) {
+        assert.equal(action({ ...row, statusCode }).props.disabled, true)
+        assert.equal(isConnectionConfirmed({ ...row, statusCode }), false)
+        assert.equal(isConnectionConfirmed({ statusCode, status: 'ยืนยันการเชื่อมต่อ' }), true)
+        assert.equal(isPendingDesignReview({ statusCode, statusLabel: 'รอพิจารณาแบบ' }), true)
+      }
+      assert.equal(isConnectionConfirmed(null), false)
+      assert.equal(isPendingDesignReview(null), false)
+    })
 
     await t.test('parameter approvals keep existing point codes without assignments or legacy-code validation', () => {
       const expected = { action: 'APPROVE_FORM', officerNote: 'แบบถูกต้อง' }
