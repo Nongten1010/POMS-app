@@ -166,6 +166,46 @@ function validationFields(documentation: JsonObject): JsonObject[] {
 }
 
 describe('POMS OpenAPI contract', () => {
+  it('documents request table monitoring point code and name in the runtime response', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const row = asObject(schemas.ConnectionRequestTableRow, 'ConnectionRequestTableRow');
+    expect(row.required).toEqual(
+      expect.arrayContaining(['monitoringPointCode', 'monitoringPointName']),
+    );
+    expect(row.properties).toMatchObject({
+      monitoringPointCode: { type: 'string', nullable: true },
+      monitoringPointName: { type: 'string', nullable: true },
+    });
+    expect(document.paths).toMatchObject({
+      '/cems-wpms-requests/table-rows': {
+        get: {
+          responses: {
+            '200': {
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ConnectionRequestTableResponse' },
+                  examples: {
+                    requestTable: {
+                      value: {
+                        data: [
+                          expect.objectContaining({
+                            monitoringPointCode: 'S2001',
+                            monitoringPointName: 'ปล่องระบาย A',
+                          }),
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('documents the current permission-management input and response matrices', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');

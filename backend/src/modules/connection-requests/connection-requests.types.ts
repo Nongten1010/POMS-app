@@ -511,6 +511,7 @@ export interface ConnectionRequestTableRowDTO {
   submittedAt: string;
   submittedDate: string;
   monitoringPointCode: string | null;
+  monitoringPointName: string | null;
   codeIssuedAt: string | null;
   codeIssuedDate: string | null;
   connectionDueAt: string | null;

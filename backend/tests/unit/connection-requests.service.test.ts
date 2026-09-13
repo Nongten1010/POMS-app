@@ -372,6 +372,7 @@ describe('connectionRequestsService', () => {
       industryType: 'ผลิตเคมีภัณฑ์',
       province: 'สระบุรี',
       monitoringPointCode: 'STACK-A',
+      monitoringPointName: 'ปล่องระบาย A',
       codeIssuedDate: '28/05/2569',
       form: 'เพิ่มจุดตรวจวัด',
       status: 'รอโรงงานตั้งค่าอุปกรณ์',
@@ -380,12 +381,54 @@ describe('connectionRequestsService', () => {
       waitingConnectionText: 'รอโรงงานตั้งค่าอุปกรณ์ 18 วัน',
     });
     expect(result.data[1]).toMatchObject({
+      monitoringPointCode: null,
+      monitoringPointName: null,
       status: 'เชื่อมต่อแล้ว',
       connectionDueAt: null,
       waitingConnectionDaysRemaining: null,
       waitingConnectionText: null,
     });
   });
+
+  it.each(['ALL', 'OWN_FACTORY'] as const)(
+    'pairs the request table point name with the first point code for %s',
+    async (scope) => {
+      const firstPoint = {
+        id: 1,
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'STACK-A',
+        pointType: 'STACK' as const,
+        latitude: null,
+        longitude: null,
+        parameters: [],
+        description: null,
+      };
+      const points = [
+        firstPoint,
+        { ...firstPoint, id: 2, pointName: 'ปล่องระบาย B', pointCode: 'STACK-B' },
+      ];
+      mockedRepository.list.mockResolvedValue({
+        rows: [
+          requestDto({ measurementPoints: points }),
+          requestDto({ id: 2, measurementPoints: [{ ...firstPoint, pointCode: null }] }),
+        ],
+        total: 2,
+      });
+      mockedRepository.findFactorySummariesForRequests.mockResolvedValue(new Map());
+
+      const result = await connectionRequestsService.listTableRows({}, actorUserId, scope);
+
+      expect(result.data[0]).toMatchObject({
+        monitoringPointCode: 'STACK-A',
+        monitoringPointName: 'ปล่องระบาย A',
+      });
+      expect(result.data[1]).toMatchObject({
+        monitoringPointCode: null,
+        monitoringPointName: 'ปล่องระบาย A',
+      });
+      expect(result.meta.total).toBe(2);
+    },
+  );
 
   it('keeps the request snapshot province when no factory master row exists', async () => {
     const request = requestDto({

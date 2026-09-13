@@ -394,6 +394,52 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 | -------------------- | -------------- | -------------------------------------------------------------------------------------------- |
 | `data[].factoryName` | string         | active current/live POMS point ล่าสุด; fallback เป็น factory master แล้วจึง request snapshot |
 | `data[].province`    | string \| null | factory snapshot ของคำขอที่มาจาก active eligible factory                                     |
+| `data[].monitoringPointCode` | string \| null | รหัสจุดตรวจวัดจาก `measurementPoints[0].pointCode`; `null` เมื่อยังไม่มีรหัสหรือไม่มีจุด |
+| `data[].monitoringPointName` | string \| null | ชื่อจุดตรวจวัดจาก `measurementPoints[0].pointName` ใน snapshot ของคำขอ; `null` เมื่อไม่มีจุด |
+
+ตารางรายการคำขอให้วางคอลัมน์ **ชื่อจุดตรวจวัด** (`monitoringPointName`) ถัดจาก **รหัสจุดตรวจวัด** (`monitoringPointCode`). Client กำหนดลำดับคอลัมน์เอง ไม่อาศัยลำดับ key ใน JSON. ทั้งสอง field อ้างอิงจุดแรกเดียวกันในคำขอ แม้คำขอมีหลายจุด และยังคืนชื่อเมื่อจุดนั้นยังไม่ได้รับรหัส. ชื่อใช้ snapshot คำขอ จึงไม่เปลี่ยนตามการแก้ชื่อ current/live POMS ในภายหลัง. ใช้กติกาเดียวกันทั้งเจ้าหน้าที่และผู้ประกอบการ โดยคง permission, scope, filters และจำนวนรายการเดิม.
+
+ตัวอย่างอ่านตาราง (ต้องมีสิทธิ์ `cems_wpms_requests:view`; query filters เป็น optional ตาม OpenAPI):
+
+```bash
+curl "$BASE_URL/api/v1/cems-wpms-requests/table-rows" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+ตัวอย่าง response `200 OK`:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 101,
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "industryType": null,
+      "province": "สระบุรี",
+      "type": "CEMS",
+      "requestNo": "CEMS-0001/2569",
+      "submittedAt": "2026-09-13T03:00:00.000Z",
+      "submittedDate": "13/09/2569",
+      "monitoringPointCode": "S2001",
+      "monitoringPointName": "ปล่องระบาย A",
+      "codeIssuedAt": "2026-09-13T04:00:00.000Z",
+      "codeIssuedDate": "13/09/2569",
+      "connectionDueAt": null,
+      "waitingConnectionDaysRemaining": null,
+      "waitingConnectionText": null,
+      "form": "ขอเชื่อมต่อใหม่",
+      "status": "เชื่อมต่อแล้ว",
+      "statusCode": "CONNECTED",
+      "requestType": "NEW_CONNECTION"
+    }
+  ],
+  "meta": { "total": 1 }
+}
+```
+
+รายละเอียด field อื่นดู runtime OpenAPI และรูปแบบข้อผิดพลาดดู [API กลาง](../../shared/common-api/README.md). แหล่ง implementation คือ [`toRequestTableRow`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts) และทดสอบใน [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts).
 
 ### Officer eligible factory list status
 

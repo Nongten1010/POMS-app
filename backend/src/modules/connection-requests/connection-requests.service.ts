@@ -2012,6 +2012,7 @@ function toRequestTableRow(
     submittedAt: request.createdAt,
     submittedDate: formatThaiDate(request.createdAt),
     monitoringPointCode: firstPoint?.pointCode ?? null,
+    monitoringPointName: firstPoint?.pointName ?? null,
     codeIssuedAt,
     codeIssuedDate: codeIssuedAt ? formatThaiDate(codeIssuedAt) : null,
     connectionDueAt: waitingConnection.connectionDueAt,
