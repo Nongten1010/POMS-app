@@ -24,8 +24,14 @@ describe('connectionRequestsRepository.cancelOperatorRequest', () => {
     jest.clearAllMocks();
   });
 
-  it('locks the request and writes status plus history in one transaction', async () => {
-    const harness = cancellationHarness(CONNECTION_REQUEST_STATUS.WAITING_CONNECTION);
+  it.each([
+    CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+    CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+    CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+    CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+    CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+  ])('locks %s and writes status plus history in one transaction', async (status) => {
+    const harness = cancellationHarness(status);
     const canceled = requestDto();
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
     jest.spyOn(connectionRequestsRepository, 'findById').mockResolvedValue(canceled);
@@ -58,7 +64,10 @@ describe('connectionRequestsRepository.cancelOperatorRequest', () => {
 
     await expect(
       connectionRequestsRepository.cancelOperatorRequest(1, 42, 'เหตุผลใหม่'),
-    ).resolves.toBe(canceled);
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: { currentStatus: CONNECTION_REQUEST_STATUS.CANCELED },
+    });
 
     expect(harness.selectBuilder.forUpdate).toHaveBeenCalledTimes(1);
     expect(harness.requestUpdate).not.toHaveBeenCalled();

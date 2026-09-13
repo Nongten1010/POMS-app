@@ -79,7 +79,7 @@ describe('connectionRequestsService.cancel', () => {
     expect(mockedRepository.cancelOperatorRequest).toHaveBeenCalledWith(1, actorUserId, null);
   });
 
-  it('returns an already canceled owned request without writing another history row', async () => {
+  it('rejects an already canceled owned request without writing another history row', async () => {
     const canceled = requestDto({
       status: CONNECTION_REQUEST_STATUS.CANCELED,
       revisionReason: 'เหตุผลเดิม',
@@ -88,7 +88,13 @@ describe('connectionRequestsService.cancel', () => {
 
     await expect(
       connectionRequestsService.cancel(1, { reason: 'เหตุผลใหม่' }, actorUserId),
-    ).resolves.toBe(canceled);
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: {
+        currentStatus: CONNECTION_REQUEST_STATUS.CANCELED,
+        allowedStatuses: CANCELLABLE_STATUSES,
+      },
+    });
 
     expect(mockedRepository.cancelOperatorRequest).not.toHaveBeenCalled();
   });

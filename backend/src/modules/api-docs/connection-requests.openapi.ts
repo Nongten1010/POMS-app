@@ -1,6 +1,7 @@
 import { pomsManagedStatusProperties } from './poms-status-management.openapi';
 import { env } from '../../config/env';
 import {
+  CANCELLABLE_CONNECTION_REQUEST_STATUSES,
   CONNECTION_REQUEST_DOCUMENT_TITLE,
   CONNECTION_REQUEST_STATUS_LABELS,
   CONNECTION_REQUEST_TYPE_LABELS,
@@ -1011,6 +1012,41 @@ const componentSchemas: Record<string, OpenApiObject> = {
         },
       },
     },
+  },
+  CancelConnectionRequestResponse: {
+    allOf: [
+      schemaRef('ConnectionRequestResponse'),
+      {
+        type: 'object',
+        properties: {
+          data: {
+            type: 'object',
+            required: ['status', 'statusLabel', 'revisionReason', 'statusHistory'],
+            properties: {
+              status: { type: 'string', enum: ['CANCELED'] },
+              statusLabel: { type: 'string', enum: ['ยกเลิก'] },
+              revisionReason: { type: 'string', nullable: true },
+              statusHistory: {
+                type: 'array',
+                description:
+                  'ประวัติเดิมและรายการยกเลิกที่เพิ่มใน transaction เดียวกับการเปลี่ยนสถานะ',
+                items: {
+                  type: 'object',
+                  properties: {
+                    status: { type: 'string', enum: Object.keys(CONNECTION_REQUEST_STATUS_LABELS) },
+                    statusLabel: { type: 'string' },
+                    note: { type: 'string', nullable: true },
+                    changedById: { type: 'integer', nullable: true },
+                    changedAt: { type: 'string', format: 'date-time' },
+                    isTerminal: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ],
   },
   ContactPerson: {
     type: 'object',
@@ -2476,19 +2512,79 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'คำขอเชื่อมต่อ',
       summary: 'ผู้ประกอบการยกเลิกคำขอ',
       operationId: 'cancelConnectionRequest',
-      description: 'Permission: cems_wpms_requests:edit + owner; ยกเลิกได้เฉพาะสถานะที่กำหนด',
+      description:
+        'Permission: cems_wpms_requests:edit + createdBy เป็นผู้เรียก; รองรับเฉพาะ OPERATOR_FORM. ' +
+        `ยกเลิกได้ทุกขั้นตอนก่อนสถานะปลายทาง: ${CANCELLABLE_CONNECTION_REQUEST_STATUSES.join(', ')}. ` +
+        'CONNECTED (เชื่อมต่อแล้ว) และ CANCELED (ยกเลิก) ตอบ 409 CONFLICT รวมถึงการยกเลิกซ้ำ; ไม่เปลี่ยนข้อมูลหรือเพิ่มประวัติซ้ำ. ' +
+        'ตรวจสิทธิ์และสถานะซ้ำหลัง lock แถวใน transaction; ไม่ลบข้อมูลคำขอหรือข้อมูลประกอบ',
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
           type: 'object',
           additionalProperties: false,
           properties: {
-            reason: { type: 'string', maxLength: 1000, nullable: true },
+            reason: {
+              type: 'string',
+              maxLength: 1000,
+              nullable: true,
+              description: 'ไม่บังคับ; trim ก่อนตรวจความยาวและบันทึก ค่าว่างหรือไม่ส่งเป็น null',
+            },
           },
         },
         { reason: 'ยุติโครงการติดตั้งระบบตรวจวัด' },
       ),
-      extraResponses: { '409': { $ref: '#/components/responses/Conflict' } },
+      successDescription:
+        'ยกเลิกคำขอสำเร็จ คืน full connection-request DTO ที่ status เป็น CANCELED',
+      successSchema: schemaRef('CancelConnectionRequestResponse'),
+      successExamples: {
+        canceled: {
+          summary: 'คำขอหลังยกเลิก (แสดงเฉพาะ field สำคัญ)',
+          value: {
+            success: true,
+            data: {
+              id: 101,
+              requestNo: 'CEMS-0001/2569',
+              requestType: 'NEW_CONNECTION',
+              submissionSource: 'OPERATOR_FORM',
+              status: 'CANCELED',
+              statusLabel: 'ยกเลิก',
+              revisionReason: 'ยุติโครงการติดตั้งระบบตรวจวัด',
+              statusHistory: [
+                {
+                  status: 'CANCELED',
+                  statusLabel: 'ยกเลิก',
+                  note: 'ยุติโครงการติดตั้งระบบตรวจวัด',
+                  changedById: 42,
+                  changedAt: '2026-09-13T03:00:00.000Z',
+                  isTerminal: true,
+                },
+              ],
+            },
+          },
+        },
+      },
+      extraResponses: {
+        '409': {
+          description:
+            'CONNECTED หรือ CANCELED: error.details มี currentStatus และ allowedStatuses; OFFICER_DIRECT_API: มี submissionSource. ให้ refresh และไม่ retry อัตโนมัติ',
+          content: {
+            'application/json': {
+              schema: schemaRef('ErrorEnvelope'),
+              example: {
+                success: false,
+                error: {
+                  code: 'CONFLICT',
+                  message: 'Connection request cannot be canceled from its current status',
+                  details: {
+                    currentStatus: 'CANCELED',
+                    allowedStatuses: [...CANCELLABLE_CONNECTION_REQUEST_STATUSES],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     }),
   },
   '/cems-wpms-requests/{id}/confirm-connection': {

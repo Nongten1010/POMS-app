@@ -1,5 +1,15 @@
 # API Breaking Changes
 
+<a id="operator-cancel-terminal-statuses"></a>
+
+## 2026-09-13 — ปฏิเสธการยกเลิกคำขอเชื่อมต่อที่ยกเลิกแล้ว
+
+- **Affected menu:** [ผู้ประกอบการยกเลิกคำขอเชื่อมต่อ](./menus/connection-requests/operator-cancel-request.md)
+- **Impact:** `POST /api/v1/cems-wpms-requests/:id/cancel` ตอบ `409 CONFLICT` เมื่อคำขอเป็น `CANCELED` รวมกรณีคำสั่งยกเลิกซ้อนกัน; ไม่มีการเขียนข้อมูลหรือประวัติซ้ำ
+- **Migration:** client ซ่อนหรือปิดปุ่มยกเลิกเมื่อ `CONNECTED`/`CANCELED` และ refresh รายละเอียดเมื่อได้ `409`; หยุด retry อัตโนมัติ การเรียกซ้ำหลัง network timeout อาจได้ `409` หากครั้งแรกสำเร็จแล้ว ให้ยืนยันสถานะด้วย GET รายละเอียด ไม่ต้อง migrate ฐานข้อมูล
+- **Old contract:** คำขอที่ `CANCELED` แล้วตอบ `200 OK` ด้วยข้อมูลเดิม
+- **New contract:** คำขอที่ `CONNECTED` หรือ `CANCELED` ตอบ `409 CONFLICT` พร้อม `error.details.currentStatus` และ `allowedStatuses`; อีก 5 สถานะก่อนสิ้นสุดยกเลิกได้ตามเดิม โดยคง permission, owner และ `OPERATOR_FORM`
+
 ## 2026-09-12 — คงข้อมูลโรงงานทุกสถานะในรายการผู้ประกอบการ
 
 - **Affected canonical docs:** [หน้าขอเชื่อมต่อ](./menus/connection-requests/README.md#operator-factory-list-source), [จัดการสถานะ](./menus/master-data/status-management.md)

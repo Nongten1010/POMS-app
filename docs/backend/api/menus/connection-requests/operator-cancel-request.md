@@ -57,6 +57,7 @@
   "data": {
     "id": 101,
     "requestNo": "CEMS-0001/2569",
+    "requestType": "NEW_CONNECTION",
     "submissionSource": "OPERATOR_FORM",
     "status": "CANCELED",
     "statusLabel": "ยกเลิก",
@@ -77,18 +78,26 @@
 
 ### Validation And Business Rules
 
-ยกเลิกได้เมื่อสถานะปัจจุบันเป็นสถานะใดสถานะหนึ่งต่อไปนี้:
+ผู้ประกอบการยกเลิกคำขอของตนเองได้ทุกขั้นตอน ยกเว้นสถานะปลายทาง `CONNECTED` และ `CANCELED`:
 
-- `PENDING_DESIGN_REVIEW`
-- `WAITING_FACTORY_REVISION`
-- `REVISED_PENDING_DESIGN_REVIEW`
-- `WAITING_CONNECTION`
-- `CONNECTION_CONFIRMED`
+| `status` | `statusLabel` ปัจจุบัน | ยกเลิกได้ |
+| --- | --- | --- |
+| `PENDING_DESIGN_REVIEW` | รอพิจารณาแบบ | ได้ |
+| `WAITING_FACTORY_REVISION` | รอโรงงานแก้ไข | ได้ |
+| `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณาแบบ | ได้ |
+| `WAITING_CONNECTION` | รอโรงงานตั้งค่าอุปกรณ์ | ได้ |
+| `CONNECTION_CONFIRMED` | รอเชื่อมต่อ | ได้ |
+| `CONNECTED` | เชื่อมต่อแล้ว | ไม่ได้ — `409 CONFLICT` |
+| `CANCELED` | ยกเลิก | ไม่ได้ — `409 CONFLICT` |
+
+ข้อกำหนดที่เรียกสถานะปลายทางว่า “ผ่านการพิจารณา” ใช้รหัส `CONNECTED` ใน API นี้ โดย `statusLabel` ยังคงเป็น `เชื่อมต่อแล้ว`; การอนุมัติแบบที่คำขอยังอยู่ `WAITING_CONNECTION` ยังยกเลิกได้ ให้ client ใช้รหัสสถานะตัดสิน action แทนข้อความบนหน้าจอ
+
+สำหรับปุ่มยกเลิก ให้ตรวจ permission, `createdBy`, `submissionSource = OPERATOR_FORM` และสถานะที่ยกเลิกได้ตามตาราง ทั้งหน้ารายการและรายละเอียด เมื่อสำเร็จใช้ DTO ที่ตอบกลับเพื่อ refresh สถานะ และเมื่อได้ `409` ให้อ่านรายละเอียดล่าสุดเพื่อปรับ action ตามสถานะปัจจุบัน
 
 กติกาเพิ่มเติม:
 
 - `CONNECTED` ยกเลิกไม่ได้; การเลิกใช้จุดที่เชื่อมต่อแล้วเป็นคนละ workflow.
-- หากคำขอเป็น `CANCELED` อยู่แล้ว endpoint ตอบ `200 OK` ด้วยข้อมูลปัจจุบันแบบ idempotent และไม่แก้เหตุผล, เวลา, actor หรือเพิ่ม history ซ้ำ.
+- หากคำขอเป็น `CANCELED` อยู่แล้ว endpoint ตอบ `409 CONFLICT` และไม่แก้เหตุผล, เวลา, actor หรือเพิ่ม history ซ้ำ รวมกรณีมีการยกเลิกอีกคำสั่งก่อน lock แถวสำเร็จ.
 - Backend lock แถวคำขอใน transaction ก่อนตรวจสถานะและเขียน history เพื่อไม่ให้ cancel แข่งกับ action อื่นแล้วสำเร็จทั้งคู่.
 - ไม่ลบ request, factory snapshot, measurement points, documents, point codes หรือ device configs.
 - เวอร์ชันนี้ไม่ส่ง email, push notification หรือ notification อื่น.
@@ -103,7 +112,11 @@
 | `401` | `UNAUTHORIZED` | ไม่มีหรือใช้ bearer token ไม่ถูกต้อง | ให้ผู้ใช้เข้าสู่ระบบใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี permission หรือไม่ใช่เจ้าของคำขอ | ซ่อน action และแจ้งว่าไม่มีสิทธิ์ |
 | `404` | `NOT_FOUND` | ไม่พบคำขอ | refresh รายการและปิดหน้ารายละเอียดเดิม |
-| `409` | `CONFLICT` | เป็น `CONNECTED`, เป็น `OFFICER_DIRECT_API` หรือมี action อื่นเปลี่ยนเป็นสถานะที่ยกเลิกไม่ได้ก่อน | refresh ด้วยข้อมูลล่าสุดและไม่ retry อัตโนมัติ |
+| `409` | `CONFLICT` | เป็น `CONNECTED`, `CANCELED`, `OFFICER_DIRECT_API` หรือมี action อื่นเปลี่ยนเป็นสถานะที่ยกเลิกไม่ได้ก่อน | refresh ด้วยข้อมูลล่าสุดและไม่ retry อัตโนมัติ |
+
+กรณีสถานะไม่อนุญาต `error.details.currentStatus` คือสถานะที่ตรวจพบ และ `error.details.allowedStatuses` คือรหัสสถานะที่ยกเลิกได้ทั้ง 5 ค่า; กรณี source ไม่อนุญาตใช้ `error.details.submissionSource` แทน ตรวจสิทธิ์เจ้าของก่อนส่งรายละเอียดเหล่านี้
+
+การเรียกยกเลิกซ้ำเปลี่ยนจาก `200` เป็น `409` ดู [ผลกระทบและการปรับ client](../../CHANGELOG.md#operator-cancel-terminal-statuses)
 
 ## Backend Maintainer Links
 
@@ -115,4 +128,6 @@
 - Service: [`connection-requests.service.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts)
 - Repository: [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts)
 - Tests: [`connection-requests.cancel.route.test.ts`](../../../../../backend/tests/unit/connection-requests.cancel.route.test.ts), [`connection-requests.cancel.service.test.ts`](../../../../../backend/tests/unit/connection-requests.cancel.service.test.ts), [`connection-requests.cancel.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.cancel.repository.test.ts)
+- HTTP status matrix: [`connection-requests.cancel-state.route.test.ts`](../../../../../backend/tests/unit/connection-requests.cancel-state.route.test.ts) ใช้ service จริงและจำลองเฉพาะ repository
+- Runtime OpenAPI: [`connection-requests.openapi.ts`](../../../../../backend/src/modules/api-docs/connection-requests.openapi.ts), [`contract test`](../../../../../backend/tests/unit/connection-requests.cancel.openapi.test.ts)
 - Evidence: [`operator-cancel-connection-request.tdd.md`](../../../../../docs/testing/operator-cancel-connection-request.tdd.md)

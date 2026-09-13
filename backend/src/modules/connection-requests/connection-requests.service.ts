@@ -1420,7 +1420,6 @@ export const connectionRequestsService = {
       });
     }
 
-    if (request.status === CONNECTION_REQUEST_STATUS.CANCELED) return request;
     if (!CANCELLABLE_CONNECTION_REQUEST_STATUSES.includes(request.status)) {
       throw new ConflictError('Connection request cannot be canceled from its current status', {
         currentStatus: request.status,
