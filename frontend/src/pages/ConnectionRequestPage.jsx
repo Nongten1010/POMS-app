@@ -55,9 +55,13 @@ import treatmentSystemOptionItems from '../option/treatmentSystemOptions.json'
 import wpmsTreatmentSystemOptionItems from '../option/wpmsTreatmentSystemOptions.json'
 import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
+import ModbusAddressField from '../components/ModbusAddressField'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
 import { buildPreviousConnectionRequestPrefill, loadPreviousConnectionRequest } from '../utils/previousConnectionRequest.mjs'
+import { canCancelConnectionRequest } from '../utils/connectionRequestCancellation.mjs'
+import { buildEligibleFactoryAddRequestDraft } from '../utils/eligibleFactoryAddRequest.mjs'
+import { isModbusParameterRow } from '../utils/modbusAddress.mjs'
 import {
   EIA_ASSESSMENT_OPTIONS as eiaAssessmentOptions,
   buildConnectionEnvironmentalAssessment,
@@ -1151,6 +1155,7 @@ function mapRequestTableRow(row) {
     submittedAt: row.submittedAt ?? null,
     submittedDate: formatDatePartAsThaiDate(row.submittedAt) || row.submittedDate || '',
     monitoringPointCode: row.monitoringPointCode ?? '',
+    monitoringPointName: row.monitoringPointName ?? '',
     codeIssuedAt: row.codeIssuedAt ?? null,
     codeIssuedDate: row.codeIssuedDate ?? '',
     form: row.form ?? '',
@@ -2567,7 +2572,7 @@ function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDo
         size="small"
         color="error"
         variant="outlined"
-        disabled={!canModifyRequest}
+        disabled={!canCancelConnectionRequest(row)}
         onClick={() => onOpenRequestCancel?.(row)}
       >
         ยกเลิกคำขอ
@@ -2884,6 +2889,15 @@ function getConnectedPointTabLabel(row, index) {
     || `คำขอที่ ${index + 1}`
 }
 
+function getConnectionRequestPdfOptions(request) {
+  const isConnected = [request?.status, request?.statusCode, request?.statusLabel]
+    .some((value) => ['CONNECTED', 'เชื่อมต่อแล้ว'].includes(String(value ?? '').trim()))
+  return {
+    showRequestMetaHeader: true,
+    approvalStatusLabel: isConnected ? 'ผ่านการพิจารณา' : '',
+  }
+}
+
 function mapConnectedPointRequestToDocumentRequest(row = {}) {
   if (Array.isArray(row.measurementPoints)) {
     const factory = row.factory ?? {}
@@ -3041,7 +3055,7 @@ function ConnectedPointRequestsDialog({ open, rows, loading, error, selectedInde
     let isActive = true
     let nextPdfUrl = ''
 
-    createConnectionRequestPdf(selectedRequest, { showRequestMetaHeader: true })
+    createConnectionRequestPdf(selectedRequest, getConnectionRequestPdfOptions(selectedRequest))
       .then((pdfBytes) => {
         const blob = new Blob([pdfBytes], { type: 'application/pdf' })
         nextPdfUrl = URL.createObjectURL(blob)
@@ -3703,7 +3717,7 @@ function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) 
   })
 }
 
-function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
+function ConnectionParameterTable({ deviceCodeOptions, connectionForms = [], rows, setRows }) {
   const updateRow = (index, field, nextValue) => {
     setRows((current) =>
       current.map((row, rowIndex) => {
@@ -3751,7 +3765,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
           <TableBody>
             {rows.length > 0 ? (
               rows.map((row, index) => (
-                <TableRow key={`${row.addressId}-${row.parameter}-${index}`}>
+                <TableRow key={row.id ?? `${row.parameter}-${index}`}>
                   <TableCell sx={{ minWidth: 170 }}>
                     <TextField
                       select
@@ -3771,12 +3785,19 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
                     </TextField>
                   </TableCell>
                   <TableCell sx={{ minWidth: 124 }}>
-                    <PositiveNumberField
-                      label=""
-                      min={1}
-                      value={row.addressId}
-                      onChange={(nextValue) => updateRow(index, 'addressId', nextValue)}
-                    />
+                    {isModbusParameterRow(row, connectionForms) ? (
+                      <ModbusAddressField
+                        value={row.addressId}
+                        onChange={(nextValue) => updateRow(index, 'addressId', nextValue)}
+                      />
+                    ) : (
+                      <PositiveNumberField
+                        label=""
+                        min={1}
+                        value={row.addressId}
+                        onChange={(nextValue) => updateRow(index, 'addressId', nextValue)}
+                      />
+                    )}
                   </TableCell>
                   <TableCell sx={{ minWidth: 144 }}>
                     <TextField
@@ -5085,6 +5106,10 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
           <Divider />
           <ConnectionParameterTable
             deviceCodeOptions={deviceCodeOptions}
+            connectionForms={connectionForms.map((form, index) => ({
+              ...form,
+              deviceCode: form.deviceCode || deviceCodeOptions[index] || getConnectionDeviceCode(context, index),
+            }))}
             rows={parameterMappingRows}
             setRows={setParameterMappingRows}
           />
@@ -7823,6 +7848,7 @@ function getRequestColumns(
     { field: 'requestNo', headerName: 'เลขที่คำขอ', width: 150 },
     { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
     { field: 'monitoringPointCode', headerName: 'รหัสจุดตรวจวัด', width: 170 },
+    { field: 'monitoringPointName', headerName: 'ชื่อจุดตรวจวัด', width: 200 },
     { field: 'codeIssuedDate', headerName: 'วันที่ออกรหัส', width: 150 },
     { field: 'form', headerName: 'แบบฟอร์ม', width: 150 },
     {
@@ -7902,6 +7928,12 @@ function ConnectionRequestPage({
   const [intentContactPhone, setIntentContactPhone] = useState('')
   const [intentRequestSubmitting, setIntentRequestSubmitting] = useState(false)
   const [intentRequestError, setIntentRequestError] = useState('')
+  const intentRequestDraft = useMemo(() => buildEligibleFactoryAddRequestDraft({
+    factoryId: intentRequestFactory?.factoryId,
+    reason: intentReason,
+    contactName: intentContactName,
+    contactPhone: intentContactPhone,
+  }), [intentRequestFactory, intentReason, intentContactName, intentContactPhone])
   const [operatorFactoryRows, setOperatorFactoryRows] = useState([])
   const [operatorFactoriesLoading, setOperatorFactoriesLoading] = useState(false)
   const [operatorFactoriesError, setOperatorFactoriesError] = useState('')
@@ -7956,18 +7988,12 @@ function ConnectionRequestPage({
       return
     }
 
-    const factoryId = String(intentRequestFactory?.factoryId ?? '').trim()
-    const reason = intentReason.trim()
-
-    if (!factoryId) {
-      setIntentRequestError('ไม่พบรหัสโรงงานสำหรับแจ้งความประสงค์')
+    const validationError = Object.values(intentRequestDraft.errors)[0]
+    if (validationError) {
+      setIntentRequestError(validationError)
       return
     }
-
-    if (!reason) {
-      setIntentRequestError('กรุณาระบุเหตุผลที่ต้องการแจ้งความประสงค์')
-      return
-    }
+    const { factoryId } = intentRequestDraft.payload
 
     setIntentRequestSubmitting(true)
     setIntentRequestError('')
@@ -7980,7 +8006,7 @@ function ConnectionRequestPage({
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ factoryId, reason }),
+        body: JSON.stringify(intentRequestDraft.payload),
       })
       const payload = await result.json().catch(() => null)
 
@@ -8011,7 +8037,7 @@ function ConnectionRequestPage({
     } finally {
       setIntentRequestSubmitting(false)
     }
-  }, [accessToken, closeIntentDialog, intentReason, intentRequestFactory])
+  }, [accessToken, closeIntentDialog, intentRequestDraft])
   const fetchFactoryRows = useCallback(async ({ signal } = {}) => {
     if (!canViewFactoryTable || !accessToken) {
       return []
@@ -8071,7 +8097,7 @@ function ConnectionRequestPage({
     setRequestDocumentPdfError('')
 
     try {
-      const pdfBytes = await createConnectionRequestPdf(request, { showRequestMetaHeader: true })
+      const pdfBytes = await createConnectionRequestPdf(request, getConnectionRequestPdfOptions(request))
       const blob = new Blob([pdfBytes], { type: 'application/pdf' })
       const pdfUrl = URL.createObjectURL(blob)
       setRequestDocumentPdfUrl(pdfUrl)
@@ -8547,9 +8573,10 @@ function ConnectionRequestPage({
     void handleOpenRequestDocument(row, 'process')
   }, [handleOpenRequestDocument])
   const openCancelRequestDialog = useCallback((row) => {
+    if (!isOperator || !canCancelConnectionRequest(row)) return
     setCancelRequestRow(row)
     setCancelRequestError('')
-  }, [])
+  }, [isOperator])
   const closeCancelRequestDialog = useCallback(() => {
     if (cancelRequestLoading) {
       return
@@ -8559,8 +8586,14 @@ function ConnectionRequestPage({
     setCancelRequestError('')
   }, [cancelRequestLoading])
   const cancelOperatorRequest = useCallback(async () => {
+    if (cancelRequestLoading) return
     if (!cancelRequestRow?.id) {
       setCancelRequestError('ไม่พบรหัสคำขอสำหรับยกเลิก')
+      return
+    }
+
+    if (!isOperator || !canCancelConnectionRequest(cancelRequestRow)) {
+      setCancelRequestError('ไม่สามารถยกเลิกคำขอในสถานะนี้ได้')
       return
     }
 
@@ -8595,7 +8628,7 @@ function ConnectionRequestPage({
     } finally {
       setCancelRequestLoading(false)
     }
-  }, [accessToken, cancelRequestRow, loadRequestTableRows])
+  }, [accessToken, cancelRequestLoading, cancelRequestRow, isOperator, loadRequestTableRows])
   const requestColumns = useMemo(
     () =>
       getRequestColumns(
@@ -8909,6 +8942,8 @@ function ConnectionRequestPage({
                 label="ชื่อ-นามสกุล"
                 name="intentContactName"
                 value={intentContactName}
+                error={Boolean(intentRequestDraft.errors.contactName)}
+                helperText={intentRequestDraft.errors.contactName}
                 onChange={(event) => setIntentContactName(event.target.value)}
                 autoComplete="name"
                 autoFocus
@@ -8920,6 +8955,8 @@ function ConnectionRequestPage({
                 name="intentContactPhone"
                 type="tel"
                 value={intentContactPhone}
+                error={Boolean(intentRequestDraft.errors.contactPhone)}
+                helperText={intentRequestDraft.errors.contactPhone}
                 onChange={(event) => setIntentContactPhone(event.target.value)}
                 autoComplete="tel"
                 fullWidth
