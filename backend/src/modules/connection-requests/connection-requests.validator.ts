@@ -888,7 +888,7 @@ function validateCemsDetails(
   point: z.infer<typeof measurementPointSchema>,
   index: number,
   ctx: z.RefinementCtx,
-  allowMissingInstruments = false,
+  allowMissingSections = false,
 ): void {
   const details = point.details;
   if (!details) return;
@@ -901,7 +901,7 @@ function validateCemsDetails(
   validateExcludedFields(details, wpmsOnlyDetailFields, index, ctx, 'WPMS-only detail field');
   validateParameterGroups(details, index, ctx);
   validateRegulationClauseTags(details, index, ctx);
-  validateRequestedParameters(point, index, ctx, allowMissingInstruments);
+  validateRequestedParameters(point, index, ctx, allowMissingSections);
   validateLegalAnnexNumbers(details, index, ctx);
 
   const stackShape = details.stackShape;
@@ -912,7 +912,10 @@ function validateCemsDetails(
     requireNumberDetail(details, index, ctx, 'stackLength');
   } else if (stackShape === 'อื่นๆ') {
     requireStringDetail(details, index, ctx, 'stackShapeOther');
-  } else {
+  } else if (
+    !allowMissingSections ||
+    (stackShape !== undefined && stackShape !== null && stackShape !== '')
+  ) {
     addDetailIssue(ctx, index, 'stackShape', 'CEMS stackShape is required');
   }
 

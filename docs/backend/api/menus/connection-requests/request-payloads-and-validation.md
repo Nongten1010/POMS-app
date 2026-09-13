@@ -245,7 +245,7 @@ criteria normalization สำคัญ
 - `pointType` ต้องเป็น `STACK`
 - `details.monitoringPointKind` ถ้าส่งต้องเป็น `CEMS`
 - ห้ามส่ง WPMS-only fields เช่น `averageWastewaterDischarge`, `instrumentLatitude`, `wastewaterSource`
-- `stackShape` required
+- `stackShape` required; ยกเว้นเจ้าหน้าที่สร้างคำขอผ่าน `POST /parameters` สามารถละ field หรือส่ง `null`/`""` ได้ แม้ส่ง `details` เป็น object
 - `stackShape = "วงกลม"` ต้องมี `stackDiameter`
 - `stackShape = "สี่เหลี่ยม"` ต้องมี `stackWidth` และ `stackLength`
 - `stackShape = "อื่นๆ"` ต้องมี `stackShapeOther`
@@ -594,7 +594,8 @@ criteria normalization สำคัญ
 - ต้องมี exactly 1 measurement point
 - `pointCode` ต้องมี เพราะ flow นี้อ้างถึงจุดเดิม
 - เฉพาะเจ้าหน้าที่ตามเงื่อนไขข้างต้น ละ `details` และ/หรือ `measurementInstruments` หรือส่ง `null` ได้; ผู้ประกอบการยังต้องส่งทั้งสองส่วน
-- `details` ที่ส่งเป็น object ต้องไม่ว่างและผ่านกฎ CEMS/WPMS เดิม; เครื่องมือที่ส่งมาต้องผ่าน schema เดิม
+- `details` ที่ส่งเป็น object ต้องไม่ว่าง; เจ้าหน้าที่สามารถส่ง `stackShape: null`, `stackShape: ""` หรือละ `stackShape` ได้ เพื่อรองรับ prefill ของจุดเดิมที่ยังไม่มีรูปทรงปล่อง แม้มี `requestedParameters` หรือข้อมูลส่วนอื่นอยู่ใน object
+- เมื่อเจ้าหน้าที่ระบุรูปทรงปล่อง ต้องส่งขนาดหรือคำอธิบายของรูปทรงนั้นตามกฎเดิม; ผู้ประกอบการยังต้องระบุรูปทรงปล่อง CEMS เสมอ และเครื่องมือที่ส่งมาต้องผ่าน schema เดิม
 - ถ้า `details.requestedParameters` มีค่าและส่ง `measurementInstruments` ต้องมีชุดค่าเดียวกัน; เมื่อเจ้าหน้าที่ละเครื่องมือหรือส่ง `null` จะไม่ตรวจการจับคู่กับเครื่องมือ แต่ยังตรวจค่าพารามิเตอร์ที่ขอ
 - service ตรวจซ้ำโดยใช้ตัวตนผู้ยื่น: จุดเดียวและ `pointCode` บังคับทุกคน; สองส่วนนี้ยกเว้นเฉพาะเจ้าหน้าที่
 - ผู้ติดต่อ ชื่อโรงงาน และ field อื่นยังใช้กฎเดิม; สถานะหลังสร้างยังเป็น `PENDING_DESIGN_REVIEW` และไม่รับ `submissionAction`

@@ -1324,6 +1324,16 @@ describe('POMS OpenAPI contract', () => {
     const media = asObject(content['application/json'], 'json');
     expect(media.example).toBeUndefined();
     const examples = asObject(media.examples, 'examples');
+    const officerPrefill = asObject(examples.officerPrefill, 'officer prefill').value;
+    expect(officerAddParameterRequestSchema.safeParse(officerPrefill).success).toBe(true);
+    expect(addParameterRequestSchema.safeParse(officerPrefill).success).toBe(false);
+    const detailsSchema = asObject(schemas.MeasurementPointDetails, 'details schema');
+    const stackShape = asObject(
+      asObject(detailsSchema.properties, 'detail properties').stackShape,
+      'stack shape',
+    );
+    expect(stackShape.nullable).toBe(true);
+    expect(stackShape.enum).toContain(null);
     const officerExample = asObject(examples.officer, 'officer example').value;
     expect(officerAddParameterRequestSchema.safeParse(officerExample).success).toBe(true);
     expect(addParameterRequestSchema.safeParse(officerExample).success).toBe(false);

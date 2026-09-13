@@ -134,6 +134,73 @@ describe('officer add-parameter optional sections through route and service', ()
     expect(response.status).toBe(201);
   });
 
+  it.each([null, undefined, ''])(
+    'accepts officer prefill with stackShape = %j',
+    async (stackShape) => {
+      const body = payload();
+      const point = body.measurementPoints[0];
+      const details = {
+        monitoringPointKind: 'CEMS',
+        requestedParameters: ['Flow Rate (m3/hr)'],
+        stackShape,
+        stackDiameter: null,
+        stackWidth: null,
+        stackLength: null,
+        stackShapeOther: null,
+        primaryFuel: 'ก๊าซธรรมชาติเหลว(LNG)',
+        primaryFuelPercent: 100,
+        combustionControlSystem: 'ระบบปิด',
+        hasTreatmentSystem: 'ไม่มี',
+        treatmentSystem: [],
+        connectionDevice: null,
+      };
+      const input = {
+        ...body,
+        measurementPoints: [
+          {
+            ...point,
+            parameters: ['Flow Rate (m3/hr)'],
+            details,
+            measurementInstruments: {
+              parameters: [{ parameter: 'Flow Rate (m3/hr)', technique: null }],
+            },
+          },
+        ],
+      };
+      const officer = await request(app)
+        .post(endpoint)
+        .set('Connection', 'close')
+        .set('Authorization', `Bearer ${token()}`)
+        .send(input);
+      expect(officer.status).toBe(201);
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          measurementPoints: [
+            expect.objectContaining({
+              details: expect.objectContaining({ requestedParameters: ['Flow Rate (m3/hr)'] }),
+              parameters: ['Flow Rate (m3/hr)'],
+            }),
+          ],
+        }),
+        52,
+        'PENDING_DESIGN_REVIEW',
+      );
+      repository.create.mockClear();
+      const operator = await request(app)
+        .post(endpoint)
+        .set('Connection', 'close')
+        .set('Authorization', `Bearer ${token('operator', ['factory_operator'])}`)
+        .send(input);
+      expect(operator.status).toBe(400);
+      expect(operator.body.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ pathString: 'measurementPoints.0.details.stackShape' }),
+        ]),
+      );
+      expect(repository.create).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([
     ['operator', ['monitoring_kpm']],
     ['operator', ['admin']],
@@ -173,6 +240,7 @@ describe('officer add-parameter optional sections through route and service', ()
 
   it.each([
     { details: { stackShape: 'วงกลม' } },
+    { details: { stackShape: 'invalid' } },
     { details: 'invalid' },
     { measurementInstruments: { parameters: [{ parameter: '' }] } },
     { measurementInstruments: { parameters: [{ parameter: 'NOx (ppm)' }] } },

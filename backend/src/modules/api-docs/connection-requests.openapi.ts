@@ -648,6 +648,15 @@ const officerAddParameterExample = {
     },
   ],
 };
+const officerPartialDetailsExample = {
+  ...addParameterExample,
+  measurementPoints: [
+    {
+      ...addParameterExample.measurementPoints[0],
+      details: { requestedParameters: ['CO (ppm)'], stackShape: null, stackDiameter: null },
+    },
+  ],
+};
 const directConnectionExample = {
   factoryId: 'F000123',
   factoryRegistrationNo: null,
@@ -1220,10 +1229,17 @@ const componentSchemas: Record<string, OpenApiObject> = {
       connectionDeviceOther: { type: 'string', maxLength: 1000 },
       stackShape: {
         type: 'string',
-        enum: ['วงกลม', 'สี่เหลี่ยม', 'อื่นๆ'],
-        description: 'CEMS required',
+        enum: ['วงกลม', 'สี่เหลี่ยม', 'อื่นๆ', '', null],
+        nullable: true,
+        description:
+          'CEMS required; เฉพาะเจ้าหน้าที่สร้างผ่าน POST /parameters ละ stackShape หรือส่ง null/ข้อความว่างได้ แม้ส่ง details เป็น object. เมื่อระบุรูปทรงต้องส่งขนาดหรือคำอธิบายตามกฎเดิม',
       },
-      stackDiameter: { type: 'number', description: 'Required เมื่อ stackShape = วงกลม' },
+      stackDiameter: {
+        type: 'number',
+        nullable: true,
+        description:
+          'Required เมื่อ stackShape = วงกลม; ส่ง null ได้เมื่อเจ้าหน้าที่ไม่ได้ระบุ stackShape ใน POST /parameters',
+      },
       stackWidth: { type: 'number', description: 'Required เมื่อ stackShape = สี่เหลี่ยม' },
       stackLength: { type: 'number', description: 'Required เมื่อ stackShape = สี่เหลี่ยม' },
       stackShapeOther: { type: 'string', description: 'Required เมื่อ stackShape = อื่นๆ' },
@@ -1600,7 +1616,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
           { type: 'object', nullable: true, enum: [null] },
         ],
         description:
-          'เจ้าหน้าที่ละ field หรือส่ง null ได้; ผู้ประกอบการต้องส่ง object ที่ไม่ว่าง. เมื่อส่ง object ต้องผ่านกฎ CEMS/WPMS เดิม',
+          'เจ้าหน้าที่ละ field หรือส่ง null ได้; ผู้ประกอบการต้องส่ง object ที่ไม่ว่าง. เมื่อส่ง object ต้องผ่านกฎ CEMS/WPMS เดิม ยกเว้นเจ้าหน้าที่ละ stackShape หรือส่ง null/ข้อความว่างได้',
       },
       documentsAndImages: {
         type: 'array',
@@ -2409,6 +2425,10 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               officer: {
                 summary: 'เจ้าหน้าที่: ละ details และ measurementInstruments',
                 value: officerAddParameterExample,
+              },
+              officerPrefill: {
+                summary: 'เจ้าหน้าที่: ส่ง details ที่ยังไม่มีรูปทรงปล่อง',
+                value: officerPartialDetailsExample,
               },
             },
           },
