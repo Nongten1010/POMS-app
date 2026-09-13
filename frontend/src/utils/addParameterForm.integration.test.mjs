@@ -32,7 +32,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns };`
+          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow };`
         }
       },
     }],
@@ -41,8 +41,41 @@ test('add-parameter form and payload preserve live groups without affecting othe
     const {
       RequestFormBottomSheet, validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody,
       syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload,
-      MeasurementInstrumentSection, getFactoryColumns,
+      MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('parameter approvals keep existing point codes without assignments or legacy-code validation', () => {
+      const expected = { action: 'APPROVE_FORM', officerNote: 'แบบถูกต้อง' }
+      for (const [systemType, pointCode] of [['CEMS', 'S2001'], ['WPMS', 'W2001']]) {
+        const request = mapRequestDetailRow({
+          id: 1, systemType, measurementPoints: [{ id: 2, pointCode }],
+        }, { requestType: 'ADD_PARAMETER' })
+        const snapshot = structuredClone(request)
+        assert.equal(isAddParameterRequest(request), true)
+        for (const mode of ['AUTO', 'EXISTING']) {
+          for (const staleCode of ['', 'invalid', pointCode]) {
+            assert.deepEqual(buildRequestApprovalPayload(request, mode, staleCode), expected)
+          }
+        }
+        assert.deepEqual(request, snapshot)
+        const newPoint = { requestType: 'ADD_MEASUREMENT_POINT', systemType, measurementPoints: [{ id: 2 }] }
+        assert.equal(isAddParameterRequest(newPoint), false)
+        assert.deepEqual(buildRequestApprovalPayload(newPoint, 'AUTO'), expected)
+        const legacyCode = `${pointCode[0]}0001`
+        assert.deepEqual(buildRequestApprovalPayload(newPoint, 'EXISTING', ` ${legacyCode.toLowerCase()} `), {
+          ...expected,
+          pointCodeAssignments: [{ measurementPointId: 2, assignmentMode: 'MANUAL_LEGACY', pointCode: legacyCode, reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า' }],
+        })
+        assert.throws(() => buildRequestApprovalPayload(newPoint, 'EXISTING', pointCode), /S0001-S1999/)
+        assert.throws(() => buildRequestApprovalPayload(newPoint, 'EXISTING', systemType === 'CEMS' ? 'W0001' : 'S0001'), /ต้องขึ้นต้นด้วย/)
+        assert.throws(() => buildRequestApprovalPayload({ ...newPoint, measurementPoints: [] }, 'EXISTING', legacyCode), /รอออกรหัส 1 จุด/)
+        assert.throws(() => buildRequestApprovalPayload({ ...newPoint, measurementPoints: [{}] }, 'EXISTING', legacyCode), /ไม่พบรหัสอ้างอิง/)
+      }
+      assert.equal(isAddParameterRequest(null), false)
+      assert.equal(isAddParameterRequest({ form: 'เพิ่มพารามิเตอร์' }), true)
+      assert.equal(isAddParameterRequest({ requestType: 'ADD_MEASUREMENT_POINT', form: 'เพิ่มพารามิเตอร์' }), false)
+      assert.deepEqual(buildRequestApprovalPayload({ form: 'เพิ่มพารามิเตอร์' }, 'EXISTING', ''), expected)
+    })
 
     await t.test('factory actions show the monitoring-point list label and retain the factory callback for both roles', () => {
       const row = { factoryId: 'TEST', isEligible: true, status: 'แสดง' }

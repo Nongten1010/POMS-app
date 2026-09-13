@@ -178,6 +178,38 @@ const getUnassignedMeasurementPoints = (request = {}) => {
   const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
   return points.filter((point) => !String(point?.pointCode ?? '').trim())
 }
+const isAddParameterRequest = (request) => request?.requestType
+  ? request.requestType === 'ADD_PARAMETER'
+  : request?.form === 'เพิ่มพารามิเตอร์'
+
+function buildRequestApprovalPayload(request, pointCodeMode, existingPointCode = '') {
+  const payload = { action: 'APPROVE_FORM', officerNote: 'แบบถูกต้อง' }
+  if (isAddParameterRequest(request) || pointCodeMode !== 'EXISTING') return payload
+
+  const normalizedPointCode = existingPointCode.trim().toUpperCase()
+  const unassignedPoints = getUnassignedMeasurementPoints(request)
+  const systemType = getRequestSystemType(request)
+  if (!isExistingPointCodeInAllowedRange(normalizedPointCode)) {
+    throw new Error('กรุณากรอกรหัสจุดตรวจวัดเดิมในช่วง S0001-S1999 หรือ W0001-W1999')
+  }
+  if (normalizedPointCode[0] !== getLegacyPointCodePrefix(systemType)) {
+    throw new Error(`รหัสจุดตรวจวัดเดิมของ ${systemType} ต้องขึ้นต้นด้วย ${getLegacyPointCodePrefix(systemType)}`)
+  }
+  if (unassignedPoints.length !== 1) {
+    throw new Error('การใช้รหัสจุดตรวจวัดเดิมรองรับเมื่อมีจุดที่รอออกรหัส 1 จุด')
+  }
+  const measurementPointId = getPointAssignmentId(unassignedPoints[0])
+  if (!measurementPointId) {
+    throw new Error('ไม่พบรหัสอ้างอิงของจุดตรวจวัดในคำขอนี้ กรุณาโหลดข้อมูลใหม่')
+  }
+  payload.pointCodeAssignments = [{
+    measurementPointId,
+    assignmentMode: 'MANUAL_LEGACY',
+    pointCode: normalizedPointCode,
+    reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+  }]
+  return payload
+}
 
 const measurementInstrumentColumns = [
   'พารามิเตอร์ที่ขอเชื่อมต่อ',
@@ -8421,11 +8453,6 @@ function ConnectionRequestPage({
     clearRequestDocumentPdf()
   }, [clearRequestDocumentPdf, resetApprovePointCodeForm])
   const approveRequestDocument = useCallback(() => {
-    const normalizedExistingPointCode = approveExistingPointCode.trim().toUpperCase()
-    const unassignedMeasurementPoints = getUnassignedMeasurementPoints(requestDocument)
-    const requestSystemType = getRequestSystemType(requestDocument)
-    const expectedPointCodePrefix = getLegacyPointCodePrefix(requestSystemType)
-
     if (!requestDocument?.id) {
       setRequestDocumentError('ไม่พบรหัสคำขอสำหรับอนุมัติ')
       return
@@ -8436,44 +8463,12 @@ function ConnectionRequestPage({
       return
     }
 
-    if (approvePointCodeMode === 'EXISTING' && !isExistingPointCodeInAllowedRange(normalizedExistingPointCode)) {
-      setApprovePointCodeError('กรุณากรอกรหัสจุดตรวจวัดเดิมในช่วง S0001-S1999 หรือ W0001-W1999')
+    let approvePayload
+    try {
+      approvePayload = buildRequestApprovalPayload(requestDocument, approvePointCodeMode, approveExistingPointCode)
+    } catch (error) {
+      setApprovePointCodeError(error.message)
       return
-    }
-
-    if (approvePointCodeMode === 'EXISTING' && normalizedExistingPointCode[0] !== expectedPointCodePrefix) {
-      setApprovePointCodeError(`รหัสจุดตรวจวัดเดิมของ ${requestSystemType} ต้องขึ้นต้นด้วย ${expectedPointCodePrefix}`)
-      return
-    }
-
-    if (approvePointCodeMode === 'EXISTING' && unassignedMeasurementPoints.length !== 1) {
-      setApprovePointCodeError('การใช้รหัสจุดตรวจวัดเดิมรองรับเมื่อมีจุดที่รอออกรหัส 1 จุด')
-      return
-    }
-
-    const legacyPointAssignmentId = approvePointCodeMode === 'EXISTING'
-      ? getPointAssignmentId(unassignedMeasurementPoints[0])
-      : null
-
-    if (approvePointCodeMode === 'EXISTING' && !legacyPointAssignmentId) {
-      setApprovePointCodeError('ไม่พบรหัสอ้างอิงของจุดตรวจวัดในคำขอนี้ กรุณาโหลดข้อมูลใหม่')
-      return
-    }
-
-    const approvePayload = {
-      action: 'APPROVE_FORM',
-      officerNote: 'แบบถูกต้อง',
-    }
-
-    if (approvePointCodeMode === 'EXISTING') {
-      approvePayload.pointCodeAssignments = [
-        {
-          measurementPointId: legacyPointAssignmentId,
-          assignmentMode: 'MANUAL_LEGACY',
-          pointCode: normalizedExistingPointCode,
-          reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
-        },
-      ]
     }
 
     setRequestDocumentApproving(true)
@@ -9115,10 +9110,13 @@ function ConnectionRequestPage({
         open={approveConfirmOpen}
         onClose={closeApproveConfirmDialog}
         fullWidth
-        maxWidth="md"
+        maxWidth={isAddParameterRequest(requestDocument) ? 'sm' : 'md'}
       >
         <DialogTitle>ยืนยันการอนุมัติ</DialogTitle>
         <DialogContent dividers>
+          {isAddParameterRequest(requestDocument) ? (
+            <Typography>ยืนยันการอนุมัติคำขอเพิ่มพารามิเตอร์{requestDocument?.requestNo ? ` เลขที่ ${requestDocument.requestNo}` : ''} หรือไม่?</Typography>
+          ) : (
           <Stack spacing={2}>
             <Stack
               direction={{ xs: 'column', md: 'row' }}
@@ -9226,6 +9224,7 @@ function ConnectionRequestPage({
               })}
             </RadioGroup>
           </Stack>
+          )}
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'center' }}>
           <Button color="inherit" disabled={requestDocumentApproving} onClick={closeApproveConfirmDialog}>
