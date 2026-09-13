@@ -511,6 +511,12 @@ delete dedicatedOperatorFormProperties.requestType;
 const connectionRequestFormProperties: Record<string, OpenApiObject> = {
   ...operatorFormProperties,
 };
+const expectedUpdatedAtProperty: OpenApiObject = {
+  type: 'string',
+  format: 'date-time',
+  description:
+    'ส่งค่าจาก GET /cems-wpms-requests/{id}/form กลับโดยไม่เปลี่ยน หากข้อมูลเปลี่ยนแล้วตอบ 409 CONFLICT (REQUEST_CHANGED); optional เพื่อรองรับ client เดิม',
+};
 delete connectionRequestFormProperties.type;
 const previousRequestFoundExample = {
   success: true,
@@ -1355,7 +1361,10 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'measurementPoints',
       'remarks',
     ],
-    properties: connectionRequestFormProperties,
+    properties: {
+      ...connectionRequestFormProperties,
+      expectedUpdatedAt: expectedUpdatedAtProperty,
+    },
     description:
       'Canonical form-prefill shape ที่ใช้ร่วมกันระหว่างคำขอเชื่อมต่อและข้อมูล current/live POMS; ชื่อ field ตรงกับ normalized PUT /cems-wpms-requests/{id}/form และไม่คืน workflow id, eligibleFactoryId หรือ measurement-point id',
     example: {
@@ -1731,9 +1740,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
     type: 'object',
     additionalProperties: false,
     required: ['factoryId', 'factoryName', 'systemType', 'measurementPoints'],
-    properties: operatorFormProperties,
+    properties: { ...operatorFormProperties, expectedUpdatedAt: expectedUpdatedAtProperty },
     description:
-      'ใช้ requestType เดิมของคำขอ validate; ถ้าส่ง requestType ต้องตรงของเดิม และผู้เรียกต้องเป็น owner ในสถานะ WAITING_FACTORY_REVISION',
+      'ใช้ requestType เดิมของคำขอ validate; factoryId, factoryRegistrationNo, systemType และ requestType ต้องตรงของเดิม ผู้เรียกมี cems_wpms_requests:edit ตาม data scope และคำขออยู่สถานะ WAITING_FACTORY_REVISION; OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access แม้เป็นผู้สร้างเดิม',
     example: addPointExample,
   },
   DirectConnectionMeasurementPoint: {
@@ -2528,11 +2537,29 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ส่งแบบใหม่หลังถูกแจ้งแก้ไข',
       operationId: 'resubmitConnectionRequestForm',
       description:
-        'Permission: cems_wpms_requests:edit + owner. ใช้ได้เฉพาะสถานะ WAITING_FACTORY_REVISION; requestType ถ้าส่งต้องตรงกับคำขอเดิม',
+        'Permission: cems_wpms_requests:edit ตาม data scope. OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access; createdBy อย่างเดียวไม่ให้สิทธิ์แก้ไข. เจ้าหน้าที่ต้องมี edit scope ครอบคลุมคำขอและผ่าน regionalAccess. ใช้ได้เฉพาะ WAITING_FACTORY_REVISION; factoryId, factoryRegistrationNo, systemType และ requestType ถ้าส่งต้องตรงเดิม. เก็บ createdBy เดิมและบันทึกผู้แก้จริงใน updated_by/ประวัติ. ตรวจสิทธิ์ สถานะและ updatedAt ซ้ำภายใต้ transaction lock. แนะนำส่ง expectedUpdatedAt จาก GET form เพื่อป้องกันฟอร์มเก่าข้ามรอบแก้ไข; ถ้าไม่ส่งยังตรวจการเปลี่ยนระหว่างประมวลผล แต่ไม่ทราบรุ่นที่ client เปิดอ่าน. ข้อมูลเปลี่ยนตอบ 409 CONFLICT พร้อม reason REQUEST_CHANGED',
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(schemaRef('ResubmitConnectionRequest'), addPointExample),
       successDescription: 'ส่งแบบแก้ไขแล้วและเปลี่ยนเป็น REVISED_PENDING_DESIGN_REVIEW',
       successSchema: schemaRef('ConnectionRequestResponse'),
+      extraResponses: {
+        '409': {
+          description: 'คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่; ไม่มี partial update',
+          content: {
+            'application/json': {
+              schema: schemaRef('ErrorEnvelope'),
+              example: {
+                success: false,
+                error: {
+                  code: 'CONFLICT',
+                  message: 'Connection request has changed; reload the form before resubmitting',
+                  details: { reason: 'REQUEST_CHANGED' },
+                },
+              },
+            },
+          },
+        },
+      },
       focus: true,
     }),
   },
@@ -2604,7 +2631,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เปลี่ยนสถานะหรือแจ้งแก้ไข',
       operationId: 'changeConnectionRequestStatus',
       description:
-        'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นเจ้าของคำขอเดิม resubmit เพื่อเก็บ revision ใหม่ (OPERATOR_FORM: ผู้สร้างเดิม; OFFICER_DIRECT_API: เจ้าหน้าที่ผู้สร้างเดิม) โดยยังต้องมีสิทธิ์ edit และไม่โอนเจ้าของคำขอ. กรณีอื่นคงข้อจำกัด transition เดิม',
+        'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นผู้มีสิทธิ์ edit ตาม scope/assignment ของโรงงาน resubmit เพื่อเก็บ revision ใหม่ ทั้ง OPERATOR_FORM และ OFFICER_DIRECT_API โดยคง createdBy เดิม. กรณีอื่นคงข้อจำกัด transition เดิม',
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {

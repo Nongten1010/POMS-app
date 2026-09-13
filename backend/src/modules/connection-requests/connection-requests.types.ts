@@ -185,7 +185,9 @@ export interface CreateConnectionRequestInput {
   remarks?: string | null;
 }
 
-export type ResubmitConnectionRequestInput = CreateConnectionRequestInput;
+export type ResubmitConnectionRequestInput = CreateConnectionRequestInput & {
+  expectedUpdatedAt?: string;
+};
 
 export interface AddMeasurementPointRequestInput extends CreateConnectionRequestInput {
   requestType: typeof CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT;
@@ -291,6 +293,7 @@ export interface ConnectionRequestFormDTO extends Omit<
   'eligibleFactoryId' | 'requestType'
 > {
   requestType: ConnectionRequestType;
+  expectedUpdatedAt?: string;
 }
 
 export const PREVIOUS_REQUEST_GENERAL_FIELDS = [

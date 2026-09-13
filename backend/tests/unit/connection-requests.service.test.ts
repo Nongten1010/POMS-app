@@ -4,6 +4,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
   connectionRequestsRepository: {
     create: jest.fn(),
     findById: jest.fn(),
+    canEditRequest: jest.fn(),
     findByIdForReadAccess: jest.fn(),
     findPreviousRequestForReadAccess: jest.fn(),
     findFactorySummariesForRequests: jest.fn(),
@@ -165,6 +166,7 @@ describe('connectionRequestsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedRepository.canEditRequest.mockResolvedValue(true);
     mockedRepository.findByIdForReadAccess.mockImplementation((id) =>
       mockedRepository.findById(id),
     );
@@ -2429,7 +2431,10 @@ describe('connectionRequestsService', () => {
       scope: 'OWN_FACTORY',
       regionalAccess: undefined,
     });
-    expect(result).toEqual(toConnectionRequestFormDTO(request));
+    expect(result).toEqual({
+      ...toConnectionRequestFormDTO(request),
+      expectedUpdatedAt: request.updatedAt,
+    });
     expect(result).not.toHaveProperty('id');
     expect(result).not.toHaveProperty('eligibleFactoryId');
     expect(result).not.toHaveProperty('requestNo');
@@ -5936,6 +5941,96 @@ describe('connectionRequestsService', () => {
     expect(mockedDeviceConnectionsService.replaceCurrentStation).not.toHaveBeenCalled();
   });
 
+  it('allows an assigned co-editor to resubmit a revised form without changing its creator', async () => {
+    const current = requestDto({
+      status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+      createdBy: 99,
+    });
+    mockedRepository.findById.mockResolvedValue(current);
+    mockedRepository.replaceForm.mockResolvedValue({
+      ...current,
+      status: CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+    });
+
+    await expect(
+      connectionRequestsService.resubmit(1, payload, actorUserId),
+    ).resolves.toMatchObject({
+      createdBy: 99,
+      status: CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+    });
+    expect(mockedRepository.canEditRequest).toHaveBeenCalledWith(1, {
+      actorUserId,
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+    });
+  });
+
+  it.each([42, 99])(
+    'rejects resubmit outside assigned factory access even when createdBy is %s',
+    async (createdBy) => {
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({ createdBy, status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION }),
+      );
+      mockedRepository.canEditRequest.mockResolvedValue(false);
+      await expect(
+        connectionRequestsService.resubmit(1, payload, actorUserId),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockedRepository.replaceForm).not.toHaveBeenCalled();
+    },
+  );
+
+  it('checks the edit scope and regional restriction for a scoped officer resubmission', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({ createdBy: 99, status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION }),
+    );
+    const scope = { scope: 'IN_PROVINCE' as const, province: 'สระบุรี' };
+    const regionalAccess = { regions: ['กลาง'] } as never;
+    await connectionRequestsService.resubmit(1, payload, actorUserId, scope, regionalAccess);
+    expect(mockedRepository.canEditRequest).toHaveBeenCalledWith(1, {
+      actorUserId,
+      scope,
+      regionalAccess,
+    });
+  });
+
+  it('rejects a stale form before replacing any data', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({ status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION }),
+    );
+    await expect(
+      connectionRequestsService.resubmit(
+        1,
+        { ...payload, expectedUpdatedAt: '2026-05-26T10:00:00.000Z' },
+        actorUserId,
+      ),
+    ).rejects.toMatchObject({ code: 'CONFLICT', details: { reason: 'REQUEST_CHANGED' } });
+    expect(mockedRepository.replaceForm).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { factoryId: 'other-factory' },
+    { factoryRegistrationNo: 'other-registration' },
+    { systemType: 'WPMS' as const },
+  ])('rejects changing resubmit identity: %j', async (change) => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({ status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION }),
+    );
+    await expect(
+      connectionRequestsService.resubmit(1, { ...payload, ...change }, actorUserId),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockedRepository.replaceForm).not.toHaveBeenCalled();
+  });
+
+  it('keeps the revision status restriction for an assigned co-editor', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({ createdBy: 99, status: CONNECTION_REQUEST_STATUS.CONNECTED }),
+    );
+    await expect(connectionRequestsService.resubmit(1, payload, actorUserId)).rejects.toMatchObject(
+      { code: 'BAD_REQUEST' },
+    );
+    expect(mockedRepository.replaceForm).not.toHaveBeenCalled();
+  });
+
   it('allows the owner to resubmit a revised form', async () => {
     mockedRepository.findById.mockResolvedValue(
       requestDto({
@@ -5969,6 +6064,12 @@ describe('connectionRequestsService', () => {
       },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+      {
+        actorUserId,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+        expectedUpdatedAt: now.toISOString(),
+      },
     );
   });
 
@@ -6030,6 +6131,12 @@ describe('connectionRequestsService', () => {
       { ...normalizedPayload, eligibleFactoryId: 9 },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+      {
+        actorUserId,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+        expectedUpdatedAt: now.toISOString(),
+      },
     );
   });
 

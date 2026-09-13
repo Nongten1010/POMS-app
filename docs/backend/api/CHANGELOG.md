@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+<a id="connection-request-collaborative-resubmit"></a>
+
+## 2026-09-13 — แก้และส่งคำขอกลับตามสิทธิ์โรงงาน
+
+- **Affected endpoints:** `PUT /api/v1/cems-wpms-requests/:id/form`, `GET /api/v1/cems-wpms-requests/:id/form`; [สัญญา API](./menus/connection-requests/request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform)
+- **Impact:** PUT ใช้ `cems_wpms_requests:edit` ตาม data scope; `OWN_FACTORY` ต้องมี assignment ผ่าน `user_juristics` หรือ `user_factory_access` แม้เป็นผู้สร้างเดิม รองรับผู้ร่วมงานและคำขอที่เจ้าหน้าที่สร้าง เจ้าหน้าที่ต้องผ่าน edit scope/region; ไม่เปลี่ยนสิทธิ์ยกเลิก อนุมัติ หรือตั้งค่าอุปกรณ์
+- **Breaking change:** yes — ผู้สร้างที่ไม่มี assignment แล้วแก้ไม่ได้ และ PUT ปฏิเสธการเปลี่ยน `factoryId`, `factoryRegistrationNo`, `systemType`; ฟอร์มเก่าหรือการบันทึกชนกันอาจตอบ `409 CONFLICT` พร้อม `reason=REQUEST_CHANGED`
+- **Migration:** ตรวจ assignment ของบัญชีผู้แก้ (รวมผู้สร้างเดิม) และ edit scope ของเจ้าหน้าที่ โหลด GET form ล่าสุดและส่ง `expectedUpdatedAt` กลับ เมื่อได้ `409` ให้ตรวจข้อมูลล่าสุดก่อนส่งใหม่ Field นี้ optional เพื่อรองรับ client เดิม แต่ client ที่ไม่ส่งจะป้องกันฟอร์มเก่าข้ามรอบแก้ไขไม่ได้ ไม่มี database migration
+
 <a id="parameter-form-live-parameters"></a>
 
 ## 2026-09-13 — ฟอร์มเพิ่มพารามิเตอร์ใช้รายการที่เชื่อมต่อจริงเหมือนฟอร์มโรงงาน

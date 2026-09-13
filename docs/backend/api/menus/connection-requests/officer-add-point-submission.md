@@ -162,7 +162,7 @@ Field อื่นใช้ request body ของฟอร์มเพิ่ม
 
 ### ข้อจำกัดปัจจุบัน
 
-การเลือก `REQUEST_FACTORY_REVISION` เปลี่ยนสถานะเริ่มต้นของคำขอเท่านั้น แต่ `PUT /api/v1/cems-wpms-requests/:id/form` ยังเป็น owner-only ดังนั้นคำขอที่เจ้าหน้าที่สร้างยังไม่ได้ให้สิทธิ์บัญชีโรงงานแก้และ resubmit โดยอัตโนมัติ
+การเลือก `REQUEST_FACTORY_REVISION` อนุญาตให้ผู้ใช้ที่ได้รับมอบหมายโรงงานและมี `cems_wpms_requests:edit` แก้และส่งกลับได้ แม้เจ้าหน้าที่เป็นผู้สร้างคำขอ ตาม [กติกา resubmit](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform)
 
 ## Backend Maintainer Links
 

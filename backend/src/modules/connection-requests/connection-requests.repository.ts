@@ -1209,6 +1209,10 @@ export const connectionRequestsRepository = {
     return row ? hydrate(row) : null;
   },
 
+  async canEditRequest(id: number, access: ListAccess): Promise<boolean> {
+    return Boolean(await buildRequestEditAccessQuery(id, access).first());
+  },
+
   async findPreviousRequestForReadAccess(
     factoryId: string,
     access: Pick<ListAccess, 'actorUserId' | 'scope' | 'regionalAccess'>,
@@ -1222,8 +1226,38 @@ export const connectionRequestsRepository = {
     input: CreateConnectionRequestInput,
     actorUserId: number,
     nextStatus: ConnectionRequestStatus,
+    access: ListAccess & { expectedUpdatedAt: string },
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
+      const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first();
+      if (!current) throw new NotFoundError('Connection request not found');
+      if (!(await buildRequestEditAccessQuery(id, { ...access, actorUserId }, trx).first())) {
+        throw new ForbiddenError('You do not have permission to edit requests for this factory');
+      }
+      if (
+        current.status !== CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION ||
+        new Date(current.updated_at).getTime() !== new Date(access.expectedUpdatedAt).getTime()
+      ) {
+        throw new ConflictError(
+          'Connection request has changed; reload the form before resubmitting',
+          {
+            reason: 'REQUEST_CHANGED',
+          },
+        );
+      }
+      if (
+        input.factoryId !== current.factory_id ||
+        input.factoryRegistrationNo !== current.factory_registration_no ||
+        input.systemType !== current.system_type
+      ) {
+        throw new BadRequestError(
+          'Factory identity and system type cannot be changed during resubmission',
+        );
+      }
       await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
       const profileRevisionPatch = await captureFactoryProfileRevision(
         trx,
@@ -1254,7 +1288,18 @@ export const connectionRequestsRepository = {
 
       await insertMeasurementPoints(trx, id, input.measurementPoints, actorUserId);
       await upsertFactorySnapshot(trx, id, input, actorUserId);
-      await insertHistory(trx, id, nextStatus, actorUserId, 'ผู้ประกอบการแก้ไขและส่งฟอร์มอีกครั้ง');
+      const changedFields = Object.entries(toRequestRow(input))
+        .filter(
+          ([key, value]) => JSON.stringify(Reflect.get(current, key)) !== JSON.stringify(value),
+        )
+        .map(([key]) => key);
+      await insertHistory(
+        trx,
+        id,
+        nextStatus,
+        actorUserId,
+        `แก้ไขและส่งฟอร์มอีกครั้ง; fields: ${[...changedFields, 'measurementPoints', 'factorySnapshot'].join(', ')}`,
+      );
 
       const updated = await findByIdInTransaction(trx, id);
       if (!updated) throw new Error('Updated connection request could not be loaded');
@@ -2162,11 +2207,38 @@ function buildPreviousRequestQuery(
   return builder.orderBy('created_at', 'desc').orderBy('id', 'desc');
 }
 
+export function buildRequestEditAccessQuery(
+  id: number,
+  access: ListAccess,
+  connection: Knex | Knex.Transaction = db,
+): Knex.QueryBuilder<ConnectionRequestRow, ConnectionRequestRow[]> {
+  const builder = buildBaseQuery(
+    {},
+    {
+      ...access,
+      useAssignedFactoryAccess: true,
+      includeRequestOwnerAccess: false,
+    },
+    connection,
+  ).where('id', id);
+  if (
+    !['ALL', 'OWN_FACTORY', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(
+      getAccessScopeValue(access.scope) ?? '',
+    )
+  ) {
+    builder.whereRaw('1 = 0');
+  }
+  return builder;
+}
+
 function buildBaseQuery(
   query: ListConnectionRequestsQuery,
   access: ListAccess,
+  connection: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<ConnectionRequestRow, ConnectionRequestRow[]> {
-  const builder = db<ConnectionRequestRow>('cems_wpms_connection_requests').whereNull('deleted_at');
+  const builder = connection<ConnectionRequestRow>('cems_wpms_connection_requests').whereNull(
+    'deleted_at',
+  );
 
   if (query.status) builder.where('status', query.status);
   if (query.requestType) builder.where('request_type', query.requestType);

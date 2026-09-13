@@ -1430,11 +1430,15 @@ export const createConnectionRequestSchema = connectionRequestFormSchema.transfo
 }));
 
 export const resubmitConnectionRequestSchema = connectionRequestFormObjectSchema
+  .extend({ expectedUpdatedAt: z.string().datetime({ offset: true }).optional() })
   .superRefine(validateResubmitConnectionRequest)
   .transform(normalizeResubmitConnectionRequest);
 
 export const resubmitConnectionRequestWithTypeSchema = connectionRequestFormObjectSchema
-  .extend({ requestType: z.nativeEnum(CONNECTION_REQUEST_TYPE) })
+  .extend({
+    requestType: z.nativeEnum(CONNECTION_REQUEST_TYPE),
+    expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
+  })
   .superRefine(validateResubmitConnectionRequest)
   .transform(normalizeResubmitConnectionRequest);
 

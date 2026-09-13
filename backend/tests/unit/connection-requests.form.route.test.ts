@@ -9,6 +9,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
     getForm: jest.fn(),
+    resubmit: jest.fn(),
   },
 }));
 
@@ -60,6 +61,45 @@ describe('GET /api/v1/cems-wpms-requests/:id/form', () => {
 
     expect(response.status).toBe(403);
     expect(mockedService.getForm).not.toHaveBeenCalled();
+  });
+
+  it('passes the edit permission scope and concurrency token to resubmit', async () => {
+    const token = signAccessToken({
+      sub: '43',
+      userType: 'operator',
+      roles: ['factory_operator'],
+      scopes: { 'cems_wpms_requests:edit': 'OWN_FACTORY', 'cems_wpms_requests:view': 'ALL' },
+    });
+    const body = {
+      factoryId: 'factory-001',
+      factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNo: 'REG-001',
+      systemType: 'CEMS',
+      contactName: 'ผู้ติดต่อ',
+      contactPhone: '0812345678',
+      measurementPoints: [{ pointName: 'ปล่อง A', pointType: 'STACK', parameters: ['CO (ppm)'] }],
+      expectedUpdatedAt: '2026-09-13T00:00:00.000Z',
+    };
+    const response = await request(createTestApp())
+      .put('/api/v1/cems-wpms-requests/17/form')
+      .set('Authorization', `Bearer ${token}`)
+      .send(body);
+    expect(response.status).toBe(200);
+    expect(mockedService.resubmit).toHaveBeenCalledWith(
+      17,
+      expect.objectContaining({ expectedUpdatedAt: body.expectedUpdatedAt }),
+      43,
+      { scope: 'OWN_FACTORY' },
+    );
+  });
+
+  it('does not allow view permission alone to resubmit', async () => {
+    const response = await request(createTestApp())
+      .put('/api/v1/cems-wpms-requests/17/form')
+      .set('Authorization', `Bearer ${viewToken()}`)
+      .send({});
+    expect(response.status).toBe(403);
+    expect(mockedService.resubmit).not.toHaveBeenCalled();
   });
 });
 

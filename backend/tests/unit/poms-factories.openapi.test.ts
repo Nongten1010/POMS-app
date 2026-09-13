@@ -382,6 +382,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
     const properties = asObject(form.properties, 'ConnectionRequestForm.properties');
     expect(Object.keys(properties).sort()).toEqual(
       [
+        'expectedUpdatedAt',
         'requestType',
         'factoryId',
         'factoryName',

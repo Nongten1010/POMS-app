@@ -636,7 +636,7 @@ export const connectionRequestsService = {
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestFormDTO> {
     const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
-    return toConnectionRequestFormDTO(request);
+    return { ...toConnectionRequestFormDTO(request), expectedUpdatedAt: request.updatedAt };
   },
 
   async getPreviousRequest(
@@ -1255,10 +1255,35 @@ export const connectionRequestsService = {
     id: number,
     input: ResubmitConnectionRequestInput,
     actorUserId: number,
+    editScope: AccessScope = 'OWN_FACTORY',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
-    ensureOwner(request, actorUserId);
+    const access = { actorUserId, scope: editScope, regionalAccess };
+    if (!(await connectionRequestsRepository.canEditRequest(id, access))) {
+      throw new ForbiddenError('You do not have permission to edit requests for this factory');
+    }
+    if (
+      input.expectedUpdatedAt !== undefined &&
+      new Date(input.expectedUpdatedAt).getTime() !== new Date(request.updatedAt).getTime()
+    ) {
+      throw new ConflictError(
+        'Connection request has changed; reload the form before resubmitting',
+        {
+          reason: 'REQUEST_CHANGED',
+        },
+      );
+    }
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION]);
+    if (
+      input.factoryId !== request.factoryId ||
+      input.factoryRegistrationNo !== request.factoryRegistrationNo ||
+      input.systemType !== request.systemType
+    ) {
+      throw new BadRequestError(
+        'Factory identity and system type cannot be changed during resubmission',
+      );
+    }
     if (input.requestType && input.requestType !== request.requestType) {
       throw new BadRequestError('Request type cannot be changed during resubmission', {
         path: 'requestType',
@@ -1286,6 +1311,7 @@ export const connectionRequestsService = {
       { ...formInput, eligibleFactoryId: eligibleFactory.id },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+      { ...access, expectedUpdatedAt: input.expectedUpdatedAt ?? request.updatedAt },
     );
   },
 

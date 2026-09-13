@@ -608,7 +608,13 @@ export const connectionRequestsController = {
       const actorUserId = requireActorUserId(req);
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
       const payload = resubmitConnectionRequestSchema.parse(req.body);
-      const data = await connectionRequestsService.resubmit(id, payload, actorUserId);
+      const data = await connectionRequestsService.resubmit(
+        id,
+        payload,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:edit'),
+        ...getRegionalAccessArg(req),
+      );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);

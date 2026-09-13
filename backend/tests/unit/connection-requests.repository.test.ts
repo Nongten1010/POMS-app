@@ -3,6 +3,7 @@ import {
   buildStatusHistoryNoteForTests,
   buildStatusHistoryTimelineForTests,
   buildBaseQueryForTests,
+  buildRequestEditAccessQuery,
   buildPreviousRequestQueryForTests,
   buildDuplicateActiveMeasurementPointCleanupSqlForTests,
   buildDirectConnectionFactoryQueryForTests,
@@ -19,6 +20,38 @@ import {
 import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests/connection-requests.types';
 
 describe('connectionRequestsRepository query helpers', () => {
+  it('requires a live assigned factory for editing without a creator bypass', () => {
+    const query = buildRequestEditAccessQuery(17, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      includeRequestOwnerAccess: true,
+    }).toSQL();
+    expect(query.sql).toContain('user_juristics');
+    expect(query.sql).toContain('user_factory_access');
+    expect(query.sql).toContain('[f].[deleted_at] is null');
+    expect(query.sql).not.toContain('[created_by] =');
+    expect(query.bindings).toContain(42);
+    expect(query.bindings).toContain(17);
+  });
+
+  it.each([undefined, null, 'INVALID', 'IN_PROVINCE', { scope: 'IN_PROVINCE' as const }])(
+    'fails closed for edit scope %j',
+    (scope) => {
+      expect(buildRequestEditAccessQuery(17, { actorUserId: 42, scope }).toSQL().sql).toContain(
+        '1 = 0',
+      );
+    },
+  );
+
+  it('limits scoped officer editing to the permitted province', () => {
+    const query = buildRequestEditAccessQuery(17, {
+      actorUserId: 42,
+      scope: { scope: 'IN_PROVINCE', province: 'สระบุรี' },
+    }).toSQL();
+    expect(query.sql).toContain('[fs].[province_name] = ?');
+    expect(query.bindings).toContain('สระบุรี');
+  });
+
   it('selects the latest undeleted request of the exact factory with deterministic ordering', () => {
     const factoryId = "factory-001' OR 1=1 --";
     const compiled = buildPreviousRequestQueryForTests(factoryId, { actorUserId: 42, scope: 'ALL' })

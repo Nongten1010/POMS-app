@@ -50,7 +50,7 @@ curl --request POST \
 | -------------------------- | -------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /measurement-points` | required       | `cems_wpms_requests:edit`; `CONNECT` ต้องมี `cems_wpms_requests:direct_connect` เพิ่ม | ต้อง resolve เป็น active eligible factory; เมื่อเจ้าหน้าที่ส่ง `submissionAction` จะตรวจ scope ของ permission ที่เกี่ยวข้องเพิ่ม |
 | `POST /parameters`         | required       | `cems_wpms_requests:edit`                                                             | ต้อง resolve เป็น active eligible factory; service ปัจจุบันไม่ได้ตัด location scope เพิ่ม                                        |
-| `PUT /:id/form`            | required       | `cems_wpms_requests:edit`                                                             | owner ของคำขอเดิม                                                                                                                |
+| `PUT /:id/form`            | required       | `cems_wpms_requests:edit`                                                             | ขอบเขตของ `cems_wpms_requests:edit`; `OWN_FACTORY` ต้องได้รับมอบหมายโรงงาน                                                       |
 | `POST /direct-connections` | required       | `cems_wpms_requests:direct_connect`                                                   | actor restriction + permission scope + active eligible factory ตามหัวข้อ endpoint                                                |
 
 ## Shared Top-level Request Fields
@@ -399,7 +399,7 @@ criteria normalization สำคัญ
 - เมื่อคำขอ `ADD_MEASUREMENT_POINT` ทุกจุดมี `monitoringPointStatus = "ได้รับการยกเว้นทั้งหมด"`, การอนุมัติด้วย `APPROVE_DESIGN` หรือ `APPROVE_FORM` จะออกรหัสจุด, เปลี่ยนคำขอเป็น `CONNECTED`, บันทึกเวลาอนุมัติเป็น `verifiedAt` และสร้าง active row ใน `cems_wpms_connected_measurement_points` ทันทีโดยไม่ผ่าน `WAITING_CONNECTION`, device config, confirm หรือ verify flow
 - active point ที่ได้รับการยกเว้นทั้งหมดเก็บ `parameters: []` และเก็บ `monitoringPointStatus` แยกต่างหากเพื่อรองรับการนับและการยื่น `ADD_PARAMETER` ด้วย `pointCode` เดิมในภายหลัง
 
-ข้อจำกัดปัจจุบัน: การเพิ่ม action นี้กำหนดสถานะเริ่มต้นเท่านั้น และยังไม่เปลี่ยน authorization ของ `PUT /:id/form` ซึ่งรับเฉพาะ owner ของคำขอ ดังนั้นคำขอ `WAITING_FACTORY_REVISION` ที่เจ้าหน้าที่เป็นผู้สร้างยังไม่ได้ให้สิทธิ์ผู้ใช้ของโรงงานแก้และ resubmit โดยอัตโนมัติ
+คำขอ `WAITING_FACTORY_REVISION` ที่เจ้าหน้าที่สร้างสามารถให้ผู้ใช้ที่ได้รับมอบหมายโรงงานและมี `cems_wpms_requests:edit` แก้และส่งกลับได้ตาม [กติกา PUT form](#put-apiv1cems-wpms-requestsidform)
 
 ### Errors
 
@@ -621,7 +621,7 @@ criteria normalization สำคัญ
 
 - Authentication: required
 - Permission: `cems_wpms_requests:edit`
-- Data scope: owner ของคำขอเดิม
+- Data scope: ขอบเขตของ `cems_wpms_requests:edit`; `OWN_FACTORY` ต้องได้รับมอบหมายโรงงาน
 
 ### Request Delta From Shared Contract
 
@@ -629,12 +629,14 @@ criteria normalization สำคัญ
 | ----------------- | -------- | --------------------- | ------------------- | ------- | ------------------------------------------------------------- |
 | `id`              | path     | Yes                   | No                  | integer | ต้องเป็นจำนวนเต็ม >= 1                                        |
 | `requestType`     | body     | No                    | No                  | enum    | ถ้าส่งมาและไม่ตรงกับ `request.requestType` เดิม ระบบตอบ `400` |
+| `expectedUpdatedAt` | body     | No                    | No                  | string (date-time) | ค่าจาก GET form; ไม่ตรงรุ่นปัจจุบันตอบ `409 CONFLICT` พร้อม `reason=REQUEST_CHANGED` |
 | other body fields | body     | ตาม request type เดิม | ตาม shared contract | object  | backend inject `requestType` เดิมเข้า validation อีกครั้ง     |
 
 ### Minimal Valid Request
 
 ```json
 {
+  "expectedUpdatedAt": "2026-09-13T00:00:00.000Z",
   "factoryId": "F000123",
   "factoryName": "โรงงานตัวอย่าง",
   "factoryRegistrationNo": "น.60-1/2560",
@@ -701,7 +703,12 @@ criteria normalization สำคัญ
 
 - path `id` ต้องเป็นจำนวนเต็มบวก
 - request ต้องมีอยู่จริง
-- requester ต้องเป็น owner ของคำขอ
+- ผู้เรียกต้องมี `cems_wpms_requests:edit` ที่ครอบคลุมคำขอ; `OWN_FACTORY` ตรวจ assignment ผ่าน `user_juristics` หรือ `user_factory_access` โดยไม่ใช้ `createdBy` เป็นทางลัด ผู้สร้างเดิมที่ไม่มี assignment แล้วแก้ไม่ได้
+- เจ้าหน้าที่ใช้ edit scope และ `regionalAccess` ของตน สิทธิ์ view/approve อย่างเดียวไม่เพียงพอ
+- `factoryId`, `factoryRegistrationNo` และ `systemType` ต้องตรงคำขอเดิม เพื่อป้องกันย้ายคำขอไปโรงงานอื่น
+- คง `createdBy` เดิม บันทึก `updated_by` และ `statusHistory.changedById` เป็น ID ผู้แก้จริง (`changedBy` เป็นชื่อแสดง) พร้อม note ระบุคอลัมน์ข้อมูลทั่วไปที่เปลี่ยนและส่วนฟอร์มที่แทนที่
+- ตรวจสิทธิ์ สถานะและ `updatedAt` ซ้ำภายใน transaction ที่ล็อกคำขอ เพื่อป้องกันการบันทึกพร้อมกัน
+- `GET /:id/form` คืน `expectedUpdatedAt`; ส่งค่านี้กลับโดยไม่เปลี่ยนเพื่อป้องกันฟอร์มเก่าข้ามรอบแก้ไข หากไม่ส่ง backend ยังตรวจการเปลี่ยนระหว่างประมวลผล แต่ไม่ทราบรุ่นที่ client เปิดอ่าน
 - request เดิมต้องอยู่สถานะ `WAITING_FACTORY_REVISION`
 - backend ใช้ `requestType` เดิมของคำขอมา validate body อีกครั้ง แม้ body จะ omit field นี้
 - ถ้าเป็น add-parameter ระบบ preserve `pointCode`; ถ้าเป็น new connection หรือ add-point ระบบ clear pending point codes ของจุดใหม่ก่อน replace form
@@ -714,10 +721,11 @@ criteria normalization สำคัญ
 | HTTP status | Code               | Condition                                                                   | Client action                       |
 | ----------- | ------------------ | --------------------------------------------------------------------------- | ----------------------------------- |
 | `400`       | `VALIDATION_ERROR` | body ไม่ผ่านกฎของ request type เดิม                                         | แก้ field ตาม `issues[].pathString` |
-| `400`       | `BAD_REQUEST`      | พยายามเปลี่ยน `requestType` หรือคำขอไม่อยู่สถานะ `WAITING_FACTORY_REVISION` | reload detail/status ของคำขอเดิม    |
+| `400`       | `BAD_REQUEST`      | พยายามเปลี่ยน identity/`systemType`/`requestType` หรือคำขอไม่อยู่สถานะ `WAITING_FACTORY_REVISION` | reload detail/status ของคำขอเดิม        |
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                            | login ใหม่                          |
-| `403`       | `FORBIDDEN`        | ไม่มี permission หรือไม่ใช่ owner ของคำขอ                                   | ซ่อนการแก้ไข                        |
+| `403`       | `FORBIDDEN`        | ไม่มี edit permission หรือคำขออยู่นอก edit scope/assignment                                       | ซ่อนการแก้ไข                            |
 | `404`       | `NOT_FOUND`        | ไม่พบคำขอ หรือหา active eligible factory ใหม่ไม่เจอ                         | refresh รายการคำขอ                  |
+| `409`       | `CONFLICT`         | ข้อมูลหรือสถานะเปลี่ยนระหว่างแก้ไข (`error.details.reason=REQUEST_CHANGED`)                       | โหลดฟอร์มล่าสุดและตรวจข้อมูลก่อนส่งใหม่ |
 
 ## `POST /api/v1/cems-wpms-requests/direct-connections`
 

@@ -376,6 +376,16 @@ describe('connection profile persistence with a stale submitted factory', () => 
     'captures the canonical revision when operators %s a request',
     async (operation) => {
       const fixture = fixtureDatabase([], true);
+      if (operation === 'resubmit') {
+        Object.assign(fixture.tables.cems_wpms_connection_requests[0], {
+          status: 'WAITING_FACTORY_REVISION',
+          updated_at: '2026-09-13T00:00:00.000Z',
+          system_type: 'WPMS',
+          factory_id: 'FID-17',
+          factory_registration_no: 'REG-17',
+          created_by: 99,
+        });
+      }
       const input = {
         ...oldRequest('NEW_CONNECTION'),
         contactName: 'ผู้ประสานงาน',
@@ -389,15 +399,69 @@ describe('connection profile persistence with a stale submitted factory', () => 
               input as never,
               7,
               'PENDING_DESIGN_REVIEW',
+              { actorUserId: 7, scope: 'ALL', expectedUpdatedAt: '2026-09-13T00:00:00.000Z' },
             );
       const persisted = fixture.tables.cems_wpms_connection_requests.find(
         (row) => row.id === result.id,
       );
       expect(persisted).toMatchObject({ source_factory_profile_revision: 3 });
+      if (operation === 'resubmit') {
+        expect(persisted).toMatchObject({ created_by: 99, updated_by: 7 });
+        expect(fixture.tables.cems_wpms_request_status_history[0]).toMatchObject({
+          changed_by: 7,
+          note: expect.stringContaining('measurementPoints'),
+        });
+        expect(
+          String(fixture.tables.cems_wpms_request_status_history[0].note).length,
+        ).toBeLessThanOrEqual(1000);
+      }
       expect(result).not.toHaveProperty('sourceFactoryProfileRevision');
       expect(result.measurementPoints).toHaveLength(1);
     },
   );
+
+  it.each([
+    { status: 'REVISED_PENDING_DESIGN_REVIEW', updatedAt: '2026-09-13T00:00:00.000Z' },
+    { status: 'WAITING_FACTORY_REVISION', updatedAt: '2026-09-13T00:00:01.000Z' },
+  ])(
+    'rejects a concurrent resubmit before mutating persisted data: %j',
+    async ({ status, updatedAt }) => {
+      const fixture = fixtureDatabase([], true);
+      Object.assign(fixture.tables.cems_wpms_connection_requests[0], {
+        status,
+        updated_at: updatedAt,
+      });
+      const before = structuredClone(fixture.tables);
+      await expect(
+        connectionRequestsRepository.replaceForm(
+          3,
+          oldRequest('NEW_CONNECTION') as never,
+          7,
+          'REVISED_PENDING_DESIGN_REVIEW',
+          { actorUserId: 7, scope: 'ALL', expectedUpdatedAt: '2026-09-13T00:00:00.000Z' },
+        ),
+      ).rejects.toMatchObject({ code: 'CONFLICT', details: { reason: 'REQUEST_CHANGED' } });
+      expect(fixture.tables).toEqual(before);
+      expect(fixture.locks).toContain('cems_wpms_connection_requests');
+    },
+  );
+
+  it('rechecks edit access inside the transaction before exposing state or writing', async () => {
+    const fixture = fixtureDatabase([], true);
+    fixture.tables.cems_wpms_connection_requests[0].created_by = 7;
+    const before = structuredClone(fixture.tables);
+    await expect(
+      connectionRequestsRepository.replaceForm(
+        3,
+        oldRequest('NEW_CONNECTION') as never,
+        7,
+        'REVISED_PENDING_DESIGN_REVIEW',
+        { actorUserId: 7, scope: 'IN_PROVINCE', expectedUpdatedAt: '2026-09-13T00:00:00.000Z' },
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(fixture.tables).toEqual(before);
+    expect(fixture.locks).toContain('cems_wpms_connection_requests');
+  });
 
   it.each([2, null])(
     'rejects a stale or pre-cutover first-connection revision %s without reverting the profile',

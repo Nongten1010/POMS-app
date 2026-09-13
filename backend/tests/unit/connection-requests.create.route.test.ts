@@ -219,6 +219,7 @@ describe('create measurement-point request route', () => {
         ],
       }),
       42,
+      { scope: 'OWN_FACTORY' },
     );
   });
 

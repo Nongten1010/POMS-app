@@ -48,7 +48,7 @@
 
 - Focused core coverage: statements 86.55%, branches 78.81%, functions 96.58%, lines 90.40%
 - ยังไม่ได้เพิ่ม browser/E2E เพราะ scope ที่ผู้ใช้อนุมัติคือ backend contract เท่านั้น
-- `PUT /:id/form` ยังเป็น owner-only flow เดิม ดังนั้นคำขอที่เจ้าหน้าที่สร้างเป็น `WAITING_FACTORY_REVISION` ผ่าน endpoint ใดก็ตาม ยังไม่ให้สิทธิ์ผู้ใช้ของโรงงานแก้และ resubmit โดยอัตโนมัติ
+- ขณะบันทึกหลักฐานรอบนี้ `PUT /:id/form` เป็น owner-only; ปัจจุบันใช้ [edit scope/assignment ของโรงงาน](../../api/menus/connection-requests/request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform) เพื่อให้ผู้ร่วมงานแก้และส่งกลับได้
 
 ## Merge Evidence
 

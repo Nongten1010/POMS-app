@@ -134,7 +134,7 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 | อ่านแบบตั้งค่าอุปกรณ์ในคำขอ                   | `GET`  | `/api/v1/cems-wpms-requests/:id/device-configs`           | `id` path, `stationId?` query  | `cems_wpms_requests:view`           | [Device configs](./device-configs.md)                                                                                             |
 | อ่าน config เดียวในคำขอ                       | `GET`  | `/api/v1/cems-wpms-requests/:id/device-configs/:configId` | `id`, `configId` path          | `cems_wpms_requests:view`           | [Device configs](./device-configs.md)                                                                                             |
 | สร้างคำขอเชื่อมต่อใหม่                        | `POST` | `/api/v1/cems-wpms-requests`                              | JSON body                      | `cems_wpms_requests:edit`           | [Eligibility gate](#eligibility-gate)                                                                                             |
-| ส่งแบบใหม่หลังถูกแจ้งแก้ไข                    | `PUT`  | `/api/v1/cems-wpms-requests/:id/form`                     | `id` path + JSON body          | `cems_wpms_requests:edit` + owner   | [Payload/validation](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform)                                      |
+| ส่งแบบใหม่หลังถูกแจ้งแก้ไข                    | `PUT`  | `/api/v1/cems-wpms-requests/:id/form`                              | `id` path + JSON body          | `cems_wpms_requests:edit` + data scope | [Payload/validation](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform)                                      |
 | อนุมัติแบบ/แจ้งแก้ไข                          | `POST` | `/api/v1/cems-wpms-requests/:id/review`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Approve design](#approve-design)                                                                                                 |
 | เปลี่ยนสถานะ/แจ้งแก้ไข                        | `POST` | `/api/v1/cems-wpms-requests/:id/status`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Approve form status](#approve-form-status)                                                                                       |
 | ผู้ประกอบการยกเลิกคำขอ                        | `POST` | `/api/v1/cems-wpms-requests/:id/cancel`                   | `id` path + `{ reason? }`      | `cems_wpms_requests:edit` + owner   | [Cancel request](./operator-cancel-request.md)                                                                                    |
@@ -168,7 +168,7 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 - route อ่านรายการ/รายละเอียดและ route ของเจ้าหน้าที่ใช้ permission scope ตาม implementation; เมื่อเป็น location scope จะตัดกับ profile assignment และอาจคืนรายการว่างหรือ `404`
 - `POST /measurement-points` และ `POST /parameters` ตรวจว่า identifier resolve เป็น active row ใน `eligible_factories`; เมื่อเจ้าหน้าที่ส่ง `submissionAction` ใน `POST /measurement-points` backend จะตัด edit scope/region ของเจ้าหน้าที่ด้วย
 - เฉพาะเจ้าหน้าที่ใน `POST /measurement-points` สามารถส่ง `submissionAction=REQUEST_FACTORY_REVISION|CONNECT`; ค่า `CONNECT` ต้องมี direct-connect permission และผ่าน eligible-factory scope ของ permission นั้น
-- `PUT /:id/form`, cancel และ confirm ฝั่งผู้ประกอบการใช้ owner/status rules ของคำขอเดิม
+- `PUT /:id/form` ใช้ edit scope/assignment และสถานะ `WAITING_FACTORY_REVISION`; cancel และ confirm ใช้ owner/status rules เดิม
 - Direct Connection รับ `submissionAction=REQUEST_FACTORY_REVISION|CONNECT` ไปพร้อมแบบ ตรวจทั้งข้อจำกัด actor, scope ของ permission และ active eligible factory ตามรายละเอียดใน [Payload และ validation ของคำขอ](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsdirect-connections)
 
 สำหรับ route ที่ใช้ scope ของ กนอ. ค่า `IN_ESTATE` หมายถึงโรงงานในนิคม `estateCode` ที่มอบหมาย
@@ -797,12 +797,14 @@ Path fields:
 
 Minimal request: ไม่มี request body.
 
+`GET /:id/form` เพิ่ม `expectedUpdatedAt` ชนิด string (date-time) เป็น token รุ่นข้อมูล เช่น `2026-09-13T00:00:00.000Z`; ส่งกลับใน PUT form เพื่อป้องกันการบันทึกจากฟอร์มเก่า อ่านแบบฟอร์มและแนบเอกสารได้ตาม permission เดิม: `GET /:id/form` ต้องมี view scope และ `POST /document-images` ต้องมี edit permission โดย upload ยังไม่ผูกคำขอจนกว่าจะบันทึกฟอร์ม.
+
 Authorization:
 
 - scope `ALL`, `IN_REGION`, `IN_PROVINCE` และ `IN_ESTATE` ใช้ permission และพื้นที่ของผู้เรียกตามปกติ.
 - scope `OWN_FACTORY` อ่านได้เมื่อผู้เรียกเป็น `createdBy` ของคำขอ หรือได้รับมอบหมายโรงงานของคำขอผ่าน `user_juristics` หรือ `user_factory_access`.
 - กฎเดียวกันใช้กับ `GET /api/v1/cems-wpms-requests/:id`, `GET /api/v1/cems-wpms-requests/:id/detail`, `GET /api/v1/cems-wpms-requests/:id/form`, `GET /api/v1/cems-wpms-requests/:id/device-configs` และ `GET /api/v1/cems-wpms-requests/:id/device-configs/:configId`.
-- คำขอที่ไม่อยู่ใน scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่ามี resource อยู่; สิทธิ์เขียนที่ระบุ owner ยังคงตรวจ `createdBy` และไม่ได้ขยายตาม factory assignment.
+- คำขอที่ไม่อยู่ใน scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่ามี resource อยู่; การแก้และส่งกลับผ่าน `PUT /:id/form` ใช้ edit scope/assignment ตาม [กติกา resubmit](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform); action อื่นที่ระบุ owner ยังคงตรวจ `createdBy`.
 
 Minimal response:
 
