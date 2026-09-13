@@ -69,6 +69,7 @@ describe('connected measurement points route', () => {
           submittedAt: '2026-06-08T00:00:00.000Z',
           submittedDate: '08/06/2569',
           monitoringPointCode: 'S0001',
+          monitoringPointName: 'S0001',
           codeIssuedAt: null,
           codeIssuedDate: null,
           connectionDueAt: null,
