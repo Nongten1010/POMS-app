@@ -62,6 +62,7 @@ import { buildPreviousConnectionRequestPrefill, loadPreviousConnectionRequest } 
 import { canCancelConnectionRequest } from '../utils/connectionRequestCancellation.mjs'
 import { buildEligibleFactoryAddRequestDraft } from '../utils/eligibleFactoryAddRequest.mjs'
 import { isModbusParameterRow } from '../utils/modbusAddress.mjs'
+import { getAddParameterGroups } from '../utils/addParameterPrefill.mjs'
 import {
   EIA_ASSESSMENT_OPTIONS as eiaAssessmentOptions,
   buildConnectionEnvironmentalAssessment,
@@ -525,8 +526,8 @@ function createInstrumentRowForParameter(parameter) {
   }
 }
 
-function syncInstrumentRowsWithRequestedParameters(currentRows = [], requestedParameters = []) {
-  const parameters = requestedParameters.filter((parameter) => (
+function syncInstrumentRowsWithRequestedParameters(currentRows = [], requestedParameters = [], retainedParameters = []) {
+  const parameters = [...new Set([...retainedParameters, ...requestedParameters])].filter((parameter) => (
     parameter && parameter !== parameterNoneOption && !isRequestedParameterSpecialOption(parameter)
   ))
   return parameters.map((parameter) => {
@@ -1594,7 +1595,7 @@ function validateDocumentRows(documentsAndImages = []) {
   return errors
 }
 
-function validateParameterGroups(details = {}, instrumentParameters = [], point = {}) {
+function validateParameterGroups(details = {}, instrumentParameters = [], point = {}, { isAddParameterMode = false } = {}) {
   const errors = []
   const parameterGroupKeys = [
     ['eligibleParameters', 'พารามิเตอร์ที่เข้าข่าย'],
@@ -1620,7 +1621,9 @@ function validateParameterGroups(details = {}, instrumentParameters = [], point 
   })
 
   const requiredParameterGroupKeys = parameterGroupKeys.filter(([key]) => (
-    key !== 'timeSharingParameters' && Object.prototype.hasOwnProperty.call(details, key)
+    key !== 'timeSharingParameters'
+      && !(isAddParameterMode && ['connectedParameters', 'pendingParameters'].includes(key))
+      && Object.prototype.hasOwnProperty.call(details, key)
   ))
   requiredParameterGroupKeys.forEach(([key, label]) => {
     const values = Array.isArray(details[key]) ? details[key].filter(isPresentValue) : []
@@ -1641,7 +1644,7 @@ function validateParameterGroups(details = {}, instrumentParameters = [], point 
   if (requestedParameters.includes(requestedParametersExemptAllOption) && requestedParameters.length > 1) {
     errors.push('พารามิเตอร์ที่ขอเชื่อมต่อถ้าเลือก "ได้รับการยกเว้นทั้งหมด" ต้องเลือกเพียงตัวเดียว')
   }
-  if (actualRequestedParameters.length && pendingParameters.length) {
+  if (!isAddParameterMode && actualRequestedParameters.length && pendingParameters.length) {
     const invalidRequestedParameters = actualRequestedParameters.filter((parameter) => !pendingParameters.includes(parameter))
     if (invalidRequestedParameters.length) {
       errors.push(`พารามิเตอร์ที่ขอเชื่อมต่อต้องเลือกจากพารามิเตอร์ที่ยังไม่เชื่อมต่อเท่านั้น (${invalidRequestedParameters.join(', ')})`)
@@ -1820,7 +1823,7 @@ function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode
       errors.push(`กรุณากรอกรายละเอียดเครื่องมือตรวจวัดของ${pointLabel}`)
     }
     errors.push(...validateDocumentRows(point.documentsAndImages ?? []))
-    errors.push(...validateParameterGroups(details, instrumentParameters, point))
+    errors.push(...validateParameterGroups(details, instrumentParameters, point, { isAddParameterMode }))
     errors.push(...validateMeasurementInstruments(point.measurementInstruments))
     errors.push(...validateTreatmentSystem(details))
 
@@ -2118,10 +2121,21 @@ function buildMeasurementPointRequestBody(
   const pointName = getFormValue(formData, 'pointName')
   const converterBrand = getFormValue(formData, 'converterBrand')
   const converterModel = getFormValue(formData, 'converterModel')
-  const instrumentParameters = buildMeasurementInstrumentParameters(instrumentRows)
   const documentsAndImages = buildDocumentsAndImages(formData, uploadedDocuments, options)
   const treatmentSystems = getFormValues(formData, 'treatmentSystem')
   const requestedParameterState = getRequestedParameterState(getFormValues(formData, 'requestedParameters'))
+  const requestInstrumentRows = options.addParameterConnectedParameters !== undefined
+    ? instrumentRows.filter((row) => requestedParameterState.actualValues.includes(row.parameter))
+    : instrumentRows
+  const instrumentParameters = buildMeasurementInstrumentParameters(requestInstrumentRows)
+  const liveParameterGroups = options.addParameterConnectedParameters !== undefined
+    ? getAddParameterGroups({
+        eligibleParameters: getFormValues(formData, 'eligibleParameters'),
+        connectedParameters: options.addParameterConnectedParameters,
+      })
+    : null
+  const connectedParameters = liveParameterGroups?.connectedParameters ?? getFormValues(formData, 'connectedParameters')
+  const pendingParameters = liveParameterGroups?.pendingParameters ?? getFormValues(formData, 'pendingParameters')
 
   return {
     factoryId: factory.factoryId ?? factory.newRegistrationNo ?? '',
@@ -2153,8 +2167,8 @@ function buildMeasurementPointRequestBody(
               minWastewaterDischarge: toNumberOrNull(getFormValue(formData, 'minWastewaterDischarge')),
               maxWastewaterDischarge: toNumberOrNull(getFormValue(formData, 'maxWastewaterDischarge')),
               eligibleParameters: getFormValues(formData, 'eligibleParameters'),
-              connectedParameters: getFormValues(formData, 'connectedParameters'),
-              pendingParameters: getFormValues(formData, 'pendingParameters'),
+              connectedParameters,
+              pendingParameters,
               requestedParameters: requestedParameterState.actualValues,
               hasTreatmentSystem: getFormValue(formData, 'hasTreatmentSystem'),
               treatmentSystem: treatmentSystems,
@@ -2195,8 +2209,8 @@ function buildMeasurementPointRequestBody(
               legalAnnexNo: getFormValues(formData, 'legalAnnexNo'),
               eligibleParameters: getFormValues(formData, 'eligibleParameters'),
               exemptedParameters: getFormValues(formData, 'exemptedParameters'),
-              connectedParameters: getFormValues(formData, 'connectedParameters'),
-              pendingParameters: getFormValues(formData, 'pendingParameters'),
+              connectedParameters,
+              pendingParameters,
               requestedParameters: requestedParameterState.actualValues,
               exemptedParameterRegulationClauses: getOptionalFormValue(formData, 'exemptedParameterRegulationClauses'),
               exemptedParameterRegulationClauseOther: getOptionalFormValue(formData, 'exemptedParameterRegulationClauseOther'),
@@ -5532,6 +5546,7 @@ function ParameterMultiSelect({
   value: controlledValue,
   defaultValue = [],
   onChange,
+  readOnly = false,
 }) {
   const [internalValue, setInternalValue] = useState(normalizeArrayValue(defaultValue))
   const value = controlledValue ?? internalValue
@@ -5542,10 +5557,12 @@ function ParameterMultiSelect({
       <InputLabel>{label}</InputLabel>
       <Select
         multiple
+        readOnly={readOnly}
         value={value}
         label={label}
         input={<OutlinedInput label={label} />}
         onChange={(event) => {
+          if (readOnly) return
           const selectedValue = event.target.value
           const selectedItems = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
           const exclusiveItem = exclusiveOptions.find((option) => selectedItems.includes(option))
@@ -5634,8 +5651,11 @@ function CemsMonitoringPointDetails({
   isOperator = false,
   isDirectConnectionMode = false,
   pointCodeReadOnly = false,
+  isAddParameterMode = false,
 }) {
   const initialDetails = { ...emptyCemsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
+  const [eligibleParameters, setEligibleParameters] = useState(normalizeArrayValue(initialDetails.eligibleParameters))
+  const pendingParameters = getAddParameterGroups({ eligibleParameters, connectedParameters }).pendingParameters
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
@@ -5754,6 +5774,8 @@ function CemsMonitoringPointDetails({
             options={withNoneOption(cemsParameterOptions)}
             exclusiveOptions={[parameterNoneOption]}
             defaultValue={initialDetails.eligibleParameters ?? []}
+            value={isAddParameterMode ? eligibleParameters : undefined}
+            onChange={isAddParameterMode ? setEligibleParameters : undefined}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -5773,6 +5795,7 @@ function CemsMonitoringPointDetails({
             exclusiveOptions={[parameterNoneOption]}
             value={connectedParameters}
             onChange={onConnectedParametersChange}
+            readOnly={isAddParameterMode}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -5782,6 +5805,8 @@ function CemsMonitoringPointDetails({
             options={withNoneOption(cemsParameterOptions)}
             exclusiveOptions={[parameterNoneOption]}
             defaultValue={initialDetails.pendingParameters ?? []}
+            value={isAddParameterMode ? pendingParameters : undefined}
+            readOnly={isAddParameterMode}
           />
         </Grid>
       </Grid>
@@ -6335,7 +6360,7 @@ function InstrumentDataDialog({ open, value, onClose, onSave, isWpms = false }) 
   )
 }
 
-function MeasurementInstrumentSection({ rows, setRows, initialInstruments = {}, isWpms = false }) {
+function MeasurementInstrumentSection({ rows, setRows, initialInstruments = {}, isWpms = false, readOnlyParameters = [] }) {
   const instrumentRows = rows
   const [editingRowIndex, setEditingRowIndex] = useState(null)
   const [instrumentDialogOpen, setInstrumentDialogOpen] = useState(false)
@@ -6404,16 +6429,18 @@ function MeasurementInstrumentSection({ rows, setRows, initialInstruments = {}, 
                       ) : null}
                       <TableCell>
                         <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => {
-                              setEditingRowIndex(index)
-                              setInstrumentDialogOpen(true)
-                            }}
-                          >
-                            จัดการข้อมูล
-                          </Button>
+                          {!readOnlyParameters.includes(data.parameter) ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => {
+                                setEditingRowIndex(index)
+                                setInstrumentDialogOpen(true)
+                              }}
+                            >
+                              จัดการข้อมูล
+                            </Button>
+                          ) : null}
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -6440,6 +6467,7 @@ function MeasurementInstrumentSection({ rows, setRows, initialInstruments = {}, 
           onClose={() => setInstrumentDialogOpen(false)}
           isWpms={isWpms}
           onSave={(nextValue) => {
+            if (readOnlyParameters.includes(editingValue?.parameter)) return
             setRows((current) =>
               editingRowIndex === null
                 ? [...current, nextValue]
@@ -6512,8 +6540,11 @@ function WpmsMonitoringPointDetails({
   isOperator = false,
   isDirectConnectionMode = false,
   pointCodeReadOnly = false,
+  isAddParameterMode = false,
 }) {
   const initialDetails = { ...emptyWpmsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
+  const [eligibleParameters, setEligibleParameters] = useState(normalizeArrayValue(initialDetails.eligibleParameters))
+  const pendingParameters = getAddParameterGroups({ eligibleParameters, connectedParameters }).pendingParameters
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
@@ -6549,6 +6580,8 @@ function WpmsMonitoringPointDetails({
             options={withNoneOption(wpmsInstrumentParameters)}
             exclusiveOptions={[parameterNoneOption]}
             defaultValue={initialDetails.eligibleParameters ?? []}
+            value={isAddParameterMode ? eligibleParameters : undefined}
+            onChange={isAddParameterMode ? setEligibleParameters : undefined}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -6559,6 +6592,7 @@ function WpmsMonitoringPointDetails({
             exclusiveOptions={[parameterNoneOption]}
             value={connectedParameters}
             onChange={onConnectedParametersChange}
+            readOnly={isAddParameterMode}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -6568,6 +6602,8 @@ function WpmsMonitoringPointDetails({
             options={withNoneOption(wpmsInstrumentParameters)}
             exclusiveOptions={[parameterNoneOption]}
             defaultValue={initialDetails.pendingParameters ?? []}
+            value={isAddParameterMode ? pendingParameters : undefined}
+            readOnly={isAddParameterMode}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -6843,10 +6879,12 @@ function MonitoringPointDetails({
   isOperator = false,
   isDirectConnectionMode = false,
   pointCodeReadOnly = false,
+  isAddParameterMode = false,
 }) {
   if (point.type === 'CEMS') {
     return (
       <CemsMonitoringPointDetails
+        isAddParameterMode={isAddParameterMode}
         pointCodeReadOnly={pointCodeReadOnly}
         initialPoint={initialPoint}
         connectedParameters={connectedParameters}
@@ -6861,6 +6899,7 @@ function MonitoringPointDetails({
   if (point.type === 'WPMS') {
     return (
       <WpmsMonitoringPointDetails
+        isAddParameterMode={isAddParameterMode}
         pointCodeReadOnly={pointCodeReadOnly}
         initialPoint={initialPoint}
         connectedParameters={connectedParameters}
@@ -6948,17 +6987,24 @@ export function RequestFormBottomSheet({
     : requestOfficerNotificationEmails
   const initialMonitoringPointType = useInitialRequestValues && initialRequest ? getRequestSystemType(initialRequest) : ''
   const initialMonitoringPoints = [{ id: 1, type: initialMonitoringPointType }]
-  const initialConnectedParameters = normalizeArrayValue(initialPoint.details?.connectedParameters ?? [])
-  const initialRequestedParameters = isEditMode
-    ? initialPoint.monitoringPointStatus === requestedParametersExemptAllOption
-      ? [requestedParametersExemptAllOption]
-      : normalizeArrayValue(initialPoint.details?.requestedParameters ?? [])
-    : []
+  const addParameterGroups = getAddParameterGroups(initialPoint.details)
+  const initialConnectedParameters = isAddParameterMode
+    ? addParameterGroups.connectedParameters
+    : normalizeArrayValue(initialPoint.details?.connectedParameters ?? [])
+  const initialRequestedParameters = isAddParameterMode
+    ? addParameterGroups.requestedParameters
+    : isEditMode
+      ? initialPoint.monitoringPointStatus === requestedParametersExemptAllOption
+        ? [requestedParametersExemptAllOption]
+        : normalizeArrayValue(initialPoint.details?.requestedParameters ?? [])
+      : []
   const [contacts, setContacts] = useState(initialContactPersons)
   const [factoryEmails, setFactoryEmails] = useState(initialNotificationEmails)
   const [monitoringPoints, setMonitoringPoints] = useState(initialMonitoringPoints)
   const [measurementInstrumentRows, setMeasurementInstrumentRows] = useState(
-    getInitialInstrumentRows(initialInstruments),
+    isAddParameterMode
+      ? syncInstrumentRowsWithRequestedParameters(getInitialInstrumentRows(initialInstruments), initialRequestedParameters, initialConnectedParameters)
+      : getInitialInstrumentRows(initialInstruments),
   )
   const [connectedParameters, setConnectedParameters] = useState(initialConnectedParameters)
   const [requestedParameters, setRequestedParameters] = useState(initialRequestedParameters)
@@ -6990,7 +7036,9 @@ export function RequestFormBottomSheet({
     ?? monitoringPoints[0]
   const updateRequestedParameters = (nextValue) => {
     setRequestedParameters(nextValue)
-    setMeasurementInstrumentRows((current) => syncInstrumentRowsWithRequestedParameters(current, nextValue))
+    setMeasurementInstrumentRows((current) => syncInstrumentRowsWithRequestedParameters(
+      current, nextValue, isAddParameterMode ? initialConnectedParameters : [],
+    ))
   }
   const handleSubmitValidationError = (error) => {
     const message = error instanceof Error ? error.message : 'ข้อมูลในแบบฟอร์มไม่ถูกต้อง'
@@ -7068,7 +7116,12 @@ export function RequestFormBottomSheet({
       formData,
       [],
       measurementInstrumentRows,
-      { includePreviewUrls: true, existingDocuments: initialDocuments, generalFactoryFieldsReadOnly },
+      {
+        includePreviewUrls: true,
+        existingDocuments: initialDocuments,
+        generalFactoryFieldsReadOnly,
+        addParameterConnectedParameters: isAddParameterMode ? initialConnectedParameters : undefined,
+      },
     )
 
     if (isEditMode) {
@@ -7196,7 +7249,11 @@ export function RequestFormBottomSheet({
         formData,
         uploadedDocuments,
         measurementInstrumentRows,
-        { existingDocuments: initialDocuments, generalFactoryFieldsReadOnly },
+        {
+          existingDocuments: initialDocuments,
+          generalFactoryFieldsReadOnly,
+          addParameterConnectedParameters: isAddParameterMode ? initialConnectedParameters : undefined,
+        },
       )
       if (isEditMode) {
         requestBody.remarks = 'แก้ไขตามเจ้าหน้าที่แจ้ง'
@@ -7678,10 +7735,11 @@ export function RequestFormBottomSheet({
                   {monitoringPoints.map((point) => (
                     <Box key={point.id} sx={{ display: point.id === selectedMonitoringPoint?.id ? 'block' : 'none' }}>
                       <MonitoringPointDetails
+                        isAddParameterMode={isAddParameterMode}
                         pointCodeReadOnly={pointCodeReadOnly}
                         point={point}
                         initialPoint={point.type === initialMonitoringPointType ? initialPoint : {}}
-                        connectedParameters={connectedParameters}
+                        connectedParameters={isAddParameterMode ? initialConnectedParameters : connectedParameters}
                         onConnectedParametersChange={setConnectedParameters}
                         requestedParameters={requestedParameters}
                         onRequestedParametersChange={updateRequestedParameters}
@@ -7705,6 +7763,7 @@ export function RequestFormBottomSheet({
                         />
                         <MeasurementInstrumentSection
                           rows={measurementInstrumentRows}
+                          readOnlyParameters={isAddParameterMode ? initialConnectedParameters : []}
                           setRows={setMeasurementInstrumentRows}
                           initialInstruments={point.type === initialMonitoringPointType ? initialInstruments : {}}
                           isWpms={point.type === 'WPMS'}
