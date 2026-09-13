@@ -122,6 +122,8 @@ interface EligibleFactoryAddRequestRow {
   has_eia: boolean | number | null;
   project_name: string | null;
   reason: string;
+  contact_name: string | null;
+  contact_phone: string | null;
   status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
   is_open: boolean | number;
   factory_snapshot_json: string;
@@ -257,6 +259,8 @@ export const eligibleFactoriesRepository = {
       factoryRegistrationNo: string;
       provinceName: string;
       reason: string;
+      contactName?: string | null;
+      contactPhone?: string | null;
       requestedFactory: CreateEligibleFactoryInput;
     },
     actorUserId: number,
@@ -315,6 +319,8 @@ export const eligibleFactoriesRepository = {
           has_eia: input.requestedFactory.hasEia ?? null,
           project_name: input.requestedFactory.projectName ?? null,
           reason: input.reason,
+          contact_name: input.contactName ?? null,
+          contact_phone: input.contactPhone ?? null,
           status: 'PENDING_REVIEW',
           is_open: true,
           factory_snapshot_json: JSON.stringify(input.requestedFactory),
@@ -913,6 +919,8 @@ function toAddRequestDTO(row: EligibleFactoryAddRequestRow): EligibleFactoryAddR
     factoryRegistrationNo: row.factory_registration_no,
     provinceName: row.province_name,
     reason: row.reason,
+    contactName: row.contact_name ?? null,
+    contactPhone: row.contact_phone ?? null,
     status: row.status,
     statusLabel: ELIGIBLE_FACTORY_ADD_REQUEST_STATUS_LABELS[row.status],
     submittedBy: Number(row.submitted_by),

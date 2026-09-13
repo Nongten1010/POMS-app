@@ -62,6 +62,8 @@ export const ELIGIBLE_FACTORY_ADD_REQUEST_STATUS_LABELS: Record<
 export interface CreateEligibleFactoryAddRequestInput {
   factoryId: string;
   reason: string;
+  contactName?: string | null;
+  contactPhone?: string | null;
 }
 
 export interface ListEligibleFactoryAddRequestsQuery {
@@ -199,6 +201,8 @@ export interface EligibleFactoryAddRequestDTO {
   factoryRegistrationNo: string;
   provinceName: string;
   reason: string;
+  contactName: string | null;
+  contactPhone: string | null;
   status: EligibleFactoryAddRequestStatus;
   statusLabel: string;
   submittedBy: number;

@@ -185,6 +185,8 @@ export const eligibleFactoriesService = {
           factoryRegistrationNo: factory.newRegistrationNo,
           provinceName,
           reason: input.reason,
+          contactName: input.contactName?.trim() || null,
+          contactPhone: input.contactPhone?.trim() || null,
           requestedFactory,
         },
         actorUserId,

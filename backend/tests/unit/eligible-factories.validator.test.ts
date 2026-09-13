@@ -178,6 +178,52 @@ describe('eligible factories validators', () => {
     });
   });
 
+  it('trims contact text while preserving phone formatting and leading zeroes', () => {
+    expect(
+      createEligibleFactoryAddRequestSchema.parse({
+        factoryId: 'F-1',
+        reason: 'แจ้งความประสงค์',
+        contactName: ' สมชาย ใจดี ',
+        contactPhone: ' 081-234-5678 ต่อ 9 ',
+      }),
+    ).toMatchObject({ contactName: 'สมชาย ใจดี', contactPhone: '081-234-5678 ต่อ 9' });
+  });
+
+  it.each([
+    {},
+    { contactName: null, contactPhone: null },
+    { contactName: '', contactPhone: '   ' },
+    { contactName: 'สมชาย ใจดี' },
+    { contactPhone: '+66 (81) 234-5678' },
+    { contactName: 'ก'.repeat(255), contactPhone: '0'.repeat(64) },
+  ])('accepts optional contacts: %j', (contacts) => {
+    expect(
+      createEligibleFactoryAddRequestSchema.safeParse({
+        factoryId: 'F-1',
+        reason: 'แจ้งความประสงค์',
+        ...contacts,
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    { contactName: 'ก'.repeat(256) },
+    { contactPhone: '0'.repeat(65) },
+    { contactName: 123 },
+    { contactPhone: 812345678 },
+    { contactName: {} },
+    { contactPhone: [] },
+    { intentContactName: 'สมชาย' },
+  ])('rejects invalid contact input: %j', (contacts) => {
+    expect(
+      createEligibleFactoryAddRequestSchema.safeParse({
+        factoryId: 'F-1',
+        reason: 'แจ้งความประสงค์',
+        ...contacts,
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects blank or oversized add-factory reasons', () => {
     expect(
       createEligibleFactoryAddRequestSchema.safeParse({ factoryId: 'F-1', reason: '   ' }).success,

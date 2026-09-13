@@ -67,6 +67,8 @@ export const createEligibleFactoryAddRequestSchema = z
   .object({
     factoryId: trimmedString(64),
     reason: trimmedString(1000),
+    contactName: z.string().trim().max(255).nullable().optional(),
+    contactPhone: z.string().trim().max(64).nullable().optional(),
   })
   .strict();
 

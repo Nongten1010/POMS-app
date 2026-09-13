@@ -75,6 +75,8 @@ describe('eligible factory routes', () => {
       factoryRegistrationNo: '10550000125197',
       provinceName: 'น่าน',
       reason: 'ต้องการเข้าระบบ CEMS',
+      contactName: null,
+      contactPhone: null,
       status: 'PENDING_REVIEW',
       statusLabel: 'รอพิจารณา',
       submittedBy: 42,
@@ -91,6 +93,8 @@ describe('eligible factory routes', () => {
       factoryName: 'โรงงานร้องขอ',
       provinceName: 'น่าน',
       reason: 'ต้องการเข้าระบบ CEMS',
+      contactName: null,
+      contactPhone: null,
       status: 'APPROVED',
       statusLabel: 'อนุมัติแล้ว',
       submittedBy: 42,
@@ -236,6 +240,8 @@ describe('eligible factory routes', () => {
           factoryRegistrationNo: '10550000125197',
           provinceName: 'น่าน',
           reason: 'ต้องการเข้าระบบ CEMS',
+          contactName: null,
+          contactPhone: null,
           status: 'PENDING_REVIEW',
           statusLabel: 'รอพิจารณา',
           submittedBy: 42,
@@ -279,6 +285,8 @@ describe('eligible factory routes', () => {
         id: 88,
         factoryName: 'โรงงานร้องขอ',
         reason: 'ต้องการเข้าระบบ CEMS',
+        contactName: null,
+        contactPhone: null,
         status: 'PENDING_REVIEW',
       }),
     );
@@ -379,7 +387,49 @@ describe('eligible factory routes', () => {
     expect(mockedEligibleFactoriesService.create).not.toHaveBeenCalled();
   });
 
-  it('requires factories:view and factories:edit for operator add-factory requests', async () => {
+  it.each([{}, { contactName: 'สมชาย ใจดี', contactPhone: '081-234-5678' }])(
+    'accepts operator add-factory contacts with both required permissions: %j',
+    async (contacts) => {
+      const response = await request(createEligibleFactoriesApp())
+        .post('/api/v1/eligible-factories/add-requests')
+        .set(
+          'Authorization',
+          `Bearer ${accessToken({
+            userType: 'operator',
+            roles: ['factory_operator'],
+            scopes: {
+              'factories:view': 'OWN_FACTORY',
+              'factories:edit': 'OWN_FACTORY',
+            },
+            scopeDetails: {
+              'factories:view': { scope: 'OWN_FACTORY' },
+              'factories:edit': { scope: 'OWN_FACTORY' },
+            },
+          })}`,
+        )
+        .send({
+          factoryId: '10550000125197',
+          reason: 'ต้องการเข้าระบบ CEMS',
+          ...contacts,
+        });
+
+      expect(response.status).toBe(201);
+      expect(mockedEligibleFactoriesService.createAddRequest).toHaveBeenCalledWith(
+        { factoryId: '10550000125197', reason: 'ต้องการเข้าระบบ CEMS', ...contacts },
+        42,
+        {
+          view: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' }, regionalAccess: null },
+          edit: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' }, regionalAccess: null },
+        },
+      );
+    },
+  );
+
+  it.each([
+    { contactPhone: 812345678 },
+    { contactName: 'ก'.repeat(256) },
+    { contactPhone: '0'.repeat(65) },
+  ])('rejects invalid contacts before reaching the service: %j', async (contacts) => {
     const response = await request(createEligibleFactoriesApp())
       .post('/api/v1/eligible-factories/add-requests')
       .set(
@@ -387,30 +437,16 @@ describe('eligible factory routes', () => {
         `Bearer ${accessToken({
           userType: 'operator',
           roles: ['factory_operator'],
-          scopes: {
-            'factories:view': 'OWN_FACTORY',
-            'factories:edit': 'OWN_FACTORY',
-          },
+          scopes: { 'factories:view': 'OWN_FACTORY', 'factories:edit': 'OWN_FACTORY' },
           scopeDetails: {
             'factories:view': { scope: 'OWN_FACTORY' },
             'factories:edit': { scope: 'OWN_FACTORY' },
           },
         })}`,
       )
-      .send({
-        factoryId: '10550000125197',
-        reason: 'ต้องการเข้าระบบ CEMS',
-      });
-
-    expect(response.status).toBe(201);
-    expect(mockedEligibleFactoriesService.createAddRequest).toHaveBeenCalledWith(
-      { factoryId: '10550000125197', reason: 'ต้องการเข้าระบบ CEMS' },
-      42,
-      {
-        view: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' }, regionalAccess: null },
-        edit: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' }, regionalAccess: null },
-      },
-    );
+      .send({ factoryId: '10550000125197', reason: 'ต้องการเข้าระบบ CEMS', ...contacts });
+    expect(response.status).toBe(400);
+    expect(mockedEligibleFactoriesService.createAddRequest).not.toHaveBeenCalled();
   });
 
   it('rejects add-factory submission when factories:edit is missing', async () => {

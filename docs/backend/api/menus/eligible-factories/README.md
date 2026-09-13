@@ -172,6 +172,23 @@ Request fields:
 | --- | --- | --- | --- | --- |
 | `factoryId` | body | string | yes | ใช้ `factoryId` จาก `GET /api/v1/cems-wpms-requests/operator-factories`; trim แล้ว 1–64 ตัวอักษร |
 | `reason` | body | string | yes | เหตุผลจาก modal `แจ้งความประสงค์`; trim แล้ว 1–1,000 ตัวอักษร |
+| `contactName` | body | string \| null | no | ชื่อ-นามสกุลผู้ติดต่อจาก `intentContactName`; trim แล้วไม่เกิน 255 ตัวอักษร |
+| `contactPhone` | body | string \| null | no | เบอร์โทรผู้ติดต่อจาก `intentContactPhone`; trim แล้วไม่เกิน 64 ตัวอักษร; ต้องเป็นข้อความเพื่อรักษาเลขศูนย์นำหน้าและเครื่องหมาย |
+
+ทั้งสองฟิลด์เป็น optional แยกกัน ไม่บังคับส่งเป็นคู่ เมื่อไม่ส่ง ส่ง `null` หรือส่งข้อความว่างหลัง trim ระบบบันทึกและคืน `null` โดยไม่เติมข้อมูลจากบัญชีผู้ใช้ ไม่ตรวจรูปแบบเบอร์โทรและไม่ตัดช่องว่างภายในข้อความ ฟิลด์ที่ไม่ใช่ string/null หรือยาวเกินกำหนดตอบ `400 VALIDATION_ERROR` ตาม [รูปแบบ error กลาง](../../shared/common-api/README.md)
+
+ตัวอย่าง request สำหรับส่งข้อมูลจาก dialog แจ้งความประสงค์:
+
+```json
+{
+  "factoryId": "F000123",
+  "reason": "ขอเพิ่มโรงงานเพื่อยื่นคำขอเชื่อมต่อ",
+  "contactName": "สมชาย ใจดี",
+  "contactPhone": "081-234-5678"
+}
+```
+
+Client เดิมที่ส่งเฉพาะ `factoryId` และ `reason` ใช้งานต่อได้ การส่งข้อมูลจากสองช่องใหม่ต้องเพิ่ม `contactName` และ `contactPhone` ใน payload ของ frontend ตาม contract นี้; การเพิ่มการรองรับ backend ไม่ทำให้ frontend ส่งค่าโดยอัตโนมัติ
 
 ```bash
 curl --request POST \
@@ -180,7 +197,9 @@ curl --request POST \
   --header 'Content-Type: application/json' \
   --data '{
     "factoryId": "F000123",
-    "reason": "มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์"
+    "reason": "มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์",
+    "contactName": "สมชาย ใจดี",
+    "contactPhone": "081-234-5678"
   }'
 ```
 
@@ -196,6 +215,8 @@ Success response (`201 Created`):
     "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
     "provinceName": "นนทบุรี",
     "reason": "มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์",
+    "contactName": "สมชาย ใจดี",
+    "contactPhone": "081-234-5678",
     "status": "PENDING_REVIEW",
     "statusLabel": "รอพิจารณา",
     "eligibleFactoryId": null,
@@ -208,8 +229,11 @@ Success response (`201 Created`):
 }
 ```
 
+Response ใช้ข้อมูลคำขอรูปแบบเดียวกับ [ตาราง response ของรายการคำขอ](#get-apiv1eligible-factoriesadd-requests) โดย `contactName` และ `contactPhone` อยู่ที่ `data` สำหรับการสร้าง/พิจารณา และอยู่ที่ `data[]` สำหรับรายการ
+
 Business rules:
 
+- เก็บข้อมูลผู้ติดต่อไว้ใน `eligible_factory_add_requests.contact_name` และ `contact_phone` ของคำขอนี้เท่านั้น; คำขอเดิมคืน `null` ทั้งสองฟิลด์ การพิจารณาคำขอคงข้อมูลผู้ติดต่อเดิมไว้
 - backend resolve ข้อมูลโรงงานและ snapshot จาก access scope ของผู้ประกอบการเอง ไม่รับชื่อ จังหวัด หรือเลขทะเบียนจาก client
 - โรงงานนอก owner scope ตอบ `404 Not Found` เพื่อไม่เปิดเผย resource
 - ถ้าโรงงานอยู่ใน `eligible_factories` แล้วตอบ `409 Conflict`
@@ -246,6 +270,8 @@ Primary response fields:
 | `data[].factoryRegistrationNo` | string | no | เลขทะเบียนโรงงานที่ใช้แสดงในตาราง |
 | `data[].provinceName` | string | no | จังหวัดสำหรับแสดงผล |
 | `data[].reason` | string | no | เหตุผลจากผู้ประกอบการ |
+| `data[].contactName` | string | yes | ชื่อ-นามสกุลผู้ติดต่อที่ระบุในคำขอ ไม่เกิน 255 ตัวอักษร; `null` เมื่อไม่ระบุหรือเป็นคำขอเดิม |
+| `data[].contactPhone` | string | yes | เบอร์โทรในรูปข้อความ ไม่เกิน 64 ตัวอักษร; `null` เมื่อไม่ระบุหรือเป็นคำขอเดิม |
 | `data[].status` | string enum | no | `PENDING_REVIEW`, `APPROVED` หรือ `REJECTED` |
 | `data[].statusLabel` | string | no | `รอพิจารณา`, `อนุมัติแล้ว` หรือ `ไม่อนุมัติ` |
 | `data[].eligibleFactoryId` | integer | yes | คำขอที่อนุมัติใหม่เป็น `null` เพราะ review ไม่เพิ่มโรงงานเข้าข่าย; ข้อมูลประวัติเดิมอาจยังมี id ที่เคย link ไป `eligible_factories` |
@@ -269,6 +295,8 @@ Minimal response (`200 OK`):
       "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
       "provinceName": "นนทบุรี",
       "reason": "มีคำขอเชื่อมต่อระบบ CEMS",
+      "contactName": "สมชาย ใจดี",
+      "contactPhone": "081-234-5678",
       "status": "PENDING_REVIEW",
       "statusLabel": "รอพิจารณา",
       "eligibleFactoryId": null,
@@ -325,6 +353,8 @@ Minimal response (`200 OK`):
     "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
     "provinceName": "นนทบุรี",
     "reason": "มีคำขอเชื่อมต่อระบบ CEMS",
+    "contactName": "สมชาย ใจดี",
+    "contactPhone": "081-234-5678",
     "status": "APPROVED",
     "statusLabel": "อนุมัติแล้ว",
     "eligibleFactoryId": null,
@@ -758,3 +788,9 @@ Minimal request: ไม่มี request body.
 | Public types | [`eligible-factories.types.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.types.ts), [`monitoring-point-forms.types.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-forms.types.ts) |
 | Tests | [`eligible-factories.route.test.ts`](../../../../../backend/tests/unit/eligible-factories.route.test.ts), [`eligible-factories.service.test.ts`](../../../../../backend/tests/unit/eligible-factories.service.test.ts), [`eligible-factory-add-requests.repository-regression.test.ts`](../../../../../backend/tests/unit/eligible-factory-add-requests.repository-regression.test.ts), [`eligible-factory-candidates.repository.test.ts`](../../../../../backend/tests/unit/eligible-factory-candidates.repository.test.ts), [`eligible-factory-add-requests-migration.test.ts`](../../../../../backend/tests/unit/eligible-factory-add-requests-migration.test.ts), [`api-docs.openapi.test.ts`](../../../../../backend/tests/unit/api-docs.openapi.test.ts), [`monitoring-point-form-attachment-upload.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachment-upload.route.test.ts), [`monitoring-point-form-attachments.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachments.service.test.ts), [`monitoring-point-attachment-cleanup.worker.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachment-cleanup.worker.test.ts), [`monitoring-point-attachments-migration.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachments-migration.test.ts), [`monitoring-point-forms.attachment-reconciliation.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.attachment-reconciliation.test.ts), [`monitoring-point-forms.validator.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.validator.test.ts), [`monitoring-point-forms.repository.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.repository.test.ts), [`monitoring-point-forms.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.service.test.ts), [`monitoring-point-forms.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.route.test.ts) |
 | Evidence | [คำขอเพิ่มโรงงานเข้าข่าย](../../../evidence/eligible-factories/eligible-factory-requests.tdd.md), [ข้อมูลต้นทาง Fac60k รายโรงงานสำหรับ flow อนุมัติ](../../../evidence/eligible-factories/fac60k-source-factory-lookup.tdd.md) |
+
+### การนำข้อมูลผู้ติดต่อไปใช้งาน
+
+รัน migration [`0118_add_eligible_factory_add_request_contacts.ts`](../../../../../backend/src/db/migrations/0118_add_eligible_factory_add_request_contacts.ts) ก่อนเริ่ม backend รุ่นที่อ่าน/เขียนข้อมูลผู้ติดต่อ โดยเพิ่มคอลัมน์ nullable สองคอลัมน์และไม่เติมข้อมูลแทนคำขอเดิม หลัง deploy ตรวจ `/api/v1/openapi.json` ว่า schema `CreateEligibleFactoryAddRequest` และ `EligibleFactoryAddRequest` มีฟิลด์ตรงกับหน้านี้
+
+การตรวจเฉพาะงานนี้ครอบคลุม [validator](../../../../../backend/tests/unit/eligible-factories.validator.test.ts), [route](../../../../../backend/tests/unit/eligible-factories.route.test.ts), [service](../../../../../backend/tests/unit/eligible-factories.service.test.ts), [การบันทึกและอ่านข้อมูล](../../../../../backend/tests/unit/eligible-factory-add-requests.repository-regression.test.ts), [migration](../../../../../backend/tests/unit/eligible-factory-add-request-contacts.migration.test.ts) และ [OpenAPI](../../../../../backend/tests/unit/api-docs.openapi.test.ts)

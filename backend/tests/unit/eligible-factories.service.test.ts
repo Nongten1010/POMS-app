@@ -483,69 +483,79 @@ describe('eligibleFactoriesService', () => {
     expect(mockedRepository.create).not.toHaveBeenCalled();
   });
 
-  it('creates an add-factory request from a factory inside both view and edit scopes', async () => {
-    const factory = ownedFactorySummary();
-    mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(factory);
-    mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue({
-      ...factory,
-      eligibleFactoryId: null,
-      juristicId: '0100000000000',
-      juristicName: 'บริษัท ทดสอบ จำกัด',
-      systemId: 1,
-      systemDetail: 'ผลิตพลังงาน',
-      verifyStatus: 1,
-      authorizeStart: null,
-      authorizeEnd: null,
-      operationStatus: 'แจ้งประกอบแล้ว',
-      capitalAmount: 5000000,
-      machineryHorsepower: 120,
-      productionCapacity: '10 MW',
-      wastewaterDischargeInfo: null,
-      boilerCount: 1,
-      boilerSizeEach: '5 ton/hour',
-      fuelUsed: 'ก๊าซธรรมชาติ',
-      formDefaults: {
-        factoryId: factory.factoryId,
-        factoryName: factory.factoryName,
-        factoryRegistrationNo: factory.newRegistrationNo,
-      },
-    } as never);
-    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
-    mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
-    mockedRepository.createAddRequest.mockResolvedValue(pendingAddRequest());
+  it.each([
+    { contacts: {}, expected: { contactName: null, contactPhone: null } },
+    {
+      contacts: { contactName: '  ', contactPhone: null },
+      expected: { contactName: null, contactPhone: null },
+    },
+    {
+      contacts: { contactName: ' สมชาย ใจดี ', contactPhone: ' 081-234-5678 ' },
+      expected: { contactName: 'สมชาย ใจดี', contactPhone: '081-234-5678' },
+    },
+  ])(
+    'creates a scoped add-factory request with contacts: $contacts',
+    async ({ contacts, expected }) => {
+      const factory = ownedFactorySummary();
+      mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(factory);
+      mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue({
+        ...factory,
+        eligibleFactoryId: null,
+        juristicId: '0100000000000',
+        juristicName: 'บริษัท ทดสอบ จำกัด',
+        systemId: 1,
+        systemDetail: 'ผลิตพลังงาน',
+        verifyStatus: 1,
+        authorizeStart: null,
+        authorizeEnd: null,
+        operationStatus: 'แจ้งประกอบแล้ว',
+        capitalAmount: 5000000,
+        machineryHorsepower: 120,
+        productionCapacity: '10 MW',
+        wastewaterDischargeInfo: null,
+        boilerCount: 1,
+        boilerSizeEach: '5 ton/hour',
+        fuelUsed: 'ก๊าซธรรมชาติ',
+        formDefaults: {
+          factoryId: factory.factoryId,
+          factoryName: factory.factoryName,
+          factoryRegistrationNo: factory.newRegistrationNo,
+        },
+      } as never);
+      mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+      mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
+      mockedRepository.createAddRequest.mockResolvedValue(pendingAddRequest());
 
-    const access = addRequestAccess();
-    const result = await eligibleFactoriesService.createAddRequest(
-      { factoryId: factory.factoryId, reason: 'ต้องการเข้าระบบ CEMS' },
-      42,
-      access,
-    );
+      const access = addRequestAccess();
+      const result = await eligibleFactoriesService.createAddRequest(
+        { factoryId: factory.factoryId, reason: 'ต้องการเข้าระบบ CEMS', ...contacts },
+        42,
+        access,
+      );
 
-    expect(mockedConnectionRequestsRepository.findFactorySummaryForAccess).toHaveBeenNthCalledWith(
-      1,
-      factory.factoryId,
-      access.view,
-    );
-    expect(mockedConnectionRequestsRepository.findFactorySummaryForAccess).toHaveBeenNthCalledWith(
-      2,
-      factory.factoryId,
-      access.edit,
-    );
-    expect(mockedRepository.createAddRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        factoryMasterId: 12,
-        requestedFactory: expect.objectContaining({
-          sourceSystem: 'eligible_factory_add_requests',
-          operationStatus: 'แจ้งประกอบแล้ว',
-          capitalAmount: 5000000,
-          machineryHorsepower: 120,
-          selectedReason: 'ต้องการเข้าระบบ CEMS',
+      expect(
+        mockedConnectionRequestsRepository.findFactorySummaryForAccess,
+      ).toHaveBeenNthCalledWith(1, factory.factoryId, access.view);
+      expect(
+        mockedConnectionRequestsRepository.findFactorySummaryForAccess,
+      ).toHaveBeenNthCalledWith(2, factory.factoryId, access.edit);
+      expect(mockedRepository.createAddRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          factoryMasterId: 12,
+          ...expected,
+          requestedFactory: expect.objectContaining({
+            sourceSystem: 'eligible_factory_add_requests',
+            operationStatus: 'แจ้งประกอบแล้ว',
+            capitalAmount: 5000000,
+            machineryHorsepower: 120,
+            selectedReason: 'ต้องการเข้าระบบ CEMS',
+          }),
         }),
-      }),
-      42,
-    );
-    expect(result.status).toBe('PENDING_REVIEW');
-  });
+        42,
+      );
+      expect(result.status).toBe('PENDING_REVIEW');
+    },
+  );
 
   it('returns not found when the factory is outside either required scope', async () => {
     mockedConnectionRequestsRepository.findFactorySummaryForAccess
@@ -692,6 +702,8 @@ function pendingAddRequest() {
     factoryRegistrationNo: '10550000125197',
     provinceName: 'น่าน',
     reason: 'ต้องการเข้าระบบ CEMS',
+    contactName: null,
+    contactPhone: null,
     status: 'PENDING_REVIEW' as const,
     statusLabel: 'รอพิจารณา',
     submittedBy: 42,

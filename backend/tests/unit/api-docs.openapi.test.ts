@@ -932,6 +932,29 @@ describe('POMS OpenAPI contract', () => {
       expect.objectContaining({ type: 'string', minLength: 1, maxLength: 80 }),
     );
     expect(addRequestProperties).toHaveProperty('reviewNote');
+    const createSchema = asObject(
+      schemas.CreateEligibleFactoryAddRequest,
+      'CreateEligibleFactoryAddRequest',
+    );
+    const createProperties = asObject(
+      createSchema.properties,
+      'CreateEligibleFactoryAddRequest.properties',
+    );
+    expect(createSchema.required).toEqual(['factoryId', 'reason']);
+    for (const [field, maxLength] of [
+      ['contactName', 255],
+      ['contactPhone', 64],
+    ] as const) {
+      expect(createProperties[field]).toMatchObject({ type: 'string', nullable: true, maxLength });
+      expect(addRequestProperties[field]).toMatchObject({
+        type: 'string',
+        nullable: true,
+        maxLength,
+      });
+      expect(
+        asObject(schemas.EligibleFactoryAddRequest, 'EligibleFactoryAddRequest').required,
+      ).toContain(field);
+    }
     expect(addRequestProperties).not.toHaveProperty('officerNote');
     const eligibleFactoryIdSchema = asObject(
       addRequestProperties.eligibleFactoryId,

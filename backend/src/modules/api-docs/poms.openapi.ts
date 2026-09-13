@@ -537,6 +537,8 @@ const createEligibleFactoryExample = {
 const createEligibleFactoryAddRequestExample = {
   factoryId: 'F000123',
   reason: 'มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์',
+  contactName: 'สมชาย ใจดี',
+  contactPhone: '081-234-5678',
 };
 
 const reviewEligibleFactoryAddRequestExample = {
@@ -1820,6 +1822,20 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: {
       factoryId: { type: 'string', minLength: 1, maxLength: 64 },
       reason: { type: 'string', minLength: 1, maxLength: 1000 },
+      contactName: {
+        type: 'string',
+        maxLength: 255,
+        nullable: true,
+        description:
+          'ชื่อ-นามสกุลผู้ติดต่อ ไม่บังคับ; trim ก่อนตรวจความยาว; ไม่ส่ง, null หรือข้อความว่างเก็บและคืน null ไม่เติมจากบัญชีผู้ใช้',
+      },
+      contactPhone: {
+        type: 'string',
+        maxLength: 64,
+        nullable: true,
+        description:
+          'เบอร์โทรผู้ติดต่อ ไม่บังคับ; trim ก่อนตรวจความยาว; ไม่ส่ง, null หรือข้อความว่างเก็บและคืน null; เก็บเลขศูนย์นำหน้าและเครื่องหมาย ไม่ตรวจรูปแบบเบอร์โทร และไม่บังคับส่งคู่ contactName',
+      },
     },
   },
   ReviewEligibleFactoryAddRequest: {
@@ -1856,6 +1872,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'factoryName',
       'provinceName',
       'reason',
+      'contactName',
+      'contactPhone',
       'status',
       'statusLabel',
       'eligibleFactoryId',
@@ -1872,6 +1890,18 @@ const componentSchemas: Record<string, OpenApiObject> = {
       factoryName: { type: 'string', minLength: 1, maxLength: 500 },
       provinceName: { type: 'string', minLength: 1, maxLength: 128 },
       reason: { type: 'string', minLength: 1, maxLength: 1000 },
+      contactName: {
+        type: 'string',
+        maxLength: 255,
+        nullable: true,
+        description: 'ผู้ติดต่อที่ระบุในคำขอนี้; null เมื่อไม่ระบุหรือเป็นคำขอเดิม',
+      },
+      contactPhone: {
+        type: 'string',
+        maxLength: 64,
+        nullable: true,
+        description: 'เบอร์โทรที่ระบุในคำขอนี้; null เมื่อไม่ระบุหรือเป็นคำขอเดิม',
+      },
       status: {
         type: 'string',
         enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED'],

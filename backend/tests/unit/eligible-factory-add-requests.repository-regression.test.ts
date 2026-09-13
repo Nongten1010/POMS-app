@@ -18,9 +18,69 @@ describe('eligibleFactoriesRepository add-request contract regressions', () => {
     mockedDb.transaction.mockReset();
   });
 
+  it.each([{}, { contactName: 'สมชาย ใจดี', contactPhone: '081-234-5678' }])(
+    'persists and reloads per-request contacts: %j',
+    async (contacts) => {
+      let inserted: Record<string, unknown> = {};
+      const insert = jest.fn((values: Record<string, unknown>) => {
+        inserted = values;
+        return { returning: async () => [{ id: 4 }] };
+      });
+      const trx = jest.fn((tableName: string) => {
+        if (tableName === 'factories') return makeChain({ first: async () => ({ id: 81 }) });
+        if (tableName === 'eligible_factory_add_requests') return { insert };
+        if (tableName === 'eligible_factory_add_requests as ef') {
+          return makeChain({ first: async () => addRequestRow(inserted) });
+        }
+        throw new Error(`Unexpected table ${tableName}`);
+      });
+      mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
+        return (args[0] as (transaction: typeof trx) => Promise<unknown>)(trx);
+      });
+      jest.spyOn(eligibleFactoriesRepository, 'findByRegistrationNoNew').mockResolvedValue(null);
+      jest
+        .spyOn(eligibleFactoriesRepository, 'findOpenAddRequestByFactoryMasterId')
+        .mockResolvedValue(null);
+
+      const result = await eligibleFactoriesRepository.createAddRequest(
+        {
+          factoryMasterId: 81,
+          factoryId: 'FAC-0004',
+          factoryName: 'โรงงานทดสอบ',
+          factoryRegistrationNo: 'FAC-0004',
+          provinceName: 'ระยอง',
+          reason: 'ขอเพิ่มโรงงาน',
+          ...contacts,
+          requestedFactory: {
+            factoryName: 'โรงงานทดสอบ',
+            factoryRegistrationNoNew: 'FAC-0004',
+            provinceName: 'ระยอง',
+            operationStatus: 'แจ้งประกอบแล้ว',
+          },
+        },
+        42,
+      );
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contact_name: contacts.contactName ?? null,
+          contact_phone: contacts.contactPhone ?? null,
+        }),
+      );
+      expect(result).toMatchObject({
+        contactName: contacts.contactName ?? null,
+        contactPhone: contacts.contactPhone ?? null,
+      });
+    },
+  );
+
   it('lists every status without applying legacy status or pagination while preserving stable order', async () => {
     const rows = [
-      addRequestRow({ id: 6, status: 'APPROVED' }),
+      addRequestRow({
+        id: 6,
+        status: 'APPROVED',
+        contact_name: 'สมชาย ใจดี',
+        contact_phone: '081-234-5678',
+      }),
       addRequestRow({ id: 5, status: 'REJECTED' }),
       addRequestRow({ id: 4, status: 'PENDING_REVIEW' }),
     ];
@@ -59,6 +119,11 @@ describe('eligibleFactoriesRepository add-request contract regressions', () => {
       'PENDING_REVIEW',
     ]);
     expect(result.total).toBe(3);
+    expect(result.rows[0]).toMatchObject({
+      contactName: 'สมชาย ใจดี',
+      contactPhone: '081-234-5678',
+    });
+    expect(result.rows[1]).toMatchObject({ contactName: null, contactPhone: null });
     expect(baseQuery.where).not.toHaveBeenCalled();
     expect(baseQuery.whereIn).not.toHaveBeenCalled();
     expect(baseQuery.whereRaw).not.toHaveBeenCalled();
@@ -80,6 +145,8 @@ describe('eligibleFactoriesRepository add-request contract regressions', () => {
       eligible_factory_id: null,
       reviewed_by: 99,
       reviewed_at: '2026-09-01T03:00:00.000Z',
+      contact_name: 'สมชาย ใจดี',
+      contact_phone: '081-234-5678',
     });
     const visibleQuery = makeChain({ first: async () => ({ id: 4 }) });
     const lockedQuery = makeChain({ first: async () => pendingRow });
@@ -121,6 +188,8 @@ describe('eligibleFactoriesRepository add-request contract regressions', () => {
       id: 4,
       status: 'APPROVED',
       eligibleFactoryId: null,
+      contactName: 'สมชาย ใจดี',
+      contactPhone: '081-234-5678',
     });
 
     expect(requestUpdate).toHaveBeenCalledWith({
@@ -269,6 +338,8 @@ function addRequestRow(overrides: Record<string, unknown> = {}) {
     has_eia: null,
     project_name: null,
     reason: 'ขอเพิ่มโรงงานเข้าข่าย',
+    contact_name: null,
+    contact_phone: null,
     status: 'PENDING_REVIEW',
     is_open: true,
     factory_snapshot_json: JSON.stringify({
