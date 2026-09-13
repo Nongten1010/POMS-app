@@ -311,6 +311,134 @@ describe('connection profile persistence with a stale submitted factory', () => 
     env.FACTORY_PROFILE_MODE = previousMode;
   });
 
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    'ADD_PARAMETER retains existing parameters and instruments (canonical: %s, full list: %s)',
+    async (canonical, fullList) => {
+      const oldParameter = 'Flow Rate (m3/hr)';
+      const oldInstrument = {
+        parameter: oldParameter,
+        brand: 'Existing brand',
+        range: '0-100',
+        standardCriteria: { max: 100 },
+      };
+      const added = ['NOx (ppm)', 'SO2 (ppm)', 'O2 (%)'];
+      const fixture = fixtureDatabase(
+        [
+          {
+            ...currentPoint(),
+            point_code: 'S0017',
+            system_type: 'CEMS',
+            parameters_json: JSON.stringify([oldParameter]),
+            instruments_json: JSON.stringify({
+              converterBrand: 'Existing converter',
+              parameters: [oldInstrument],
+            }),
+          },
+        ],
+        canonical,
+      );
+      const request = oldRequest('ADD_PARAMETER', 'P0017');
+      request.systemType = 'CEMS';
+      request.measurementPoints[0].pointCode = 'S0017';
+      request.measurementPoints[0].pointType = 'STACK';
+      request.measurementPoints[0].parameters = fullList ? [oldParameter, ...added] : added;
+      Object.assign(request.measurementPoints[0], {
+        measurementInstruments: {
+          parameters: added.map((parameter) => ({ parameter, brand: 'New brand' })),
+        },
+      });
+      const snapshot = structuredClone(request);
+      // Replaying the same sync must not duplicate parameters or instruments.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await connectionRequestsRepository.syncConnectedMeasurementPoints(request as never, 7);
+        const active = fixture.tables[CONNECTED].filter((row) => row.deleted_at == null);
+        expect(active).toHaveLength(1);
+        expect(JSON.parse(String(active[0].parameters_json))).toEqual([oldParameter, ...added]);
+        expect(JSON.parse(String(active[0].instruments_json))).toEqual({
+          converterBrand: 'Existing converter',
+          parameters: [
+            oldInstrument,
+            ...added.map((parameter) => ({ parameter, brand: 'New brand' })),
+          ],
+        });
+      }
+      expect(request).toEqual(snapshot);
+    },
+  );
+
+  it.each([undefined, null, { parameters: [] }])(
+    'ADD_PARAMETER keeps old instruments when incoming instruments are %j',
+    async (measurementInstruments) => {
+      const instruments = { parameters: [{ parameter: 'BOD (mg/l)', brand: 'Existing brand' }] };
+      const fixture = fixtureDatabase([
+        {
+          ...currentPoint(),
+          parameters_json: '["BOD (mg/l)"]',
+          instruments_json: JSON.stringify(instruments),
+        },
+      ]);
+      const request = oldRequest('ADD_PARAMETER', 'P0017');
+      request.measurementPoints[0].parameters = ['COD (mg/l)'];
+      Object.assign(request.measurementPoints[0], { measurementInstruments });
+      await connectionRequestsRepository.syncConnectedMeasurementPoints(request as never, 7);
+      const active = fixture.tables[CONNECTED].find((row) => row.deleted_at == null)!;
+      expect(JSON.parse(String(active.parameters_json))).toEqual(['BOD (mg/l)', 'COD (mg/l)']);
+      expect(JSON.parse(String(active.instruments_json))).toEqual(instruments);
+    },
+  );
+
+  it('ADD_PARAMETER merges repeated labels and instrument fields without reviving removed instruments', async () => {
+    const fixture = fixtureDatabase([
+      {
+        ...currentPoint(),
+        parameters_json: '["BOD (mg/l)"]',
+        instruments_json: JSON.stringify({
+          parameters: [
+            { parameter: 'BOD (mg/l)', brand: 'Existing brand', range: '0-100' },
+            { parameter: 'Watt (kW/hr)', brand: 'Retired' },
+          ],
+        }),
+      },
+    ]);
+    const request = oldRequest('ADD_PARAMETER', 'P0017');
+    request.measurementPoints[0].parameters = [' bod (mg/l) ', 'COD (mg/l)'];
+    Object.assign(request.measurementPoints[0], {
+      measurementInstruments: {
+        parameters: [
+          { parameter: ' bod (mg/l) ', range: null },
+          { parameter: 'COD (mg/l)' },
+          { parameter: 'BOD (ppm)' },
+        ],
+      },
+    });
+    await connectionRequestsRepository.syncConnectedMeasurementPoints(request as never, 7);
+    const active = fixture.tables[CONNECTED].find((row) => row.deleted_at == null)!;
+    expect(JSON.parse(String(active.parameters_json))).toEqual([
+      'BOD (mg/l)',
+      'COD (mg/l)',
+      'BOD (ppm)',
+    ]);
+    expect(JSON.parse(String(active.instruments_json)).parameters).toEqual([
+      { parameter: 'BOD (mg/l)', brand: 'Existing brand', range: null },
+      { parameter: 'COD (mg/l)' },
+      { parameter: 'BOD (ppm)' },
+    ]);
+  });
+
+  it('retains replacement behavior for a non-ADD_PARAMETER request', async () => {
+    const fixture = fixtureDatabase([currentPoint()]);
+    const request = oldRequest('NEW_CONNECTION', 'P0017');
+    request.measurementPoints[0].parameters = ['COD (mg/l)'];
+    await connectionRequestsRepository.syncConnectedMeasurementPoints(request as never, 7);
+    const active = fixture.tables[CONNECTED].find((row) => row.deleted_at == null)!;
+    expect(JSON.parse(String(active.parameters_json))).toEqual(['COD (mg/l)']);
+  });
+
   it.each(['ADD_MEASUREMENT_POINT', 'ADD_PARAMETER'])(
     '%s preserves approved general data in the existing point and eligible factory',
     async (requestType) => {

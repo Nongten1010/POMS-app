@@ -151,6 +151,7 @@ interface MeasurementPointRow {
 interface ConnectedMeasurementPointRow {
   id: number | string;
   parameters_json: string;
+  instruments_json: string | null;
 }
 
 interface ConnectedFactoryProfileRow {
@@ -1625,15 +1626,21 @@ async function syncConnectedMeasurementPointsInTransaction(
   );
   for (const point of request.measurementPoints) {
     const existing = await findConnectedPointForMeasurementPoint(trx, point);
+    const isAddParameter = request.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER;
     const pointParameters = getConnectedMeasurementPointParameters(point);
     const parameters = uniqueParameters([
-      ...(pointParameters.length > 0
-        ? []
-        : existing
-          ? parseParameters(existing.parameters_json)
-          : []),
+      ...(existing && (isAddParameter || pointParameters.length === 0)
+        ? parseParameters(existing.parameters_json)
+        : []),
       ...pointParameters,
     ]);
+    const instruments = isAddParameter
+      ? mergeAddedParameterInstruments(
+          parseJsonObject<MeasurementInstrumentsInput>(existing?.instruments_json ?? null),
+          point.measurementInstruments ?? null,
+          parameters,
+        )
+      : point.measurementInstruments;
 
     await softDeleteConnectedPoint(trx, point, actorUserId);
     await trx('cems_wpms_connected_measurement_points').insert({
@@ -1656,9 +1663,7 @@ async function syncConnectedMeasurementPointsInTransaction(
         point.documentsAndImages && point.documentsAndImages.length > 0
           ? JSON.stringify(point.documentsAndImages)
           : null,
-      instruments_json: point.measurementInstruments
-        ? JSON.stringify(point.measurementInstruments)
-        : null,
+      instruments_json: instruments ? JSON.stringify(instruments) : null,
       connected_at: request.verifiedAt,
       created_by: actorUserId,
       updated_by: actorUserId,
@@ -3193,6 +3198,25 @@ function getConnectedMeasurementPointParameters(point: MeasurementPointDTO): str
   return instrumentParameters.length > 0 ? instrumentParameters : point.parameters;
 }
 
+/** An add request may contain only new instruments; omitted live settings are retained. */
+function mergeAddedParameterInstruments(
+  current: MeasurementInstrumentsInput | null,
+  incoming: MeasurementInstrumentsInput | null,
+  parameters: string[],
+): MeasurementInstrumentsInput | null {
+  if (!current && !incoming) return null;
+  const labels = new Map(parameters.map((parameter) => [parameter.trim().toLowerCase(), parameter]));
+  const instruments = new Map<string, MeasurementInstrumentsInput['parameters'][number]>();
+  for (const instrument of [...(current?.parameters ?? []), ...(incoming?.parameters ?? [])]) {
+    const key = instrument.parameter.trim().toLowerCase();
+    const label = labels.get(key);
+    // Do not resurrect settings for a parameter removed from the live point.
+    if (!label) continue;
+    instruments.set(key, { ...instruments.get(key), ...instrument, parameter: label });
+  }
+  return { ...current, ...incoming, parameters: [...instruments.values()] };
+}
+
 const SOFT_DELETE_DUPLICATE_ACTIVE_MEASUREMENT_POINTS_SQL = `
 WITH ranked_points AS (
   SELECT
@@ -3236,7 +3260,7 @@ async function findConnectedPointForMeasurementPoint(
 ): Promise<ConnectedMeasurementPointRow | null> {
   const query = trx<ConnectedMeasurementPointRow>('cems_wpms_connected_measurement_points')
     .whereNull('deleted_at')
-    .select('id', 'parameters_json');
+    .select('id', 'parameters_json', 'instruments_json');
 
   if (point.pointCode) {
     query.where('point_code', point.pointCode);
