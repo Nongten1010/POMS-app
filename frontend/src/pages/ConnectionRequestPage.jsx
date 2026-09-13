@@ -1595,7 +1595,7 @@ function validateDocumentRows(documentsAndImages = []) {
   return errors
 }
 
-function validateParameterGroups(details = {}, instrumentParameters = [], point = {}, { isAddParameterMode = false } = {}) {
+function validateParameterGroups(details = {}, instrumentParameters = [], point = {}, { isAddParameterMode = false, isOfficer = false } = {}) {
   const errors = []
   const parameterGroupKeys = [
     ['eligibleParameters', 'พารามิเตอร์ที่เข้าข่าย'],
@@ -1623,6 +1623,7 @@ function validateParameterGroups(details = {}, instrumentParameters = [], point 
   const requiredParameterGroupKeys = parameterGroupKeys.filter(([key]) => (
     key !== 'timeSharingParameters'
       && !(isAddParameterMode && ['connectedParameters', 'pendingParameters'].includes(key))
+      && !(isAddParameterMode && isOfficer && key === 'exemptedParameters')
       && Object.prototype.hasOwnProperty.call(details, key)
   ))
   requiredParameterGroupKeys.forEach(([key, label]) => {
@@ -1738,12 +1739,13 @@ function validateTreatmentSystem(details = {}) {
   return errors
 }
 
-function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode = false, skipFullValidation = false } = {}) {
+function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode = false, isOfficer = false, skipFullValidation = false } = {}) {
   if (skipFullValidation) {
     return
   }
 
   const errors = []
+  const isOfficerAddParameterMode = isAddParameterMode && isOfficer
   const measurementPoints = Array.isArray(requestBody.measurementPoints) ? requestBody.measurementPoints : []
 
   if (!isPresentValue(requestBody.factoryId)) {
@@ -1823,7 +1825,7 @@ function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode
       errors.push(`กรุณากรอกรายละเอียดเครื่องมือตรวจวัดของ${pointLabel}`)
     }
     errors.push(...validateDocumentRows(point.documentsAndImages ?? []))
-    errors.push(...validateParameterGroups(details, instrumentParameters, point, { isAddParameterMode }))
+    errors.push(...validateParameterGroups(details, instrumentParameters, point, { isAddParameterMode, isOfficer }))
     errors.push(...validateMeasurementInstruments(point.measurementInstruments))
     errors.push(...validateTreatmentSystem(details))
 
@@ -1842,16 +1844,16 @@ function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode
       if (details.monitoringPointKind && details.monitoringPointKind !== 'CEMS') {
         errors.push(`${pointLabel} ของ CEMS ต้องมีชนิดจุดตรวจวัดเป็น CEMS`)
       }
-      if (!isPresentValue(details.productionUnitType)) {
+      if (!isOfficerAddParameterMode && !isPresentValue(details.productionUnitType)) {
         errors.push(`กรุณากรอกประเภทของหน่วยการผลิตของ${pointLabel}`)
       }
-      if (!isPresentValue(details.productionCapacityValue)) {
+      if (!isOfficerAddParameterMode && !isPresentValue(details.productionCapacityValue)) {
         errors.push(`กรุณากรอกกำลังการผลิตของ${pointLabel}`)
       }
-      if (!isPresentValue(details.productionCapacityUnit)) {
+      if (!isOfficerAddParameterMode && !isPresentValue(details.productionCapacityUnit)) {
         errors.push(`กรุณากรอกหน่วยกำลังการผลิตของ${pointLabel}`)
       }
-      if (!isPresentValue(details.stackShape)) {
+      if (!isOfficerAddParameterMode && !isPresentValue(details.stackShape)) {
         errors.push(`กรุณาเลือกลักษณะปล่องของ${pointLabel}`)
       }
       if (details.stackShape === 'วงกลม' && !Number.isFinite(details.stackDiameter)) {
@@ -7183,6 +7185,7 @@ export function RequestFormBottomSheet({
       if (!customSubmit) {
         validateConnectionRequestPayload(requestBody, {
           isAddParameterMode,
+          isOfficer: !isOperator,
           skipFullValidation: shouldUseDirectConnection,
         })
       }
@@ -7259,6 +7262,7 @@ export function RequestFormBottomSheet({
       if (!customSubmit) {
         validateConnectionRequestPayload(requestBody, {
           isAddParameterMode,
+          isOfficer: !isOperator,
           skipFullValidation: shouldUseDirectConnection,
         })
       }

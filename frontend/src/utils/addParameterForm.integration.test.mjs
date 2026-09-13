@@ -32,17 +32,65 @@ test('add-parameter form and payload preserve live groups without affecting othe
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          return `${code}\nexport { validateParameterGroups, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection };`
+          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection };`
         }
       },
     }],
   })
   try {
     const {
-      RequestFormBottomSheet, validateParameterGroups, buildMeasurementPointRequestBody,
+      RequestFormBottomSheet, validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody,
       syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload,
       MeasurementInstrumentSection,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('only officer add-parameter requests may omit the five required legacy fields', () => {
+      const payload = {
+        factoryId: 'TEST', factoryName: 'Test factory', systemType: 'CEMS', latitude: 13.5, longitude: 100.5,
+        contactPersons: [{ name: 'Contact', phone: '0812345678' }], notificationEmails: ['contact@example.com'],
+        informationProviderName: 'Provider', informationProviderPosition: 'Engineer',
+        measurementPoints: [{
+          pointCode: 'S123', pointName: 'Stack', pointType: 'STACK',
+          details: {
+            eligibleParameters: ['CO (ppm)'], exemptedParameters: [], connectedParameters: ['ไม่มี'],
+            pendingParameters: ['CO (ppm)'], requestedParameters: ['CO (ppm)'],
+            productionUnitType: null, productionCapacityValue: null, productionCapacityUnit: null, stackShape: null,
+          },
+          documentsAndImages: [{ title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', fileName: 'logo.jpg', fileUrl: 'https://example.com/logo.jpg', fileType: 'image/jpeg' }],
+          measurementInstruments: { parameters: [{ parameter: 'CO (ppm)' }] },
+        }],
+      }
+      const officerAdd = { isAddParameterMode: true, isOfficer: true }
+      const requiredMessages = [
+        'กรุณาเลือกพารามิเตอร์ที่ได้รับการยกเว้น',
+        'กรุณากรอกประเภทของหน่วยการผลิต', 'กรุณากรอกกำลังการผลิต',
+        'กรุณากรอกหน่วยกำลังการผลิต', 'กรุณาเลือกลักษณะปล่อง',
+      ]
+      assert.doesNotThrow(() => validateConnectionRequestPayload(payload, officerAdd))
+      for (const options of [undefined, { isAddParameterMode: true, isOfficer: false }, { isAddParameterMode: false, isOfficer: true }]) {
+        assert.throws(() => validateConnectionRequestPayload(payload, options), (error) => (
+          requiredMessages.every((message) => error.message.includes(message))
+        ))
+      }
+      for (const blank of ['', undefined]) {
+        const request = structuredClone(payload)
+        Object.assign(request.measurementPoints[0].details, {
+          productionUnitType: blank, productionCapacityValue: blank, productionCapacityUnit: blank, stackShape: blank,
+        })
+        assert.doesNotThrow(() => validateConnectionRequestPayload(request, officerAdd))
+      }
+      const invalid = structuredClone(payload)
+      invalid.measurementPoints[0].details.exemptedParameters = ['ไม่มี', 'CO (ppm)']
+      invalid.measurementPoints[0].details.stackShape = 'วงกลม'
+      invalid.measurementPoints[0].pointName = ''
+      invalid.measurementPoints[0].details.requestedParameters = []
+      assert.throws(() => validateConnectionRequestPayload(invalid, officerAdd), (error) => (
+        error.message.includes('ถ้าเลือก "ไม่มี" ต้องเลือก "ไม่มี" เพียงตัวเดียว')
+        && error.message.includes('กรุณากรอกเส้นผ่านศูนย์กลางปล่อง')
+        && error.message.includes('กรุณากรอกชื่อจุดตรวจวัด')
+        && error.message.includes('กรุณาเลือกพารามิเตอร์ที่ขอเชื่อมต่อ')
+      ))
+    })
 
     for (const systemType of ['CEMS', 'WPMS']) {
       await t.test(systemType, () => {
