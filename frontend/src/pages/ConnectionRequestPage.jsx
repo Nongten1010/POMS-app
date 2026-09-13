@@ -2468,7 +2468,7 @@ function OfficerFactoryActions({ row, onOpenMonitoringPoints }) {
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
-        ดูข้อมูล
+        รายการจุดตรวจวัด
       </Button>
       <Button size="small" color="error" variant="outlined">
         ลบ
@@ -2500,7 +2500,7 @@ function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
-        ดูข้อมูล
+        รายการจุดตรวจวัด
       </Button>
       <Button
         size="small"
@@ -5232,7 +5232,7 @@ function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: useOperatorColumns ? 260 : 290,
+      width: useOperatorColumns ? 330 : 360,
       sortable: false,
       filterable: false,
       renderCell: (params) =>

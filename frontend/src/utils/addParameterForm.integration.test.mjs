@@ -32,7 +32,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection };`
+          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns };`
         }
       },
     }],
@@ -41,8 +41,24 @@ test('add-parameter form and payload preserve live groups without affecting othe
     const {
       RequestFormBottomSheet, validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody,
       syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload,
-      MeasurementInstrumentSection,
+      MeasurementInstrumentSection, getFactoryColumns,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('factory actions show the monitoring-point list label and retain the factory callback for both roles', () => {
+      const row = { factoryId: 'TEST', isEligible: true, status: 'แสดง' }
+      for (const isOperator of [true, false]) {
+        let openedFactory
+        const actions = getFactoryColumns(isOperator, () => {}, (factory) => { openedFactory = factory })
+          .find((column) => column.field === 'actions')
+        const element = actions.renderCell({ row })
+        const html = renderToStaticMarkup(element)
+        assert.ok(html.includes('รายการจุดตรวจวัด'))
+        assert.ok(!html.includes('ดูข้อมูล'))
+        assert.ok(actions.width >= 330)
+        element.props.onOpenMonitoringPoints(row)
+        assert.equal(openedFactory, row)
+      }
+    })
 
     await t.test('add-parameter exemptions are optional for both roles while production and stack requirements remain role-specific', () => {
       const payload = {
