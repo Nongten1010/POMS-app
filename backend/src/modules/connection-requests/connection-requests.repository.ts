@@ -1209,6 +1209,14 @@ export const connectionRequestsRepository = {
     return row ? hydrate(row) : null;
   },
 
+  async findPreviousRequestForReadAccess(
+    factoryId: string,
+    access: Pick<ListAccess, 'actorUserId' | 'scope' | 'regionalAccess'>,
+  ): Promise<ConnectionRequestDTO | null> {
+    const row = await buildPreviousRequestQuery(factoryId, access).first();
+    return row ? hydrate(row) : null;
+  },
+
   async replaceForm(
     id: number,
     input: CreateConnectionRequestInput,
@@ -1784,6 +1792,8 @@ export function buildBaseQueryForTests(
   return buildBaseQuery(query, access);
 }
 
+export const buildPreviousRequestQueryForTests = buildPreviousRequestQuery;
+
 export function buildFactoriesForAccessQueryForTests(
   access: FactoryAccess,
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
@@ -2129,6 +2139,28 @@ function applyDirectConnectionFactoryAccessFilter(
     return;
   }
   builder.whereRaw('1 = 0');
+}
+
+function buildPreviousRequestQuery(
+  factoryId: string,
+  access: Pick<ListAccess, 'actorUserId' | 'scope' | 'regionalAccess'>,
+): Knex.QueryBuilder<ConnectionRequestRow, ConnectionRequestRow[]> {
+  const builder = buildBaseQuery(
+    { factoryId },
+    {
+      ...access,
+      useAssignedFactoryAccess: true,
+      includeRequestOwnerAccess: true,
+    },
+  );
+  if (
+    !['ALL', 'OWN_FACTORY', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(
+      getAccessScopeValue(access.scope) ?? '',
+    )
+  ) {
+    builder.whereRaw('1 = 0');
+  }
+  return builder.orderBy('created_at', 'desc').orderBy('id', 'desc');
 }
 
 function buildBaseQuery(

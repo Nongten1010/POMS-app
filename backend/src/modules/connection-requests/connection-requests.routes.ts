@@ -92,6 +92,11 @@ connectionRequestsRoutes.get(
   connectionRequestsController.getFactoryGeneral,
 );
 connectionRequestsRoutes.get(
+  '/factories/:factoryId/previous-request',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getPreviousRequest,
+);
+connectionRequestsRoutes.get(
   '/connected-measurement-points',
   authorize('cems_wpms_requests:view'),
   connectionRequestsController.listConnectedMeasurementPoints,

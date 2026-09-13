@@ -5,6 +5,7 @@ import {
   CONNECTION_REQUEST_STATUS_LABELS,
   CONNECTION_REQUEST_TYPE_LABELS,
   MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS,
+  PREVIOUS_REQUEST_GENERAL_FIELDS,
 } from '../connection-requests/connection-requests.types';
 import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
 import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-point-forms.types';
@@ -22,6 +23,7 @@ interface OperationOptions {
   successStatus?: string;
   successDescription?: string;
   successSchema?: OpenApiObject;
+  successExamples?: OpenApiObject;
   extraResponses?: OpenApiObject;
   deprecated?: boolean;
   focus?: boolean;
@@ -97,11 +99,13 @@ const jsonRequestBody = (
 const successResponse = (
   description: string,
   schema: OpenApiObject = schemaRef('SuccessEnvelope'),
+  examples?: OpenApiObject,
 ) => ({
   description,
   content: {
     'application/json': {
       schema,
+      ...(examples ? { examples } : {}),
     },
   },
 });
@@ -127,6 +131,7 @@ function securedOperation(options: OperationOptions): OpenApiObject {
       [successStatus]: successResponse(
         options.successDescription ?? 'สำเร็จ',
         options.successSchema,
+        options.successExamples,
       ),
       ...standardErrorResponses,
       ...(options.extraResponses ?? {}),
@@ -504,6 +509,45 @@ const connectionRequestFormProperties: Record<string, OpenApiObject> = {
   ...operatorFormProperties,
 };
 delete connectionRequestFormProperties.type;
+const previousRequestFoundExample = {
+  success: true,
+  data: {
+    hasPreviousRequest: true,
+    sourceRequestId: 17,
+    message: 'พบข้อมูลจากคำขอก่อนหน้า',
+    formData: {
+      ...Object.fromEntries(PREVIOUS_REQUEST_GENERAL_FIELDS.map((field) => [field, null])),
+      factoryId: 'factory-001',
+      factoryName: 'บริษัท ตัวอย่าง จำกัด',
+      factoryRegistrationNo: '3-106-33/50สบ',
+      address: '99 หมู่ 1',
+      factoryFrontPhotos: [
+        {
+          title: CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_FRONT_PHOTO,
+          fileUrl: 'https://example.com/uploads/front.jpg',
+        },
+      ],
+      factoryLogo: {
+        title: CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_LOGO,
+        fileUrl: 'https://example.com/uploads/logo.png',
+      },
+      contactName: 'สมชาย ใจดี',
+      contactPhone: '0812345678',
+      contactEmail: null,
+      contactPersons: [],
+      notificationEmails: ['factory@example.com'],
+    },
+  },
+};
+const previousRequestEmptyExample = {
+  success: true,
+  data: {
+    hasPreviousRequest: false,
+    sourceRequestId: null,
+    formData: null,
+    message: 'ไม่พบคำขอก่อนหน้าของโรงงานนี้',
+  },
+};
 const addPointExample = {
   factoryId: 'F000123',
   factoryName: 'โรงงานตัวอย่าง',
@@ -1190,6 +1234,78 @@ const componentSchemas: Record<string, OpenApiObject> = {
       success: { type: 'boolean', enum: [true] },
       data: schemaRef('ConnectionRequestForm'),
     },
+  },
+  PreviousRequestFormData: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      ...PREVIOUS_REQUEST_GENERAL_FIELDS,
+      'factoryFrontPhotos',
+      'factoryLogo',
+      'contactName',
+      'contactPhone',
+      'contactEmail',
+      'contactPersons',
+      'notificationEmails',
+    ],
+    properties: {
+      ...Object.fromEntries(
+        PREVIOUS_REQUEST_GENERAL_FIELDS.map((field) => [
+          field,
+          connectionRequestFormProperties[field],
+        ]),
+      ),
+      factoryFrontPhotos: {
+        type: 'array',
+        items: schemaRef('RequestDocumentImage'),
+        description:
+          'ภาพหน้าโรงงานหรือป้ายโรงงานจากทุกจุดตรวจวัด ตัดรูปที่ใช้ fileUrl/link เดียวกันซ้ำ; ไม่มีรูปคืน []',
+      },
+      factoryLogo: {
+        ...nullableRef('RequestDocumentImage'),
+        description: 'โลโก้รายการแรกตามลำดับจุดตรวจวัดและเอกสาร; ไม่มีคืน null',
+      },
+      contactName: connectionRequestFormProperties.contactName,
+      contactPhone: connectionRequestFormProperties.contactPhone,
+      contactEmail: connectionRequestFormProperties.contactEmail,
+      contactPersons: { type: 'array', items: schemaRef('ContactPerson') },
+      notificationEmails: connectionRequestFormProperties.notificationEmails,
+    },
+  },
+  PreviousConnectionRequestResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['hasPreviousRequest', 'sourceRequestId', 'formData', 'message'],
+            properties: {
+              hasPreviousRequest: { type: 'boolean', enum: [true] },
+              sourceRequestId: { type: 'integer', minimum: 1, example: 17 },
+              formData: schemaRef('PreviousRequestFormData'),
+              message: { type: 'string', example: 'พบข้อมูลจากคำขอก่อนหน้า' },
+            },
+          },
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: ['hasPreviousRequest', 'sourceRequestId', 'formData', 'message'],
+            properties: {
+              hasPreviousRequest: { type: 'boolean', enum: [false] },
+              sourceRequestId: { type: 'integer', nullable: true, enum: [null] },
+              formData: { type: 'object', nullable: true, enum: [null] },
+              message: { type: 'string', example: 'ไม่พบคำขอก่อนหน้าของโรงงานนี้' },
+            },
+          },
+        ],
+      },
+    },
+    example: previousRequestFoundExample,
   },
   AddPointMeasurementPoint: {
     type: 'object',
@@ -2075,6 +2191,22 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'getSingleConnectionRequestDeviceConfig',
       description: 'Permission: cems_wpms_requests:view',
       parameters: [idPathParameter, configIdPathParameter],
+    }),
+  },
+  '/cems-wpms-requests/factories/{factoryId}/previous-request': {
+    get: securedOperation({
+      tag: 'Flow หลัก',
+      summary: 'โหลดข้อมูลโรงงานจากคำขอก่อนหน้าสำหรับเติมฟอร์ม',
+      operationId: 'getPreviousConnectionRequest',
+      description:
+        'Permission: cems_wpms_requests:view. ใช้ factoryId ที่บันทึกในคำขอ (trim 1-64 ตัวอักษร; URL-encode หากมี /). เลือกคำขอที่ยังไม่ถูกลบและอ่านได้ตาม owner/data scope เดียวกับ GET /cems-wpms-requests/{id}/form โดย created_at DESC, id DESC ทุกสถานะ/ประเภทคำขอ รวม CEMS/WPMS. คืน snapshot เฉพาะข้อมูลทั่วไป รูปหน้าโรงงาน โลโก้ ผู้ติดต่อ และอีเมลแจ้งเตือนโรงงาน; ไม่สร้างหรือแก้ไขคำขอ. ไม่พบคำขอที่อ่านได้ (รวม factoryId ที่ไม่มีหรืออยู่นอกสิทธิ์) คืน 200 พร้อม hasPreviousRequest=false, sourceRequestId=null, formData=null. นำรูปกลับไปใส่ measurementPoints[].documentsAndImages เมื่อส่งคำขอใหม่',
+      parameters: [factoryIdPathParameter],
+      successSchema: schemaRef('PreviousConnectionRequestResponse'),
+      successExamples: {
+        found: { summary: 'พบคำขอก่อนหน้า', value: previousRequestFoundExample },
+        notFound: { summary: 'ไม่พบคำขอก่อนหน้า', value: previousRequestEmptyExample },
+      },
+      focus: true,
     }),
   },
   '/cems-wpms-requests/{id}/form': {

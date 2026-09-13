@@ -5,6 +5,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     create: jest.fn(),
     findById: jest.fn(),
     findByIdForReadAccess: jest.fn(),
+    findPreviousRequestForReadAccess: jest.fn(),
     findFactorySummariesForRequests: jest.fn(),
     findCurrentPomsFactoryNamesForRequests: jest.fn(),
     replaceForm: jest.fn(),
@@ -2397,6 +2398,107 @@ describe('connectionRequestsService', () => {
     expect(result.measurementPoints[0]).not.toHaveProperty('sourceMeasurementPointId');
     expect(result.measurementPoints[0]).not.toHaveProperty('pointCodeAssignmentMode');
     expect(resubmitConnectionRequestWithTypeSchema.safeParse(result).success).toBe(true);
+  });
+
+  it('prefills only the requested factory fields and combines factory images from all points', async () => {
+    const photo = { title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', fileUrl: '/uploads/front.png' };
+    const secondPhoto = { ...photo, fileUrl: '/uploads/sign.png' };
+    const logo = {
+      title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
+      link: 'https://example.com/logo.png',
+    };
+    const source = requestDto({
+      id: 17,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'A',
+          pointType: 'STACK',
+          parameters: [],
+          documentsAndImages: [photo, { title: 'แผนผัง', fileUrl: '/uploads/plan.pdf' }],
+        },
+        {
+          id: 2,
+          pointName: 'B',
+          pointType: 'STACK',
+          parameters: [],
+          documentsAndImages: [photo, secondPhoto, logo],
+        },
+      ] as ConnectionRequestDTO['measurementPoints'],
+    });
+    mockedRepository.findPreviousRequestForReadAccess.mockResolvedValue(source);
+
+    const result = await connectionRequestsService.getPreviousRequest(
+      'factory-001',
+      42,
+      'OWN_FACTORY',
+    );
+
+    expect(result).toMatchObject({
+      hasPreviousRequest: true,
+      sourceRequestId: 17,
+      formData: {
+        factoryId: source.factoryId,
+        factoryName: source.factoryName,
+        factoryRegistrationNo: source.factoryRegistrationNo,
+        address: source.address,
+        eia: source.eia,
+        latitude: source.latitude,
+        longitude: source.longitude,
+        factoryFrontPhotos: [photo, secondPhoto],
+        factoryLogo: logo,
+        contactName: source.contactName,
+        contactPhone: source.contactPhone,
+        contactEmail: source.contactEmail,
+        contactPersons: source.contactPersons,
+        notificationEmails: source.notificationEmails,
+      },
+    });
+    for (const field of [
+      'measurementPoints',
+      'status',
+      'id',
+      'requestType',
+      'systemType',
+      'officerNotificationEmails',
+      'informationProviderName',
+      'remarks',
+    ]) {
+      expect(result.formData).not.toHaveProperty(field);
+    }
+    expect(result.formData?.factoryFrontPhotos).not.toBe(
+      source.measurementPoints[0].documentsAndImages,
+    );
+  });
+
+  it('keeps absent images and contact lists explicitly empty on a previous request', async () => {
+    mockedRepository.findPreviousRequestForReadAccess.mockResolvedValue(
+      requestDto({
+        measurementPoints: [],
+        contactPersons: [],
+        notificationEmails: [],
+        contactEmail: null,
+      }),
+    );
+    const result = await connectionRequestsService.getPreviousRequest('factory-001', 42, 'ALL');
+    expect(result.formData).toMatchObject({
+      factoryFrontPhotos: [],
+      factoryLogo: null,
+      contactPersons: [],
+      notificationEmails: [],
+      contactEmail: null,
+    });
+  });
+
+  it('passes regional request access through to previous-request lookup', async () => {
+    mockedRepository.findPreviousRequestForReadAccess.mockResolvedValue(null);
+    const scope = { scope: 'IN_PROVINCE' as const, province: 'สระบุรี' };
+    await connectionRequestsService.getPreviousRequest('factory-001', 42, scope);
+    expect(mockedRepository.findPreviousRequestForReadAccess).toHaveBeenCalledWith('factory-001', {
+      actorUserId: 42,
+      scope,
+      regionalAccess: undefined,
+    });
   });
 
   it('omits an empty measurement-point parameters array so the returned form remains resubmittable', () => {

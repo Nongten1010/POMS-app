@@ -8,6 +8,15 @@
 
 permission code, grouped response alias และ scope keyword ที่อ้างในหน้านี้ใช้ canonical contract จาก [สิทธิ์การใช้งาน](../permissions/README.md)
 
+### เติมข้อมูลจากคำขอก่อนหน้า
+
+เมื่อเลือกโรงงานสำหรับคำขอใหม่ เรียก [โหลดข้อมูลจากคำขอก่อนหน้า](./previous-request.md) เพื่อรับข้อมูลทั่วไป รูปหน้าโรงงาน โลโก้ ผู้ติดต่อ และอีเมลแจ้งเตือนจากคำขอล่าสุดที่อ่านได้ หาก `data.hasPreviousRequest = false` ให้เริ่มกรอกฟอร์มว่าง
+
+```bash
+curl "$BASE_URL/api/v1/cems-wpms-requests/factories/factory-001/previous-request" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
 ### หน้าเว็บทดสอบ API
 
 เมื่อเปิด backend แล้ว ใช้หน้า Swagger UI ที่ `<BASE_URL>/api/v1/docs` เพื่อดู contract, กรอก payload และกด `Try it out` ได้จาก browser ส่วน machine-readable contract อยู่ที่ `<BASE_URL>/api/v1/openapi.json`
@@ -95,7 +104,7 @@ curl --request POST \
 
 ## Endpoint Summary
 
-นับแบบ `Method + Path` แยกกัน เมนูขอเชื่อมต่อมี **34 API ที่ใช้งานได้** และ **1 compatibility API ที่ตอบ `404` เสมอ** รวมที่แสดงในหน้านี้ 35 route signatures ขอบเขตนี้รวม API คำขอ, prefill, การตั้งค่าอุปกรณ์ และการทดสอบการเชื่อมต่อ แต่ไม่นับ API สถิติ/ปฏิทิน/ส่งออกที่เป็นหน้าที่ของเมนูหน้าหลัก
+นับแบบ `Method + Path` แยกกัน เมนูขอเชื่อมต่อมี **35 API ที่ใช้งานได้** และ **1 compatibility API ที่ตอบ `404` เสมอ** รวมที่แสดงในหน้านี้ 36 route signatures ขอบเขตนี้รวม API คำขอ, prefill, การตั้งค่าอุปกรณ์ และการทดสอบการเชื่อมต่อ แต่ไม่นับ API สถิติ/ปฏิทิน/ส่งออกที่เป็นหน้าที่ของเมนูหน้าหลัก
 
 API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต่ละแถวระบุ permission เพิ่มเติมที่ต้องผ่าน
 
@@ -121,6 +130,7 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 | อ่านสรุปคำขอ                                  | `GET`  | `/api/v1/cems-wpms-requests/:id`                          | `id` path                      | `cems_wpms_requests:view`           | [Read request](#read-request)                                                                                                     |
 | อ่านรายละเอียดเต็มสำหรับ prefill              | `GET`  | `/api/v1/cems-wpms-requests/:id/detail`                   | `id` path                      | `cems_wpms_requests:view`           | [Read request](#read-request)                                                                                                     |
 | อ่านค่าลงฟอร์มมาตรฐาน                  | `GET`  | `/api/v1/cems-wpms-requests/:id/form`                     | `id` path                      | `cems_wpms_requests:view`           | [Connection-request form prefill](#connection-request-form-prefill)                                                               |
+| โหลดข้อมูลจากคำขอก่อนหน้า | `GET` | `/api/v1/cems-wpms-requests/factories/:factoryId/previous-request` | `factoryId` path | `cems_wpms_requests:view` | [โหลดข้อมูลจากคำขอก่อนหน้า](./previous-request.md) |
 | อ่านแบบตั้งค่าอุปกรณ์ในคำขอ                   | `GET`  | `/api/v1/cems-wpms-requests/:id/device-configs`           | `id` path, `stationId?` query  | `cems_wpms_requests:view`           | [Device configs](./device-configs.md)                                                                                             |
 | อ่าน config เดียวในคำขอ                       | `GET`  | `/api/v1/cems-wpms-requests/:id/device-configs/:configId` | `id`, `configId` path          | `cems_wpms_requests:view`           | [Device configs](./device-configs.md)                                                                                             |
 | สร้างคำขอเชื่อมต่อใหม่                        | `POST` | `/api/v1/cems-wpms-requests`                              | JSON body                      | `cems_wpms_requests:edit`           | [Eligibility gate](#eligibility-gate)                                                                                             |

@@ -450,6 +450,22 @@ export const connectionRequestsController = {
     }
   },
 
+  async getPreviousRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { factoryId } = factoryGeneralParamsSchema.parse(req.params);
+      const data = await connectionRequestsService.getPreviousRequest(
+        factoryId,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);

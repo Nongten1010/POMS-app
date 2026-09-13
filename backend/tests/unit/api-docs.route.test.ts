@@ -164,7 +164,7 @@ describe('API documentation routes', () => {
     expect(operationCount).toBe(
       countOpenApiOperations(pomsOpenApiDocument as Record<string, unknown>),
     );
-    expect(operationCount).toBe(152);
+    expect(operationCount).toBe(153);
   });
 
   it('serves one canonical form-prefill response schema on connection and POMS endpoints', async () => {

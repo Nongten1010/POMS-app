@@ -36,6 +36,10 @@ import type { ParameterEvaluationOptions } from '../parameter-values/parameter-v
 import { connectionRequestsRepository } from './connection-requests.repository';
 import {
   CANCELLABLE_CONNECTION_REQUEST_STATUSES,
+  CONNECTION_REQUEST_DOCUMENT_TITLE,
+  PREVIOUS_REQUEST_GENERAL_FIELDS,
+  type PreviousConnectionRequestDTO,
+  type PreviousRequestFormData,
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_STATUS_LABELS,
   CONNECTION_REQUEST_SUBMISSION_SOURCE,
@@ -628,6 +632,63 @@ export const connectionRequestsService = {
   ): Promise<ConnectionRequestFormDTO> {
     const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
     return toConnectionRequestFormDTO(request);
+  },
+
+  async getPreviousRequest(
+    factoryId: string,
+    actorUserId: number,
+    viewScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
+  ): Promise<PreviousConnectionRequestDTO> {
+    const request = await connectionRequestsRepository.findPreviousRequestForReadAccess(factoryId, {
+      actorUserId,
+      scope: viewScope,
+      regionalAccess,
+    });
+    if (!request) {
+      return {
+        hasPreviousRequest: false,
+        sourceRequestId: null,
+        formData: null,
+        message: 'ไม่พบคำขอก่อนหน้าของโรงงานนี้',
+      };
+    }
+
+    const documents = request.measurementPoints.flatMap((point) => point.documentsAndImages ?? []);
+    const frontPhotos = documents.filter(
+      (document) => document.title === CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_FRONT_PHOTO,
+    );
+    // The same factory photo may be attached to several measurement points.
+    const uniquePhotos = [
+      ...new Map(
+        frontPhotos.map((document) => [
+          document.fileUrl || document.link || JSON.stringify(document),
+          document,
+        ]),
+      ).values(),
+    ];
+    const logo = documents.find(
+      (document) => document.title === CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_LOGO,
+    );
+    const general = Object.fromEntries(
+      PREVIOUS_REQUEST_GENERAL_FIELDS.map((field) => [field, request[field] ?? null]),
+    ) as Pick<PreviousRequestFormData, (typeof PREVIOUS_REQUEST_GENERAL_FIELDS)[number]>;
+
+    return {
+      hasPreviousRequest: true,
+      sourceRequestId: request.id,
+      message: 'พบข้อมูลจากคำขอก่อนหน้า',
+      formData: {
+        ...general,
+        factoryFrontPhotos: uniquePhotos.map((document) => ({ ...document })),
+        factoryLogo: logo ? { ...logo } : null,
+        contactName: request.contactName,
+        contactPhone: request.contactPhone,
+        contactEmail: request.contactEmail ?? null,
+        contactPersons: request.contactPersons.map((contact) => ({ ...contact })),
+        notificationEmails: [...request.notificationEmails],
+      },
+    };
   },
 
   async getDeviceConfigFormDetail(

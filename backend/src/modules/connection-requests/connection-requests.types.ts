@@ -87,6 +87,7 @@ export type PointCodeAssignmentInput =
 export type MeasurementPointDetailsInput = Record<string, unknown>;
 
 export const CONNECTION_REQUEST_DOCUMENT_TITLE = {
+  FACTORY_FRONT_PHOTO: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
   FACTORY_LOGO: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
   WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO: 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
 } as const;
@@ -291,6 +292,60 @@ export interface ConnectionRequestFormDTO extends Omit<
 > {
   requestType: ConnectionRequestType;
 }
+
+export const PREVIOUS_REQUEST_GENERAL_FIELDS = [
+  'factoryId',
+  'factoryName',
+  'factoryRegistrationNo',
+  'industryMainOrder',
+  'industryMainOrderLabel',
+  'industrySubOrder',
+  'businessActivity',
+  'eia',
+  'eiaOther',
+  'hasEia',
+  'projectName',
+  'address',
+  'regionCode',
+  'regionName',
+  'provinceCode',
+  'provinceName',
+  'districtCode',
+  'districtName',
+  'subdistrictCode',
+  'subdistrictName',
+  'industrialEstateCode',
+  'industrialEstateName',
+  'latitude',
+  'longitude',
+] as const satisfies readonly (keyof ConnectionRequestDTO)[];
+
+export type PreviousRequestFormData = Pick<
+  ConnectionRequestDTO,
+  | (typeof PREVIOUS_REQUEST_GENERAL_FIELDS)[number]
+  | 'contactName'
+  | 'contactPhone'
+  | 'contactEmail'
+  | 'contactPersons'
+  | 'notificationEmails'
+> & {
+  factoryFrontPhotos: RequestDocumentImageInput[];
+  factoryLogo: RequestDocumentImageInput | null;
+};
+
+export type PreviousConnectionRequestDTO =
+  | {
+      hasPreviousRequest: true;
+      sourceRequestId: number;
+      formData: PreviousRequestFormData;
+      message: string;
+    }
+  | {
+      hasPreviousRequest: false;
+      sourceRequestId: null;
+      formData: null;
+      message: string;
+    };
 
 export interface StatusHistoryDTO {
   id: number;

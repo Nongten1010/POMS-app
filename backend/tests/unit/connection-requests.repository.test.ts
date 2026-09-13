@@ -3,6 +3,7 @@ import {
   buildStatusHistoryNoteForTests,
   buildStatusHistoryTimelineForTests,
   buildBaseQueryForTests,
+  buildPreviousRequestQueryForTests,
   buildDuplicateActiveMeasurementPointCleanupSqlForTests,
   buildDirectConnectionFactoryQueryForTests,
   buildConnectedFactoriesForAccessQueryForTests,
@@ -18,6 +19,45 @@ import {
 import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests/connection-requests.types';
 
 describe('connectionRequestsRepository query helpers', () => {
+  it('selects the latest undeleted request of the exact factory with deterministic ordering', () => {
+    const factoryId = "factory-001' OR 1=1 --";
+    const compiled = buildPreviousRequestQueryForTests(factoryId, { actorUserId: 42, scope: 'ALL' })
+      .first()
+      .toSQL();
+    expect(compiled.sql).toContain('[deleted_at] is null');
+    expect(compiled.sql).toContain('[factory_id] = ?');
+    expect(compiled.sql).toContain('order by [created_at] desc, [id] desc');
+    expect(compiled.sql).not.toContain(factoryId);
+    expect(compiled.sql).not.toContain('[updated_at] desc');
+    expect(compiled.bindings).toContain(factoryId);
+  });
+
+  it('limits previous requests to owned or assigned factories for operators', () => {
+    const compiled = buildPreviousRequestQueryForTests('factory-001', {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    }).toSQL();
+    expect(compiled.sql).toContain('[created_by] = ? or (exists');
+    expect(compiled.sql).toContain('from [factories] as [f]');
+    expect(compiled.bindings).toContain(42);
+  });
+
+  it('applies province scope to previous requests and fails closed for unsupported scopes', () => {
+    const scoped = buildPreviousRequestQueryForTests('factory-001', {
+      actorUserId: 42,
+      scope: { scope: 'IN_PROVINCE', province: 'สระบุรี' },
+    }).toSQL();
+    expect(scoped.sql).toContain('[fs].[province_name] = ?');
+    expect(scoped.bindings).toContain('สระบุรี');
+    for (const scope of [undefined, null, 'INVALID', { scope: 'IN_PROVINCE' as const }]) {
+      const denied = buildPreviousRequestQueryForTests('factory-001', {
+        actorUserId: 42,
+        scope,
+      }).toSQL();
+      expect(denied.sql).toContain('1 = 0');
+    }
+  });
+
   it('stores province in the request address while retaining the province snapshot input', () => {
     const row = toRequestRowForTests({
       factoryId: '72120200125358',
@@ -85,10 +125,13 @@ describe('connectionRequestsRepository query helpers', () => {
       actorUserId: 88,
       scope: { scope: 'FACTORY_TYPE_88' },
     }).toSQL();
-    const requests = buildBaseQueryForTests({}, {
-      actorUserId: 88,
-      scope: { scope: 'FACTORY_TYPE_88' },
-    }).toSQL();
+    const requests = buildBaseQueryForTests(
+      {},
+      {
+        actorUserId: 88,
+        scope: { scope: 'FACTORY_TYPE_88' },
+      },
+    ).toSQL();
 
     expect(factories.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
     expect(factories.bindings).toContain('00088');
