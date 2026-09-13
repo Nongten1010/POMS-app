@@ -2135,7 +2135,7 @@ function buildMeasurementPointRequestBody(
       })
     : null
   const connectedParameters = liveParameterGroups?.connectedParameters ?? getFormValues(formData, 'connectedParameters')
-  const pendingParameters = liveParameterGroups?.pendingParameters ?? getFormValues(formData, 'pendingParameters')
+  const pendingParameters = getFormValues(formData, 'pendingParameters')
 
   return {
     factoryId: factory.factoryId ?? factory.newRegistrationNo ?? '',
@@ -5654,8 +5654,7 @@ function CemsMonitoringPointDetails({
   isAddParameterMode = false,
 }) {
   const initialDetails = { ...emptyCemsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
-  const [eligibleParameters, setEligibleParameters] = useState(normalizeArrayValue(initialDetails.eligibleParameters))
-  const pendingParameters = getAddParameterGroups({ eligibleParameters, connectedParameters }).pendingParameters
+  const initialPendingParameters = getAddParameterGroups({ ...initialDetails, connectedParameters }).pendingParameters
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
@@ -5774,8 +5773,6 @@ function CemsMonitoringPointDetails({
             options={withNoneOption(cemsParameterOptions)}
             exclusiveOptions={[parameterNoneOption]}
             defaultValue={initialDetails.eligibleParameters ?? []}
-            value={isAddParameterMode ? eligibleParameters : undefined}
-            onChange={isAddParameterMode ? setEligibleParameters : undefined}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -5804,9 +5801,7 @@ function CemsMonitoringPointDetails({
             label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ"
             options={withNoneOption(cemsParameterOptions)}
             exclusiveOptions={[parameterNoneOption]}
-            defaultValue={initialDetails.pendingParameters ?? []}
-            value={isAddParameterMode ? pendingParameters : undefined}
-            readOnly={isAddParameterMode}
+            defaultValue={isAddParameterMode ? initialPendingParameters : initialDetails.pendingParameters ?? []}
           />
         </Grid>
       </Grid>
@@ -6543,8 +6538,7 @@ function WpmsMonitoringPointDetails({
   isAddParameterMode = false,
 }) {
   const initialDetails = { ...emptyWpmsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
-  const [eligibleParameters, setEligibleParameters] = useState(normalizeArrayValue(initialDetails.eligibleParameters))
-  const pendingParameters = getAddParameterGroups({ eligibleParameters, connectedParameters }).pendingParameters
+  const initialPendingParameters = getAddParameterGroups({ ...initialDetails, connectedParameters }).pendingParameters
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
@@ -6580,8 +6574,6 @@ function WpmsMonitoringPointDetails({
             options={withNoneOption(wpmsInstrumentParameters)}
             exclusiveOptions={[parameterNoneOption]}
             defaultValue={initialDetails.eligibleParameters ?? []}
-            value={isAddParameterMode ? eligibleParameters : undefined}
-            onChange={isAddParameterMode ? setEligibleParameters : undefined}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -6601,9 +6593,7 @@ function WpmsMonitoringPointDetails({
             label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ"
             options={withNoneOption(wpmsInstrumentParameters)}
             exclusiveOptions={[parameterNoneOption]}
-            defaultValue={initialDetails.pendingParameters ?? []}
-            value={isAddParameterMode ? pendingParameters : undefined}
-            readOnly={isAddParameterMode}
+            defaultValue={isAddParameterMode ? initialPendingParameters : initialDetails.pendingParameters ?? []}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -6945,7 +6935,7 @@ export function RequestFormBottomSheet({
   documentImagesUploadUrl = '',
   generalFactoryFieldsReadOnly: requestedGeneralFactoryFieldsReadOnly = false,
   factoryProfilePatchMode = false,
-  monitoringPointTypeReadOnly = false,
+  monitoringPointTypeReadOnly: requestedMonitoringPointTypeReadOnly = false,
   pointCodeReadOnly = false,
   officerNotificationEmailsEditable = false,
   embedded = false,
@@ -6960,6 +6950,7 @@ export function RequestFormBottomSheet({
   const isEditMode = mode === 'edit'
   const isAddParameterMode = mode === 'add-parameter'
   const generalFactoryFieldsReadOnly = requestedGeneralFactoryFieldsReadOnly || isAddParameterMode
+  const monitoringPointTypeReadOnly = requestedMonitoringPointTypeReadOnly || isAddParameterMode
   const isOfficerAddMeasurementPointMode = !isOperator && formType === 'เพิ่มจุดตรวจวัด' && !isEditMode && !isAddParameterMode
   const shouldUseDirectConnection = isDirectConnectionMode && !isEditMode && !isAddParameterMode
   const useInitialRequestValues = isEditMode || isAddParameterMode
@@ -7703,6 +7694,7 @@ export function RequestFormBottomSheet({
                     row
                     value={selectedMonitoringPoint?.type ?? ''}
                     onChange={(event) => {
+                      if (monitoringPointTypeReadOnly) return
                       const nextType = event.target.value
                       const nextPoint = {
                         id: selectedMonitoringPoint?.id ?? Date.now(),

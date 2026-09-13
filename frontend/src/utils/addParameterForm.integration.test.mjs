@@ -74,9 +74,8 @@ test('add-parameter form and payload preserve live groups without affecting othe
         assert.deepEqual(hiddenValues(html, 'connectedParameters'), [connected])
         assert.deepEqual(hiddenValues(html, 'pendingParameters'), [additional])
         assert.deepEqual(hiddenValues(html, 'requestedParameters'), [])
-        for (const name of ['connectedParameters', 'pendingParameters']) {
-          assert.ok(fieldMarkup(html, name).includes('Mui-readOnly'))
-        }
+        assert.ok(fieldMarkup(html, 'connectedParameters').includes('Mui-readOnly'))
+        assert.ok(!fieldMarkup(html, 'pendingParameters').includes('Mui-readOnly'))
         assert.ok(!fieldMarkup(html, 'requestedParameters').includes('Mui-readOnly'))
         assert.ok(html.includes('Saved brand'))
         assert.ok(!html.includes('Old brand'))
@@ -88,7 +87,16 @@ test('add-parameter form and payload preserve live groups without affecting othe
         assert.ok(!render('create').includes('name="requestedParameters"'))
 
         const generalSection = (markup) => markup.slice(markup.indexOf('ข้อมูลทั่วไปของโรงงาน'), markup.indexOf('data-field-name="contactPersons"'))
+        const typeRadios = (markup) => (markup.match(/<input\b[^>]*>/g) ?? [])
+          .filter((input) => input.includes('type="radio"') && /value="(?:CEMS|WPMS)"/.test(input))
         for (const isOperator of [true, false]) {
+          const addByRole = render('add-parameter', { isOperator, monitoringPointTypeReadOnly: false })
+          const radios = typeRadios(addByRole)
+          assert.equal(radios.length, 2)
+          assert.ok(radios.every((input) => input.includes('disabled=""')))
+          assert.ok(radios.find((input) => input.includes(`value="${systemType}"`)).includes('checked=""'))
+          assert.deepEqual(hiddenValues(addByRole, 'pendingParameters'), [additional])
+          assert.ok(!fieldMarkup(addByRole, 'pendingParameters').includes('Mui-readOnly'))
           const locked = generalSection(render('add-parameter', { isOperator, generalFactoryFieldsReadOnly: false }))
           const inputs = locked.match(/<input\b[^>]*>/g)
           const uploads = inputs.filter((input) => input.includes('type="file"'))
@@ -109,8 +117,13 @@ test('add-parameter form and payload preserve live groups without affecting othe
             const fileInputs = section.match(/<input[^>]*type="file"[^>]*>/g)
             assert.equal(fileInputs.every((input) => input.includes('disabled=""')), generalFactoryFieldsReadOnly)
             assert.equal(create.includes('เลือกสถานะหลังส่งแบบฟอร์ม'), !isOperator)
+            assert.equal(typeRadios(create).length, 2)
+            assert.ok(typeRadios(create).every((input) => !input.includes('disabled=""')))
           }
+          assert.ok(typeRadios(render('create', { isOperator, monitoringPointTypeReadOnly: true }))
+            .every((input) => input.includes('disabled=""')))
           const editByRole = render('edit', { isOperator })
+          assert.ok(typeRadios(editByRole).every((input) => !input.includes('disabled=""')))
           const pointCodeInput = editByRole.match(/<input[^>]*name="pointCode"[^>]*>/)?.[0]
           assert.ok(pointCodeInput)
           assert.equal(pointCodeInput.includes('readOnly=""'), isOperator)
@@ -155,13 +168,23 @@ test('add-parameter form and payload preserve live groups without affecting othe
           addParameterConnectedParameters: [connected],
         }).measurementPoints[0]
         assert.deepEqual(point.details.connectedParameters, [connected])
-        assert.deepEqual(point.details.pendingParameters, [additional])
+        assert.deepEqual(point.details.pendingParameters, ['STALE'])
         assert.deepEqual(point.details.requestedParameters, [additional])
         assert.deepEqual(point.measurementInstruments.parameters.map((item) => item.parameter), [additional])
         const standard = buildMeasurementPointRequestBody({}, systemType, formData, [], instruments).measurementPoints[0]
         assert.deepEqual(standard.details.connectedParameters, ['TAMPERED'])
         assert.deepEqual(standard.details.pendingParameters, ['STALE'])
         assert.deepEqual(standard.measurementInstruments.parameters.map((item) => item.parameter), [connected, additional])
+        for (const pendingParameters of [[], ['ไม่มี'], [additional]]) {
+          formData.set('pendingParameters', JSON.stringify(pendingParameters))
+          const changed = buildMeasurementPointRequestBody({ factoryId: 'TEST' }, systemType, formData, [], instruments, {
+            addParameterConnectedParameters: [connected],
+          })
+          assert.equal(changed.systemType, systemType)
+          assert.deepEqual(changed.measurementPoints[0].details.pendingParameters, pendingParameters)
+          assert.deepEqual(changed.measurementPoints[0].details.connectedParameters, [connected])
+          assert.deepEqual(changed.measurementPoints[0].details.requestedParameters, [additional])
+        }
         formData.set('requestedParameters', '[]')
         const unselected = buildMeasurementPointRequestBody({}, systemType, formData, [], instruments, {
           addParameterConnectedParameters: [connected],
