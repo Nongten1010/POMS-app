@@ -1,3 +1,4 @@
+import { deriveCurrentParameterDetails } from '../../shared/utils/current-parameter-details';
 import {
   approvedParameterLabel,
   alignPointInstruments,
@@ -731,12 +732,11 @@ export const connectionRequestsService = {
       regionalAccess,
     );
 
-    const [factoryReference, activeDeviceConfigs, currentFactory] = await Promise.all([
+    const [factoryReference, currentFactory] = await Promise.all([
       connectionRequestsRepository.findActiveEligibleFactoryReference({
         factoryId: request.factoryId,
         factoryRegistrationNo: request.factoryRegistrationNo,
       }),
-      listActiveDeviceConfigsForPoint(point, stationId),
       isCanonicalFactoryProfilesEnabled()
         ? connectionRequestsRepository.findFactoryGeneral(request.factoryId, {
             actorUserId,
@@ -771,7 +771,6 @@ export const connectionRequestsService = {
     return toAddParameterFormDetail(currentRequest, point, stationId, {
       newRegistrationNo: factoryReference?.factoryRegistrationNoNew ?? request.factoryId,
       oldRegistrationNo: factoryReference?.factoryRegistrationNoOld ?? inferredOldRegistrationNo,
-      activeDeviceConfigs,
     });
   },
 
@@ -1843,10 +1842,9 @@ function toAddParameterFormDetail(
   currentState: {
     newRegistrationNo: string;
     oldRegistrationNo: string | null;
-    activeDeviceConfigs: DeviceConnectionConfigDTO[];
   },
 ): AddParameterFormDetailDTO {
-  const currentDetails = deriveCurrentParameterDetails(point, currentState.activeDeviceConfigs);
+  const currentDetails = deriveCurrentParameterDetails(point);
 
   return {
     requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
@@ -1904,59 +1902,6 @@ function toMeasurementPointInput(
     documentsAndImages: point.documentsAndImages,
     measurementInstruments: point.measurementInstruments,
   };
-}
-
-function deriveCurrentParameterDetails(
-  point: MeasurementPointDTO,
-  activeDeviceConfigs: DeviceConnectionConfigDTO[],
-): MeasurementPointDetailsInput {
-  const details = point.details ?? {};
-  const eligibleParameters = stringListDetail(details, 'eligibleParameters');
-  const parametersInScope = eligibleParameters.length > 0 ? eligibleParameters : point.parameters;
-  const exemptedParameterKeys = new Set(
-    stringListDetail(details, 'exemptedParameters').map(normalizeParameterName),
-  );
-  const connectedParameters = uniqueParameterNames(
-    activeDeviceConfigs.flatMap((config) => config.channels.map((channel) => channel.dataType)),
-  );
-  const connectedParameterKeys = new Set(connectedParameters.map(normalizeParameterName));
-  const pendingParameters = parametersInScope.filter((parameter) => {
-    const key = normalizeParameterName(parameter);
-    return (
-      key !== normalizeParameterName('ไม่มี') &&
-      !connectedParameterKeys.has(key) &&
-      !exemptedParameterKeys.has(key)
-    );
-  });
-
-  return {
-    ...details,
-    connectedParameters,
-    pendingParameters,
-  };
-}
-
-function uniqueParameterNames(parameters: string[]): string[] {
-  const uniqueParameters = new Map<string, string>();
-
-  for (const parameter of parameters) {
-    const trimmed = parameter.trim();
-    const key = normalizeParameterName(trimmed);
-    if (trimmed && key !== normalizeParameterName('ไม่มี') && !uniqueParameters.has(key)) {
-      uniqueParameters.set(key, trimmed);
-    }
-  }
-
-  return [...uniqueParameters.values()];
-}
-
-function stringListDetail(details: MeasurementPointDTO['details'], key: string): string[] {
-  if (!details || typeof details !== 'object' || Array.isArray(details)) return [];
-
-  const value = details[key];
-  if (!Array.isArray(value)) return [];
-
-  return uniqueParameterNames(value.filter((item): item is string => typeof item === 'string'));
 }
 
 function measurementPointLatitude(point: MeasurementPointDTO): number | null {

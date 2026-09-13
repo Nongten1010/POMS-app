@@ -938,7 +938,7 @@ Minimal response:
 
 `GET /api/v1/connected-measurement-points/:stationId/parameter-form` อ่านจุดตรวจวัด active ปัจจุบัน โดย `pointName`, `pointCode`, `pointType`, `parameters`, `monitoringPointStatus`, `details`, `documentsAndImages` และ `measurementInstruments` ใช้ค่าจากจุดปัจจุบันตาม allowlist และไม่ใช้ค่าเก่าแทนเมื่อถูกล้างเป็น `null` หรือ `[]`. หากจุดไม่ active หรืออยู่นอกสิทธิ์ ตอบ `404 NOT_FOUND` แม้ยังมีคำขอ CONNECTED เก่า; รูปแบบ annual path `/:stationId/:buddhistYear/parameter-form` ใช้กติกาเดียวกัน
 
-canonical mode ใช้ข้อมูลทั่วไปโรงงานปัจจุบันร่วมกับเข้าข่าย ส่วนข้อมูลเฉพาะคำขอและผู้ติดต่อยังอ้างคำขอต้นทางตาม contract เดิม. สถานะพารามิเตอร์ยังประกอบจาก active device config ของ `stationId` ทุกครั้ง จึงไม่ใช้ `connectedParameters` และ `pendingParameters` จาก request snapshot โดยตรง
+canonical mode ใช้ข้อมูลทั่วไปโรงงานปัจจุบันร่วมกับเข้าข่าย ส่วนข้อมูลเฉพาะคำขอและผู้ติดต่อยังอ้างคำขอต้นทางตาม contract เดิม. รายการพารามิเตอร์ทั้ง 4 กลุ่มใช้กติกาเดียวกับ [ฟอร์มโรงงาน POMS](../master-data/factory-edit-requests.md): `eligibleParameters` จากรายละเอียดจุดปัจจุบัน; `connectedParameters` และ `requestedParameters` จาก active `cems_wpms_connected_measurement_points.parameters_json`; `pendingParameters` เป็น `eligibleParameters - connectedParameters` โดย normalize Unicode ตัวพิมพ์และช่องว่างในการเทียบ แต่คงชื่อพร้อมหน่วยและลำดับใน response. ไม่ใช้ device channel หรือสถานะเก่าจาก request snapshot ตัดสินการเชื่อมต่อ และไม่ลบ `exemptedParameters` ออกจาก `pendingParameters` เพิ่มเติม เพื่อให้ตรงกับฟอร์มโรงงาน
 
 รายการ `/connected-measurement-points`, alias `/cems-wpms-requests/connected-measurement-points` และรายการรายโรงงาน ใช้จุดปัจจุบันชุดเดียวกันและตัดจุด inactive ออกจากผลลัพธ์; รหัสจุดและรหัสคำขอใน response คงเดิม
 
@@ -949,8 +949,10 @@ Response fields ที่เพิ่มเติมสำหรับเลข�
 | `data.formDefaults.newRegistrationNo`                                | string         | yes      | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories`                                        |
 | `data.formDefaults.oldRegistrationNo`                                | string \| null | yes      | เลขทะเบียนโรงงานเดิมจาก active `eligible_factories`                                        |
 | `data.formDefaults.factoryRegistrationNo`                            | string         | yes      | compatibility alias สำหรับ client เดิม; ใช้เลขทะเบียนเดิมเมื่อมี มิฉะนั้นใช้เลขทะเบียนใหม่ |
-| `data.formDefaults.measurementPoints[0].details.connectedParameters` | string[]       | yes      | พารามิเตอร์ที่มี active channel ใน device config ปัจจุบัน โดยตัดค่าซ้ำ                     |
-| `data.formDefaults.measurementPoints[0].details.pendingParameters`   | string[]       | yes      | พารามิเตอร์ที่เข้าข่ายซึ่งยังไม่มี active channel และไม่ได้รับการยกเว้น                    |
+| `data.formDefaults.measurementPoints[0].details.eligibleParameters` | string[] | yes | รายการเข้าข่ายจากรายละเอียดจุดปัจจุบัน; `[]` เมื่อไม่มี |
+| `data.formDefaults.measurementPoints[0].details.connectedParameters` | string[] | yes | รายการเดียวกับ `parameters` ของจุดที่เชื่อมต่ออยู่ปัจจุบัน แม้ยังไม่มี device channel |
+| `data.formDefaults.measurementPoints[0].details.pendingParameters` | string[] | yes | `eligibleParameters - connectedParameters`; `[]` เมื่อเชื่อมต่อครบ |
+| `data.formDefaults.measurementPoints[0].details.requestedParameters` | string[] | yes | รายการเดียวกับ `connectedParameters` สำหรับค่าเริ่มต้นฟอร์ม |
 
 Minimal request: ไม่มี request body.
 
@@ -962,8 +964,8 @@ Minimal response:
   "data": {
     "requestType": "ADD_PARAMETER",
     "sourceRequestId": 12,
-    "sourceRequestNo": "CEMS-0001/2569",
-    "stationId": "S1125",
+    "sourceRequestNo": "WPMS-0001/2569",
+    "stationId": "P0155",
     "formDefaults": {
       "factoryId": "10120000325542",
       "factoryRegistrationNo": "3-34(3)-3/54นบ",
@@ -971,12 +973,13 @@ Minimal response:
       "oldRegistrationNo": "3-34(3)-3/54นบ",
       "measurementPoints": [
         {
-          "pointCode": "S1125",
+          "pointCode": "P0155",
+          "parameters": ["COD (mg/l)", "Flow rate (m3/hr)", "Watt (kW/hr)"],
           "details": {
-            "eligibleParameters": ["CO (ppm)", "NOx (ppm)"],
-            "exemptedParameters": [],
-            "connectedParameters": ["CO (ppm)", "NOx (ppm)"],
-            "pendingParameters": []
+            "eligibleParameters": ["Flow rate (m3/hr)", "Watt (kW/hr)", "COD (mg/l)"],
+            "connectedParameters": ["COD (mg/l)", "Flow rate (m3/hr)", "Watt (kW/hr)"],
+            "pendingParameters": [],
+            "requestedParameters": ["COD (mg/l)", "Flow rate (m3/hr)", "Watt (kW/hr)"]
           }
         }
       ]

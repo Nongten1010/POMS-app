@@ -1,4 +1,5 @@
 import { contactSnapshot, contactsChanged } from './poms-factory-contacts';
+import { deriveCurrentParameterDetails as deriveCurrentPomsParameterDetails } from '../../shared/utils/current-parameter-details';
 import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
 import {
   AppError,
@@ -525,34 +526,6 @@ function toPomsConnectionRequestForm(
     ),
     remarks: remarks ?? null,
   };
-}
-
-function deriveCurrentPomsParameterDetails(
-  point: PomsMeasurementPointDTO,
-): NonNullable<ConnectionRequestFormDTO['measurementPoints'][number]['details']> {
-  const details = point.details ?? {};
-  const eligibleParameters = Array.isArray(details.eligibleParameters)
-    ? details.eligibleParameters.filter(
-        (parameter): parameter is string => typeof parameter === 'string',
-      )
-    : [];
-  const connectedParameters = [...point.parameters];
-  const connectedParameterKeys = new Set(connectedParameters.map(normalizePomsParameterKey));
-  const pendingParameters = eligibleParameters.filter(
-    (parameter) => !connectedParameterKeys.has(normalizePomsParameterKey(parameter)),
-  );
-
-  return {
-    ...details,
-    eligibleParameters,
-    connectedParameters,
-    pendingParameters,
-    requestedParameters: [...connectedParameters],
-  };
-}
-
-function normalizePomsParameterKey(parameter: string): string {
-  return parameter.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
 }
 
 function resolveEditRequestContactSystemType(

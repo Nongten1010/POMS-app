@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+<a id="parameter-form-live-parameters"></a>
+
+## 2026-09-13 — ฟอร์มเพิ่มพารามิเตอร์ใช้รายการที่เชื่อมต่อจริงเหมือนฟอร์มโรงงาน
+
+- **Affected endpoint:** `GET /api/v1/connected-measurement-points/:stationId/parameter-form` รวม annual path; [สัญญา API](./menus/connection-requests/README.md#add-parameter-prefill)
+- **Impact:** `connectedParameters` และ `requestedParameters` อิง `parameters_json` ของ active connected point; `pendingParameters` เป็น `eligibleParameters - connectedParameters` เหมือน [ฟอร์มโรงงาน POMS](./menus/master-data/factory-edit-requests.md) รวมการเทียบ Unicode/ตัวพิมพ์/ช่องว่าง และไม่หัก `exemptedParameters` เพิ่มเติม รูปแบบ field และ permission คงเดิม
+- **Old contract:** ใช้ active device channels คำนวณ connected/pending และตัดรายการยกเว้นออกจาก pending; requested อาจคง snapshot เก่า ทำให้จุดที่เชื่อมต่อแล้วแต่ยังไม่มี channel แสดงเป็นรอเชื่อมต่อ
+- **Migration:** client อ่านรายการจาก prefill ที่คำนวณใหม่ได้โดยตรง; หากต้องการตรวจการตั้งค่า channel ให้ใช้ [device-configs](./menus/connection-requests/device-configs.md) แทนการอนุมานจาก connected/pending ไม่ต้อง migrate ฐานข้อมูล
+
 <a id="operator-cancel-terminal-statuses"></a>
 
 ## 2026-09-13 — ปฏิเสธการยกเลิกคำขอเชื่อมต่อที่ยกเลิกแล้ว

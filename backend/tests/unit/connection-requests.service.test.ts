@@ -3096,17 +3096,6 @@ describe('connectionRequestsService', () => {
       factoryRegistrationNoNew: '10120000325542',
       factoryRegistrationNoOld: '3-34(3)-3/54นบ',
     });
-    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValueOnce([
-      deviceConnectionConfig({
-        stationId: 'STACK-A',
-        channels: [
-          { addressId: 1, dataType: 'NOx (ppm)', offset: 0 },
-          { addressId: 2, dataType: 'SO2 (ppm)', offset: 0 },
-          { addressId: 3, dataType: 'NOx (ppm)', offset: 0 },
-        ],
-      }),
-    ]);
-
     const result = await connectionRequestsService.getAddParameterFormDetail(
       'STACK-A',
       actorUserId,
@@ -3125,9 +3114,6 @@ describe('connectionRequestsService', () => {
     expect(mockedRepository.findActiveEligibleFactoryReference).toHaveBeenCalledWith({
       factoryId: '10120000325542',
       factoryRegistrationNo: '10120000325542',
-    });
-    expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
-      stationId: 'STACK-A',
     });
     expect(result).toMatchObject({
       requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
@@ -3157,7 +3143,8 @@ describe('connectionRequestsService', () => {
               eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)', 'CO (ppm)'],
               exemptedParameters: ['CO (ppm)'],
               connectedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
-              pendingParameters: [],
+              pendingParameters: ['CO (ppm)'],
+              requestedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
             },
             measurementInstruments: {
               converterBrand: 'ACME',
@@ -3167,6 +3154,99 @@ describe('connectionRequestsService', () => {
       },
     });
   });
+
+  it.each([[['COD (mg/l)']], [['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)']]])(
+    'prefills P0155 parameter groups from live connected parameters %j without device channels',
+    async (parameters) => {
+      const eligibleParameters = [...parameters.slice(1), parameters[0]];
+      const request = requestDto({
+        systemType: 'WPMS',
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        measurementPoints: [
+          {
+            id: 1,
+            pointName: 'จุดที่ 1',
+            pointCode: 'P0155',
+            pointType: 'WASTEWATER',
+            latitude: null,
+            longitude: null,
+            description: null,
+            parameters,
+            details: {
+              eligibleParameters,
+              connectedParameters: [],
+              pendingParameters: eligibleParameters,
+              requestedParameters: parameters,
+            },
+          },
+        ],
+      });
+      mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+      mockActivePointsForRequests([request]);
+      mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
+
+      const result = await connectionRequestsService.getAddParameterFormDetail(
+        'P0155',
+        actorUserId,
+        'ALL',
+      );
+
+      expect(result.formDefaults.measurementPoints[0].details).toMatchObject({
+        eligibleParameters,
+        connectedParameters: parameters,
+        pendingParameters: [],
+        requestedParameters: parameters,
+      });
+    },
+  );
+
+  it.each([
+    { parameters: ['cod (mg/l)'], pendingParameters: ['BOD (mg/l)'] },
+    { parameters: [], pendingParameters: ['ＣＯＤ (mg/l)', 'BOD (mg/l)'] },
+  ])(
+    'uses live parameter groups despite stale snapshots and device channels: %j',
+    async ({ parameters, pendingParameters }) => {
+      const request = requestDto({ status: CONNECTION_REQUEST_STATUS.CONNECTED });
+      const point = { ...request.measurementPoints[0], pointCode: 'P0155' };
+      request.measurementPoints = [point];
+      mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+      mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+        currentFactoryMeasurementPoint({
+          sourceRequestId: request.id,
+          sourceMeasurementPointId: point.id,
+          stationId: 'P0155',
+          pointCode: 'P0155',
+          parameters,
+          details: {
+            eligibleParameters: ['ＣＯＤ (mg/l)', 'BOD (mg/l)'],
+            exemptedParameters: ['BOD (mg/l)'],
+            connectedParameters: ['BOD (mg/l)'],
+            requestedParameters: ['BOD (mg/l)'],
+          },
+        }),
+      ]);
+      mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+        deviceConnectionConfig({
+          stationId: 'P0155',
+          channels: [{ dataType: 'BOD (mg/l)', addressId: 1, offset: 0 }],
+        }),
+      ]);
+
+      const result = await connectionRequestsService.getAddParameterFormDetail(
+        'P0155',
+        actorUserId,
+        'ALL',
+      );
+
+      expect(result.formDefaults.measurementPoints[0].details).toMatchObject({
+        eligibleParameters: ['ＣＯＤ (mg/l)', 'BOD (mg/l)'],
+        connectedParameters: parameters,
+        pendingParameters,
+        requestedParameters: parameters,
+      });
+      expect(mockedDeviceConnectionsService.listActiveSettings).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects removed COD channels when saving current device configuration', async () => {
     const request = requestDto({

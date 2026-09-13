@@ -69,6 +69,8 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
 };
 const currentConnectedPointDescription =
   'อ่าน pointName, pointCode, pointType, parameters, monitoringPointStatus, details, documentsAndImages และ measurementInstruments จาก active connected point ปัจจุบันตาม allowlist; null และ [] ที่ล้างแล้วไม่ดึงค่า snapshot เก่ากลับมา. รายการตัดจุด inactive ออก; endpoint ของสถานีที่ไม่ active หรือนอก scope ตอบ 404. canonical mode ใช้ข้อมูลทั่วไปโรงงานร่วมกับเข้าข่าย; ประวัติคำขอยังคง snapshot เดิม';
+const currentParameterFormDescription =
+  'details ใช้กติกาเดียวกับ GET /poms-factories/{factoryId}/form?formType=MEASUREMENT_POINTS: eligibleParameters จากรายละเอียดจุดปัจจุบัน; connectedParameters และ requestedParameters จาก active cems_wpms_connected_measurement_points.parameters_json แม้ยังไม่มี device channel; pendingParameters = eligibleParameters - connectedParameters โดย normalize Unicode/ตัวพิมพ์/ช่องว่างในการเปรียบเทียบและคง label พร้อมหน่วยใน response. ไม่ลบ exemptedParameters ออกจาก pendingParameters เพิ่มเติม และไม่ใช้สถานะเก่าจาก request snapshot';
 const connectionProfileWriteDescription =
   'การเชื่อมต่อครั้งแรกปรับเฉพาะข้อมูลทั่วไปที่อนุญาต โดย canonical mode ตรวจ source revision ที่ backend เก็บเมื่อยื่น/ส่งกลับก่อนบันทึก; ถ้า revision หายหรือเปลี่ยนและคำขอมีข้อมูลทั่วไป ให้ส่งคำขอกลับมาใหม่. เมื่อมีจุดเชื่อมต่ออยู่แล้วใช้ข้อมูลโรงงานปัจจุบัน รวม null โดยไม่นำ snapshot เก่ามาเขียนทับ. Backend เก็บ revision ภายใน ผู้เรียกไม่ต้องส่ง field เพิ่ม';
 const connectionProfileConflictResponse: OpenApiObject = {
@@ -1341,6 +1343,105 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: {
       success: { type: 'boolean', enum: [true] },
       data: schemaRef('ConnectionRequestForm'),
+    },
+  },
+  AddParameterFormResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'object',
+        required: [
+          'requestType',
+          'sourceRequestId',
+          'sourceRequestNo',
+          'stationId',
+          'formDefaults',
+        ],
+        properties: {
+          requestType: { type: 'string', enum: ['ADD_PARAMETER'] },
+          sourceRequestId: { type: 'integer' },
+          sourceRequestNo: { type: 'string' },
+          stationId: { type: 'string' },
+          formDefaults: {
+            type: 'object',
+            properties: {
+              ...connectionRequestFormProperties,
+              newRegistrationNo: { type: 'string' },
+              oldRegistrationNo: { type: 'string', nullable: true },
+              measurementPoints: {
+                type: 'array',
+                minItems: 1,
+                maxItems: 1,
+                items: {
+                  type: 'object',
+                  required: ['parameters', 'details'],
+                  properties: {
+                    pointCode: { type: 'string', nullable: true },
+                    parameters: { type: 'array', items: { type: 'string' } },
+                    details: {
+                      type: 'object',
+                      required: [
+                        'eligibleParameters',
+                        'connectedParameters',
+                        'pendingParameters',
+                        'requestedParameters',
+                      ],
+                      properties: {
+                        eligibleParameters: {
+                          type: 'array',
+                          items: { type: 'string' },
+                          description: 'รายการเข้าข่ายจากจุดปัจจุบัน; [] เมื่อไม่มี',
+                        },
+                        connectedParameters: {
+                          type: 'array',
+                          items: { type: 'string' },
+                          description: 'parameters ของ active connected point พร้อมหน่วย',
+                        },
+                        pendingParameters: {
+                          type: 'array',
+                          items: { type: 'string' },
+                          description: 'eligibleParameters - connectedParameters',
+                        },
+                        requestedParameters: {
+                          type: 'array',
+                          items: { type: 'string' },
+                          description: 'รายการเดียวกับ connectedParameters',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    example: {
+      success: true,
+      data: {
+        requestType: 'ADD_PARAMETER',
+        sourceRequestId: 12,
+        sourceRequestNo: 'WPMS-0001/2569',
+        stationId: 'P0155',
+        formDefaults: {
+          systemType: 'WPMS',
+          measurementPoints: [
+            {
+              pointCode: 'P0155',
+              parameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+              details: {
+                eligibleParameters: ['Flow rate (m3/hr)', 'Watt (kW/hr)', 'COD (mg/l)'],
+                connectedParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+                pendingParameters: [],
+                requestedParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+              },
+            },
+          ],
+        },
+      },
     },
   },
   PreviousRequestFormData: {
@@ -2667,7 +2768,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ข้อมูลประกอบฟอร์ม',
       summary: 'อ่าน prefill ฟอร์มเพิ่มพารามิเตอร์',
       operationId: 'getAddParameterFormDetail',
-      description: `Permission: cems_wpms_requests:view. ${currentConnectedPointDescription}`,
+      description: `Permission: cems_wpms_requests:view. ${currentConnectedPointDescription} ${currentParameterFormDescription}`,
+      successSchema: schemaRef('AddParameterFormResponse'),
       parameters: [stationIdPathParameter],
     }),
   },
@@ -2715,7 +2817,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ข้อมูลประกอบฟอร์ม',
       summary: 'อ่าน prefill เพิ่มพารามิเตอร์ของ annual point code (proxy-decoded path)',
       operationId: 'getAnnualAddParameterFormDetail',
-      description: `Permission: cems_wpms_requests:view. Compatibility path สำหรับ annual point code ที่ถูกแยกเป็น 2 path segments. ${currentConnectedPointDescription}`,
+      description: `Permission: cems_wpms_requests:view. Compatibility path สำหรับ annual point code ที่ถูกแยกเป็น 2 path segments. ${currentConnectedPointDescription} ${currentParameterFormDescription}`,
+      successSchema: schemaRef('AddParameterFormResponse'),
       parameters: [annualStationIdPathParameter, buddhistYearPathParameter],
     }),
   },
