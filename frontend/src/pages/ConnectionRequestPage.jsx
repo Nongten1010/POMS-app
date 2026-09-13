@@ -57,6 +57,7 @@ import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
+import { buildPreviousConnectionRequestPrefill, loadPreviousConnectionRequest } from '../utils/previousConnectionRequest.mjs'
 import {
   EIA_ASSESSMENT_OPTIONS as eiaAssessmentOptions,
   buildConnectionEnvironmentalAssessment,
@@ -6867,6 +6868,8 @@ export function RequestFormBottomSheet({
   mode = 'create',
   requestId,
   initialRequest,
+  previousRequestFormData = null,
+  slideOnMount = false,
   loading = false,
   loadError = '',
   titleOverride = '',
@@ -6900,14 +6903,16 @@ export function RequestFormBottomSheet({
   const initialDocuments = mergeDocumentItems(
     getDocumentItemsFromSource(initialPoint),
     getDocumentItemsFromSource(initialRequest),
+    getDocumentItemsFromSource(mode === 'create' ? previousRequestFormData : null),
   )
   const formFactory = useInitialRequestValues ? getInitialRequestFactory(initialRequest, factory) : factory
   const latestRevisionMessage = isEditMode ? getLatestRevisionMessage(initialRequest) : ''
-  const initialContactPersons = useInitialRequestValues && Array.isArray(initialRequest?.contactPersons)
-    ? withFormIds(initialRequest.contactPersons)
+  const initialContacts = useInitialRequestValues ? initialRequest : previousRequestFormData
+  const initialContactPersons = Array.isArray(initialContacts?.contactPersons)
+    ? withFormIds(initialContacts.contactPersons)
     : [{ id: 1 }]
-  const initialNotificationEmails = useInitialRequestValues && Array.isArray(initialRequest?.notificationEmails) && initialRequest.notificationEmails.length
-    ? initialRequest.notificationEmails.map((email, index) => ({ id: index + 1, value: email }))
+  const initialNotificationEmails = Array.isArray(initialContacts?.notificationEmails) && initialContacts.notificationEmails.length
+    ? initialContacts.notificationEmails.map((email, index) => ({ id: index + 1, value: email }))
     : [{ id: 1, value: '' }]
   const pointOfficerNotificationEmails = normalizeEmailList(initialPoint?.officerNotificationEmails)
   const requestOfficerNotificationEmails = normalizeEmailList(
@@ -7290,6 +7295,7 @@ export function RequestFormBottomSheet({
         },
         transition: {
           direction: 'up',
+          ...(slideOnMount ? { appear: true } : {}),
           onExited,
         },
       }}
@@ -7866,6 +7872,9 @@ function ConnectionRequestPage({
 }) {
   const [requestForm, setRequestForm] = useState(null)
   const [requestFormError, setRequestFormError] = useState('')
+  const [previousRequestLoad, setPreviousRequestLoad] = useState(null)
+  const previousRequestAbortRef = useRef(null)
+  const newRequestSessionRef = useRef(0)
   const [requestDocumentOpen, setRequestDocumentOpen] = useState(false)
   const [requestDocument, setRequestDocument] = useState(null)
   const [requestDocumentMode, setRequestDocumentMode] = useState('view')
@@ -7889,6 +7898,8 @@ function ConnectionRequestPage({
   const [connectionSettingsContext, setConnectionSettingsContext] = useState(null)
   const [intentRequestFactory, setIntentRequestFactory] = useState(null)
   const [intentReason, setIntentReason] = useState('')
+  const [intentContactName, setIntentContactName] = useState('')
+  const [intentContactPhone, setIntentContactPhone] = useState('')
   const [intentRequestSubmitting, setIntentRequestSubmitting] = useState(false)
   const [intentRequestError, setIntentRequestError] = useState('')
   const [operatorFactoryRows, setOperatorFactoryRows] = useState([])
@@ -7928,11 +7939,15 @@ function ConnectionRequestPage({
   const openIntentDialog = useCallback((factory) => {
     setIntentRequestFactory(factory)
     setIntentReason('')
+    setIntentContactName('')
+    setIntentContactPhone('')
     setIntentRequestError('')
   }, [])
   const closeIntentDialog = useCallback(() => {
     setIntentRequestFactory(null)
     setIntentReason('')
+    setIntentContactName('')
+    setIntentContactPhone('')
     setIntentRequestError('')
   }, [])
   const submitIntentRequest = useCallback(async () => {
@@ -8071,20 +8086,60 @@ function ConnectionRequestPage({
       URL.revokeObjectURL(requestDocumentPdfUrl)
     }
   }, [requestDocumentPdfUrl])
+  useEffect(() => () => previousRequestAbortRef.current?.abort(), [])
+  const closePreviousRequestLoad = useCallback(() => {
+    previousRequestAbortRef.current?.abort()
+    previousRequestAbortRef.current = null
+    setPreviousRequestLoad(null)
+  }, [])
+  const handleOpenNewRequestForm = useCallback(async (factory, formType) => {
+    previousRequestAbortRef.current?.abort()
+    previousRequestAbortRef.current = null
+    setPreviousRequestLoad(null)
+    setRequestFormError('')
+    const formSessionId = ++newRequestSessionRef.current
+    const context = {
+      factory,
+      formType,
+      formSessionId,
+      isDirectConnectionMode: canUseEligibleFactoryRows && !isOperator && formType === 'เพิ่มจุดตรวจวัด',
+    }
+    if (formType !== 'เพิ่มจุดตรวจวัด') {
+      setRequestForm(context)
+      return
+    }
+
+    const controller = new AbortController()
+    previousRequestAbortRef.current = controller
+    setPreviousRequestLoad({ factory, formType, error: '' })
+    try {
+      const formData = await loadPreviousConnectionRequest(factory?.factoryId, accessToken, { signal: controller.signal })
+      if (controller.signal.aborted || previousRequestAbortRef.current !== controller) return
+      setRequestForm({ ...context, ...buildPreviousConnectionRequestPrefill(factory, formData) })
+      setPreviousRequestLoad(null)
+    } catch (error) {
+      if (controller.signal.aborted || previousRequestAbortRef.current !== controller) return
+      setPreviousRequestLoad({
+        factory,
+        formType,
+        error: error instanceof Error ? error.message : 'โหลดข้อมูลคำขอก่อนหน้าไม่สำเร็จ กรุณาลองใหม่',
+      })
+    } finally {
+      if (previousRequestAbortRef.current === controller) previousRequestAbortRef.current = null
+    }
+  }, [accessToken, canUseEligibleFactoryRows, isOperator])
   const factoryColumns = useMemo(
     () =>
       getFactoryColumns(
         isOperator,
-        (factory, formType) => setRequestForm({
-          factory,
-          formType,
-          isDirectConnectionMode: canUseEligibleFactoryRows && !isOperator && formType === 'เพิ่มจุดตรวจวัด',
-        }),
+        // getFactoryColumns only forwards this handler to onClick; it never reads refs during render.
+        // eslint-disable-next-line react-hooks/refs
+        handleOpenNewRequestForm,
         setMonitoringPointFactory,
         openIntentDialog,
         canViewFactoryTable,
       ),
-    [canUseEligibleFactoryRows, canViewFactoryTable, isOperator, openIntentDialog],
+    [canViewFactoryTable, handleOpenNewRequestForm, isOperator, openIntentDialog],
   )
   const handleOpenRequestDocument = useCallback(async (row, mode = 'view') => {
     clearRequestDocumentPdf()
@@ -8849,6 +8904,28 @@ function ConnectionRequestPage({
                 {intentRequestFactory?.newRegistrationNo ?? intentRequestFactory?.factoryId ?? '-'}
               </Typography>
             </Box>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="ชื่อ-นามสกุล"
+                name="intentContactName"
+                value={intentContactName}
+                onChange={(event) => setIntentContactName(event.target.value)}
+                autoComplete="name"
+                autoFocus
+                fullWidth
+                disabled={intentRequestSubmitting}
+              />
+              <TextField
+                label="เบอร์โทร"
+                name="intentContactPhone"
+                type="tel"
+                value={intentContactPhone}
+                onChange={(event) => setIntentContactPhone(event.target.value)}
+                autoComplete="tel"
+                fullWidth
+                disabled={intentRequestSubmitting}
+              />
+            </Stack>
             <TextField
               label="เหตุผล"
               value={intentReason}
@@ -8856,7 +8933,6 @@ function ConnectionRequestPage({
               multiline
               minRows={3}
               fullWidth
-              autoFocus
               disabled={intentRequestSubmitting}
               inputProps={{ maxLength: 1000 }}
               placeholder="ระบุเหตุผลที่ต้องการแจ้งความประสงค์"
@@ -8873,8 +8949,29 @@ function ConnectionRequestPage({
           </Button>
         </DialogActions>
       </Dialog>
+      <Dialog open={Boolean(previousRequestLoad)} onClose={closePreviousRequestLoad} fullWidth maxWidth="sm">
+        <DialogTitle>โหลดข้อมูลคำขอก่อนหน้า</DialogTitle>
+        <DialogContent>
+          {previousRequestLoad?.error ? (
+            <Alert severity="error">{previousRequestLoad.error}</Alert>
+          ) : (
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', py: 1 }}>
+              <CircularProgress size={24} />
+              <Typography>กำลังโหลดข้อมูล...</Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button variant="outlined" color="inherit" onClick={closePreviousRequestLoad}>ยกเลิก</Button>
+          {previousRequestLoad?.error ? (
+            <Button variant="contained" onClick={() => handleOpenNewRequestForm(previousRequestLoad.factory, previousRequestLoad.formType)}>
+              ลองใหม่
+            </Button>
+          ) : null}
+        </DialogActions>
+      </Dialog>
       <RequestFormBottomSheet
-        key={`${requestForm?.mode ?? 'create'}-${requestForm?.requestId ?? requestForm?.point?.pointCode ?? requestForm?.point?.code ?? 'new'}-${requestForm?.initialRequest?.id ?? 'draft'}`}
+        key={`${requestForm?.mode ?? 'create'}-${requestForm?.requestId ?? requestForm?.point?.pointCode ?? requestForm?.point?.code ?? 'new'}-${requestForm?.initialRequest?.id ?? 'draft'}-${requestForm?.formSessionId ?? 'existing'}`}
         open={Boolean(requestForm)}
         formType={requestForm?.formType ?? ''}
         factory={requestForm?.factory}
@@ -8886,6 +8983,9 @@ function ConnectionRequestPage({
         mode={requestForm?.mode ?? 'create'}
         requestId={requestForm?.requestId}
         initialRequest={requestForm?.initialRequest}
+        previousRequestFormData={requestForm?.previousRequestFormData}
+        generalFactoryFieldsReadOnly={Boolean(requestForm?.previousRequestFormData)}
+        slideOnMount={Boolean(requestForm?.formSessionId)}
         loading={requestForm?.loading}
         loadError={requestFormError}
         onSubmitted={handleRequestSubmitted}
