@@ -6943,7 +6943,7 @@ export function RequestFormBottomSheet({
   submitPreviewContentMode = undefined,
   customSubmit = null,
   documentImagesUploadUrl = '',
-  generalFactoryFieldsReadOnly = false,
+  generalFactoryFieldsReadOnly: requestedGeneralFactoryFieldsReadOnly = false,
   factoryProfilePatchMode = false,
   monitoringPointTypeReadOnly = false,
   pointCodeReadOnly = false,
@@ -6959,6 +6959,7 @@ export function RequestFormBottomSheet({
   const submitPreviewPdfUrlRef = useRef('')
   const isEditMode = mode === 'edit'
   const isAddParameterMode = mode === 'add-parameter'
+  const generalFactoryFieldsReadOnly = requestedGeneralFactoryFieldsReadOnly || isAddParameterMode
   const isOfficerAddMeasurementPointMode = !isOperator && formType === 'เพิ่มจุดตรวจวัด' && !isEditMode && !isAddParameterMode
   const shouldUseDirectConnection = isDirectConnectionMode && !isEditMode && !isAddParameterMode
   const useInitialRequestValues = isEditMode || isAddParameterMode

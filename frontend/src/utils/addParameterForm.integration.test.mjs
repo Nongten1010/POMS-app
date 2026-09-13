@@ -54,14 +54,20 @@ test('add-parameter form and payload preserve live groups without affecting othe
         }
         const initialRequest = getParameterFormDefaultsFromPayload({ data: { formDefaults: {
           id: 1, factoryId: 'TEST', systemType,
+          eia: 'อื่นๆ', eiaOther: 'Other assessment', projectName: 'Saved project', latitude: 13.5, longitude: 100.5,
+          documentsAndImages: [
+            { title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', fileName: 'front.jpg', fileUrl: 'https://example.com/front.jpg', fileType: 'image/jpeg' },
+            { title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', fileName: 'logo.jpg', fileUrl: 'https://example.com/logo.jpg', fileType: 'image/jpeg' },
+          ],
           measurementPoints: [{ pointCode: 'S123', pointName: 'Test point', details,
             measurementInstruments: { parameters: [
               { parameter: connected, brand: 'Saved brand' }, { parameter: 'STALE', brand: 'Old brand' },
             ] } }],
         } } }, { pointCode: 'S123', type: systemType })
-        const render = (mode) => renderToStaticMarkup(React.createElement(RequestFormBottomSheet, {
+        const render = (mode, props = {}) => renderToStaticMarkup(React.createElement(RequestFormBottomSheet, {
           open: true, embedded: true, mode, initialRequest, factory: { factoryId: 'TEST' }, isOperator: true,
           formType: mode === 'add-parameter' ? 'เพิ่มพารามิเตอร์' : 'เพิ่มจุดตรวจวัด',
+          ...props,
         }))
         const html = render('add-parameter')
         assert.deepEqual(hiddenValues(html, 'eligibleParameters'), [connected, additional])
@@ -80,6 +86,48 @@ test('add-parameter form and payload preserve live groups without affecting othe
         assert.deepEqual(hiddenValues(edit, 'pendingParameters'), ['STALE'])
         assert.ok(!fieldMarkup(edit, 'connectedParameters').includes('Mui-readOnly'))
         assert.ok(!render('create').includes('name="requestedParameters"'))
+
+        const generalSection = (markup) => markup.slice(markup.indexOf('ข้อมูลทั่วไปของโรงงาน'), markup.indexOf('data-field-name="contactPersons"'))
+        for (const isOperator of [true, false]) {
+          const locked = generalSection(render('add-parameter', { isOperator, generalFactoryFieldsReadOnly: false }))
+          const inputs = locked.match(/<input\b[^>]*>/g)
+          const uploads = inputs.filter((input) => input.includes('type="file"'))
+          assert.equal(uploads.length, 2)
+          assert.ok(uploads.every((input) => input.includes('disabled=""')))
+          assert.ok(inputs.filter((input) => !input.includes('type="file"')).every((input) => input.includes('readOnly=""')))
+          for (const value of ['Other assessment', 'Saved project', '13.5', '100.5', 'front.jpg', 'logo.jpg']) {
+            assert.ok(locked.includes(value), `locked factory data must remain visible: ${value}`)
+          }
+          assert.ok(!locked.includes('aria-label="ลบไฟล์'))
+          assert.ok(!render('add-parameter', { isOperator }).includes('เลือกสถานะหลังส่งแบบฟอร์ม'))
+
+          for (const generalFactoryFieldsReadOnly of [false, true]) {
+            const create = render('create', { isOperator, generalFactoryFieldsReadOnly })
+            const section = generalSection(create)
+            const latitude = section.match(/<input[^>]*name="latitude"[^>]*>/)?.[0]
+            assert.equal(Boolean(latitude), !generalFactoryFieldsReadOnly)
+            const fileInputs = section.match(/<input[^>]*type="file"[^>]*>/g)
+            assert.equal(fileInputs.every((input) => input.includes('disabled=""')), generalFactoryFieldsReadOnly)
+            assert.equal(create.includes('เลือกสถานะหลังส่งแบบฟอร์ม'), !isOperator)
+          }
+          const editByRole = render('edit', { isOperator })
+          const pointCodeInput = editByRole.match(/<input[^>]*name="pointCode"[^>]*>/)?.[0]
+          assert.ok(pointCodeInput)
+          assert.equal(pointCodeInput.includes('readOnly=""'), isOperator)
+          assert.ok(generalSection(editByRole).includes('aria-label="ลบไฟล์ front.jpg"'))
+        }
+
+        const lockedPayload = buildMeasurementPointRequestBody(initialRequest, systemType, new FormData(), [], [], {
+          generalFactoryFieldsReadOnly: true,
+          existingDocuments: initialRequest.documentsAndImages,
+        })
+        assert.equal(lockedPayload.eia, 'อื่นๆ')
+        assert.equal(lockedPayload.eiaOther, 'Other assessment')
+        assert.equal(lockedPayload.projectName, 'Saved project')
+        assert.equal(lockedPayload.latitude, 13.5)
+        assert.equal(lockedPayload.longitude, 100.5)
+        assert.ok(lockedPayload.measurementPoints[0].documentsAndImages.some((document) => document.fileName === 'front.jpg'))
+        assert.ok(lockedPayload.measurementPoints[0].documentsAndImages.some((document) => document.fileName === 'logo.jpg'))
 
         const formData = new FormData()
         for (const [name, values] of Object.entries({
