@@ -233,7 +233,7 @@ criteria normalization สำคัญ
 - `requestedParameters` ห้ามมีค่า `ไม่มี`
 - ส่ง `requestedParameters` ได้โดยไม่ต้องส่ง `pendingParameters`
 - `requestedParameters` เลือกนอก `eligibleParameters` และ `pendingParameters` ได้ แม้ส่งรายการเหล่านี้มาด้วย API ไม่บังคับให้เป็น subset
-- ถ้าส่ง `requestedParameters` แล้ว `measurementInstruments.parameters` ต้องมีชุดค่าเดียวกันกับ `requestedParameters`
+- ถ้าส่ง `requestedParameters` แล้ว `measurementInstruments.parameters` ต้องมีชุดค่าเดียวกันกับ `requestedParameters`; ยกเว้นเจ้าหน้าที่สร้างคำขอผ่าน `POST /parameters` โดยละ `measurementInstruments` หรือส่ง `null` ตามเงื่อนไขในหัวข้อ endpoint
 - `hasTreatmentSystem` ถ้าส่งต้องเป็น `มี` หรือ `ไม่มี`
 - ถ้า `hasTreatmentSystem = "มี"` ต้องมี `treatmentSystem` และห้ามเป็น `ไม่มี`
 - ถ้า `hasTreatmentSystem = "ไม่มี"` then `treatmentSystem` ต้องว่างหรือมีแค่ `ไม่มี`
@@ -495,11 +495,33 @@ criteria normalization สำคัญ
 | `requestType`                                | body     | No       | No       | -      | backend จะ stamp เป็น `ADD_PARAMETER`             |
 | `measurementPoints`                          | body     | Yes      | No       | array  | ต้องมี exactly 1 point                            |
 | `measurementPoints[].pointCode`              | body     | Yes      | No       | string | ต้องเป็นรหัสจุดเดิมของ point ที่จะเพิ่ม parameter |
-| `measurementPoints[].details`                | body     | Yes      | No       | object | ต้องมีและต้องไม่ว่าง                              |
-| `measurementPoints[].measurementInstruments` | body     | Yes      | No       | object | ห้ามเป็น `null`                                   |
+| `measurementPoints[].details` | body | ตามผู้ยื่น | เฉพาะเจ้าหน้าที่ | object | เจ้าหน้าที่ละ field หรือส่ง `null` ได้; ผู้ประกอบการต้องส่ง object ที่ไม่ว่าง; object ที่ส่งมาต้องผ่านกฎเดิม |
+| `measurementPoints[].measurementInstruments` | body | ตามผู้ยื่น | เฉพาะเจ้าหน้าที่ | object | เจ้าหน้าที่ละ field หรือส่ง `null` ได้; ผู้ประกอบการต้องส่ง object; ข้อมูลที่ส่งมายังตรวจรูปแบบเดิม |
 | `measurementPoints[].documentsAndImages`     | body     | No       | No       | array  | ไม่บังคับ แม้เป็น `CEMS`                          |
 
-### Minimal Valid Request
+ข้อยกเว้นนี้ใช้เฉพาะ `userType` เป็น `officer` หรือ `admin` และมี role `monitoring_kpm` หรือ `admin` ตาม access token เช่นเดียวกับฟอร์มเพิ่มจุดของเจ้าหน้าที่ พร้อม permission `cems_wpms_requests:edit` เดิม ไม่รับ role หรือ flag จาก request body เพื่อเลือก validation
+
+### ตัวอย่างคำขอเจ้าหน้าที่ที่ละสองส่วน
+
+```json
+{
+  "factoryId": "F000123",
+  "factoryName": "โรงงานตัวอย่าง",
+  "factoryRegistrationNo": "น.60-1/2560",
+  "systemType": "CEMS",
+  "contactPersons": [{ "name": "ผู้ติดต่อโรงงาน", "phone": "0812345678" }],
+  "measurementPoints": [{
+    "pointName": "ปล่องระบาย A",
+    "pointCode": "S2001",
+    "pointType": "STACK",
+    "parameters": ["CO (ppm)"]
+  }]
+}
+```
+
+เมื่อไม่มี `details.requestedParameters` และไม่มีรายการเครื่องมือ ให้ส่งรายการพารามิเตอร์ผ่าน `measurementPoints[].parameters` พร้อมหน่วยตามตัวอย่าง การละสองส่วนจะ normalize เป็น `null` และไม่ดึงรายละเอียดหรือเครื่องมือเดิมมาเติมในคำขอ
+
+### Minimal Valid Request สำหรับผู้ประกอบการ
 
 ```json
 {
@@ -571,8 +593,12 @@ criteria normalization สำคัญ
 
 - ต้องมี exactly 1 measurement point
 - `pointCode` ต้องมี เพราะ flow นี้อ้างถึงจุดเดิม
-- ถ้า `details.requestedParameters` มีค่า ชุดค่าต้องตรงกับ `measurementInstruments.parameters`
-- service recheck ซ้ำอีกชั้นว่า point เดียว, pointCode มี, details มี, measurementInstruments มี
+- เฉพาะเจ้าหน้าที่ตามเงื่อนไขข้างต้น ละ `details` และ/หรือ `measurementInstruments` หรือส่ง `null` ได้; ผู้ประกอบการยังต้องส่งทั้งสองส่วน
+- `details` ที่ส่งเป็น object ต้องไม่ว่างและผ่านกฎ CEMS/WPMS เดิม; เครื่องมือที่ส่งมาต้องผ่าน schema เดิม
+- ถ้า `details.requestedParameters` มีค่าและส่ง `measurementInstruments` ต้องมีชุดค่าเดียวกัน; เมื่อเจ้าหน้าที่ละเครื่องมือหรือส่ง `null` จะไม่ตรวจการจับคู่กับเครื่องมือ แต่ยังตรวจค่าพารามิเตอร์ที่ขอ
+- service ตรวจซ้ำโดยใช้ตัวตนผู้ยื่น: จุดเดียวและ `pointCode` บังคับทุกคน; สองส่วนนี้ยกเว้นเฉพาะเจ้าหน้าที่
+- ผู้ติดต่อ ชื่อโรงงาน และ field อื่นยังใช้กฎเดิม; สถานะหลังสร้างยังเป็น `PENDING_DESIGN_REVIEW` และไม่รับ `submissionAction`
+- ข้อยกเว้นนี้ใช้เฉพาะการสร้างผ่าน `POST /parameters`; `PUT /:id/form` และฟอร์มประเภทอื่นใช้ validation เดิม
 - ต้อง resolve active eligible factory ได้เหมือน add-point
 
 ### Errors
@@ -967,5 +993,5 @@ endpoint นี้รับ config เดี่ยวแบบ normalized; ไ�
 - Service: [backend/src/modules/connection-requests/connection-requests.service.ts](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts)
 - EIA helper: [backend/src/modules/connection-requests/connection-request-eia.ts](../../../../../backend/src/modules/connection-requests/connection-request-eia.ts)
 - Migrations: [backend/src/db/migrations/0019_create_cems_wpms_connection_requests.ts](../../../../../backend/src/db/migrations/0019_create_cems_wpms_connection_requests.ts), [backend/src/db/migrations/0021_extend_connection_request_forms.ts](../../../../../backend/src/db/migrations/0021_extend_connection_request_forms.ts), [backend/src/db/migrations/0022_add_connection_request_form_sections.ts](../../../../../backend/src/db/migrations/0022_add_connection_request_form_sections.ts), [backend/src/db/migrations/0024_add_connection_request_contacts.ts](../../../../../backend/src/db/migrations/0024_add_connection_request_contacts.ts), [backend/src/db/migrations/0025_add_connection_request_factory_snapshot.ts](../../../../../backend/src/db/migrations/0025_add_connection_request_factory_snapshot.ts), [backend/src/db/migrations/0026_add_connection_request_factory_coordinates.ts](../../../../../backend/src/db/migrations/0026_add_connection_request_factory_coordinates.ts), [backend/src/db/migrations/0047_add_canceled_connection_request_status.ts](../../../../../backend/src/db/migrations/0047_add_canceled_connection_request_status.ts), [backend/src/db/migrations/0066_add_connection_request_eia_assessment.ts](../../../../../backend/src/db/migrations/0066_add_connection_request_eia_assessment.ts), [backend/src/db/migrations/0074_create_officer_direct_connections.ts](../../../../../backend/src/db/migrations/0074_create_officer_direct_connections.ts), [backend/src/db/migrations/0101_backfill_p0446_measurement_point_parameters.ts](../../../../../backend/src/db/migrations/0101_backfill_p0446_measurement_point_parameters.ts)
-- Tests: [backend/tests/unit/connection-requests.validator.test.ts](../../../../../backend/tests/unit/connection-requests.validator.test.ts), [backend/tests/unit/connection-requests.service.test.ts](../../../../../backend/tests/unit/connection-requests.service.test.ts), [backend/tests/unit/connection-requests.direct-connections.validator.test.ts](../../../../../backend/tests/unit/connection-requests.direct-connections.validator.test.ts), [backend/tests/unit/connection-requests.direct-connections.route.test.ts](../../../../../backend/tests/unit/connection-requests.direct-connections.route.test.ts), [backend/tests/unit/p0446-parameter-backfill-migration.test.ts](../../../../../backend/tests/unit/p0446-parameter-backfill-migration.test.ts), [backend/tests/unit/connection-request-form-enhancements.validator.test.ts](../../../../../backend/tests/unit/connection-request-form-enhancements.validator.test.ts)
+- Tests: [officer add-parameter route/service regression](../../../../../backend/tests/unit/connection-requests.officer-parameter-sections.test.ts), [backend/tests/unit/connection-requests.validator.test.ts](../../../../../backend/tests/unit/connection-requests.validator.test.ts), [backend/tests/unit/connection-requests.service.test.ts](../../../../../backend/tests/unit/connection-requests.service.test.ts), [backend/tests/unit/connection-requests.direct-connections.validator.test.ts](../../../../../backend/tests/unit/connection-requests.direct-connections.validator.test.ts), [backend/tests/unit/connection-requests.direct-connections.route.test.ts](../../../../../backend/tests/unit/connection-requests.direct-connections.route.test.ts), [backend/tests/unit/p0446-parameter-backfill-migration.test.ts](../../../../../backend/tests/unit/p0446-parameter-backfill-migration.test.ts), [backend/tests/unit/connection-request-form-enhancements.validator.test.ts](../../../../../backend/tests/unit/connection-request-form-enhancements.validator.test.ts)
 - Evidence: [docs/backend/evidence/connection-requests/direct-connection-nullable-fields.tdd.md](../../../evidence/connection-requests/direct-connection-nullable-fields.tdd.md), [docs/backend/evidence/connection-requests/direct-connection-optional-documents.tdd.md](../../../evidence/connection-requests/direct-connection-optional-documents.tdd.md), [docs/backend/evidence/connection-requests/email-invisible-character-normalization.tdd.md](../../../evidence/connection-requests/email-invisible-character-normalization.tdd.md), [docs/backend/evidence/connection-requests/officer-direct-eligible-lookup.tdd.md](../../../evidence/connection-requests/officer-direct-eligible-lookup.tdd.md)

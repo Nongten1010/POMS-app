@@ -190,7 +190,7 @@ describe('create measurement-point request route', () => {
           }),
         ],
       }),
-      42,
+      { actorUserId: 42, userType: 'operator', roles: ['factory_operator'] },
     );
   });
 

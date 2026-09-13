@@ -95,6 +95,10 @@ import {
   type VerifyConnectionInput,
 } from './connection-requests.types';
 import { resubmitConnectionRequestWithTypeSchema } from './connection-requests.validator';
+import {
+  canOmitParameterRequestSections,
+  type ParameterRequestActorContext,
+} from './parameter-request-policy';
 
 const DESIGN_REVIEW_STATUSES: ConnectionRequestStatus[] = [
   CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
@@ -1226,9 +1230,14 @@ export const connectionRequestsService = {
 
   async createParameterRequest(
     input: AddParameterRequestInput,
-    actorUserId: number,
+    actor: number | ParameterRequestActorContext,
   ): Promise<ConnectionRequestDTO> {
-    ensureRequestFormSections(input, CONNECTION_REQUEST_TYPE.ADD_PARAMETER);
+    const actorUserId = typeof actor === 'number' ? actor : actor.actorUserId;
+    ensureRequestFormSections(
+      input,
+      CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+      canOmitParameterRequestSections(typeof actor === 'number' ? null : actor),
+    );
     const eligibleFactory = await requireActiveEligibleFactory(input);
 
     return connectionRequestsRepository.create(
@@ -2485,6 +2494,7 @@ function ensureSingleMeasurementPoint(input: CreateConnectionRequestInput): void
 function ensureRequestFormSections(
   input: CreateConnectionRequestInput,
   requestType: ConnectionRequestType,
+  allowMissingSections = false,
 ): void {
   if (requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) {
     ensureSingleMeasurementPoint(input);
@@ -2504,7 +2514,10 @@ function ensureRequestFormSections(
       requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT ||
       requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER
     ) {
-      if (!point.details || Object.keys(point.details).length === 0) {
+      if (
+        (!point.details && !allowMissingSections) ||
+        (point.details && Object.keys(point.details).length === 0)
+      ) {
         throw new BadRequestError('Measurement point detail section is required', {
           path: `measurementPoints.${index}.details`,
         });
@@ -2524,7 +2537,7 @@ function ensureRequestFormSections(
       requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT ||
       requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER
     ) {
-      if (!point.measurementInstruments) {
+      if (!point.measurementInstruments && !allowMissingSections) {
         throw new BadRequestError('Measurement instruments section is required', {
           path: `measurementPoints.${index}.measurementInstruments`,
         });

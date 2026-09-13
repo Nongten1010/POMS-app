@@ -637,6 +637,17 @@ const addParameterExample = {
     },
   ],
 };
+const officerAddParameterExample = {
+  ...addParameterExample,
+  measurementPoints: [
+    {
+      pointName: 'ปล่องระบาย A',
+      pointCode: 'S2001',
+      pointType: 'STACK',
+      parameters: ['CO (ppm)'],
+    },
+  ],
+};
 const directConnectionExample = {
   factoryId: 'F000123',
   factoryRegistrationNo: null,
@@ -1194,7 +1205,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: { type: 'string' },
         maxItems: 100,
         description:
-          'ไม่บังคับให้ส่ง pendingParameters; requestedParameters เลือกนอก eligibleParameters และ pendingParameters ได้ แต่ต้องเป็นชุดเดียวกับ measurementInstruments.parameters. Direct Connection ที่ CONNECT และมี pendingParameters จริงต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า โดย requestedParameters เป็นค่าหลักเมื่อส่ง field นี้',
+          'ไม่บังคับให้ส่ง pendingParameters; requestedParameters เลือกนอก eligibleParameters และ pendingParameters ได้ แต่ต้องเป็นชุดเดียวกับ measurementInstruments.parameters เมื่อส่งเครื่องมือ; เฉพาะเจ้าหน้าที่สร้างผ่าน POST /parameters ละเครื่องมือหรือส่ง null ได้. Direct Connection ที่ CONNECT และมี pendingParameters จริงต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า โดย requestedParameters เป็นค่าหลักเมื่อส่ง field นี้',
       },
       timeSharingParameters: {
         type: 'array',
@@ -1563,7 +1574,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
   AddParameterMeasurementPoint: {
     type: 'object',
     additionalProperties: false,
-    required: ['pointName', 'pointCode', 'details', 'measurementInstruments'],
+    required: ['pointName', 'pointCode'],
+    description:
+      'ผู้ประกอบการต้องส่ง details และ measurementInstruments; เฉพาะ userType officer/admin ที่มี role monitoring_kpm/admin สามารถละทั้งสอง field หรือส่ง null ได้ โดยใช้ตัวตนจาก access token',
     properties: {
       pointName: { type: 'string', minLength: 1, maxLength: 255 },
       pointCode: { type: 'string', minLength: 1, maxLength: 64 },
@@ -1581,9 +1594,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
         'สถานะระดับจุดเดิมหรือสถานะใหม่หลังเพิ่มพารามิเตอร์',
       ),
       details: {
-        allOf: [schemaRef('MeasurementPointDetails')],
-        minProperties: 1,
-        description: 'Required, not null และต้องไม่เป็น object ว่าง',
+        nullable: true,
+        anyOf: [
+          { allOf: [schemaRef('MeasurementPointDetails')], minProperties: 1 },
+          { type: 'object', nullable: true, enum: [null] },
+        ],
+        description:
+          'เจ้าหน้าที่ละ field หรือส่ง null ได้; ผู้ประกอบการต้องส่ง object ที่ไม่ว่าง. เมื่อส่ง object ต้องผ่านกฎ CEMS/WPMS เดิม',
       },
       documentsAndImages: {
         type: 'array',
@@ -1591,7 +1608,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: schemaRef('RequestDocumentImage'),
         description: 'Optional แม้เป็น CEMS',
       },
-      measurementInstruments: schemaRef('MeasurementInstruments'),
+      measurementInstruments: {
+        nullable: true,
+        anyOf: [
+          schemaRef('MeasurementInstruments'),
+          { type: 'object', nullable: true, enum: [null] },
+        ],
+        description:
+          'เจ้าหน้าที่ละ field หรือส่ง null ได้; ผู้ประกอบการต้องส่ง object. หากส่ง object พร้อม details.requestedParameters รายการเครื่องมือต้องตรงกับพารามิเตอร์ที่ขอ',
+      },
     },
   },
   CreateConnectionRequest: {
@@ -1646,7 +1671,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
     description:
-      'ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องอ้าง point เดิม exactly 1 point',
+      'ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องอ้าง point เดิม exactly 1 point. เฉพาะ userType officer/admin และ role monitoring_kpm/admin จาก access token ไม่บังคับ details และ measurementInstruments (ละ field หรือ null); ผู้ประกอบการยังบังคับทั้งสองส่วน. กฎ field อื่นและสถานะ PENDING_DESIGN_REVIEW คงเดิม',
     example: addParameterExample,
   },
   PointCodeAssignment: {
@@ -2373,8 +2398,22 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ขอเพิ่มพารามิเตอร์ให้จุดเดิม',
       operationId: 'createParameterRequest',
       description:
-        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องมี exactly 1 measurement point พร้อม pointCode, details และ measurementInstruments',
-      requestBody: jsonRequestBody(schemaRef('AddParameterRequest'), addParameterExample),
+        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องมี exactly 1 measurement point พร้อม pointCode เดิม. เฉพาะ userType officer/admin และ role monitoring_kpm/admin จาก access token ละ details และ measurementInstruments หรือส่ง null ได้; ผู้ประกอบการยังต้องส่งทั้งสองส่วน. ข้อมูลที่ส่งมาต้องผ่าน validation เดิม; การจับคู่ requestedParameters กับเครื่องมือใช้เมื่อมี measurementInstruments. สร้าง PENDING_DESIGN_REVIEW เหมือนเดิม',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: schemaRef('AddParameterRequest'),
+            examples: {
+              operator: { summary: 'ผู้ประกอบการ: ส่งครบสองส่วน', value: addParameterExample },
+              officer: {
+                summary: 'เจ้าหน้าที่: ละ details และ measurementInstruments',
+                value: officerAddParameterExample,
+              },
+            },
+          },
+        },
+      },
       successStatus: '201',
       successDescription: 'สร้างคำขอเพิ่มพารามิเตอร์แล้ว',
       successSchema: schemaRef('ConnectionRequestResponse'),

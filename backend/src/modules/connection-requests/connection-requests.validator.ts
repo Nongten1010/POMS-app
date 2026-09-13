@@ -872,21 +872,23 @@ function validateMeasurementPointDetailsBySystem(
   point: z.infer<typeof measurementPointSchema>,
   index: number,
   ctx: z.RefinementCtx,
+  allowMissingInstruments = false,
 ): void {
   if (!point.details) return;
 
   if (systemType === 'CEMS') {
-    validateCemsDetails(point, index, ctx);
+    validateCemsDetails(point, index, ctx, allowMissingInstruments);
     return;
   }
 
-  validateWpmsDetails(point, index, ctx);
+  validateWpmsDetails(point, index, ctx, allowMissingInstruments);
 }
 
 function validateCemsDetails(
   point: z.infer<typeof measurementPointSchema>,
   index: number,
   ctx: z.RefinementCtx,
+  allowMissingInstruments = false,
 ): void {
   const details = point.details;
   if (!details) return;
@@ -899,7 +901,7 @@ function validateCemsDetails(
   validateExcludedFields(details, wpmsOnlyDetailFields, index, ctx, 'WPMS-only detail field');
   validateParameterGroups(details, index, ctx);
   validateRegulationClauseTags(details, index, ctx);
-  validateRequestedParameters(point, index, ctx);
+  validateRequestedParameters(point, index, ctx, allowMissingInstruments);
   validateLegalAnnexNumbers(details, index, ctx);
 
   const stackShape = details.stackShape;
@@ -964,6 +966,7 @@ function validateWpmsDetails(
   point: z.infer<typeof measurementPointSchema>,
   index: number,
   ctx: z.RefinementCtx,
+  allowMissingInstruments = false,
 ): void {
   const details = point.details;
   if (!details) return;
@@ -975,7 +978,7 @@ function validateWpmsDetails(
   validateMonitoringPointKind(details, index, ctx, 'WPMS');
   validateExcludedFields(details, cemsOnlyDetailFields, index, ctx, 'CEMS-only detail field');
   validateParameterGroups(details, index, ctx);
-  validateRequestedParameters(point, index, ctx);
+  validateRequestedParameters(point, index, ctx, allowMissingInstruments);
   validateTreatmentSystem(details, index, ctx);
   validateConnectionDevice(details, index, ctx);
 
@@ -1080,6 +1083,7 @@ function validateRequestedParameters(
   point: z.infer<typeof measurementPointSchema>,
   index: number,
   ctx: z.RefinementCtx,
+  allowMissingInstruments = false,
 ): void {
   const details = point.details;
   if (!details) return;
@@ -1098,6 +1102,8 @@ function validateRequestedParameters(
     );
     return;
   }
+
+  if (allowMissingInstruments && !point.measurementInstruments) return;
 
   const instrumentParameters =
     point.measurementInstruments?.parameters.map((parameter) => parameter.parameter) ?? [];
@@ -1179,7 +1185,7 @@ function validateSingleFactoryLogo(
   let foundLogo = false;
 
   points.forEach((point, pointIndex) => {
-    point.documentsAndImages.forEach((document) => {
+    point.documentsAndImages?.forEach((document) => {
       if (document.title !== CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_LOGO) return;
       if (!foundLogo) {
         foundLogo = true;
@@ -1280,7 +1286,11 @@ function addDetailIssue(ctx: z.RefinementCtx, index: number, field: string, mess
 function validateMeasurementPointFormSections(
   payload: ContactFormPayloadWithoutRequestType,
   ctx: z.RefinementCtx,
-  options: { requireExistingPointCode?: boolean; requireCemsDocuments?: boolean } = {},
+  options: {
+    requireExistingPointCode?: boolean;
+    requireCemsDocuments?: boolean;
+    allowMissingSections?: boolean;
+  } = {},
 ): void {
   validateUniqueMeasurementPoints(payload.measurementPoints, ctx);
   validateSingleFactoryLogo(payload.measurementPoints, ctx);
@@ -1293,7 +1303,10 @@ function validateMeasurementPointFormSections(
         message: 'Existing measurement point code is required for add parameter request',
       });
     }
-    if (!point.details || Object.keys(point.details).length === 0) {
+    if (
+      (!point.details && !options.allowMissingSections) ||
+      (point.details && Object.keys(point.details).length === 0)
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['measurementPoints', index, 'details'],
@@ -1311,14 +1324,20 @@ function validateMeasurementPointFormSections(
         message: 'Documents and images section is required for CEMS',
       });
     }
-    if (!point.measurementInstruments) {
+    if (!point.measurementInstruments && !options.allowMissingSections) {
       ctx.addIssue({
         code: 'custom',
         path: ['measurementPoints', index, 'measurementInstruments'],
         message: 'Measurement instruments section is required',
       });
     }
-    validateMeasurementPointDetailsBySystem(payload.systemType, point, index, ctx);
+    validateMeasurementPointDetailsBySystem(
+      payload.systemType,
+      point,
+      index,
+      ctx,
+      options.allowMissingSections,
+    );
   });
 }
 
@@ -1652,27 +1671,33 @@ export const directConnectionRequestSchema = directConnectionRequestObjectSchema
     };
   });
 
-export const addParameterRequestSchema = connectionRequestFormObjectSchema
-  .omit({ requestType: true })
-  .superRefine((payload, ctx) => {
-    validateContactSection(payload, ctx);
-    validateEnvironmentalAssessment(payload, ctx);
-    if (payload.measurementPoints.length !== 1) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['measurementPoints'],
-        message: 'Add parameter request must reference exactly one measurement point',
+function buildAddParameterRequestSchema(allowMissingSections = false) {
+  return connectionRequestFormObjectSchema
+    .omit({ requestType: true })
+    .superRefine((payload, ctx) => {
+      validateContactSection(payload, ctx);
+      validateEnvironmentalAssessment(payload, ctx);
+      if (payload.measurementPoints.length !== 1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['measurementPoints'],
+          message: 'Add parameter request must reference exactly one measurement point',
+        });
+      }
+      validateMeasurementPointFormSections(payload, ctx, {
+        requireExistingPointCode: true,
+        requireCemsDocuments: false,
+        allowMissingSections,
       });
-    }
-    validateMeasurementPointFormSections(payload, ctx, {
-      requireExistingPointCode: true,
-      requireCemsDocuments: false,
-    });
-  })
-  .transform((payload) => ({
-    ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
-    requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
-  }));
+    })
+    .transform((payload) => ({
+      ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
+      requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+    }));
+}
+
+export const addParameterRequestSchema = buildAddParameterRequestSchema();
+export const officerAddParameterRequestSchema = buildAddParameterRequestSchema(true);
 
 export const listConnectionRequestsQuerySchema = z
   .object({

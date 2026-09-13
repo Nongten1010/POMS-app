@@ -7,6 +7,7 @@ import { loginSchema } from '../../src/modules/auth/auth.validator';
 import {
   addMeasurementPointRequestSchema,
   addParameterRequestSchema,
+  officerAddParameterRequestSchema,
   cancelConnectionRequestSchema,
   changeConnectionRequestStatusSchema,
   confirmConnectionSchema,
@@ -98,7 +99,10 @@ function requestExample(pathKey: string, method: string): unknown {
 
   for (const mediaType of mediaTypes) {
     if (mediaType in content) {
-      return asObject(content[mediaType], mediaType).example;
+      const media = asObject(content[mediaType], mediaType);
+      if (media.example !== undefined) return media.example;
+      const examples = asObject(media.examples, `${mediaType}.examples`);
+      return asObject(Object.values(examples)[0], 'first example').value;
     }
   }
 
@@ -1295,6 +1299,38 @@ describe('POMS OpenAPI contract', () => {
       expect(properties.requestType).toBeUndefined();
       expect(schema.additionalProperties).toBe(false);
     }
+  });
+
+  it('documents add-parameter optional sections only for authenticated officer actors', () => {
+    const document = asObject(pomsOpenApiDocument, 'document');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const point = asObject(schemas.AddParameterMeasurementPoint, 'point');
+    expect(point.required).not.toContain('details');
+    expect(point.required).not.toContain('measurementInstruments');
+    expect(point.description).toContain('officer/admin');
+    expect(point.description).toContain('monitoring_kpm/admin');
+    const properties = asObject(point.properties, 'properties');
+    for (const field of ['details', 'measurementInstruments']) {
+      expect(asObject(properties[field], field).anyOf).toEqual(
+        expect.arrayContaining([expect.objectContaining({ nullable: true, enum: [null] })]),
+      );
+    }
+    const paths = asObject(document.paths, 'paths');
+    const operation = asObject(
+      asObject(paths['/cems-wpms-requests/parameters'], 'path').post,
+      'post',
+    );
+    const content = asObject(asObject(operation.requestBody, 'body').content, 'content');
+    const media = asObject(content['application/json'], 'json');
+    expect(media.example).toBeUndefined();
+    const examples = asObject(media.examples, 'examples');
+    const officerExample = asObject(examples.officer, 'officer example').value;
+    expect(officerAddParameterRequestSchema.safeParse(officerExample).success).toBe(true);
+    expect(addParameterRequestSchema.safeParse(officerExample).success).toBe(false);
+    expect(
+      addParameterRequestSchema.safeParse(asObject(examples.operator, 'operator example').value)
+        .success,
+    ).toBe(true);
   });
 
   it('documents the point-level monitoring status used by fully exempted active points', () => {

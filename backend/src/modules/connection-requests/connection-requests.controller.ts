@@ -8,6 +8,7 @@ import { createDeviceConnectionConfigRequestSchema } from '../device-connections
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { createConnectionRequestDocumentImageService } from './connection-request-document-image.service';
 import { connectionRequestsService } from './connection-requests.service';
+import { canOmitParameterRequestSections } from './parameter-request-policy';
 import {
   calendarStatusDetailsQuerySchema,
   calendarStatusQuerySchema,
@@ -18,6 +19,7 @@ import {
 import {
   addMeasurementPointRequestSchema,
   addParameterRequestSchema,
+  officerAddParameterRequestSchema,
   cancelConnectionRequestSchema,
   changeConnectionRequestStatusSchema,
   confirmConnectionSchema,
@@ -582,9 +584,16 @@ export const connectionRequestsController = {
 
   async createParameterRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const actorUserId = requireActorUserId(req);
-      const payload = addParameterRequestSchema.parse(req.body);
-      const data = await connectionRequestsService.createParameterRequest(payload, actorUserId);
+      const actor = requireAuthenticatedActor(req);
+      const schema = canOmitParameterRequestSections(actor)
+        ? officerAddParameterRequestSchema
+        : addParameterRequestSchema;
+      const payload = schema.parse(req.body);
+      const data = await connectionRequestsService.createParameterRequest(payload, {
+        actorUserId: actor.id,
+        userType: actor.userType,
+        roles: actor.roles,
+      });
       res.status(StatusCodes.CREATED).location(`${req.baseUrl}/${data.id}`).json({
         success: true,
         data,
