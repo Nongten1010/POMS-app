@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+<a id="request-actions-factory-scope"></a>
+
+## 2026-09-13 — ทุก action ของคำขอใช้สิทธิ์โรงงานแทนผู้สร้าง
+
+- **Affected canonical docs:** [ตั้งค่าและยืนยันอุปกรณ์](./menus/connection-requests/device-configs.md), [ยกเลิกคำขอเชื่อมต่อ](./menus/connection-requests/operator-cancel-request.md), [ยกเลิกคำขอแก้ไขโรงงาน](./menus/master-data/factory-edit-requests.md)
+- **Impact:** เอาเงื่อนไขผู้ทำรายการต้องตรงกับ `createdBy` ออกจากการสร้าง config ในคำขอ ยืนยัน/บันทึกการเชื่อมต่อ ยกเลิกคำขอ และแทนที่ config ปัจจุบันทั้ง path ปกติและ annual path; `cems_wpms_requests:edit` หรือ `factories:edit` และ scope/assignment ยังจำเป็นตาม endpoint ผู้มีสิทธิ์ทำแทนกันได้ ส่วนสถานะ/source/สิทธิ์อนุมัติไม่เปลี่ยน
+- **Breaking change:** yes — ผู้สร้างที่ไม่มีสิทธิ์โรงงาน/พื้นที่แล้วไม่สามารถใช้สิทธิ์จาก `createdBy` ผ่าน action เหล่านี้ได้
+- **Migration:** ตรวจ permission และ assignment ปัจจุบันของผู้ทำรายการ (`user_juristics` หรือ `user_factory_access` สำหรับ `OWN_FACTORY`) ไม่ต้องเปลี่ยน payload และไม่มี database migration; คง `createdBy` เดิม บันทึก actor ที่ทำจริงในประวัติ/updated_by
+
 <a id="connection-request-collaborative-resubmit"></a>
 
 ## 2026-09-13 — แก้และส่งคำขอกลับตามสิทธิ์โรงงาน

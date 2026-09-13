@@ -37,7 +37,7 @@ describe('connectionRequestsRepository.cancelOperatorRequest', () => {
     jest.spyOn(connectionRequestsRepository, 'findById').mockResolvedValue(canceled);
 
     await expect(
-      connectionRequestsRepository.cancelOperatorRequest(1, 42, 'ยุติโครงการ'),
+      connectionRequestsRepository.cancelOperatorRequest(1, 42, 'ยุติโครงการ', { scope: 'ALL' }),
     ).resolves.toBe(canceled);
 
     expect(harness.selectBuilder.forUpdate).toHaveBeenCalledTimes(1);
@@ -56,6 +56,17 @@ describe('connectionRequestsRepository.cancelOperatorRequest', () => {
     });
   });
 
+  it('rechecks factory assignment under the request lock before cancellation', async () => {
+    const harness = cancellationHarness(CONNECTION_REQUEST_STATUS.WAITING_CONNECTION, false);
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+    await expect(
+      connectionRequestsRepository.cancelOperatorRequest(1, 42, null, { scope: 'OWN_FACTORY' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(harness.requestUpdate).not.toHaveBeenCalled();
+    expect(harness.historyInsert).not.toHaveBeenCalled();
+    expect(harness.selectBuilder.forUpdate).toHaveBeenCalledTimes(1);
+  });
+
   it('does not write status or history when a locked request is already canceled', async () => {
     const harness = cancellationHarness(CONNECTION_REQUEST_STATUS.CANCELED);
     const canceled = requestDto();
@@ -63,7 +74,7 @@ describe('connectionRequestsRepository.cancelOperatorRequest', () => {
     jest.spyOn(connectionRequestsRepository, 'findById').mockResolvedValue(canceled);
 
     await expect(
-      connectionRequestsRepository.cancelOperatorRequest(1, 42, 'เหตุผลใหม่'),
+      connectionRequestsRepository.cancelOperatorRequest(1, 42, 'เหตุผลใหม่', { scope: 'ALL' }),
     ).rejects.toMatchObject({
       code: 'CONFLICT',
       details: { currentStatus: CONNECTION_REQUEST_STATUS.CANCELED },
@@ -79,7 +90,7 @@ describe('connectionRequestsRepository.cancelOperatorRequest', () => {
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
     await expect(
-      connectionRequestsRepository.cancelOperatorRequest(1, 42, null),
+      connectionRequestsRepository.cancelOperatorRequest(1, 42, null, { scope: 'ALL' }),
     ).rejects.toMatchObject({
       code: 'CONFLICT',
       details: { currentStatus: CONNECTION_REQUEST_STATUS.CONNECTED },
@@ -90,19 +101,26 @@ describe('connectionRequestsRepository.cancelOperatorRequest', () => {
   });
 });
 
-function cancellationHarness(status: string) {
+function cancellationHarness(status: string, accessible = true) {
   const selectBuilder = makeChain({
     first: async () => ({
       id: 1,
       status,
       submission_source: CONNECTION_REQUEST_SUBMISSION_SOURCE.OPERATOR_FORM,
-      created_by: 42,
+      created_by: 99,
     }),
   });
   const requestUpdate = jest.fn(async (_values: Record<string, unknown>) => 1);
   const historyInsert = jest.fn(async (_values: Record<string, unknown>) => 1);
   const queues = new Map<string, unknown[]>([
-    ['cems_wpms_connection_requests', [selectBuilder, makeChain({ update: requestUpdate })]],
+    [
+      'cems_wpms_connection_requests',
+      [
+        selectBuilder,
+        makeChain({ first: async () => (accessible ? { id: 1 } : undefined) }),
+        makeChain({ update: requestUpdate }),
+      ],
+    ],
     ['cems_wpms_request_status_history', [makeChain({ insert: historyInsert })]],
   ]);
   const trx = Object.assign(
@@ -133,6 +151,8 @@ function makeChain(options: {
   const chain: Record<string, unknown> = {};
   Object.assign(chain, {
     where: jest.fn(() => chain),
+    select: jest.fn(() => chain),
+    whereExists: jest.fn(() => chain),
     whereNull: jest.fn(() => chain),
     forUpdate: jest.fn(() => chain),
     first: jest.fn(options.first ?? (async () => undefined)),

@@ -1260,9 +1260,7 @@ export const connectionRequestsService = {
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
     const access = { actorUserId, scope: editScope, regionalAccess };
-    if (!(await connectionRequestsRepository.canEditRequest(id, access))) {
-      throw new ForbiddenError('You do not have permission to edit requests for this factory');
-    }
+    await ensureRequestEditAccess(id, actorUserId, editScope, regionalAccess);
     if (
       input.expectedUpdatedAt !== undefined &&
       new Date(input.expectedUpdatedAt).getTime() !== new Date(request.updatedAt).getTime()
@@ -1444,9 +1442,11 @@ export const connectionRequestsService = {
     id: number,
     input: CancelConnectionRequestInput,
     actorUserId: number,
+    editScope: AccessScope = 'OWN_FACTORY',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
-    ensureOwner(request, actorUserId);
+    await ensureRequestEditAccess(id, actorUserId, editScope, regionalAccess);
 
     if (request.submissionSource !== CONNECTION_REQUEST_SUBMISSION_SOURCE.OPERATOR_FORM) {
       throw new ConflictError('Only operator-form connection requests can be canceled', {
@@ -1465,6 +1465,7 @@ export const connectionRequestsService = {
       id,
       actorUserId,
       input.reason ?? null,
+      { scope: editScope, regionalAccess },
     );
   },
 
@@ -1510,9 +1511,11 @@ export const connectionRequestsService = {
     id: number,
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
+    editScope: AccessScope = 'OWN_FACTORY',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
     const request = await loadRequest(id);
-    ensureOwner(request, actorUserId);
+    await ensureRequestEditAccess(id, actorUserId, editScope, regionalAccess);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
     ensureStationBelongsToRequest(request, input.stationId);
     ensureStatusScheduleParametersBelongToRequest(request, input);
@@ -1525,9 +1528,11 @@ export const connectionRequestsService = {
     id: number,
     input: CreateDeviceConnectionConfigsInput,
     actorUserId: number,
+    editScope: AccessScope = 'OWN_FACTORY',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
     const request = await loadRequest(id);
-    ensureOwner(request, actorUserId);
+    await ensureRequestEditAccess(id, actorUserId, editScope, regionalAccess);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
     for (const config of input.configs) {
       ensureStationBelongsToRequest(request, config.stationId);
@@ -1553,7 +1558,7 @@ export const connectionRequestsService = {
       stationId,
       actorUserId,
       editScope,
-      false,
+      true,
       regionalAccess,
     );
     ensureCurrentChannelsBelongToPoint(request, input);
@@ -1579,7 +1584,7 @@ export const connectionRequestsService = {
       stationId,
       actorUserId,
       editScope,
-      false,
+      true,
       regionalAccess,
     );
     for (const config of input.configs) {
@@ -1600,9 +1605,11 @@ export const connectionRequestsService = {
     id: number,
     input: ConfirmConnectionInput,
     actorUserId: number,
+    editScope: AccessScope = 'OWN_FACTORY',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
-    ensureOwner(request, actorUserId);
+    await ensureRequestEditAccess(id, actorUserId, editScope, regionalAccess);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
 
     if ((input.action ?? 'CONFIRM') === 'SAVE') {
@@ -3934,9 +3941,16 @@ function getScopeEstateCode(scope: PermissionScopeDetails): string | null {
   return null;
 }
 
-function ensureOwner(request: ConnectionRequestDTO, actorUserId: number): void {
-  if (request.createdBy !== actorUserId) {
-    throw new ForbiddenError('Only the request owner can perform this action');
+async function ensureRequestEditAccess(
+  id: number,
+  actorUserId: number,
+  scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): Promise<void> {
+  if (
+    !(await connectionRequestsRepository.canEditRequest(id, { actorUserId, scope, regionalAccess }))
+  ) {
+    throw new ForbiddenError('You do not have permission to edit requests for this factory');
   }
 }
 

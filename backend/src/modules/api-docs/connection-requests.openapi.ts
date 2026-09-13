@@ -78,6 +78,8 @@ const connectionProfileConflictResponse: OpenApiObject = {
     '409 CONFLICT: legacy สำเนาข้อมูลโรงงานปัจจุบันขัดกัน ใช้ error.details.reason = FACTORY_PROFILE_CONFLICT; canonical การเชื่อมต่อครั้งแรกมีข้อมูลทั่วไปแต่ source revision หายหรือเก่า ใช้ error.details.reason = FACTORY_PROFILE_CHANGED ให้ reload และ resubmit. canonical profile ยังไม่พร้อม หรือ eligible factory ไม่ active ก็ตอบ CONFLICT; ไม่มี partial update',
   content: { 'application/json': { schema: schemaRef('ErrorEnvelope') } },
 };
+const requestEditAccessDescription =
+  'Permission: cems_wpms_requests:edit ตาม scope และ regionalAccess. OWN_FACTORY ใช้ assignment ผ่าน user_juristics หรือ user_factory_access; ผู้ทำรายการไม่ต้องตรงกับ createdBy และผู้สร้างเดิมก็ต้องผ่าน scope. เก็บ createdBy เดิมและบันทึกผู้ทำรายการจริง. ';
 const currentDeviceConfigDescription =
   'อ่านพารามิเตอร์จาก active connected point หลังตรวจสิทธิ์; คง mapping เดิมที่ยังอยู่, ซ่อนช่องที่ถอดออก, เพิ่ม mapping ว่างสำหรับพารามิเตอร์ใหม่. rawConfigs แสดงเฉพาะค่าที่บันทึกจริง; request-specific device-configs ยังคง snapshot เดิม';
 
@@ -2486,7 +2488,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'บันทึก config อุปกรณ์ในคำขอ',
       operationId: 'saveConnectionRequestDeviceConfigs',
       description:
-        'Permission: cems_wpms_requests:edit. รับ config เดี่ยว, batch 1-50 หรือ structured form wrapper',
+        requestEditAccessDescription +
+        'รับ config เดี่ยว, batch 1-50 หรือ structured form wrapper; คำขอต้องอยู่ WAITING_CONNECTION',
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
@@ -2700,7 +2703,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ผู้ประกอบการยกเลิกคำขอ',
       operationId: 'cancelConnectionRequest',
       description:
-        'Permission: cems_wpms_requests:edit + createdBy เป็นผู้เรียก; รองรับเฉพาะ OPERATOR_FORM. ' +
+        requestEditAccessDescription +
+        'รองรับเฉพาะ OPERATOR_FORM. ' +
         `ยกเลิกได้ทุกขั้นตอนก่อนสถานะปลายทาง: ${CANCELLABLE_CONNECTION_REQUEST_STATUSES.join(', ')}. ` +
         'CONNECTED (เชื่อมต่อแล้ว) และ CANCELED (ยกเลิก) ตอบ 409 CONFLICT รวมถึงการยกเลิกซ้ำ; ไม่เปลี่ยนข้อมูลหรือเพิ่มประวัติซ้ำ. ' +
         'ตรวจสิทธิ์และสถานะซ้ำหลัง lock แถวใน transaction; ไม่ลบข้อมูลคำขอหรือข้อมูลประกอบ',
@@ -2779,7 +2783,10 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'บันทึกหรือยืนยันการเชื่อมต่อ',
       operationId: 'confirmConnectionRequestConnection',
-      description: 'Permission: cems_wpms_requests:edit' + ` ${connectionProfileWriteDescription}`,
+      description:
+        requestEditAccessDescription +
+        'ใช้ได้ใน WAITING_CONNECTION สำหรับ SAVE และ CONFIRM; ' +
+        connectionProfileWriteDescription,
       extraResponses: { '409': connectionProfileConflictResponse },
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
@@ -2873,7 +2880,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'แทนที่ config ปัจจุบันของจุดตรวจวัด',
       operationId: 'saveCurrentConnectedPointDeviceConfigs',
       description:
-        'Permission: cems_wpms_requests:edit. stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก',
+        requestEditAccessDescription +
+        'stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก',
       parameters: [stationIdPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
@@ -2922,7 +2930,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'แทนที่ config ของ annual point code (proxy-decoded path)',
       operationId: 'saveAnnualConnectedPointDeviceConfigs',
       description:
-        'Permission: cems_wpms_requests:edit. Middleware ประกอบ stationId/buddhistYear กลับเป็น annual point code ก่อนตรวจ body. stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก',
+        requestEditAccessDescription +
+        'Middleware ประกอบ stationId/buddhistYear กลับเป็น annual point code ก่อนตรวจ body. stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก',
       parameters: [annualStationIdPathParameter, buddhistYearPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
@@ -3067,7 +3076,7 @@ export const connectionRequestsOpenApiDocument: OpenApiObject = {
         content: { 'application/json': { schema: schemaRef('ErrorEnvelope') } },
       },
       Forbidden: {
-        description: 'ไม่มี permission, ไม่ใช่ owner หรือข้อมูลอยู่นอก scope',
+        description: 'ไม่มี permission หรือข้อมูลอยู่นอก scope/assignment',
         content: { 'application/json': { schema: schemaRef('ErrorEnvelope') } },
       },
       NotFound: {

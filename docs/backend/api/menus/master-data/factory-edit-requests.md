@@ -33,7 +33,7 @@
 4. ผู้ประกอบการส่งคำขอแก้ไขด้วย `POST /api/v1/poms-factories/:factoryId/edit-requests` โดยเลือก `formType` เป็น `BASIC_INFO` หรือ `MEASUREMENT_POINTS`
 5. admin อ่านรายการและรายละเอียดคำขอ แล้วเลือก `APPROVE`, `REQUEST_REVISION` หรือ `REJECT`
 6. ถ้าขอให้แก้ไข ผู้ประกอบการเรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values แล้วส่งกลับด้วย `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
-7. ผู้สร้างคำขอเดิม (`createdBy`) ยกเลิกคำขอที่ยังเปิดอยู่ได้ด้วย `POST /api/v1/poms-factories/edit-requests/:id/cancel`
+7. ผู้มี `factories:edit` ในขอบเขตโรงงานยกเลิกคำขอที่ยังเปิดอยู่แทนกันได้ด้วย `POST /api/v1/poms-factories/edit-requests/:id/cancel`
 8. เมื่ออนุมัติ backend อัปเดต current/live POMS data ตาม `formType`: `BASIC_INFO` sync active `cems_wpms_connected_measurement_points` และ active `eligible_factories`, ส่วน `MEASUREMENT_POINTS` sync จุดตรวจวัดและข้อมูลทั่วไปของโรงงานที่มีการแก้ไข โดยข้อมูลทั่วไป sync เป้าหมายเดียวกับ `BASIC_INFO` โดยไม่อัปเดตตาราง `factories`
 
 ### Capability Boundary
@@ -41,7 +41,7 @@
 - `BASIC_INFO` แก้ได้เฉพาะการประเมินผลกระทบสิ่งแวดล้อม (`eia`), ชื่อโครงการ (`projectName`), อื่นๆ ของ EIA (`eiaOther`), ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน (`factoryFrontPhotos`), สัญลักษณ์ของโรงงานหรือโลโก้บริษัท (`factoryLogo`), ละติจูด (`latitude`) และลองติจูด (`longitude`) รวมถึง [ข้อมูลติดต่อและอีเมล](#contact-comparison); เมื่ออนุมัติจะ sync ตาม target mapping โดยคงชื่อและที่อยู่โรงงานเดิม
 - `MEASUREMENT_POINTS` ใช้ patch `pointName`, `monitoringPointStatus`, `details`, `documentsAndImages`, `measurementInstruments` และ `officerNotificationEmails` พร้อมข้อมูลทั่วไปของโรงงานและ [ข้อมูลติดต่อ](#contact-comparison) เดียวกับ `BASIC_INFO` ได้ในคำขอเดียวกัน
 - binary upload รับครั้งละหนึ่งไฟล์และคืน metadata เท่านั้น การผูกไฟล์กับคำขอเกิดเมื่อ client ส่ง metadata นั้นใน create/resubmission payload
-- เฉพาะ `createdBy` ยกเลิกคำขอของตนเองได้ และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`
+- ผู้มี `factories:view` และ `factories:edit` ตาม scope/assignment ยกเลิกคำขอได้แม้ไม่ใช่ `createdBy` และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`
 - โรงงานที่อ่านหรือแก้ได้ต้องอยู่ใน effective data scope ของ permission ที่ endpoint ใช้ และหนึ่งโรงงานมี open request ได้สูงสุดหนึ่งรายการต่อ `formType`
 - การ review ทุก decision ต้องมี role `admin` ใน JWT พร้อม permissions `factories:view` และ `factories:approve`; บัญชี `userType = officer` ที่ได้รับ role `admin` ใช้งานได้ และ `userType = admin` อย่างเดียวไม่เพียงพอ ไม่ต้องเปลี่ยนประเภทบัญชีหรือ migrate ข้อมูลผู้ใช้
 - ไม่อยู่ใน scope ของ capability นี้: การแก้ `pointCode`, `pointType`, `systemType`, `parameters`, device configuration, identity/audit fields, ตาราง `factories` และโค้ด frontend
@@ -138,7 +138,7 @@ curl --request POST \
 | Approval scope       | `POST .../review` ต้องผ่านทั้ง `factories:view` และ `factories:approve`, ยึด scope ของ `factories:approve` และบังคับ role `admin` ใน JWT (ไม่บังคับ `userType`)                |
 | Object scope         | รายการถูกกรองตาม effective scope ของ endpoint; detail หรือ mutation ที่อ้างโรงงาน/คำขอนอก scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่าข้อมูลมีอยู่                       |
 | Self-review | ผู้มี role `admin` พิจารณาคำขอของตนเองได้ แม้ตรงกับ `createdBy` หรือ `submittedBy`; ใช้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT` โดยยังต้องผ่าน permission และ data scope                     |
-| Cancel ownership     | `POST .../cancel` อนุญาตเฉพาะผู้ใช้ที่ตรงกับ `createdBy`; ผู้มี permission แต่ไม่ใช่เจ้าของตอบ `403 FORBIDDEN`                                                              |
+| Cancel ownership     | `POST .../cancel` ใช้ `factories:edit` ตาม scope/assignment และ `regionalAccess`; ตรวจซ้ำใน transaction โดยไม่บังคับ `createdBy`                                                              |
 
 ## Contracts
 
@@ -662,7 +662,7 @@ Frontend ใช้ `GET /poms-factories/:factoryId` อ่าน `data.measureme
 
 เมื่อ admin อนุมัติ จะบันทึก `cems_wpms_connected_measurement_points.officer_notification_emails_json` พร้อมการอนุมัติใน transaction เดียวกัน โดยไม่เขียนทับ snapshot คำขอเชื่อมต่อเดิม ค่า `NULL` ในจุดที่ยังไม่เคยตั้งค่าให้อ่านจาก source request ของจุดนั้น ส่วน JSON `[]` เป็นการล้างโดยชัดเจนและไม่ fallback กลับไปอีเมลเดิม การบันทึกรายชื่อไม่ส่งอีเมลทันที และไม่เปลี่ยน trigger/ระบบส่งการแจ้งเตือน
 
-`GET /poms-factories` รวมรายชื่อ current ของ active points ในแต่ละโรงงานแบบไม่ซ้ำ สิทธิ์เข้าถึง การตรวจเจ้าของคำขอ การอนุมัติโดย admin และการปฏิเสธข้อมูลที่เปลี่ยนหลังสร้าง snapshot ยังคงใช้กติกาเดิม
+`GET /poms-factories` รวมรายชื่อ current ของ active points ในแต่ละโรงงานแบบไม่ซ้ำ สิทธิ์เข้าถึง การตรวจ permission และ scope/assignment ของคำขอ การอนุมัติโดย admin และการปฏิเสธข้อมูลที่เปลี่ยนหลังสร้าง snapshot ยังคงใช้กติกาเดิม
 
 ### เปลี่ยนพารามิเตอร์หลังอนุมัติ
 
@@ -1095,7 +1095,7 @@ Minimal response (`200 OK`):
 
 ### `POST /api/v1/poms-factories/edit-requests/:id/cancel`
 
-ยกเลิกคำขอแก้ไขโดยไม่เปลี่ยนข้อมูล current/live ใช้ Bearer token พร้อม `factories:view` และ `factories:edit`; การคัด resource ยึด data scope ของ `factories:edit` และผู้เรียกต้องเป็นผู้สร้างคำขอเดิมตาม `createdBy` เท่านั้น
+ยกเลิกคำขอแก้ไขโดยไม่เปลี่ยนข้อมูล current/live ใช้ Bearer token พร้อม `factories:view` และ `factories:edit`; การคัด resource ยึด data scope ของ `factories:edit` และผู้เรียกไม่จำเป็นต้องตรงกับ `createdBy` โดย `OWN_FACTORY` ตรวจ assignment ผ่าน `user_juristics` หรือ `user_factory_access` และ scope อื่นตรวจพื้นที่ที่มอบหมาย
 
 ยกเลิกได้เมื่อสถานะปัจจุบันเป็น `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED` ยกเว้น `APPROVED` และ `CANCELLED` หลังสำเร็จสถานะเป็น `CANCELLED`, `statusLabel = "ยกเลิก"`, `isOpen = false` และเพิ่ม event `CANCEL` การตอบกลับเป็น full [`PomsFactoryEditRequestResponse`](#get-apiv1poms-factoriesedit-requestsid) ไม่ใช่ summary object
 
@@ -1222,7 +1222,7 @@ Minimal response (`200 OK`):
 
 ## Workflow, Concurrency And Idempotency
 
-การเปิดใช้ cancellation จาก `REJECTED` ต้องรัน migration `0111_allow_rejected_poms_factory_edit_request_cancellation.ts` ด้วย เพื่อให้ audit constraint ยอมรับ `REJECTED → CANCELLED` โดยยังตรวจผู้สร้างคำขอและล็อกสถานะก่อนบันทึก การ rollback จะถูกปฏิเสธหากมีประวัติ transition ใหม่นี้แล้ว
+การเปิดใช้ cancellation จาก `REJECTED` ต้องรัน migration `0111_allow_rejected_poms_factory_edit_request_cancellation.ts` ด้วย เพื่อให้ audit constraint ยอมรับ `REJECTED → CANCELLED` โดยตรวจ edit scope/assignment และล็อกสถานะก่อนบันทึก การ rollback จะถูกปฏิเสธหากมีประวัติ transition ใหม่นี้แล้ว
 
 ### Status And Decisions
 
@@ -1233,7 +1233,7 @@ Minimal response (`200 OK`):
 | `REVISED_PENDING_REVIEW` | `แก้ไขแล้ว รอพิจารณา` | `true`   | ส่งกลับเข้ารอบพิจารณาแล้ว          |
 | `APPROVED`               | `อนุมัติแล้ว`         | `false`  | อัปเดต current/live ตาม `formType` สำเร็จ |
 | `REJECTED`               | `ไม่อนุมัติ`          | `false`  | ปิดคำขอโดยไม่เปลี่ยนข้อมูลจริง     |
-| `CANCELLED`              | `ยกเลิก`              | `false`  | ผู้สร้างคำขอปิดคำขอโดยไม่เปลี่ยนข้อมูลจริง |
+| `CANCELLED`              | `ยกเลิก`              | `false`  | ผู้มีสิทธิ์แก้ไขปิดคำขอโดยไม่เปลี่ยนข้อมูลจริง |
 
 State transitions:
 
@@ -1242,7 +1242,7 @@ State transitions:
 | none                                           | ผู้มี `factories:edit` | create             | `PENDING_REVIEW`         | เก็บ current/proposed snapshot ตาม `formType` และเปิดคำขอ     |
 | `PENDING_REVIEW`                               | admin                  | `REQUEST_REVISION` | `REVISION_REQUESTED`     | บันทึก `revisionReason`; ยังไม่แก้ข้อมูลจริง                 |
 | `REVISION_REQUESTED`                           | ผู้มี `factories:edit` | resubmission       | `REVISED_PENDING_REVIEW` | refresh current snapshot และส่ง proposed payload เดิมอีกครั้ง |
-| `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED` | ผู้สร้างคำขอ (`createdBy`) | `CANCEL` | `CANCELLED` | ปิดคำขอโดยไม่แก้ข้อมูล current/live |
+| `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED` | ผู้มี `factories:edit` ตาม scope/assignment | `CANCEL` | `CANCELLED` | ปิดคำขอโดยไม่แก้ข้อมูล current/live |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `APPROVE`          | `APPROVED`               | sync ข้อมูลจริงแบบ atomic ตาม `formType`                    |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้ข้อมูลจริง                                   |
 
@@ -1274,7 +1274,7 @@ State transitions:
 | `400`       | `FILE_UPLOAD_FAILED` | multipart upload เกิน limit เช่นไฟล์เกิน 5 MiB หรือส่งไฟล์/part เกินจำนวน                                                            | แสดงข้อผิดพลาดอัปโหลดและให้เลือกไฟล์ใหม่        |
 | `400`       | `BAD_REQUEST`      | แก้ข้อมูลติดต่อโดยเลือกจุดข้าม CEMS/WPMS, upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
-| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกไม่ใช่ `createdBy`, reviewer ไม่มี role `admin`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
+| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกอยู่นอก edit scope/assignment, reviewer ไม่มี role `admin`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
 | `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
 | `409`       | `CONFLICT`         | ไม่มีข้อมูลที่แก้ไขเปลี่ยน, ข้อมูลติดต่อเปลี่ยนหลังยื่นคำขอ, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version/revision เปลี่ยน, canonical profile ยังไม่พร้อม, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |

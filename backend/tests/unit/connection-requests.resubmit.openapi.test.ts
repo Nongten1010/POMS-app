@@ -6,6 +6,24 @@ type Obj = Record<string, unknown>;
 const obj = (value: unknown) => value as Obj;
 
 describe('collaborative resubmission contract', () => {
+  it.each([
+    '/cems-wpms-requests/{id}/device-configs',
+    '/cems-wpms-requests/{id}/confirm-connection',
+    '/cems-wpms-requests/{id}/cancel',
+    '/connected-measurement-points/{stationId}/device-configs',
+    '/connected-measurement-points/{stationId}/{buddhistYear}/device-configs',
+  ])('publishes collaborative edit scope for request action %s', (path) => {
+    const action = obj(obj(obj(pomsOpenApiDocument.paths)[path]).post);
+    for (const text of [
+      'cems_wpms_requests:edit',
+      'OWN_FACTORY',
+      'user_factory_access',
+      'regionalAccess',
+    ]) {
+      expect(action.description).toEqual(expect.stringContaining(text));
+    }
+  });
+
   const schemas = obj(obj(pomsOpenApiDocument.components).schemas);
   const operation = obj(obj(obj(pomsOpenApiDocument.paths)['/cems-wpms-requests/{id}/form']).put);
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/connection-requests/connection-requests.repository', () => ({
   connectionRequestsRepository: {
     findById: jest.fn(),
+    canEditRequest: jest.fn(),
     cancelOperatorRequest: jest.fn(),
   },
 }));
@@ -46,10 +47,11 @@ const CANCELLABLE_STATUSES: ConnectionRequestStatus[] = [
 describe('connectionRequestsService.cancel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedRepository.canEditRequest.mockResolvedValue(true);
   });
 
   it.each(CANCELLABLE_STATUSES)('cancels an owned operator request from %s', async (status) => {
-    const current = requestDto({ status });
+    const current = requestDto({ status, createdBy: 99 });
     const canceled = requestDto({
       status: CONNECTION_REQUEST_STATUS.CANCELED,
       revisionReason: 'ยุติโครงการติดตั้งระบบตรวจวัด',
@@ -65,6 +67,7 @@ describe('connectionRequestsService.cancel', () => {
       1,
       actorUserId,
       'ยุติโครงการติดตั้งระบบตรวจวัด',
+      { scope: 'OWN_FACTORY', regionalAccess: undefined },
     );
   });
 
@@ -76,7 +79,10 @@ describe('connectionRequestsService.cancel', () => {
 
     await connectionRequestsService.cancel(1, {}, actorUserId);
 
-    expect(mockedRepository.cancelOperatorRequest).toHaveBeenCalledWith(1, actorUserId, null);
+    expect(mockedRepository.cancelOperatorRequest).toHaveBeenCalledWith(1, actorUserId, null, {
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+    });
   });
 
   it('rejects an already canceled owned request without writing another history row', async () => {
@@ -99,12 +105,13 @@ describe('connectionRequestsService.cancel', () => {
     expect(mockedRepository.cancelOperatorRequest).not.toHaveBeenCalled();
   });
 
-  it('rejects a request owned by another operator before revealing cancellation state', async () => {
+  it('rejects a request outside edit scope before revealing cancellation state', async () => {
     mockedRepository.findById.mockResolvedValue(requestDto({ createdBy: 99 }));
+    mockedRepository.canEditRequest.mockResolvedValue(false);
 
     await expect(connectionRequestsService.cancel(1, {}, actorUserId)).rejects.toMatchObject({
       code: 'FORBIDDEN',
-      message: 'Only the request owner can perform this action',
+      message: 'You do not have permission to edit requests for this factory',
     });
     expect(mockedRepository.cancelOperatorRequest).not.toHaveBeenCalled();
   });

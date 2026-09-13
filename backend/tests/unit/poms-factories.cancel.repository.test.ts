@@ -23,7 +23,7 @@ describe('pomsFactoriesRepository.cancelEditRequest', () => {
     const harness = cancellationHarness(POMS_FACTORY_EDIT_REQUEST_STATUS.REVISION_REQUESTED);
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
-    const result = await pomsFactoriesRepository.cancelEditRequest(11, 42);
+    const result = await pomsFactoriesRepository.cancelEditRequest(11, 42, { scope: 'ALL' });
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -74,7 +74,7 @@ describe('pomsFactoriesRepository.cancelEditRequest', () => {
     const harness = cancellationHarness(POMS_FACTORY_EDIT_REQUEST_STATUS.REJECTED);
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
-    const result = await pomsFactoriesRepository.cancelEditRequest(11, 42);
+    const result = await pomsFactoriesRepository.cancelEditRequest(11, 42, { scope: 'ALL' });
 
     expect(result.status).toBe(POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED);
     expect(result.isOpen).toBe(false);
@@ -89,14 +89,16 @@ describe('pomsFactoriesRepository.cancelEditRequest', () => {
     );
   });
 
-  it('rechecks the owner after locking and rejects a concurrent non-owner write', async () => {
-    const harness = cancellationHarness(POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW, 99);
+  it('rechecks scope after locking before any write', async () => {
+    const harness = cancellationHarness(POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW, 99, false);
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
-    await expect(pomsFactoriesRepository.cancelEditRequest(11, 42)).rejects.toMatchObject({
+    await expect(
+      pomsFactoriesRepository.cancelEditRequest(11, 42, { scope: 'ALL' }),
+    ).rejects.toMatchObject({
       statusCode: 403,
       code: 'FORBIDDEN',
-      message: 'Only the request owner can perform this action',
+      message: 'POMS factory edit request is outside the edit scope',
     });
 
     expect(harness.requestUpdate).not.toHaveBeenCalled();
@@ -109,7 +111,9 @@ describe('pomsFactoriesRepository.cancelEditRequest', () => {
       const harness = cancellationHarness(status);
       mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
-      await expect(pomsFactoriesRepository.cancelEditRequest(11, 42)).rejects.toMatchObject({
+      await expect(
+        pomsFactoriesRepository.cancelEditRequest(11, 42, { scope: 'ALL' }),
+      ).rejects.toMatchObject({
         statusCode: 409,
         code: 'INVALID_STATUS_TRANSITION',
         message: 'ไม่สามารถยกเลิกคำขอในสถานะปัจจุบันได้',
@@ -122,7 +126,7 @@ describe('pomsFactoriesRepository.cancelEditRequest', () => {
   );
 });
 
-function cancellationHarness(status: string, createdBy = 42) {
+function cancellationHarness(status: string, createdBy = 99, accessible = true) {
   const lockedRow = requestRow({
     status,
     created_by: createdBy,
@@ -153,7 +157,10 @@ function cancellationHarness(status: string, createdBy = 42) {
   });
   const queues = new Map<string, unknown[]>([
     ['poms_factory_edit_requests', [lockedRequest, makeChain({ update: requestUpdate })]],
-    ['poms_factory_edit_requests as req', [reloadRequest]],
+    [
+      'poms_factory_edit_requests as req',
+      [makeChain({ firstResult: accessible ? lockedRow : undefined }), reloadRequest],
+    ],
     ['poms_factory_edit_request_events', [makeChain({ insert: eventInsert }), eventList]],
   ]);
   const trx = Object.assign(
@@ -185,6 +192,7 @@ function makeChain(options: {
   const chain: Record<string, unknown> = {};
   Object.assign(chain, {
     leftJoin: jest.fn(() => chain),
+    innerJoin: jest.fn(() => chain),
     select: jest.fn(() => chain),
     where: jest.fn(() => chain),
     whereNull: jest.fn(() => chain),

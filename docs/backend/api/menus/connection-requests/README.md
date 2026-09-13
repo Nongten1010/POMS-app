@@ -28,7 +28,7 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/factories/factory-001/previous-request
 3. วาง access token ในช่อง `bearerAuth`; Swagger UI จะเติม `Authorization: Bearer` ให้
 4. เลือก endpoint, กด `Try it out`, แก้ path/query/body แล้วกด `Execute`
 
-หน้าเอกสารเปิดอ่านได้โดยไม่ต้อง login ทุก environment รวม production และรวมทั้งระบบ **141 endpoints / 150 operations / 13 กลุ่มงาน** ให้ใช้ช่อง Filter ค้นชื่อกลุ่ม `ขอเชื่อมต่อ` หรือ path ที่ต้องการ ขอบเขต contract ในเอกสารหน้านี้มี 35 route signatures และแสดงเป็น 39 operations เมื่อรวมรูปแบบ path ที่มี `buddhistYear` ทั้งนี้ API จริงยังตรวจ Bearer token, permission, owner และ data scope ตาม contract ตัวอย่างทั้งหมดเป็นข้อมูลสมมติและไม่มี credential จริง ส่วน `POST /api/v1/device-connections/test-connection` ยังตอบโหมด `MOCK` และไม่ได้เปิดการเชื่อมต่อ transport/database จริง
+หน้าเอกสารเปิดอ่านได้โดยไม่ต้อง login ทุก environment รวม production และรวมทั้งระบบ **141 endpoints / 150 operations / 13 กลุ่มงาน** ให้ใช้ช่อง Filter ค้นชื่อกลุ่ม `ขอเชื่อมต่อ` หรือ path ที่ต้องการ ขอบเขต contract ในเอกสารหน้านี้มี 35 route signatures และแสดงเป็น 39 operations เมื่อรวมรูปแบบ path ที่มี `buddhistYear` ทั้งนี้ API จริงยังตรวจ Bearer token, permission และ data scope/assignment ตาม contract ตัวอย่างทั้งหมดเป็นข้อมูลสมมติและไม่มี credential จริง ส่วน `POST /api/v1/device-connections/test-connection` ยังตอบโหมด `MOCK` และไม่ได้เปิดการเชื่อมต่อ transport/database จริง
 
 หน้าเอกสารเปิดเป็นค่าเริ่มต้นและปิดได้ด้วย `API_DOCS_ENABLED=false`; หน้า Swagger ไม่เก็บ Bearer token ข้ามการ refresh/session
 
@@ -137,7 +137,7 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 | ส่งแบบใหม่หลังถูกแจ้งแก้ไข                    | `PUT`  | `/api/v1/cems-wpms-requests/:id/form`                              | `id` path + JSON body          | `cems_wpms_requests:edit` + data scope | [Payload/validation](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform)                                      |
 | อนุมัติแบบ/แจ้งแก้ไข                          | `POST` | `/api/v1/cems-wpms-requests/:id/review`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Approve design](#approve-design)                                                                                                 |
 | เปลี่ยนสถานะ/แจ้งแก้ไข                        | `POST` | `/api/v1/cems-wpms-requests/:id/status`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Approve form status](#approve-form-status)                                                                                       |
-| ผู้ประกอบการยกเลิกคำขอ                        | `POST` | `/api/v1/cems-wpms-requests/:id/cancel`                   | `id` path + `{ reason? }`      | `cems_wpms_requests:edit` + owner   | [Cancel request](./operator-cancel-request.md)                                                                                    |
+| ผู้ประกอบการยกเลิกคำขอ                        | `POST` | `/api/v1/cems-wpms-requests/:id/cancel`                   | `id` path + `{ reason? }`      | `cems_wpms_requests:edit` + data scope   | [Cancel request](./operator-cancel-request.md)                                                                                    |
 | บันทึก config อุปกรณ์ในคำขอ                   | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs`           | `id` path + JSON body          | `cems_wpms_requests:edit`           | [Device configs](./device-configs.md)                                                                                             |
 | บันทึก/ยืนยันการเชื่อมต่อ                     | `POST` | `/api/v1/cems-wpms-requests/:id/confirm-connection`       | `id` path + JSON body          | `cems_wpms_requests:edit`           | `action`, `confirmedAt?`, `note?`                                                                                                 |
 | เจ้าหน้าที่ตรวจยืนยันการเชื่อมต่อ             | `POST` | `/api/v1/cems-wpms-requests/:id/verify-connection`        | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Connected factory profile sync](#connected-factory-profile-sync)                                                                 |
@@ -168,7 +168,7 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 - route อ่านรายการ/รายละเอียดและ route ของเจ้าหน้าที่ใช้ permission scope ตาม implementation; เมื่อเป็น location scope จะตัดกับ profile assignment และอาจคืนรายการว่างหรือ `404`
 - `POST /measurement-points` และ `POST /parameters` ตรวจว่า identifier resolve เป็น active row ใน `eligible_factories`; เมื่อเจ้าหน้าที่ส่ง `submissionAction` ใน `POST /measurement-points` backend จะตัด edit scope/region ของเจ้าหน้าที่ด้วย
 - เฉพาะเจ้าหน้าที่ใน `POST /measurement-points` สามารถส่ง `submissionAction=REQUEST_FACTORY_REVISION|CONNECT`; ค่า `CONNECT` ต้องมี direct-connect permission และผ่าน eligible-factory scope ของ permission นั้น
-- `PUT /:id/form` ใช้ edit scope/assignment และสถานะ `WAITING_FACTORY_REVISION`; cancel และ confirm ใช้ owner/status rules เดิม
+- `PUT /:id/form` ใช้ edit scope/assignment และสถานะ `WAITING_FACTORY_REVISION`; cancel, ตั้งค่าอุปกรณ์ และ confirm ใช้ edit scope/assignment กับข้อจำกัดสถานะของแต่ละ action
 - Direct Connection รับ `submissionAction=REQUEST_FACTORY_REVISION|CONNECT` ไปพร้อมแบบ ตรวจทั้งข้อจำกัด actor, scope ของ permission และ active eligible factory ตามรายละเอียดใน [Payload และ validation ของคำขอ](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsdirect-connections)
 
 สำหรับ route ที่ใช้ scope ของ กนอ. ค่า `IN_ESTATE` หมายถึงโรงงานในนิคม `estateCode` ที่มอบหมาย
@@ -386,7 +386,7 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 `GET /api/v1/cems-wpms-requests/table-rows` คืน `data[].province` จาก factory snapshot ของคำขอ โดย snapshot ต้องรับจังหวัดจาก active row ใน `eligible_factories` ที่เชื่อมด้วย `eligibleFactoryId`. โรงงานที่ไม่มี row ใน `factories` ต้องยังคงจังหวัดเดิมหลังส่งคำขอ และ backend ต้องไม่ใช้การมีอยู่ของ factory master เป็นเงื่อนไขในการคืนจังหวัด.
 
-สำหรับ scope `OWN_FACTORY` ตารางนี้คืนคำขอของทุกโรงงานที่ผู้ประกอบการได้รับมอบหมายผ่าน `user_juristics` หรือ `user_factory_access` แม้เจ้าหน้าที่หรือผู้ใช้อื่นจะเป็นผู้สร้างคำขอ; endpoint ที่ระบุ owner โดยตรง เช่นการยกเลิกคำขอ ยังคงตรวจ `createdBy` ตาม contract ของ endpoint นั้น.
+สำหรับ scope `OWN_FACTORY` ตารางนี้คืนคำขอของทุกโรงงานที่ผู้ประกอบการได้รับมอบหมายผ่าน `user_juristics` หรือ `user_factory_access` แม้เจ้าหน้าที่หรือผู้ใช้อื่นจะเป็นผู้สร้างคำขอ; ทุก action ของคำขอใช้ permission และ scope/assignment ตาม contract ของ endpoint โดยไม่บังคับให้ผู้ทำรายการเป็น `createdBy`.
 
 `data[].factoryName` ใช้ชื่อจาก active current/live POMS point ใน `cems_wpms_connected_measurement_points` ที่อัปเดตล่าสุดและจับคู่ด้วย `eligibleFactoryId`, `factoryId` หรือเลขทะเบียนโรงงาน โดยไม่บังคับว่าต้องมี factory master. ถ้ายังไม่มี current/live point ให้ fallback ไป `factories.name` และชื่อ snapshot ในคำขอตามลำดับ. กติกานี้ใช้เหมือนกันทั้งผู้ประกอบการและเจ้าหน้าที่; role มีผลเฉพาะ permission/scope ของรายการที่มองเห็น.
 
@@ -804,7 +804,7 @@ Authorization:
 - scope `ALL`, `IN_REGION`, `IN_PROVINCE` และ `IN_ESTATE` ใช้ permission และพื้นที่ของผู้เรียกตามปกติ.
 - scope `OWN_FACTORY` อ่านได้เมื่อผู้เรียกเป็น `createdBy` ของคำขอ หรือได้รับมอบหมายโรงงานของคำขอผ่าน `user_juristics` หรือ `user_factory_access`.
 - กฎเดียวกันใช้กับ `GET /api/v1/cems-wpms-requests/:id`, `GET /api/v1/cems-wpms-requests/:id/detail`, `GET /api/v1/cems-wpms-requests/:id/form`, `GET /api/v1/cems-wpms-requests/:id/device-configs` และ `GET /api/v1/cems-wpms-requests/:id/device-configs/:configId`.
-- คำขอที่ไม่อยู่ใน scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่ามี resource อยู่; การแก้และส่งกลับผ่าน `PUT /:id/form` ใช้ edit scope/assignment ตาม [กติกา resubmit](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform); action อื่นที่ระบุ owner ยังคงตรวจ `createdBy`.
+- คำขอที่ไม่อยู่ใน scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่ามี resource อยู่; การแก้และส่งกลับผ่าน `PUT /:id/form` ใช้ edit scope/assignment ตาม [กติกา resubmit](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform); การยกเลิก ตั้งค่าอุปกรณ์ และยืนยันใช้ edit scope/assignment เช่นเดียวกัน โดยคงข้อจำกัดสถานะของ action นั้น.
 
 Minimal response:
 
@@ -913,7 +913,7 @@ Authorization:
 
 - scope `ALL`, `IN_REGION` และ `IN_PROVINCE` ใช้กฎการกรองตาม permission และพื้นที่.
 - scope `OWN_FACTORY` ตรวจ factory assignment จาก `user_juristics` หรือ `user_factory_access`; ไม่บังคับว่าผู้เรียกต้องเป็น `createdBy` ของคำขอเชื่อมต่อ จึงอ่านจุดที่เจ้าหน้าที่เชื่อมต่อให้โรงงานนั้นได้.
-- กฎ factory assignment นี้ใช้กับ `GET /api/v1/connected-measurement-points`, `GET /api/v1/connected-measurement-points/:stationId/requests`, `GET /api/v1/connected-measurement-points/:stationId/device-configs` และ `GET /api/v1/cems-wpms-requests/table-rows`; สิทธิ์ที่ผูกกับผู้สร้างคำขอ เช่นการยกเลิก ยังตรวจ `createdBy` ตาม contract ของ endpoint นั้น.
+- กฎ factory assignment นี้ใช้กับ `GET /api/v1/connected-measurement-points`, `GET /api/v1/connected-measurement-points/:stationId/requests`, `GET /api/v1/connected-measurement-points/:stationId/device-configs` และ `GET /api/v1/cems-wpms-requests/table-rows`; การเขียน config การยืนยันและยกเลิกใช้ edit scope/assignment โดยไม่บังคับ `createdBy`.
 
 Minimal request: ไม่มี request body.
 

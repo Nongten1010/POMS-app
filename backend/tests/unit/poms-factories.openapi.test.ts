@@ -719,10 +719,12 @@ describe('POMS factory master-data OpenAPI contract', () => {
     );
   });
 
-  it('documents owner-only cancellation without a body and with explicit transition errors', () => {
+  it('documents scope-based cancellation without a body and with explicit transition errors', () => {
     const documented = operation('/poms-factories/edit-requests/{id}/cancel', 'post');
     expect(documented).not.toHaveProperty('requestBody');
-    expect(String(documented.description)).toContain('createdBy');
+    expect(String(documented.description)).toContain('factories:edit');
+    expect(String(documented.description)).toContain('user_factory_access');
+    expect(String(documented.description)).toContain('regionalAccess');
     expect(String(documented.description)).toContain('PENDING_REVIEW');
     expect(String(documented.description)).toContain('REVISION_REQUESTED');
     expect(String(documented.description)).toContain('REVISED_PENDING_REVIEW');

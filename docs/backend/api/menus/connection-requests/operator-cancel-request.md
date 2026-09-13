@@ -10,7 +10,7 @@
 
 - Authentication: required bearer access token.
 - Permission: `cems_wpms_requests:edit`.
-- Data scope: ผู้ประกอบการต้องเป็น `createdBy` ของคำขอ; permission scope ปกติคือ `OWN_FACTORY`.
+- Data scope: ใช้ scope ของ `cems_wpms_requests:edit` และ `regionalAccess`; `OWN_FACTORY` ต้องได้รับมอบหมายโรงงานผ่าน `user_juristics` หรือ `user_factory_access` ผู้ทำรายการไม่จำเป็นต้องตรงกับ `createdBy`.
 - Submission source: รองรับเฉพาะ `OPERATOR_FORM`; ไม่ใช้กับ `OFFICER_DIRECT_API`.
 
 ### Request Fields
@@ -110,11 +110,11 @@
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | `id` ไม่ถูกต้อง, `reason` เกิน 1000 ตัวอักษร หรือมี field ที่ contract ไม่รองรับ | แสดง validation message และไม่ retry จนกว่าจะแก้ payload |
 | `401` | `UNAUTHORIZED` | ไม่มีหรือใช้ bearer token ไม่ถูกต้อง | ให้ผู้ใช้เข้าสู่ระบบใหม่ |
-| `403` | `FORBIDDEN` | ไม่มี permission หรือไม่ใช่เจ้าของคำขอ | ซ่อน action และแจ้งว่าไม่มีสิทธิ์ |
+| `403` | `FORBIDDEN` | ไม่มี edit permission หรืออยู่นอก scope/assignment | ซ่อน action และแจ้งว่าไม่มีสิทธิ์ |
 | `404` | `NOT_FOUND` | ไม่พบคำขอ | refresh รายการและปิดหน้ารายละเอียดเดิม |
 | `409` | `CONFLICT` | เป็น `CONNECTED`, `CANCELED`, `OFFICER_DIRECT_API` หรือมี action อื่นเปลี่ยนเป็นสถานะที่ยกเลิกไม่ได้ก่อน | refresh ด้วยข้อมูลล่าสุดและไม่ retry อัตโนมัติ |
 
-กรณีสถานะไม่อนุญาต `error.details.currentStatus` คือสถานะที่ตรวจพบ และ `error.details.allowedStatuses` คือรหัสสถานะที่ยกเลิกได้ทั้ง 5 ค่า; กรณี source ไม่อนุญาตใช้ `error.details.submissionSource` แทน ตรวจสิทธิ์เจ้าของก่อนส่งรายละเอียดเหล่านี้
+กรณีสถานะไม่อนุญาต `error.details.currentStatus` คือสถานะที่ตรวจพบ และ `error.details.allowedStatuses` คือรหัสสถานะที่ยกเลิกได้ทั้ง 5 ค่า; กรณี source ไม่อนุญาตใช้ `error.details.submissionSource` แทน ตรวจ edit scope/assignment ก่อนส่งรายละเอียดเหล่านี้ และตรวจซ้ำหลังล็อกคำขอใน transaction
 
 การเรียกยกเลิกซ้ำเปลี่ยนจาก `200` เป็น `409` ดู [ผลกระทบและการปรับ client](../../CHANGELOG.md#operator-cancel-terminal-statuses)
 

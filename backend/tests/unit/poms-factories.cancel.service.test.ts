@@ -51,7 +51,10 @@ describe('pomsFactoriesService.cancelEditRequest', () => {
       scope: editScope,
       regionalAccess: null,
     });
-    expect(mockedRepository.cancelEditRequest).toHaveBeenCalledWith(11, actorUserId);
+    expect(mockedRepository.cancelEditRequest).toHaveBeenCalledWith(11, actorUserId, {
+      scope: editScope,
+      regionalAccess: null,
+    });
   });
 
   it('returns not found without attempting a write when the request is outside factories:edit scope', async () => {
@@ -67,20 +70,18 @@ describe('pomsFactoriesService.cancelEditRequest', () => {
     expect(mockedRepository.cancelEditRequest).not.toHaveBeenCalled();
   });
 
-  it('allows only the original creator to cancel the request', async () => {
-    mockedRepository.findEditRequestById.mockResolvedValue(
-      editRequest(POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW, { createdBy: 99 }),
-    );
-
+  it('allows a non-creator inside edit scope to cancel the request', async () => {
+    const current = editRequest(POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW, { createdBy: 99 });
+    const cancelled = {
+      ...current,
+      status: POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED,
+      isOpen: false,
+    };
+    mockedRepository.findEditRequestById.mockResolvedValue(current);
+    mockedRepository.cancelEditRequest.mockResolvedValue(cancelled);
     await expect(
       pomsFactoriesService.cancelEditRequest(11, actorUserId, editScope, null),
-    ).rejects.toMatchObject({
-      statusCode: 403,
-      code: 'FORBIDDEN',
-      message: 'Only the request owner can perform this action',
-    });
-
-    expect(mockedRepository.cancelEditRequest).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({ createdBy: 99, isOpen: false });
   });
 
   it.each([POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED, POMS_FACTORY_EDIT_REQUEST_STATUS.APPROVED])(

@@ -10,7 +10,11 @@ import {
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.repository', () => ({
-  connectionRequestsRepository: { findById: jest.fn(), cancelOperatorRequest: jest.fn() },
+  connectionRequestsRepository: {
+    findById: jest.fn(),
+    canEditRequest: jest.fn(),
+    cancelOperatorRequest: jest.fn(),
+  },
 }));
 
 const repository = jest.mocked(connectionRequestsRepository);
@@ -30,6 +34,7 @@ const stateCases: [ConnectionRequestStatus, number][] = [
 describe('operator cancellation HTTP status rules with the real service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    repository.canEditRequest.mockResolvedValue(true);
   });
 
   it.each(stateCases)('returns %s cancellation as HTTP %s', async (status, httpStatus) => {
@@ -44,7 +49,10 @@ describe('operator cancellation HTTP status rules with the real service', () => 
         success: true,
         data: { status: 'CANCELED', statusLabel: 'ยกเลิก' },
       });
-      expect(repository.cancelOperatorRequest).toHaveBeenCalledWith(1, 42, null);
+      expect(repository.cancelOperatorRequest).toHaveBeenCalledWith(1, 42, null, {
+        scope: { scope: 'OWN_FACTORY' },
+        regionalAccess: undefined,
+      });
     } else {
       expect(response.body).toMatchObject({
         success: false,
@@ -57,8 +65,9 @@ describe('operator cancellation HTTP status rules with the real service', () => 
     }
   });
 
-  it('returns 403 for another owner even when the request is canceled', async () => {
+  it('returns 403 outside edit scope even when the request is canceled', async () => {
     repository.findById.mockResolvedValue({ ...requestDto('CANCELED'), createdBy: 99 });
+    repository.canEditRequest.mockResolvedValue(false);
     const response = await cancel();
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');

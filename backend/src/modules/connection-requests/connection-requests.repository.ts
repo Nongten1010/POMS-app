@@ -1506,6 +1506,7 @@ export const connectionRequestsRepository = {
     id: number,
     actorUserId: number,
     reason: string | null,
+    access: Pick<ListAccess, 'scope' | 'regionalAccess'>,
   ): Promise<ConnectionRequestDTO> {
     await db.transaction(async (trx) => {
       const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
@@ -1515,8 +1516,8 @@ export const connectionRequestsRepository = {
         .first('id', 'status', 'submission_source', 'created_by');
 
       if (!current) throw new NotFoundError('Connection request not found');
-      if (Number(current.created_by) !== actorUserId) {
-        throw new ForbiddenError('Only the request owner can perform this action');
+      if (!(await buildRequestEditAccessQuery(id, { ...access, actorUserId }, trx).first())) {
+        throw new ForbiddenError('You do not have permission to edit requests for this factory');
       }
 
       const submissionSource =

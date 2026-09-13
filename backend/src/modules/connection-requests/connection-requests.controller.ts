@@ -656,7 +656,13 @@ export const connectionRequestsController = {
       const actorUserId = requireActorUserId(req);
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
       const payload = cancelConnectionRequestSchema.parse(req.body);
-      const data = await connectionRequestsService.cancel(id, payload, actorUserId);
+      const data = await connectionRequestsService.cancel(
+        id,
+        payload,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:edit'),
+        ...getRegionalAccessArg(req),
+      );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
@@ -669,7 +675,13 @@ export const connectionRequestsController = {
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
       const payload = createDeviceConnectionConfigRequestSchema.parse(req.body);
       if ('configs' in payload) {
-        const data = await connectionRequestsService.createDeviceConfigs(id, payload, actorUserId);
+        const data = await connectionRequestsService.createDeviceConfigs(
+          id,
+          payload,
+          actorUserId,
+          getScopeDetails(req, 'cems_wpms_requests:edit'),
+          ...getRegionalAccessArg(req),
+        );
         res.status(StatusCodes.CREATED).json({
           success: true,
           data,
@@ -677,7 +689,13 @@ export const connectionRequestsController = {
         return;
       }
 
-      const data = await connectionRequestsService.createDeviceConfig(id, payload, actorUserId);
+      const data = await connectionRequestsService.createDeviceConfig(
+        id,
+        payload,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:edit'),
+        ...getRegionalAccessArg(req),
+      );
       res.status(StatusCodes.CREATED).json({
         success: true,
         data,
@@ -692,7 +710,13 @@ export const connectionRequestsController = {
       const actorUserId = requireActorUserId(req);
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
       const payload = confirmConnectionSchema.parse(req.body);
-      const data = await connectionRequestsService.confirmConnection(id, payload, actorUserId);
+      const data = await connectionRequestsService.confirmConnection(
+        id,
+        payload,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:edit'),
+        ...getRegionalAccessArg(req),
+      );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);

@@ -32,7 +32,9 @@ describe('POST /api/v1/cems-wpms-requests/:id/cancel', () => {
       .send({});
 
     expect(response.status).toBe(200);
-    expect(mockedConnectionRequestsService.cancel).toHaveBeenCalledWith(1, { reason: null }, 42);
+    expect(mockedConnectionRequestsService.cancel).toHaveBeenCalledWith(1, { reason: null }, 42, {
+      scope: 'OWN_FACTORY',
+    });
     expect(response.body).toMatchObject({
       success: true,
       data: {
@@ -49,7 +51,9 @@ describe('POST /api/v1/cems-wpms-requests/:id/cancel', () => {
       .send({ reason: '   ' });
 
     expect(response.status).toBe(200);
-    expect(mockedConnectionRequestsService.cancel).toHaveBeenCalledWith(1, { reason: null }, 42);
+    expect(mockedConnectionRequestsService.cancel).toHaveBeenCalledWith(1, { reason: null }, 42, {
+      scope: 'OWN_FACTORY',
+    });
   });
 
   it('rejects a reason longer than 1000 characters', async () => {

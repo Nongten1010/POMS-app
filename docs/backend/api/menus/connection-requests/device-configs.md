@@ -267,7 +267,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 
 - Authentication: required
 - Permission: `cems_wpms_requests:edit`
-- Data scope: ผู้เรียกต้องเป็นเจ้าของ request
+- Data scope: ผู้เรียกต้องผ่าน `cems_wpms_requests:edit` ตาม scope/assignment ของโรงงานและ `regionalAccess`
 
 ### Request Fields
 
@@ -364,7 +364,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 ### Validation And Business Rules
 
 - `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ของ measurement point ใน request
-- ผู้เรียกต้องเป็นเจ้าของ request และ request ต้องอยู่สถานะ `WAITING_CONNECTION`
+- ผู้เรียกต้องผ่าน `cems_wpms_requests:edit` ตาม scope/assignment ของโรงงานและ `regionalAccess` และ request ต้องอยู่สถานะ `WAITING_CONNECTION`
 - เมื่อ `settings.dbPass` เป็น `********` backend จะใช้รหัสจริงของ active config ที่มี `stationId + protocol + deviceCode` เดียวกัน; หากไม่มีรหัสจริงให้รักษา ต้องตอบ `400 BAD_REQUEST` และ client ต้องให้ผู้ใช้กรอกรหัสใหม่
 - backend ไม่ตรวจ required, format, IP, port range, Address ID range, min/max order, alert order, encoding/value-format enum หรือ Address ID ซ้ำของ connection/channel fields
 - status-management ตรวจ enum, local datetime รูปแบบ `YYYY-MM-DD HH:mm:ss`, ลำดับเวลา, จำนวนรายการ, parameter ของจุดตรวจวัด และช่วงทับกันที่ backend
@@ -380,7 +380,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 | `400` | `BAD_REQUEST` | station ไม่อยู่ใน request, parameter ไม่อยู่ในจุด หรือ request ไม่ได้อยู่สถานะ `WAITING_CONNECTION` | refresh request และเลือก station/parameter ใหม่ |
 | `400` | `BAD_REQUEST` | ส่ง `settings.dbPass = "********"` แต่ไม่มีรหัสจริงเดิมให้รักษา | ให้ผู้ใช้กรอกรหัสฐานข้อมูลจริงใหม่ |
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
-| `403` | `FORBIDDEN` | ไม่มี permission หรือไม่ใช่เจ้าของ request | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
+| `403` | `FORBIDDEN` | ไม่มี edit permission หรืออยู่นอก scope/assignment | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
 | `404` | `NOT_FOUND` | ไม่พบ request | refresh รายการ |
 
 ## `GET /api/v1/connected-measurement-points/:stationId/device-configs`
@@ -391,7 +391,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 
 - Authentication: required
 - Permission: `cems_wpms_requests:view`
-- Data scope: scope ของ permission และ region/province/owner ของ connected request ล่าสุด
+- Data scope: scope ของ permission และ พื้นที่และ factory assignment ของ connected request ล่าสุด
 - สำหรับ `OWN_FACTORY` ระบบตรวจ factory assignment ของ connected point ไม่ตรวจ `createdBy` ของ request จึงอ่าน config ที่เจ้าหน้าที่สร้างให้โรงงานที่ผู้ประกอบการได้รับมอบหมายได้
 
 ### Request Fields
@@ -480,9 +480,9 @@ Response ใช้ schema เดียวกับ [GET ของ request](#succ
 
 - Authentication: required
 - Permission: `cems_wpms_requests:edit`
-- Data scope: scope ของ permission และ region/province/owner ของ connected request ล่าสุด
+- Data scope: scope ของ permission และ พื้นที่และ factory assignment ของ connected request ล่าสุด
 - Backend ตรวจ connected request ของ `stationId` ภายใน edit scope ก่อนแทนที่ config
-- สำหรับ `OWN_FACTORY` สิทธิ์เขียนยังคงตรวจผู้สร้าง request (`createdBy`) ไม่ใช่ factory assignment; ผู้ใช้ที่ถูกมอบหมายโรงงานแต่ไม่ใช่ผู้สร้างจะอ่านได้แต่แทนที่ config ไม่ได้
+- สำหรับ `OWN_FACTORY` ผู้ใช้ที่ได้รับมอบหมายโรงงานผ่าน `user_juristics` หรือ `user_factory_access` และมี edit permission แทนที่ config ได้แม้ไม่ใช่ผู้สร้างคำขอ; ใช้ทั้ง path ปกติและ annual path โดยเก็บผู้สร้างเดิมและบันทึกผู้แก้จริง
 
 ### Request Fields
 

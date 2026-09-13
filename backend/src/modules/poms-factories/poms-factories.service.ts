@@ -232,13 +232,13 @@ export const pomsFactoriesService = {
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PomsFactoryEditRequestDTO> {
     const request = await this.getEditRequest(id, actorUserId, editScope, regionalAccess);
-    if (request.createdBy !== actorUserId) {
-      throw new ForbiddenError('Only the request owner can perform this action');
-    }
     if (!CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES.includes(request.status)) {
       throw invalidCancellationTransition(id, request.status);
     }
-    return pomsFactoriesRepository.cancelEditRequest(id, actorUserId);
+    return pomsFactoriesRepository.cancelEditRequest(id, actorUserId, {
+      scope: editScope,
+      regionalAccess,
+    });
   },
 
   async getEditRequestForm(

@@ -5469,7 +5469,36 @@ describe('connectionRequestsService', () => {
     expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('stores device config only when station belongs to an approved owner request', async () => {
+  it.each(['single', 'multiple', 'confirm'] as const)(
+    'denies request action %s outside the edit scope even for its creator',
+    async (action) => {
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+          createdBy: actorUserId,
+        }),
+      );
+      mockedRepository.canEditRequest.mockResolvedValue(false);
+      const config = {
+        stationId: 'STACK-A',
+        protocol: 'MODBUS_TCP' as const,
+        settings: { hostIp: '192.168.1.10', port: 502, slaveId: 1 },
+        channels: [],
+      };
+      const result =
+        action === 'single'
+          ? connectionRequestsService.createDeviceConfig(1, config, actorUserId)
+          : action === 'multiple'
+            ? connectionRequestsService.createDeviceConfigs(1, { configs: [config] }, actorUserId)
+            : connectionRequestsService.confirmConnection(1, {}, actorUserId);
+      await expect(result).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockedDeviceConnectionsService.createForRequest).not.toHaveBeenCalled();
+      expect(mockedDeviceConnectionsService.createManyForRequest).not.toHaveBeenCalled();
+      expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows an assigned non-creator to save request device configs', async () => {
     const deviceConfig = {
       stationId: 'STACK-A',
       protocol: 'MODBUS_TCP' as const,
@@ -5489,7 +5518,7 @@ describe('connectionRequestsService', () => {
     mockedRepository.findById.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-        createdBy: actorUserId,
+        createdBy: 99,
         measurementPoints: [
           {
             id: 1,
@@ -5672,7 +5701,7 @@ describe('connectionRequestsService', () => {
     expect(mockedDeviceConnectionsService.createForRequest).not.toHaveBeenCalled();
   });
 
-  it('stores multiple device configs in one request when every station belongs to the owner request', async () => {
+  it('stores multiple device configs in one request when every station belongs to the assigned factory request', async () => {
     const firstConfig = {
       stationId: 'STACK-A',
       deviceCode: 'STACK-A/01',
@@ -5698,7 +5727,7 @@ describe('connectionRequestsService', () => {
     mockedRepository.findById.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-        createdBy: actorUserId,
+        createdBy: 99,
         measurementPoints: [
           {
             id: 1,
@@ -5819,7 +5848,7 @@ describe('connectionRequestsService', () => {
         actorUserId,
         scope: 'OWN_FACTORY',
         regionalAccess: undefined,
-        useAssignedFactoryAccess: false,
+        useAssignedFactoryAccess: true,
       },
     );
     expect(mockedDeviceConnectionsService.replaceCurrentStation).toHaveBeenCalledWith(
@@ -5834,7 +5863,15 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('does not let an assigned non-owner replace current device configs', async () => {
+  it('allows an assigned non-creator to replace current device configs', async () => {
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        sourceMeasurementPointId: 1,
+        stationId: 'STACK-A',
+        pointCode: 'STACK-A',
+        parameters: ['NOx'],
+      }),
+    ]);
     const staffCreatedRequest = requestDto({
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
       createdBy: 7,
@@ -5877,8 +5914,8 @@ describe('connectionRequestsService', () => {
         actorUserId,
         'OWN_FACTORY',
       ),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    expect(mockedDeviceConnectionsService.replaceCurrentStation).not.toHaveBeenCalled();
+    ).resolves.toBeDefined();
+    expect(mockedDeviceConnectionsService.replaceCurrentStation).toHaveBeenCalled();
   });
 
   it('rejects current device config saves when payload stationId does not match route stationId', async () => {
@@ -5934,7 +5971,7 @@ describe('connectionRequestsService', () => {
         actorUserId,
         scope: 'OWN_FACTORY',
         regionalAccess: undefined,
-        useAssignedFactoryAccess: false,
+        useAssignedFactoryAccess: true,
       },
     );
     expect(mockedDeviceConnectionsService.create).not.toHaveBeenCalled();
@@ -6233,7 +6270,7 @@ describe('connectionRequestsService', () => {
       requestDto({
         status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
         connectionDueAt: '2026-05-01T00:00:00.000Z',
-        createdBy: actorUserId,
+        createdBy: 99,
       }),
     );
 
@@ -6251,13 +6288,13 @@ describe('connectionRequestsService', () => {
       requestDto({
         status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
         connectionDueAt: '2026-06-30T00:00:00.000Z',
-        createdBy: actorUserId,
+        createdBy: 99,
       }),
     );
     mockedRepository.updateStatus.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-        createdBy: actorUserId,
+        createdBy: 99,
       }),
     );
 
@@ -6282,13 +6319,13 @@ describe('connectionRequestsService', () => {
       requestDto({
         status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
         connectionDueAt: '2026-06-30T00:00:00.000Z',
-        createdBy: actorUserId,
+        createdBy: 99,
       }),
     );
     mockedRepository.updateStatus.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
-        createdBy: actorUserId,
+        createdBy: 99,
       }),
     );
 
@@ -6313,13 +6350,13 @@ describe('connectionRequestsService', () => {
     mockedRepository.findById.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
-        createdBy: actorUserId,
+        createdBy: 99,
       }),
     );
     mockedRepository.connect.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.CONNECTED,
-        createdBy: actorUserId,
+        createdBy: 99,
       }),
     );
 

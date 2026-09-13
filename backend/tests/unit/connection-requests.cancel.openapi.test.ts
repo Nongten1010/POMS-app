@@ -10,10 +10,12 @@ describe('published operator cancellation contract', () => {
   );
   const responses = obj(operation.responses);
 
-  it('documents owner, submission source and every allowed and terminal status', () => {
+  it('documents edit scope, submission source and every allowed and terminal status', () => {
     for (const text of [
       'cems_wpms_requests:edit',
-      'createdBy',
+      'OWN_FACTORY',
+      'user_factory_access',
+      'regionalAccess',
       'OPERATOR_FORM',
       'PENDING_DESIGN_REVIEW',
       'WAITING_FACTORY_REVISION',

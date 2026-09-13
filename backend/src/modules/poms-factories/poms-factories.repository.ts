@@ -400,7 +400,11 @@ export const pomsFactoriesRepository = {
     return row ? hydrateEditRequest(row, db) : null;
   },
 
-  async cancelEditRequest(id: number, actorUserId: number): Promise<PomsFactoryEditRequestDTO> {
+  async cancelEditRequest(
+    id: number,
+    actorUserId: number,
+    access: Pick<FactoryAccess, 'scope' | 'regionalAccess'>,
+  ): Promise<PomsFactoryEditRequestDTO> {
     return db.transaction(async (trx) => {
       const request = await trx<EditRequestRow>('poms_factory_edit_requests')
         .where('id', id)
@@ -408,8 +412,12 @@ export const pomsFactoriesRepository = {
         .forUpdate()
         .first();
       if (!request) throw new NotFoundError('POMS factory edit request not found');
-      if (Number(request.created_by) !== actorUserId) {
-        throw new ForbiddenError('Only the request owner can perform this action');
+      if (
+        !(await buildEditRequestsQuery({ ...access, actorUserId }, trx)
+          .where('req.id', id)
+          .first())
+      ) {
+        throw new ForbiddenError('POMS factory edit request is outside the edit scope');
       }
       if (!CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES.includes(request.status)) {
         throw invalidCancellationTransition(id, request.status);
@@ -1141,8 +1149,9 @@ function buildConnectedFactoryRowsQuery(
 
 function buildEditRequestsQuery(
   access: FactoryAccess,
+  connection: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<EditRequestRow, EditRequestRow[]> {
-  const builder = db<EditRequestRow>('poms_factory_edit_requests as req')
+  const builder = connection<EditRequestRow>('poms_factory_edit_requests as req')
     .innerJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'req.eligible_factory_id').andOnNull('ef.deleted_at');
     })
