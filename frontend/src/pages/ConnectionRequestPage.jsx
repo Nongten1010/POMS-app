@@ -1595,7 +1595,7 @@ function validateDocumentRows(documentsAndImages = []) {
   return errors
 }
 
-function validateParameterGroups(details = {}, instrumentParameters = [], point = {}, { isAddParameterMode = false, isOfficer = false } = {}) {
+function validateParameterGroups(details = {}, instrumentParameters = [], point = {}, { isAddParameterMode = false } = {}) {
   const errors = []
   const parameterGroupKeys = [
     ['eligibleParameters', 'พารามิเตอร์ที่เข้าข่าย'],
@@ -1622,8 +1622,7 @@ function validateParameterGroups(details = {}, instrumentParameters = [], point 
 
   const requiredParameterGroupKeys = parameterGroupKeys.filter(([key]) => (
     key !== 'timeSharingParameters'
-      && !(isAddParameterMode && ['connectedParameters', 'pendingParameters'].includes(key))
-      && !(isAddParameterMode && isOfficer && key === 'exemptedParameters')
+      && !(isAddParameterMode && ['connectedParameters', 'pendingParameters', 'exemptedParameters'].includes(key))
       && Object.prototype.hasOwnProperty.call(details, key)
   ))
   requiredParameterGroupKeys.forEach(([key, label]) => {
@@ -1825,7 +1824,7 @@ function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode
       errors.push(`กรุณากรอกรายละเอียดเครื่องมือตรวจวัดของ${pointLabel}`)
     }
     errors.push(...validateDocumentRows(point.documentsAndImages ?? []))
-    errors.push(...validateParameterGroups(details, instrumentParameters, point, { isAddParameterMode, isOfficer }))
+    errors.push(...validateParameterGroups(details, instrumentParameters, point, { isAddParameterMode }))
     errors.push(...validateMeasurementInstruments(point.measurementInstruments))
     errors.push(...validateTreatmentSystem(details))
 

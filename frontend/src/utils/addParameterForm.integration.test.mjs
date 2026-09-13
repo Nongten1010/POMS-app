@@ -44,7 +44,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
       MeasurementInstrumentSection,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
 
-    await t.test('only officer add-parameter requests may omit the five required legacy fields', () => {
+    await t.test('add-parameter exemptions are optional for both roles while production and stack requirements remain role-specific', () => {
       const payload = {
         factoryId: 'TEST', factoryName: 'Test factory', systemType: 'CEMS', latitude: 13.5, longitude: 100.5,
         contactPersons: [{ name: 'Contact', phone: '0812345678' }], notificationEmails: ['contact@example.com'],
@@ -61,8 +61,8 @@ test('add-parameter form and payload preserve live groups without affecting othe
         }],
       }
       const officerAdd = { isAddParameterMode: true, isOfficer: true }
+      const exemptionMessage = 'กรุณาเลือกพารามิเตอร์ที่ได้รับการยกเว้น'
       const requiredMessages = [
-        'กรุณาเลือกพารามิเตอร์ที่ได้รับการยกเว้น',
         'กรุณากรอกประเภทของหน่วยการผลิต', 'กรุณากรอกกำลังการผลิต',
         'กรุณากรอกหน่วยกำลังการผลิต', 'กรุณาเลือกลักษณะปล่อง',
       ]
@@ -70,7 +70,24 @@ test('add-parameter form and payload preserve live groups without affecting othe
       for (const options of [undefined, { isAddParameterMode: true, isOfficer: false }, { isAddParameterMode: false, isOfficer: true }]) {
         assert.throws(() => validateConnectionRequestPayload(payload, options), (error) => (
           requiredMessages.every((message) => error.message.includes(message))
+          && error.message.includes(exemptionMessage) === !options?.isAddParameterMode
         ))
+      }
+      const completeProduction = structuredClone(payload)
+      Object.assign(completeProduction.measurementPoints[0].details, {
+        productionUnitType: 'Boiler', productionCapacityValue: 10, productionCapacityUnit: 'MW',
+        stackShape: 'วงกลม', stackDiameter: 1,
+      })
+      for (const isOfficer of [true, false]) {
+        for (const exemptedParameters of [[], null, undefined]) {
+          const request = structuredClone(completeProduction)
+          request.measurementPoints[0].details.exemptedParameters = exemptedParameters
+          assert.doesNotThrow(() => validateConnectionRequestPayload(request, { isAddParameterMode: true, isOfficer }))
+          assert.throws(() => validateConnectionRequestPayload(request, { isOfficer }), (error) => error.message.includes(exemptionMessage))
+        }
+        const request = structuredClone(completeProduction)
+        request.measurementPoints[0].details.exemptedParameters = ['ไม่มี', 'CO (ppm)']
+        assert.throws(() => validateConnectionRequestPayload(request, { isAddParameterMode: true, isOfficer }), /ต้องเลือก "ไม่มี" เพียงตัวเดียว/)
       }
       for (const blank of ['', undefined]) {
         const request = structuredClone(payload)
