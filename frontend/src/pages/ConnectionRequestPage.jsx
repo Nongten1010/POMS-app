@@ -217,7 +217,7 @@ const measurementInstrumentColumns = [
   'ช่วงการตรวจวัด',
   'ยี่ห้อเครื่องมือ',
   'ผู้จำหน่ายเครื่องมือ',
-  'มาตรฐาน EIA',
+  'มาตรฐาน IEE/EIA/HEIA',
   'สภาวะมาตรฐาน',
   'การรายงานค่า (Dry basis)',
   'O₂ @ 7% or Excess Air 50%',
@@ -6360,7 +6360,7 @@ function InstrumentDataDialog({ open, value, onClose, onSave, isWpms = false }) 
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <StandardCriteriaSection
-                label="พารามิเตอร์ไม่มีค่ามาตรฐาน ตาม EIA"
+                label="พารามิเตอร์ไม่มีค่ามาตรฐาน IEE / EIA / HEIA"
                 value={form.eiaCriteria}
                 onChange={(nextValue) => updateForm('eiaCriteria', nextValue)}
               />

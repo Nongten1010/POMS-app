@@ -1639,7 +1639,7 @@ function renderInstrumentTable(layout, parameters, isWpms) {
         { label: 'ช่วงการวัด', width: 68 },
         { label: 'ยี่ห้อเครื่องมือ', width: 76 },
         { label: 'ผู้จำหน่ายเครื่องมือ', width: 82 },
-        { label: 'มาตรฐาน EIA', width: 66 },
+        { label: 'มาตรฐาน\nIEE/EIA/HEIA', width: 66 },
       ]
     : [
         { label: 'พารามิเตอร์\nที่ขอเชื่อมต่อ', width: 86 },
@@ -1647,7 +1647,7 @@ function renderInstrumentTable(layout, parameters, isWpms) {
         { label: 'ช่วงการวัด', width: 46 },
         { label: 'ยี่ห้อเครื่องมือ', width: 66 },
         { label: 'ผู้จำหน่ายเครื่องมือ', width: 68 },
-        { label: 'มาตรฐาน\nEIA', width: 50 },
+        { label: 'มาตรฐาน\nIEE/EIA/\nHEIA', width: 50 },
         { label: 'สภาวะ\nมาตรฐาน', width: 52 },
         { label: 'สภาวะแห้ง\n(Dry basis)', width: 58 },
         { label: 'O2 @ 7 %\nor Excess\nAir 50 %', width: 50 },

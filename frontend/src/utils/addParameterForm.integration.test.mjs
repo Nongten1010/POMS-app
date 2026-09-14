@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
+import fontkit from '@pdf-lib/fontkit'
 
 function hiddenValues(html, name) {
   const input = html.match(new RegExp(`<input[^>]*name="${name}"[^>]*>`))?.[0]
@@ -31,6 +32,9 @@ test('add-parameter form and payload preserve live groups without affecting othe
       name: 'add-parameter-test-exports',
       enforce: 'pre',
       transform(code, id) {
+        if (id.endsWith('/src/utils/connectionRequestPdf.js')) {
+          return `${code}\nexport { renderInstrumentTable };`
+        }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
           return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed };`
         }
@@ -44,6 +48,28 @@ test('add-parameter form and payload preserve live groups without affecting othe
       MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow,
       OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('PDF instrument headers use IEE/EIA/HEIA and fit both CEMS and WPMS columns', async () => {
+      const { renderInstrumentTable } = await server.ssrLoadModule('/src/utils/connectionRequestPdf.js')
+      const font = fontkit.create(await readFile(new URL('../assets/fonts/THSarabunNew-Bold.ttf', import.meta.url)))
+      for (const isWpms of [false, true]) {
+        let rendered = false
+        renderInstrumentTable({
+          cemsInstrumentTable(columns, rows, options) {
+            rendered = true
+            const column = columns[5]
+            assert.equal(column.label.replaceAll('\n', ''), 'มาตรฐานIEE/EIA/HEIA')
+            for (const line of column.label.split('\n')) {
+              const width = font.layout(line).glyphs.reduce((sum, glyph) => sum + glyph.advanceWidth, 0)
+                / font.unitsPerEm * options.headerFontSize
+              assert.ok(width <= column.width - 8, `${line} must fit the header cell`)
+            }
+            assert.equal(rows[0][5], '120')
+          },
+        }, [{ parameter: 'CO (ppm)', eiaStandard: '120' }], isWpms)
+        assert.equal(rendered, true)
+      }
+    })
 
     await t.test('officer processing prioritizes statusCode over display labels and still requires permission', () => {
       const row = {
@@ -311,6 +337,8 @@ test('add-parameter form and payload preserve live groups without affecting othe
           rows: instruments, setRows: () => {}, isWpms: systemType === 'WPMS', readOnlyParameters,
         }))
         const table = section([connected])
+        assert.ok(table.includes('มาตรฐาน IEE/EIA/HEIA'))
+        assert.ok(!table.includes('มาตรฐาน EIA'))
         const tableRows = table.match(/<tr\b[\s\S]*?<\/tr>/g)
         assert.ok(!tableRows.find((row) => row.includes('Saved brand')).includes('จัดการข้อมูล'))
         assert.ok(tableRows.find((row) => row.includes(additional)).includes('จัดการข้อมูล'))
