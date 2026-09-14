@@ -3,18 +3,45 @@ import { AppError } from '../../src/shared/errors/AppError';
 import { lawIdParamsSchema, parseLawInput } from '../../src/modules/laws/laws.validator';
 
 describe('laws validator', () => {
+  it.each([
+    'MINISTERIAL_REGULATION',
+    'MINISTRY_ANNOUNCEMENT',
+    'DEPARTMENT_ANNOUNCEMENT',
+    'REGULATION_REQUIREMENT',
+    'OTHER',
+  ])('accepts the current document type %s', (type) => {
+    expect(
+      parseLawInput({ title: 'ทดสอบ', category: 'CEMS', type, publishedDate: '2026-09-14' }).type,
+    ).toBe(type);
+  });
+
+  it.each(['RULE_AND_ANNOUNCEMENT', 'ACT', '', 'ministry_announcement'])(
+    'rejects a legacy or invalid write type %s',
+    (type) => {
+      expect(() =>
+        parseLawInput({ title: 'ทดสอบ', category: 'CEMS', type, publishedDate: '2026-09-14' }),
+      ).toThrow(
+        expect.objectContaining({
+          statusCode: 400,
+          code: 'VALIDATION_ERROR',
+          details: { type: expect.any(String) },
+        }),
+      );
+    },
+  );
+
   it('normalizes a complete law payload', () => {
     expect(
       parseLawInput({
         title: '  ประกาศกรมโรงงานอุตสาหกรรม  ',
         category: 'CEMS',
-        type: 'RULE_AND_ANNOUNCEMENT',
+        type: 'DEPARTMENT_ANNOUNCEMENT',
         publishedDate: '2026-09-04',
       }),
     ).toEqual({
       title: 'ประกาศกรมโรงงานอุตสาหกรรม',
       category: 'CEMS',
-      type: 'RULE_AND_ANNOUNCEMENT',
+      type: 'DEPARTMENT_ANNOUNCEMENT',
       publishedDate: '2026-09-04',
     });
   });

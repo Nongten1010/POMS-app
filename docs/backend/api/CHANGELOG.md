@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+<a id="law-document-types"></a>
+
+## 2026-09-14 — แยกประเภทประกาศในเมนูกฎหมาย
+
+- **Affected canonical docs:** [กฎหมายที่เกี่ยวข้อง](./menus/laws/README.md#type)
+- **Impact:** `POST /api/v1/laws` และ `PUT /api/v1/laws/:id` รับ 5 ประเภทตามตาราง canonical โดยเพิ่ม `MINISTRY_ANNOUNCEMENT` และ `DEPARTMENT_ANNOUNCEMENT` และเลิกรับ `RULE_AND_ANNOUNCEMENT` (ตอบ `400 VALIDATION_ERROR` พร้อม `error.details.type`); `GET` ยังอ่านประเภทเดิมและ label เดิมได้ ส่วน `MINISTERIAL_REGULATION` ใช้ label `กฎกระทรวงอุตสาหกรรม`
+- **Migration:** frontend ใช้ตัวเลือกและลำดับตาม canonical ส่ง `type` ใหม่ผ่าน multipart เดิม เมื่อแก้รายการประเภทเก่าให้ผู้ใช้เลือกประเภทใหม่ก่อนบันทึก ไม่จับคู่สองประกาศอัตโนมัติ; ใช้ migration `0120_expand_law_document_types.ts` ก่อนเปิดใช้ backend และตรวจ runtime OpenAPI หลัง deploy ไม่มีการย้ายประเภทข้อมูลเดิม; rollback หยุดหากยังมีแถวประเภทใหม่รวมถึง soft-delete
+- **Breaking change:** yes — client ที่ส่ง `RULE_AND_ANNOUNCEMENT` ต้องเปลี่ยนก่อนบันทึก
+
 <a id="eligible-factory-registration-numbers"></a>
 
 ## 2026-09-14 — แก้เลขทะเบียนเมื่อเลือกโรงงานเข้าข่าย

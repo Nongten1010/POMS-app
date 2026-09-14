@@ -26,7 +26,7 @@ curl --request POST \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --form 'title=ประกาศกรมโรงงานอุตสาหกรรม เรื่อง การทวนสอบระบบ CEMS' \
   --form 'category=CEMS' \
-  --form 'type=RULE_AND_ANNOUNCEMENT' \
+  --form 'type=DEPARTMENT_ANNOUNCEMENT' \
   --form 'publishedDate=2025-07-09' \
   --form 'file=@./announcement.pdf;type=application/pdf'
 ```
@@ -53,12 +53,19 @@ curl --request POST \
 
 ### `type`
 
-| Value | `typeLabel` |
-| --- | --- |
-| `MINISTERIAL_REGULATION` | `กฎกระทรวง` |
-| `RULE_AND_ANNOUNCEMENT` | `กฎและประกาศ` |
-| `REGULATION_REQUIREMENT` | `ระเบียบ ข้อบังคับ และข้อกำหนด` |
-| `OTHER` | `อื่นๆ` |
+ตัวเลือกสำหรับเพิ่มและแก้ไขเรียงตามลำดับนี้ (`LawInputType` ใน OpenAPI):
+
+| ลำดับ | Value | `typeLabel` |
+| --- | --- | --- |
+| 1 | `MINISTERIAL_REGULATION` | `กฎกระทรวงอุตสาหกรรม` |
+| 2 | `MINISTRY_ANNOUNCEMENT` | `ประกาศกระทรวงอุตสาหกรรม` |
+| 3 | `DEPARTMENT_ANNOUNCEMENT` | `ประกาศกรมโรงงานอุตสาหกรรม` |
+| 4 | `REGULATION_REQUIREMENT` | `ระเบียบ ข้อบังคับ และข้อกำหนด` |
+| 5 | `OTHER` | `อื่นๆ` |
+
+ข้อมูลเดิมยังคืน `type: RULE_AND_ANNOUNCEMENT` และ `typeLabel: กฎและประกาศ` ได้ใน `GET`; `LawType` สำหรับ response จึงรวมค่านี้ด้วย แต่ `POST` และ `PUT` ไม่รับค่านี้และตอบ `400 VALIDATION_ERROR` พร้อม `error.details.type` ผู้ใช้ต้องเลือกหนึ่งใน 5 ประเภทก่อนบันทึก แม้แก้เฉพาะชื่อหรือไฟล์ ไม่มีการจับคู่หรือย้ายข้อมูลเก่าอัตโนมัติ
+
+`MINISTERIAL_REGULATION` คงค่าเดิม แต่ label เปลี่ยนเป็น `กฎกระทรวงอุตสาหกรรม` การเรียงตัวเลือกข้างต้นไม่เปลี่ยนลำดับรายการที่ `GET` คืน ดู [ผลกระทบและขั้นตอนปรับ client](../../CHANGELOG.md#law-document-types)
 
 ## Response DTO
 
@@ -70,7 +77,7 @@ curl --request POST \
 | `title` | string | No | ชื่อกฎหมาย 1-500 ตัวอักษรหลัง trim |
 | `category` | enum | No | ค่า machine-stable ตามตาราง `category` |
 | `categoryLabel` | string | No | label สำหรับแสดงผล |
-| `type` | enum | No | ค่า machine-stable ตามตาราง `type` |
+| `type` | enum | No | ค่า machine-stable ตามตาราง `type` หรือ `RULE_AND_ANNOUNCEMENT` สำหรับข้อมูลเดิม |
 | `typeLabel` | string | No | label ภาษาไทยสำหรับแสดงผล |
 | `publishedDate` | string (`YYYY-MM-DD`) | No | วันประกาศ ค.ศ. ช่วง `1900-01-01` ถึง `9999-12-31` |
 | `file.fileName` | string | No | ชื่อไฟล์เดิม สูงสุด 255 ตัวอักษร |
@@ -98,8 +105,8 @@ curl --request POST \
       "title": "ประกาศกรมโรงงานอุตสาหกรรม เรื่อง การทวนสอบระบบ CEMS",
       "category": "CEMS",
       "categoryLabel": "CEMS",
-      "type": "RULE_AND_ANNOUNCEMENT",
-      "typeLabel": "กฎและประกาศ",
+      "type": "DEPARTMENT_ANNOUNCEMENT",
+      "typeLabel": "ประกาศกรมโรงงานอุตสาหกรรม",
       "publishedDate": "2025-07-09",
       "file": {
         "fileName": "announcement.pdf",
@@ -137,7 +144,7 @@ Frontend เป็นผู้กรอง `category` และเรียง `
 {
   "title": "ประกาศกรมโรงงานอุตสาหกรรม เรื่อง การทวนสอบระบบ CEMS",
   "category": "CEMS",
-  "type": "RULE_AND_ANNOUNCEMENT",
+  "type": "DEPARTMENT_ANNOUNCEMENT",
   "publishedDate": "2025-07-09",
   "file": "<binary PDF>"
 }
@@ -151,8 +158,8 @@ Frontend เป็นผู้กรอง `category` และเรียง `
     "title": "ประกาศกรมโรงงานอุตสาหกรรม เรื่อง การทวนสอบระบบ CEMS",
     "category": "CEMS",
     "categoryLabel": "CEMS",
-    "type": "RULE_AND_ANNOUNCEMENT",
-    "typeLabel": "กฎและประกาศ",
+    "type": "DEPARTMENT_ANNOUNCEMENT",
+    "typeLabel": "ประกาศกรมโรงงานอุตสาหกรรม",
     "publishedDate": "2025-07-09",
     "file": {
       "fileName": "announcement.pdf",
@@ -178,7 +185,7 @@ Frontend เป็นผู้กรอง `category` และเรียง `
 | `id` | path | UUID string | Yes | public identifier ของรายการ |
 | `title` | form | string | Yes | full replacement, trim แล้ว 1-500 ตัวอักษร |
 | `category` | form | enum | Yes | full replacement |
-| `type` | form | enum | Yes | full replacement |
+| `type` | form | enum | Yes | full replacement; หนึ่งใน 5 ค่าตามตาราง `type` เท่านั้น |
 | `publishedDate` | form | string | Yes | วันจริงรูป `YYYY-MM-DD` |
 | `file` | form | binary | No | เมื่อไม่ส่งจะเก็บไฟล์เดิม; เมื่อส่งใช้กติกา PDF เดียวกับ create |
 
@@ -186,7 +193,7 @@ Frontend เป็นผู้กรอง `category` และเรียง `
 {
   "title": "ประกาศฉบับแก้ไข เรื่อง การทวนสอบระบบ CEMS",
   "category": "CEMS",
-  "type": "RULE_AND_ANNOUNCEMENT",
+  "type": "DEPARTMENT_ANNOUNCEMENT",
   "publishedDate": "2026-09-04"
 }
 ```
@@ -199,8 +206,8 @@ Frontend เป็นผู้กรอง `category` และเรียง `
     "title": "ประกาศฉบับแก้ไข เรื่อง การทวนสอบระบบ CEMS",
     "category": "CEMS",
     "categoryLabel": "CEMS",
-    "type": "RULE_AND_ANNOUNCEMENT",
-    "typeLabel": "กฎและประกาศ",
+    "type": "DEPARTMENT_ANNOUNCEMENT",
+    "typeLabel": "ประกาศกรมโรงงานอุตสาหกรรม",
     "publishedDate": "2026-09-04",
     "file": {
       "fileName": "announcement.pdf",
@@ -296,6 +303,12 @@ Response `200 OK` เป็น binary PDF ไม่ใช่ JSON:
 - [API กลางและ shared envelope](../../shared/common-api/README.md)
 - [Endpoint registry](../../ENDPOINTS.md)
 
+## การนำขึ้นระบบ
+
+ต้องใช้ migration [`0120_expand_law_document_types.ts`](../../../../../backend/src/db/migrations/0120_expand_law_document_types.ts) ก่อนเปิดใช้งาน backend รุ่นนี้ เพื่อขยาย CHECK constraint ให้บันทึกประกาศทั้งสองประเภทได้ โดยยังเก็บประเภทเดิมไว้ ไม่มีการแก้ record เดิม การ rollback จะหยุดหากพบประเภทใหม่ในแถวใดก็ตามรวมถึงแถว soft-delete; ให้ใช้ forward migration ตามการจัดประเภทที่ได้รับอนุมัติแทนการเดาค่า
+
+หลัง deploy ตรวจ `/api/v1/openapi.json` ว่า `LawInputType` มี 5 ค่าตามลำดับ และ `LawType` รวมประเภทเดิมด้วย
+
 ## Backend Maintainer Map
 
 | Concern | Canonical source |
@@ -309,5 +322,6 @@ Response `200 OK` เป็น binary PDF ไม่ใช่ JSON:
 | Private file storage | [`laws-file-storage.ts`](../../../../../backend/src/modules/laws/laws-file-storage.ts) |
 | Migration | [`0108_create_laws_and_faqs.ts`](../../../../../backend/src/db/migrations/0108_create_laws_and_faqs.ts) |
 | Runtime tests | [`laws.validator.test.ts`](../../../../../backend/tests/unit/laws.validator.test.ts), [`laws.file-storage.test.ts`](../../../../../backend/tests/unit/laws.file-storage.test.ts), [`laws.repository.test.ts`](../../../../../backend/tests/unit/laws.repository.test.ts), [`laws.service.test.ts`](../../../../../backend/tests/unit/laws.service.test.ts), [`laws.routes.test.ts`](../../../../../backend/tests/unit/laws.routes.test.ts) |
+| Type migration test | [`laws-document-types-migration.test.ts`](../../../../../backend/tests/unit/laws-document-types-migration.test.ts) |
 | Contract test | [`laws-faqs.openapi.test.ts`](../../../../../backend/tests/unit/laws-faqs.openapi.test.ts) |
 | OpenAPI source | [`poms.openapi.ts`](../../../../../backend/src/modules/api-docs/poms.openapi.ts) |

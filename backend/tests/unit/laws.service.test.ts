@@ -49,6 +49,46 @@ describe('law service', () => {
     });
   });
 
+  it.each([
+    ['MINISTERIAL_REGULATION', 'กฎกระทรวงอุตสาหกรรม'],
+    ['MINISTRY_ANNOUNCEMENT', 'ประกาศกระทรวงอุตสาหกรรม'],
+    ['DEPARTMENT_ANNOUNCEMENT', 'ประกาศกรมโรงงานอุตสาหกรรม'],
+    ['REGULATION_REQUIREMENT', 'ระเบียบ ข้อบังคับ และข้อกำหนด'],
+    ['OTHER', 'อื่นๆ'],
+  ] as const)(
+    'preserves %s and returns its display label on list/create/update',
+    async (type, typeLabel) => {
+      const previous = lawRecord();
+      const current = lawRecord({ type });
+      const create = jest.fn<LawRepository['create']>(async () => current);
+      const update = jest.fn<LawRepository['update']>(async () => ({ previous, current }));
+      const service = new LawService(
+        repositoryStub({
+          list: async () => [current],
+          findById: async () => previous,
+          create,
+          update,
+        }),
+        storageStub(),
+      );
+
+      await expect(service.list()).resolves.toEqual([expect.objectContaining({ type, typeLabel })]);
+      await expect(
+        service.create({ ...lawInput(), type }, uploadedPdf(), 7),
+      ).resolves.toMatchObject({ type, typeLabel });
+      await expect(
+        service.update(LAW_ID, { ...lawInput(), type }, undefined, 7),
+      ).resolves.toMatchObject({ type, typeLabel });
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({ type }), 7);
+      expect(update).toHaveBeenCalledWith(
+        LAW_ID,
+        expect.objectContaining({ type, file: undefined }),
+        7,
+      );
+      expect(previous.type).toBe('RULE_AND_ANNOUNCEMENT');
+    },
+  );
+
   it('stores and returns a newly created law', async () => {
     const create = jest.fn<LawRepository['create']>(async () => lawRecord());
     const save = jest.fn<LawFileStorage['save']>(async () => storedFile());
@@ -219,7 +259,7 @@ function lawInput() {
   return {
     title: 'ประกาศทดสอบ',
     category: 'CEMS' as const,
-    type: 'RULE_AND_ANNOUNCEMENT' as const,
+    type: 'DEPARTMENT_ANNOUNCEMENT' as const,
     publishedDate: '2026-09-04',
   };
 }

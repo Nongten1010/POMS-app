@@ -14,6 +14,7 @@ import {
 import { BOD_COD_DEVIATION_REPORT_STATUSES } from '../bod-cod-deviations/bod-cod-deviation-reports.types';
 import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
 import { KWP_FORM_STATUSES, KWP_FORM_TYPES } from '../kwp-form-reports/kwp-form-reports.types';
+import { LAW_TYPES, LAW_TYPE_LABELS } from '../laws/laws.types';
 import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-point-forms.types';
 import {
   EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES,
@@ -891,8 +892,8 @@ const lawExample = {
   title: 'ประกาศกรมโรงงานอุตสาหกรรม เรื่อง การทวนสอบและสอบเทียบระบบ CEMS',
   category: 'CEMS',
   categoryLabel: 'CEMS',
-  type: 'RULE_AND_ANNOUNCEMENT',
-  typeLabel: 'กฎและประกาศ',
+  type: 'DEPARTMENT_ANNOUNCEMENT',
+  typeLabel: 'ประกาศกรมโรงงานอุตสาหกรรม',
   publishedDate: '2025-07-09',
   file: {
     fileName: 'cems-calibration-announcement.pdf',
@@ -975,7 +976,7 @@ const faqValidationErrorExample = {
 const lawRequestProperties: Record<string, OpenApiObject> = {
   title: { type: 'string', minLength: 1, maxLength: 500 },
   category: schemaRef('LawCategory'),
-  type: schemaRef('LawType'),
+  type: schemaRef('LawInputType'),
   publishedDate: {
     type: 'string',
     format: 'date',
@@ -1152,13 +1153,17 @@ const componentSchemas: Record<string, OpenApiObject> = {
   },
   LawType: {
     type: 'string',
-    enum: ['MINISTERIAL_REGULATION', 'RULE_AND_ANNOUNCEMENT', 'REGULATION_REQUIREMENT', 'OTHER'],
-    'x-enum-labels': {
-      MINISTERIAL_REGULATION: 'กฎกระทรวง',
-      RULE_AND_ANNOUNCEMENT: 'กฎและประกาศ',
-      REGULATION_REQUIREMENT: 'ระเบียบ ข้อบังคับ และข้อกำหนด',
-      OTHER: 'อื่นๆ',
-    },
+    enum: [...LAW_TYPES, 'RULE_AND_ANNOUNCEMENT'],
+    description:
+      'ประเภทใน response; RULE_AND_ANNOUNCEMENT ใช้อ่านข้อมูลเดิมเท่านั้น ไม่เปลี่ยนประเภทอัตโนมัติ',
+    'x-enum-labels': LAW_TYPE_LABELS,
+  },
+  LawInputType: {
+    type: 'string',
+    enum: [...LAW_TYPES],
+    description:
+      'ตัวเลือกตามลำดับสำหรับ POST/PUT; ไม่รับ RULE_AND_ANNOUNCEMENT (400 VALIDATION_ERROR, error.details.type) เมื่อแก้ไขรายการเดิมต้องเลือกหนึ่งใน 5 ค่านี้',
+    'x-enum-labels': Object.fromEntries(LAW_TYPES.map((type) => [type, LAW_TYPE_LABELS[type]])),
   },
   LawFile: {
     type: 'object',
@@ -1204,7 +1209,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       type: schemaRef('LawType'),
       typeLabel: {
         type: 'string',
-        enum: ['กฎกระทรวง', 'กฎและประกาศ', 'ระเบียบ ข้อบังคับ และข้อกำหนด', 'อื่นๆ'],
+        enum: Object.values(LAW_TYPE_LABELS),
       },
       publishedDate: lawRequestProperties.publishedDate,
       file: schemaRef('LawFile'),

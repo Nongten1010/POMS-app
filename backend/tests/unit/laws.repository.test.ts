@@ -52,16 +52,16 @@ describe('laws repository', () => {
 
   it('generates a UUID and persists the exact migration column names on create', async () => {
     const insertQuery = mutationQuery();
-    const findQuery = selectQuery({ first: lawRow() });
+    const findQuery = selectQuery({ first: lawRow({ document_type: 'DEPARTMENT_ANNOUNCEMENT' }) });
     const transaction = sequentialExecutor([insertQuery, findQuery]);
     const database = transactionalDatabase(transaction);
     const repository = createLawsRepository(database, () => LAW_ID);
 
-    await repository.create(
+    const created = await repository.create(
       {
         title: 'ประกาศทดสอบ',
         category: 'CEMS',
-        type: 'RULE_AND_ANNOUNCEMENT',
+        type: 'DEPARTMENT_ANNOUNCEMENT',
         publishedDate: '2026-09-04',
         file: {
           fileName: 'law.pdf',
@@ -77,7 +77,7 @@ describe('laws repository', () => {
       public_id: LAW_ID,
       title: 'ประกาศทดสอบ',
       category: 'CEMS',
-      document_type: 'RULE_AND_ANNOUNCEMENT',
+      document_type: 'DEPARTMENT_ANNOUNCEMENT',
       published_date: '2026-09-04',
       original_file_name: 'law.pdf',
       mime_type: 'application/pdf',
@@ -87,6 +87,7 @@ describe('laws repository', () => {
       updated_by: 42,
     });
     expect(findQuery.where).toHaveBeenCalledWith('public_id', LAW_ID);
+    expect(created.type).toBe('DEPARTMENT_ANNOUNCEMENT');
   });
 
   it('updates audit ownership and replaces file columns only when supplied', async () => {
@@ -137,22 +138,27 @@ describe('laws repository', () => {
   it('preserves file columns for a metadata-only update', async () => {
     const previous = selectQuery({ first: lawRow() });
     const update = mutationQuery({ affected: 1 });
-    const current = selectQuery({ first: lawRow({ title: 'ประกาศแก้ไข' }) });
+    const current = selectQuery({
+      first: lawRow({ title: 'ประกาศแก้ไข', document_type: 'DEPARTMENT_ANNOUNCEMENT' }),
+    });
     const transaction = sequentialExecutor([previous, update, current]);
     const repository = createLawsRepository(transactionalDatabase(transaction));
 
-    await repository.update(
+    const result = await repository.update(
       LAW_ID,
       {
         title: 'ประกาศแก้ไข',
         category: 'CEMS',
-        type: 'RULE_AND_ANNOUNCEMENT',
+        type: 'DEPARTMENT_ANNOUNCEMENT',
         publishedDate: '2026-09-04',
       },
       77,
     );
 
     const changes = update.update.mock.calls[0][0] as Record<string, unknown>;
+    expect(changes.document_type).toBe('DEPARTMENT_ANNOUNCEMENT');
+    expect(result?.previous.type).toBe('RULE_AND_ANNOUNCEMENT');
+    expect(result?.current.type).toBe('DEPARTMENT_ANNOUNCEMENT');
     expect(changes).not.toHaveProperty('original_file_name');
     expect(changes).not.toHaveProperty('mime_type');
     expect(changes).not.toHaveProperty('file_size');

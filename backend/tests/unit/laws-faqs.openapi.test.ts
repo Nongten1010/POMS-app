@@ -128,9 +128,39 @@ describe('laws and FAQs OpenAPI contract', () => {
     expect(asObject(schemas().LawCategory, 'LawCategory').enum).toEqual(['CEMS', 'WPMS', 'OTHER']);
     expect(asObject(schemas().LawType, 'LawType').enum).toEqual([
       'MINISTERIAL_REGULATION',
-      'RULE_AND_ANNOUNCEMENT',
+      'MINISTRY_ANNOUNCEMENT',
+      'DEPARTMENT_ANNOUNCEMENT',
       'REGULATION_REQUIREMENT',
       'OTHER',
+      'RULE_AND_ANNOUNCEMENT',
+    ]);
+    expect(asObject(schemas().LawInputType, 'LawInputType').enum).toEqual([
+      'MINISTERIAL_REGULATION',
+      'MINISTRY_ANNOUNCEMENT',
+      'DEPARTMENT_ANNOUNCEMENT',
+      'REGULATION_REQUIREMENT',
+      'OTHER',
+    ]);
+    expect(asObject(schemas().LawInputType, 'LawInputType')['x-enum-labels']).toEqual({
+      MINISTERIAL_REGULATION: 'กฎกระทรวงอุตสาหกรรม',
+      MINISTRY_ANNOUNCEMENT: 'ประกาศกระทรวงอุตสาหกรรม',
+      DEPARTMENT_ANNOUNCEMENT: 'ประกาศกรมโรงงานอุตสาหกรรม',
+      REGULATION_REQUIREMENT: 'ระเบียบ ข้อบังคับ และข้อกำหนด',
+      OTHER: 'อื่นๆ',
+    });
+    expect(schemaProperties('CreateLawRequest').type).toEqual({
+      $ref: '#/components/schemas/LawInputType',
+    });
+    expect(schemaProperties('UpdateLawRequest').type).toEqual({
+      $ref: '#/components/schemas/LawInputType',
+    });
+    expect(asObject(schemaProperties('Law').typeLabel, 'typeLabel').enum).toEqual([
+      'กฎกระทรวงอุตสาหกรรม',
+      'ประกาศกระทรวงอุตสาหกรรม',
+      'ประกาศกรมโรงงานอุตสาหกรรม',
+      'ระเบียบ ข้อบังคับ และข้อกำหนด',
+      'อื่นๆ',
+      'กฎและประกาศ',
     ]);
 
     const law = asObject(schemas().Law, 'Law');

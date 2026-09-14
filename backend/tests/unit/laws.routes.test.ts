@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { createLawsController } from '../../src/modules/laws/laws.controller';
 import { createLawsRoutes } from '../../src/modules/laws/laws.routes';
 import type { LawServiceContract } from '../../src/modules/laws/laws.service';
-import type { LawDTO } from '../../src/modules/laws/laws.types';
+import { LAW_TYPE_LABELS, type LawDTO } from '../../src/modules/laws/laws.types';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
@@ -69,59 +69,69 @@ describe('law routes', () => {
     expect(forbidden.status).toBe(403);
   });
 
-  it('creates a law from four multipart fields and one PDF', async () => {
-    const file = pdfBuffer();
-    const response = await request(testApp(service))
-      .post('/laws')
-      .set('Authorization', `Bearer ${accessToken()}`)
-      .field('title', 'ประกาศทดสอบ')
-      .field('category', 'CEMS')
-      .field('type', 'RULE_AND_ANNOUNCEMENT')
-      .field('publishedDate', '2026-09-04')
-      .attach('file', file, { filename: 'law.pdf', contentType: 'application/pdf' });
+  it.each(['MINISTRY_ANNOUNCEMENT', 'DEPARTMENT_ANNOUNCEMENT'] as const)(
+    'creates %s from multipart fields and a PDF',
+    async (type) => {
+      const created = lawDto({ type, typeLabel: LAW_TYPE_LABELS[type] });
+      service.create.mockResolvedValue(created);
+      const file = pdfBuffer();
+      const response = await request(testApp(service))
+        .post('/laws')
+        .set('Authorization', `Bearer ${accessToken()}`)
+        .field('title', 'ประกาศทดสอบ')
+        .field('category', 'CEMS')
+        .field('type', type)
+        .field('publishedDate', '2026-09-04')
+        .attach('file', file, { filename: 'law.pdf', contentType: 'application/pdf' });
 
-    expect(response.status).toBe(201);
-    expect(response.headers.location).toBe(`/laws/${LAW_ID}`);
-    expect(response.body).toEqual({ success: true, data: lawDto() });
-    expect(service.create).toHaveBeenCalledWith(
-      {
-        title: 'ประกาศทดสอบ',
-        category: 'CEMS',
-        type: 'RULE_AND_ANNOUNCEMENT',
-        publishedDate: '2026-09-04',
-      },
-      expect.objectContaining({
-        buffer: file,
-        originalName: 'law.pdf',
-        mimeType: 'application/pdf',
-        size: file.length,
-      }),
-      7,
-    );
-  });
+      expect(response.status).toBe(201);
+      expect(response.headers.location).toBe(`/laws/${LAW_ID}`);
+      expect(response.body).toEqual({ success: true, data: created });
+      expect(service.create).toHaveBeenCalledWith(
+        {
+          title: 'ประกาศทดสอบ',
+          category: 'CEMS',
+          type,
+          publishedDate: '2026-09-04',
+        },
+        expect.objectContaining({
+          buffer: file,
+          originalName: 'law.pdf',
+          mimeType: 'application/pdf',
+          size: file.length,
+        }),
+        7,
+      );
+    },
+  );
 
-  it('updates all metadata fields without requiring a replacement PDF', async () => {
-    const response = await request(testApp(service))
-      .put(`/laws/${LAW_ID}`)
-      .set('Authorization', `Bearer ${accessToken()}`)
-      .field('title', 'ประกาศแก้ไข')
-      .field('category', 'WPMS')
-      .field('type', 'OTHER')
-      .field('publishedDate', '2026-09-05');
+  it.each(['MINISTRY_ANNOUNCEMENT', 'DEPARTMENT_ANNOUNCEMENT'] as const)(
+    'updates to %s without requiring a replacement PDF',
+    async (type) => {
+      service.update.mockResolvedValue(lawDto({ type, typeLabel: LAW_TYPE_LABELS[type] }));
+      const response = await request(testApp(service))
+        .put(`/laws/${LAW_ID}`)
+        .set('Authorization', `Bearer ${accessToken()}`)
+        .field('title', 'ประกาศแก้ไข')
+        .field('category', 'WPMS')
+        .field('type', type)
+        .field('publishedDate', '2026-09-05');
 
-    expect(response.status).toBe(200);
-    expect(service.update).toHaveBeenCalledWith(
-      LAW_ID,
-      {
-        title: 'ประกาศแก้ไข',
-        category: 'WPMS',
-        type: 'OTHER',
-        publishedDate: '2026-09-05',
-      },
-      undefined,
-      7,
-    );
-  });
+      expect(response.status).toBe(200);
+      expect(response.body.data).toMatchObject({ type, typeLabel: LAW_TYPE_LABELS[type] });
+      expect(service.update).toHaveBeenCalledWith(
+        LAW_ID,
+        {
+          title: 'ประกาศแก้ไข',
+          category: 'WPMS',
+          type,
+          publishedDate: '2026-09-05',
+        },
+        undefined,
+        7,
+      );
+    },
+  );
 
   it('returns field-addressable validation errors', async () => {
     const response = await request(testApp(service))
@@ -148,13 +158,35 @@ describe('law routes', () => {
     });
   });
 
+  it.each(['post', 'put'] as const)(
+    'rejects the legacy type on %s before calling the service',
+    async (method) => {
+      const response = await request(testApp(service))
+        [method](method === 'post' ? '/laws' : `/laws/${LAW_ID}`)
+        .set('Authorization', `Bearer ${accessToken()}`)
+        .field('title', 'ประกาศทดสอบ')
+        .field('category', 'CEMS')
+        .field('type', 'RULE_AND_ANNOUNCEMENT')
+        .field('publishedDate', '2026-09-14')
+        .attach('file', pdfBuffer(), { filename: 'law.pdf', contentType: 'application/pdf' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', details: { type: expect.any(String) } },
+      });
+      expect(service.create).not.toHaveBeenCalled();
+      expect(service.update).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects a non-PDF MIME type before buffering it into the service', async () => {
     const response = await request(testApp(service))
       .post('/laws')
       .set('Authorization', `Bearer ${accessToken()}`)
       .field('title', 'ประกาศทดสอบ')
       .field('category', 'CEMS')
-      .field('type', 'RULE_AND_ANNOUNCEMENT')
+      .field('type', 'DEPARTMENT_ANNOUNCEMENT')
       .field('publishedDate', '2026-09-04')
       .attach('file', Buffer.from('plain text'), {
         filename: 'law.txt',

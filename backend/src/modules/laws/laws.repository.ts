@@ -6,7 +6,7 @@ import type {
   LawCategory,
   LawRecord,
   LawRepository,
-  LawType,
+  LawRecordType,
   UpdateLawRecordInput,
 } from './laws.types';
 
@@ -16,7 +16,7 @@ interface LawRow {
   public_id: string;
   title: string;
   category: LawCategory;
-  document_type: LawType;
+  document_type: LawRecordType;
   published_date: Date | string;
   original_file_name: string;
   mime_type: 'application/pdf';
