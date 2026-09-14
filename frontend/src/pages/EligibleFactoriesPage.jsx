@@ -80,7 +80,7 @@ const subMenus = [
 
 const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.label)
 const wpmsParameterOptions = wpmsParameterOptionItems.map((option) => option.label)
-const legalAnnexOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
+const legalAnnexOptions = Array.from({ length: 13 }, (_, index) => String(index + 1))
 const parameterNoneOption = 'ไม่มี'
 const maxUploadFileSizeBytes = 10 * 1024 * 1024
 const allowedAttachmentMimeTypes = ['image/jpeg', 'image/png', 'application/pdf']
@@ -512,7 +512,7 @@ function normalizeTimeSharingParameters(value) {
   return items.includes(parameterNoneOption) ? [parameterNoneOption] : items
 }
 
-function normalizeTimeSharingSelection(nextValue, currentValue) {
+function normalizeParameterSelection(nextValue, currentValue) {
   const nextItems = normalizeArrayValue(nextValue)
   const currentItems = normalizeArrayValue(currentValue)
   const hasNone = nextItems.includes(parameterNoneOption)
@@ -2570,35 +2570,35 @@ function MonitoringPointForm({ point, accessToken, readOnly = false, onChange, o
           <Grid size={{ xs: 12, md: 3 }}>
             <ParameterMultiSelect
               label="พารามิเตอร์ที่เข้าข่าย"
-              options={parameterOptions}
+              options={withNoneOption(parameterOptions)}
               value={point.eligibleParameters}
-              onChange={(value) => onChange({ eligibleParameters: value })}
+              onChange={(value) => onChange({ eligibleParameters: normalizeParameterSelection(value, point.eligibleParameters) })}
             />
           </Grid>
           {!isWpms ? (
             <Grid size={{ xs: 12, md: 3 }}>
               <ParameterMultiSelect
                 label="พารามิเตอร์ที่ได้รับการยกเว้น"
-                options={parameterOptions}
+                options={withNoneOption(parameterOptions)}
                 value={point.exemptedParameters}
-                onChange={(value) => onChange({ exemptedParameters: value })}
+                onChange={(value) => onChange({ exemptedParameters: normalizeParameterSelection(value, point.exemptedParameters) })}
               />
             </Grid>
           ) : null}
           <Grid size={{ xs: 12, md: 3 }}>
             <ParameterMultiSelect
               label="พารามิเตอร์ที่เชื่อมต่อแล้ว"
-              options={parameterOptions}
+              options={withNoneOption(parameterOptions)}
               value={point.connectedParameters}
-              onChange={(value) => onChange({ connectedParameters: value })}
+              onChange={(value) => onChange({ connectedParameters: normalizeParameterSelection(value, point.connectedParameters) })}
             />
           </Grid>
           <Grid size={{ xs: 12, md: 3 }}>
             <ParameterMultiSelect
               label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ"
-              options={parameterOptions}
+              options={withNoneOption(parameterOptions)}
               value={point.pendingParameters}
-              onChange={(value) => onChange({ pendingParameters: value })}
+              onChange={(value) => onChange({ pendingParameters: normalizeParameterSelection(value, point.pendingParameters) })}
             />
           </Grid>
         </Grid>
@@ -2682,7 +2682,7 @@ function MonitoringPointForm({ point, accessToken, readOnly = false, onChange, o
               value={normalizeTimeSharingParameters(point.timeSharingParameters)}
               onChange={(value) =>
                 onChange({
-                  timeSharingParameters: normalizeTimeSharingSelection(value, point.timeSharingParameters),
+                  timeSharingParameters: normalizeParameterSelection(value, point.timeSharingParameters),
                 })
               }
             />

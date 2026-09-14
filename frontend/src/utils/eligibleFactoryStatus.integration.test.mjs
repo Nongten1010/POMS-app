@@ -3,10 +3,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { Children, isValidElement } from 'react'
 import { getGridSingleSelectOperators } from '@mui/x-data-grid'
 import { createServer } from 'vite'
 
-test('eligible factory status filters match displayed CEMS and WPMS summaries', async () => {
+test('eligible factory status filters and monitoring-point form options', async (t) => {
   const cacheDir = await mkdtemp(join(tmpdir(), 'poms-eligible-status-test-'))
   const server = await createServer({
     cacheDir,
@@ -18,13 +19,70 @@ test('eligible factory status filters match displayed CEMS and WPMS summaries', 
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/EligibleFactoriesPage.jsx')) {
-          return `${code}\nexport { eligibleMonitoringColumns, mapEligibleFactory };`
+          return `${code}\nexport { eligibleMonitoringColumns, mapEligibleFactory, MonitoringPointForm, ParameterMultiSelect, createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload };`
         }
       },
     }],
   })
   try {
-    const { eligibleMonitoringColumns, mapEligibleFactory } = await server.ssrLoadModule('/src/pages/EligibleFactoriesPage.jsx')
+    const {
+      eligibleMonitoringColumns, mapEligibleFactory, MonitoringPointForm, ParameterMultiSelect,
+      createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload,
+    } = await server.ssrLoadModule('/src/pages/EligibleFactoriesPage.jsx')
+    await t.test('parameter dropdowns put none first, keep it exclusive, and submit annex 13', () => {
+      const fields = {
+        eligibleParameters: 'พารามิเตอร์ที่เข้าข่าย',
+        exemptedParameters: 'พารามิเตอร์ที่ได้รับการยกเว้น',
+        connectedParameters: 'พารามิเตอร์ที่เชื่อมต่อแล้ว',
+        pendingParameters: 'พารามิเตอร์ที่ยังไม่เชื่อมต่อ',
+        timeSharingParameters: 'พารามิเตอร์ที่ติดตั้งแบบ Time sharing',
+      }
+      const findDropdowns = (element) => {
+        if (!isValidElement(element)) return []
+        if (element.type === ParameterMultiSelect) return [element]
+        return Children.toArray(element.props.children).flatMap(findDropdowns)
+      }
+      for (const type of ['CEMS', 'WPMS']) {
+        let point = createDefaultMonitoringPoint(type)
+        const getFields = () => findDropdowns(MonitoringPointForm({
+          point, onChange: (changes) => { point = { ...point, ...changes } }, onTypeChange: () => {},
+        }))
+        for (const [field, label] of Object.entries(fields)) {
+          if (type === 'WPMS' && field === 'exemptedParameters') {
+            assert.ok(!getFields().some((element) => element.props.label === label))
+            continue
+          }
+          const getField = () => getFields().find((element) => element.props.label === label)
+          const options = getField().props.options
+          assert.equal(options[0], 'ไม่มี')
+          assert.equal(options.filter((option) => option === 'ไม่มี').length, 1)
+          const parameter = options[1]
+          assert.ok(parameter)
+          for (const [selected, expected] of [
+            [[parameter], [parameter]],
+            [[parameter, 'ไม่มี'], ['ไม่มี']],
+            [['ไม่มี', parameter], [parameter]],
+            [[], []],
+            [['ไม่มี'], ['ไม่มี']],
+          ]) {
+            const select = Children.toArray(ParameterMultiSelect(getField().props).props.children)[1]
+            select.props.onChange({ target: { value: selected } })
+            assert.deepEqual(point[field], expected)
+          }
+          assert.deepEqual(mapMonitoringPointFormPayload(point)[field], ['ไม่มี'])
+          assert.deepEqual(mapMonitoringPointToForm(mapMonitoringPointFormPayload(point))[field], ['ไม่มี'])
+        }
+        const annex = getFields().find((element) => element.props.label === 'เข้าข่ายตามบัญชีแนบท้ายลำดับที่')
+        if (type === 'CEMS') {
+          assert.deepEqual(annex.props.options, Array.from({ length: 13 }, (_, index) => String(index + 1)))
+          annex.props.onChange(['1', '13'])
+          assert.deepEqual(mapMonitoringPointFormPayload(point).legalAnnexNo, ['1', '13'])
+          assert.deepEqual(mapMonitoringPointToForm(mapMonitoringPointFormPayload(point)).legalAnnexNo, ['1', '13'])
+        } else {
+          assert.equal(annex, undefined)
+        }
+      }
+    })
     const statuses = ['-', 'เชื่อมต่อครบถ้วน', 'ได้รับยกเว้นทั้งหมด', 'อยู่ระหว่างเชื่อมต่อ', 'ยังไม่แล้วเสร็จ']
     const operators = getGridSingleSelectOperators()
     for (const type of ['CEMS', 'WPMS']) {
