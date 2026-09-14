@@ -123,7 +123,8 @@ const connectionStatusSortOrder = {
   [emptyValue]: 0,
   เชื่อมต่อครบถ้วน: 1,
   ได้รับยกเว้นทั้งหมด: 2,
-  ยังไม่แล้วเสร็จ: 3,
+  อยู่ระหว่างเชื่อมต่อ: 3,
+  ยังไม่แล้วเสร็จ: 4,
 }
 
 const eligibleMonitoringColumns = [
@@ -145,7 +146,9 @@ const eligibleMonitoringColumns = [
     headerAlign: 'center',
     headerClassName: 'eligible-cems-header',
     cellClassName: 'eligible-cems-cell',
-    filterable: false,
+    filterable: true,
+    type: 'singleSelect',
+    valueOptions: Object.keys(connectionStatusSortOrder),
     valueGetter: (_, row) => getConnectionStatusSummaryCellValue(row, 'CEMS'),
     sortComparator: compareConnectionStatusSummary,
     renderCell: (params) => (
@@ -170,7 +173,9 @@ const eligibleMonitoringColumns = [
     headerAlign: 'center',
     headerClassName: 'eligible-wpms-header',
     cellClassName: 'eligible-wpms-cell',
-    filterable: false,
+    filterable: true,
+    type: 'singleSelect',
+    valueOptions: Object.keys(connectionStatusSortOrder),
     valueGetter: (_, row) => getConnectionStatusSummaryCellValue(row, 'WPMS'),
     sortComparator: compareConnectionStatusSummary,
     renderCell: (params) => (
@@ -267,6 +272,15 @@ function getConnectionStatusSummaryCellValue(row = {}, type) {
 
   if (getMonitoringPointCountNumber(countValue) <= 0) {
     return emptyValue
+  }
+
+  const points = Array.isArray(row.measurementPoints)
+    ? row.measurementPoints.filter((point) => getMonitoringPointType(point) === type)
+    : []
+  if (points.length > 0 && points.every((point) => (
+    normalizeDisplayValue(point.monitoringPointStatus ?? point.details?.monitoringPointStatus) === 'อยู่ระหว่างเชื่อมต่อ'
+  ))) {
+    return 'อยู่ระหว่างเชื่อมต่อ'
   }
 
   return type === 'WPMS' ? row.wpmsConnectionStatusSummary : row.cemsConnectionStatusSummary
@@ -3126,6 +3140,10 @@ function ConnectionStatusSummaryChip({ value }) {
     ได้รับยกเว้นทั้งหมด: {
       bgcolor: '#dcfce7',
       color: '#166534',
+    },
+    อยู่ระหว่างเชื่อมต่อ: {
+      bgcolor: '#dbeafe',
+      color: '#1d4ed8',
     },
     ยังไม่แล้วเสร็จ: {
       bgcolor: '#ffedd5',
