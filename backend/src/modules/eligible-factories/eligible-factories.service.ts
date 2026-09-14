@@ -266,12 +266,21 @@ function deriveFactoryOperationStatus(isActive: boolean | undefined): string {
 function toSelectedEligibleFactory(factory: EligibleFactoryDTO): SelectedEligibleFactoryDTO {
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(factory.factoryTypeSequence);
   const measurementPoints = factory.measurementPoints ?? [];
+  // Direct selections used to store the display registration in the new-number column.
+  // Preserve the candidate identity while those legacy rows await a reviewed data repair.
+  const isLegacyDirectSelection =
+    factory.sourceSystem === 'diw.fac_import' &&
+    factory.factoryRegistrationNoOld === null &&
+    Boolean(factory.sourceFactoryId?.trim());
+  const factoryId = isLegacyDirectSelection
+    ? factory.sourceFactoryId!
+    : factory.factoryRegistrationNoNew;
 
   return {
     id: factory.id,
     monitoringPointFormId: factory.monitoringPointFormId,
     factoryName: factory.factoryName,
-    factoryId: factory.factoryRegistrationNoNew,
+    factoryId,
     factoryRegistrationNo: factory.factoryRegistrationNoOld ?? factory.factoryRegistrationNoNew,
     factoryClass,
     factorySubclass,

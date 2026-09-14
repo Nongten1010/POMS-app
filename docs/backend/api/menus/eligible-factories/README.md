@@ -23,6 +23,18 @@ curl --request GET \
 
 ความหมายของ `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve`, `cems_wpms_requests:view`, `cems_wpms_requests:edit` และ data scope ที่เกี่ยวข้องอ้างตาม [สิทธิ์การใช้งาน](../permissions/README.md)
 
+เมื่อเลือกโรงงานจาก candidate ให้ใช้ [สัญญาเลขทะเบียนของ POST และ GET](#selection-registration-numbers) โดยส่งเฉพาะ fields ที่ POST รับ ไม่ส่ง candidate ทั้ง object เพราะ response อาจมี fields เพิ่มเติมที่ strict request schema ไม่รับ
+
+```bash
+curl --request POST \
+  --url '<BASE_URL>/api/v1/eligible-factories' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Content-Type: application/json' \
+  --data @eligible-factory.json
+```
+
+ใช้ request JSON ในหัวข้อข้างล่างเป็นเนื้อหา `eligible-factory.json`
+
 ## ข้อมูลสามชุดและแหล่งข้อมูลทั่วไป
 
 1. **ทะเบียนโรงงานต้นทาง Fac60k** เป็นข้อมูลอ้างอิงแบบ read-only; candidate และ `/source-factories/:factoryRegistrationNo` ยังอ่านต้นทางตามกติกาเดิม การแก้เข้าข่ายหรือ POMS ไม่เขียนกลับทะเบียนต้นทาง
@@ -58,6 +70,116 @@ curl --request GET \
 Candidate จาก Fac60k รับเฉพาะแถวที่ `fac_import.FFLAG` เป็น `0`, `1` หรือ `3`; ไม่รวมสถานะ `2`. Mapping สถานะโรงงานคือ `0` = `ยังไม่แจ้งประกอบ`, `1` = `แจ้งประกอบแล้ว`, `2` = `จำหน่ายทะเบียน` และ `3` = `หยุดชั่วคราว`.
 
 ## ข้อมูลต้นทาง Fac60k รายโรงงาน
+
+<a id="selection-registration-numbers"></a>
+
+### เลขทะเบียนเมื่อเลือกโรงงาน: `POST /api/v1/eligible-factories`
+
+Bearer authentication และ `eligible_factories:edit` ภายใน data scope ของผู้เรียก; สำเร็จตอบ `201` พร้อม `Location: /api/v1/eligible-factories/:id`
+
+ทุก field ในตารางต้องส่ง แม้ field ที่รองรับ `null`; strings ถูก trim และเมื่อไม่ใช่ `null` ต้องไม่ว่าง ห้ามส่ง fields นอกตาราง
+
+| Request field | Type / validation | ความหมาย |
+| --- | --- | --- |
+| `factoryId` | string, 1–64 | คัดลอก `candidate.factoryId` ซึ่ง UI ใช้เป็นเลขใหม่; เก็บใน `sourceFactoryId` และ `factoryRegistrationNoNew` |
+| `factoryRegistrationNo` | string, 1–64 | คัดลอก `candidate.factoryRegistrationNo` ซึ่ง UI ใช้เป็นเลขเดิม; เก็บใน `factoryRegistrationNoOld` และรักษาค่า fallback ของต้นทางเมื่อไม่มีเลขเดิมแยก |
+| `factoryName` | string, 1–500 | ชื่อโรงงาน |
+| `factoryClass`, `factorySubclass` | string 1–64 หรือ null | รหัสประเภทโรงงาน |
+| `address` | string 1–1,000 หรือ null | ที่อยู่ |
+| `provinceName` | string, 1–128 | จังหวัด |
+| `industrialEstateName` | string 1–255 หรือ null | นิคมอุตสาหกรรม |
+| `longitude`, `latitude` | number หรือ null; -180 ถึง 180 / -90 ถึง 90 | พิกัด; หากด้านใดเป็น null เก็บ `coordinates: null` |
+| `businessActivity`, `wastewaterDischargeInfo` | string 1–4,000 หรือ null | กิจการ / ข้อมูลระบายน้ำทิ้ง |
+| `operationStatus` | string, 1–64 | สถานะโรงงาน |
+| `capitalAmount`, `machineryHorsepower` | number หรือ null | เงินทุน / กำลังเครื่องจักร |
+| `productionCapacity`, `boilerSizeEach`, `fuelUsed` | string 1–500 หรือ null | กำลังผลิต / ขนาดหม้อไอน้ำ / เชื้อเพลิง |
+| `boilerCount` | integer 0–10,000 หรือ null | จำนวนหม้อไอน้ำ |
+| `hasEia` | boolean หรือ null | ข้อมูล EIA |
+
+ตัวอย่าง request ขั้นต่ำที่ส่งได้:
+
+```json
+{
+  "factoryName": "โรงงานตัวอย่าง",
+  "factoryId": "72220100125563",
+  "factoryRegistrationNo": "3-60-1/43ปท",
+  "factoryClass": null,
+  "factorySubclass": null,
+  "address": null,
+  "provinceName": "ปทุมธานี",
+  "industrialEstateName": null,
+  "longitude": null,
+  "latitude": null,
+  "businessActivity": null,
+  "operationStatus": "แจ้งประกอบแล้ว",
+  "capitalAmount": null,
+  "machineryHorsepower": null,
+  "productionCapacity": null,
+  "wastewaterDischargeInfo": null,
+  "boilerCount": null,
+  "boilerSizeEach": null,
+  "fuelUsed": null,
+  "hasEia": null
+}
+```
+
+ฟิลด์ identity ใน `data` ของ response; ข้อมูลทั่วไปและ audit fields อื่นยังคืนตาม `EligibleFactoryDTO`:
+
+| Response field | Type | ความหมาย |
+| --- | --- | --- |
+| `id` | positive integer | id ของแถวเข้าข่าย |
+| `sourceSystem` | string | `diw.fac_import` |
+| `sourceFactoryId` | string | `factoryId` ที่รับมา |
+| `factoryRegistrationNoNew` | string | `factoryId` ที่รับมา |
+| `factoryRegistrationNoOld` | string | `factoryRegistrationNo` ที่รับมา |
+
+ตัวอย่าง response เฉพาะฟิลด์ identity:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "sourceSystem": "diw.fac_import",
+    "sourceFactoryId": "72220100125563",
+    "factoryRegistrationNoNew": "72220100125563",
+    "factoryRegistrationNoOld": "3-60-1/43ปท"
+  }
+}
+```
+
+### เลขทะเบียนใน `GET /api/v1/eligible-factories`
+
+Bearer authentication และ `eligible_factories:view`; ไม่รับ query parameters สำเร็จตอบ `200` พร้อม `data[]` และ `meta.total` ตาม scope เดิม
+
+| Response field | Type | ความหมาย |
+| --- | --- | --- |
+| `data[].id` | positive integer | id ของแถวเข้าข่าย ใช้อ้างอิงการถอดโรงงาน |
+| `data[].factoryId` | string | เลขใหม่จาก `factoryRegistrationNoNew`; แถวเก่าจาก `diw.fac_import` ที่ `factoryRegistrationNoOld` เป็น null และ `sourceFactoryId` ไม่ว่าง ใช้ `sourceFactoryId` |
+| `data[].factoryRegistrationNo` | string | เลขเดิมจาก `factoryRegistrationNoOld`; ถ้าเป็น null ใช้ค่าที่เก็บใน `factoryRegistrationNoNew` |
+| `meta.total` | integer | จำนวนโรงงานที่ผู้เรียกมองเห็น |
+
+ตัวอย่าง response เฉพาะ identity; ฟิลด์ข้อมูลทั่วไป จุดตรวจวัด และสถานะการเชื่อมต่อยังคืนตาม `SelectedEligibleFactoryDTO`:
+
+```json
+{
+  "success": true,
+  "data": [{ "id": 1, "factoryId": "72220100125563", "factoryRegistrationNo": "3-60-1/43ปท" }],
+  "meta": { "total": 1 }
+}
+```
+
+ข้อผิดพลาดใช้ [shared error envelope](../../shared/README.md): `400` เมื่อ validation ไม่ผ่าน, `401` เมื่อไม่มี token ที่ใช้ได้, `403` เมื่อไม่มีสิทธิ์หรือ POST อยู่นอก scope, `409` เมื่อโรงงานเข้าข่ายแล้วหรือมีคำขอเพิ่มโรงงานที่ยังเปิดอยู่ การตรวจเลขใหม่ซ้ำรวมแถว legacy ที่เก็บเลขใหม่ไว้ใน `source_factory_id` ด้วย
+
+รายการ candidate ตัดโรงงานที่เลือกแล้วโดยใช้ทั้งเลขใหม่และเลขเดิมที่บันทึกไว้ เพื่อไม่ให้โรงงานกลับมาปรากฏให้เลือกซ้ำหลังแก้ mapping ของ POST
+
+### ตรวจข้อมูลเก่าก่อนซ่อมฐานข้อมูล
+
+GET รองรับข้อมูลเก่าเฉพาะรูปแบบข้างต้นโดยไม่เขียนข้อมูลกลับ การ deploy นี้ไม่ย้ายเลขทะเบียนในฐานข้อมูลและไม่แก้ snapshots ประวัติ
+
+ใช้ [SQL audit แบบ SELECT-only](../../../../../backend/scripts/sql/audit-eligible-factory-registration-numbers.sql) เพื่อดูค่าเดิม/ค่าที่เสนอ ทั้งแถว active และ soft-deleted รวมถึงเลขใหม่ที่ชนแถวอื่น ต้องตรวจ `FID`/`DISPFACREG` จาก Fac60k และรายการอ้างอิง เช่น แบบฟอร์ม คำขอ ข้อมูล connected POMS และ canonical profiles ก่อนกำหนด transaction ซ่อมข้อมูล ไม่ใช้ค่าที่เสนอเป็นคำสั่ง UPDATE อัตโนมัติ และไม่อัปเดตตาราง `factories` โดยอนุมาน
+
+เทสต์ป้องกันบั๊กต่อ [validator → create → GET](../../../../../backend/tests/unit/eligible-factories.service.test.ts) โดยใช้ข้อมูลที่ส่งเข้าบันทึกจริงใน mock; ตรวจ query หาแถวเก่าด้วย [repository test](../../../../../backend/tests/unit/eligible-factories.repository.test.ts) หลัง deploy ต้องตรวจ `/api/v1/openapi.json` ว่ามี `CreateEligibleFactoryResponse` และ `SelectedEligibleFactoriesResponse` พร้อม mapping นี้
 
 ### `GET /api/v1/eligible-factories/source-factories/:factoryRegistrationNo`
 

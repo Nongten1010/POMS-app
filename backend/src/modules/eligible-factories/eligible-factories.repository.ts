@@ -168,7 +168,15 @@ export const eligibleFactoriesRepository = {
     monitoringPointFormId: number | null;
   } | null> {
     const query = (trx ?? db)('eligible_factories')
-      .where('factory_registration_no_new', registrationNoNew)
+      .where((builder) => {
+        builder.where('factory_registration_no_new', registrationNoNew).orWhere((legacy) => {
+          // Older direct selections stored the new number only in source_factory_id.
+          legacy
+            .where('source_system', 'diw.fac_import')
+            .where('source_factory_id', registrationNoNew)
+            .whereNull('factory_registration_no_old');
+        });
+      })
       .whereNull('deleted_at')
       .select('id', 'factory_registration_no_new', 'monitoring_point_form_id')
       .first();
@@ -414,11 +422,23 @@ export const eligibleFactoriesRepository = {
     const query = buildEligibleFactoriesBaseQuery(filters, access?.actorUserId)
       .clearSelect()
       .clearOrder()
-      .select<{ factory_registration_no_new: string }[]>('ef.factory_registration_no_new');
+      .select<
+        {
+          factory_registration_no_new: string;
+          factory_registration_no_old: string | null;
+        }[]
+      >('ef.factory_registration_no_new', 'ef.factory_registration_no_old');
 
     const rows = await query;
 
-    return rows.map((row) => row.factory_registration_no_new);
+    // Fac60k candidates display the old number, while selected rows now store both correctly.
+    return [
+      ...new Set(
+        rows
+          .flatMap((row) => [row.factory_registration_no_new, row.factory_registration_no_old])
+          .filter((number): number is string => Boolean(number)),
+      ),
+    ];
   },
 
   async softDelete(id: number, actorUserId: number): Promise<boolean> {

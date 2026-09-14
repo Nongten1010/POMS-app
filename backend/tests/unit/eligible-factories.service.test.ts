@@ -45,6 +45,7 @@ import { eligibleFactoriesRepository } from '../../src/modules/eligible-factorie
 import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
 import { resolveEligibleFactoryAddressForStorage } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 import type { CreateEligibleFactoryInput } from '../../src/modules/eligible-factories/eligible-factories.types';
+import { createEligibleFactorySchema } from '../../src/modules/eligible-factories/eligible-factories.validator';
 
 const mockedRepository = jest.mocked(eligibleFactoriesRepository);
 const mockedCandidatesRepository = jest.mocked(eligibleFactoryCandidatesRepository);
@@ -65,6 +66,57 @@ describe('eligibleFactoriesService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
+
+  it.each(['3-60-1/43ปท', '72220100125563'])(
+    'preserves registration numbers through POST validation, create and GET (%s)',
+    async (factoryRegistrationNo) => {
+      const request = {
+        factoryName: 'โรงงานทดสอบเลขทะเบียน',
+        factoryId: '72220100125563',
+        factoryRegistrationNo,
+        factoryClass: null,
+        factorySubclass: null,
+        address: null,
+        provinceName: 'ปทุมธานี',
+        industrialEstateName: null,
+        longitude: null,
+        latitude: null,
+        businessActivity: null,
+        operationStatus: 'แจ้งประกอบแล้ว',
+        capitalAmount: null,
+        machineryHorsepower: null,
+        productionCapacity: null,
+        wastewaterDischargeInfo: null,
+        boilerCount: null,
+        boilerSizeEach: null,
+        fuelUsed: null,
+        hasEia: null,
+      };
+      mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+      // Keep the actual write input, rather than inventing a correctly stored GET fixture.
+      mockedRepository.create.mockImplementationOnce(
+        async (input) => ({ id: 1, ...input }) as never,
+      );
+      const created = await eligibleFactoriesService.create(
+        createEligibleFactorySchema.parse(request),
+        42,
+      );
+      mockedRepository.list.mockResolvedValueOnce({ rows: [created], total: 1 });
+
+      const result = await eligibleFactoriesService.list({});
+
+      expect(result.data[0]).toMatchObject({
+        factoryId: request.factoryId,
+        factoryRegistrationNo: request.factoryRegistrationNo,
+      });
+      expect(created).toMatchObject({
+        sourceFactoryId: request.factoryId,
+        factoryRegistrationNoNew: request.factoryId,
+        factoryRegistrationNoOld: request.factoryRegistrationNo,
+      });
+      expect(mockedRepository.findByRegistrationNoNew).toHaveBeenCalledWith(request.factoryId);
+    },
+  );
 
   it('creates an eligible factory selection with the actor user id', async () => {
     mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
@@ -104,6 +156,35 @@ describe('eligibleFactoriesService', () => {
     expect(mockedRepository.create).toHaveBeenCalledWith(payload, 42);
     expect(result.factoryRegistrationNoNew).toBe(payload.factoryRegistrationNoNew);
   });
+
+  it.each([
+    ['diw.fac_import', '3-60-1/43ปท', null, '72220100125563', '3-60-1/43ปท'],
+    ['diw.fac_import', '72220100125563', '3-60-1/43ปท', '72220100125563', '3-60-1/43ปท'],
+    ['monitoring_point_forms', 'NEW-1', null, 'NEW-1', 'NEW-1'],
+    ['diw.fac_import', 'NEW-1', 'OLD-1', 'NEW-1', 'OLD-1'],
+  ])(
+    'reads legacy direct selections without changing other registration mappings (%s, %s, %s)',
+    async (sourceSystem, newNumber, oldNumber, expectedId, expectedRegistration) => {
+      const stored = {
+        id: 1,
+        sourceSystem,
+        sourceFactoryId: '72220100125563',
+        factoryRegistrationNoNew: newNumber,
+        factoryRegistrationNoOld: oldNumber,
+        factoryTypeSequence: null,
+      };
+      mockedRepository.list.mockResolvedValueOnce({ rows: [stored as never], total: 1 });
+
+      const result = await eligibleFactoriesService.list({});
+
+      expect(result.data[0]).toMatchObject({
+        factoryId: expectedId,
+        factoryRegistrationNo: expectedRegistration,
+      });
+      expect(stored.factoryRegistrationNoNew).toBe(newNumber);
+      expect(stored.factoryRegistrationNoOld).toBe(oldNumber);
+    },
+  );
 
   it('resolves numeric administrative labels before direct eligible-factory create', async () => {
     const numericAddress = '4 หมู่ 6 ตำบล10 อำเภอ4 24130';

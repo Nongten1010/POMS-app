@@ -332,6 +332,27 @@ describe('POMS OpenAPI contract', () => {
     expect(() => schema.parse(requestExample(pathKey, method))).not.toThrow();
   });
 
+  it('keeps eligible factory registration examples aligned across POST and GET contracts', () => {
+    const input = asObject(requestExample('/eligible-factories', 'post'), 'selection example');
+    const parsed = createEligibleFactorySchema.parse(input);
+    expect(parsed.factoryRegistrationNoNew).toBe(input.factoryId);
+    expect(parsed.factoryRegistrationNoOld).toBe(input.factoryRegistrationNo);
+    expect(input.factoryId).not.toBe(input.factoryRegistrationNo);
+
+    const document = asObject(pomsOpenApiDocument, 'document');
+    const paths = asObject(document.paths, 'paths');
+    const selectionPath = asObject(paths['/eligible-factories'], 'selection path');
+    for (const [method, status, schema] of [
+      ['post', '201', 'CreateEligibleFactoryResponse'],
+      ['get', '200', 'SelectedEligibleFactoriesResponse'],
+    ]) {
+      const operation = asObject(selectionPath[method!], 'operation');
+      const response = asObject(asObject(operation.responses, 'responses')[status!], 'response');
+      const media = asObject(asObject(response.content, 'content')['application/json'], 'media');
+      expect(media.schema).toEqual({ $ref: `#/components/schemas/${schema}` });
+    }
+  });
+
   it('keeps every local component reference resolvable', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const components = asObject(document.components, 'components');

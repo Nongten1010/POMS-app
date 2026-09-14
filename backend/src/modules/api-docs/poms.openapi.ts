@@ -513,8 +513,8 @@ function editablePermissionGroupsSchema(complete: boolean): OpenApiObject {
 
 const createEligibleFactoryExample = {
   factoryName: 'บริษัท ตัวอย่าง จำกัด',
-  factoryId: 'F000123',
-  factoryRegistrationNo: '40100007125560',
+  factoryId: '72220100125563',
+  factoryRegistrationNo: '3-60-1/43ปท',
   factoryClass: '60',
   factorySubclass: '1',
   address: '89 หมู่ 1 ตำบลบ้านเลน อำเภอบางปะอิน จังหวัดพระนครศรีอยุธยา 13160',
@@ -1713,8 +1713,22 @@ const componentSchemas: Record<string, OpenApiObject> = {
     ],
     properties: {
       factoryName: { type: 'string', minLength: 1, maxLength: 500 },
-      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
-      factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryId: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description:
+          'ใช้ factoryId จาก candidate; บันทึกเป็น sourceFactoryId และ factoryRegistrationNoNew (เลขทะเบียนแบบใหม่)',
+        example: '72220100125563',
+      },
+      factoryRegistrationNo: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description:
+          'ใช้ factoryRegistrationNo จาก candidate; บันทึกเป็น factoryRegistrationNoOld (เลขทะเบียนแบบเดิม/เลขแสดงผลที่ต้นทาง fallback ให้)',
+        example: '3-60-1/43ปท',
+      },
       factoryClass: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       factorySubclass: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       address: { type: 'string', minLength: 1, maxLength: 1000, nullable: true },
@@ -1732,6 +1746,79 @@ const componentSchemas: Record<string, OpenApiObject> = {
       boilerSizeEach: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
       fuelUsed: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
       hasEia: { type: 'boolean', nullable: true },
+    },
+  },
+  CreateEligibleFactoryResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'object',
+        additionalProperties: true,
+        description:
+          'ข้อมูลโรงงานที่บันทึก พร้อมข้อมูลทั่วไปและ audit fields; ระบุ schema ฟิลด์ identity ที่ใช้ตรวจเลขทะเบียน',
+        required: [
+          'id',
+          'sourceSystem',
+          'sourceFactoryId',
+          'factoryRegistrationNoNew',
+          'factoryRegistrationNoOld',
+        ],
+        properties: {
+          id: { type: 'integer', minimum: 1 },
+          sourceSystem: { type: 'string', example: 'diw.fac_import' },
+          sourceFactoryId: { type: 'string', nullable: true, example: '72220100125563' },
+          factoryRegistrationNoNew: {
+            type: 'string',
+            description: 'ค่าจาก request.factoryId',
+            example: '72220100125563',
+          },
+          factoryRegistrationNoOld: {
+            type: 'string',
+            nullable: true,
+            description: 'ค่าจาก request.factoryRegistrationNo',
+            example: '3-60-1/43ปท',
+          },
+        },
+      },
+    },
+  },
+  SelectedEligibleFactoriesResponse: {
+    type: 'object',
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: true,
+          description:
+            'รายการโรงงานพร้อมข้อมูลทั่วไป จุดตรวจวัด และสถานะการเชื่อมต่อ; ระบุ schema ฟิลด์ identity ที่ใช้ตรวจเลขทะเบียน',
+          required: ['id', 'factoryId', 'factoryRegistrationNo'],
+          properties: {
+            id: { type: 'integer', minimum: 1 },
+            factoryId: {
+              type: 'string',
+              description:
+                'เลขใหม่; สำหรับแถวเก่าจาก diw.fac_import ที่เลขเดิมเป็น null ใช้ sourceFactoryId ที่ไม่ว่าง',
+              example: '72220100125563',
+            },
+            factoryRegistrationNo: {
+              type: 'string',
+              description:
+                'เลขเดิม; fallback เป็นเลขที่เก็บใน factoryRegistrationNoNew เมื่อเลขเดิมเป็น null',
+              example: '3-60-1/43ปท',
+            },
+          },
+        },
+      },
+      meta: {
+        type: 'object',
+        required: ['total'],
+        properties: { total: { type: 'integer', minimum: 0 } },
+      },
     },
   },
   EligibleFactoryCandidate: {
@@ -4763,7 +4850,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List eligible factory candidates',
       operationId: 'listEligibleFactoryCandidates',
       description:
-        'คืน candidate จาก Fac60k เฉพาะ FFLAG 0, 1 และ 3 โดยไม่รวม FFLAG 2; mapping สถานะโรงงานคือ 0 = ยังไม่แจ้งประกอบ, 1 = แจ้งประกอบแล้ว, 2 = จำหน่ายทะเบียน และ 3 = หยุดชั่วคราว',
+        'คืน candidate จาก Fac60k เฉพาะ FFLAG 0, 1 และ 3 โดยไม่รวม FFLAG 2; mapping สถานะโรงงานคือ 0 = ยังไม่แจ้งประกอบ, 1 = แจ้งประกอบแล้ว, 2 = จำหน่ายทะเบียน และ 3 = หยุดชั่วคราว; ตัดรายการที่เลือกแล้วด้วยทั้งเลขทะเบียนใหม่และเดิมที่เก็บใน eligible_factories',
       parameters: [
         queryInteger('page', 'เลขหน้า; ต้องส่งคู่กับ perPage'),
         queryInteger('perPage', 'จำนวนรายการต่อหน้า; ต้องส่งคู่กับ page', false, 1, 200),
@@ -4787,16 +4874,22 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Eligible Factories',
       summary: 'List eligible factories',
       operationId: 'listEligibleFactories',
+      description:
+        'คืนเลขใหม่ใน factoryId และเลขเดิมใน factoryRegistrationNo; รองรับแถวเก่าที่ POST เคยสลับช่องโดยไม่เขียนฐานข้อมูลระหว่าง GET',
+      successSchema: schemaRef('SelectedEligibleFactoriesResponse'),
     }),
     post: securedOperation({
       tag: 'Eligible Factories',
       summary: 'Create eligible factory',
       operationId: 'createEligibleFactory',
+      description:
+        'เลือก candidate โดยเก็บ factoryId เป็นเลขใหม่ และ factoryRegistrationNo เป็นเลขเดิม; trim strings, body เป็น strict object. ตรวจโรงงานซ้ำด้วยเลขใหม่ รวมแถว legacy จาก diw.fac_import ที่เก็บเลขใหม่ไว้ใน source_factory_id; ตอบ 409 เมื่อเลือกแล้วหรือมีคำขอเพิ่มโรงงานที่ยังเปิดอยู่. สิทธิ์ eligible_factories:edit และ data scope เดิม',
       requestBody: jsonRequestBody(
         schemaRef('CreateEligibleFactoryRequest'),
         createEligibleFactoryExample,
       ),
       successStatus: '201',
+      successSchema: schemaRef('CreateEligibleFactoryResponse'),
     }),
   },
   '/eligible-factories/add-requests': {

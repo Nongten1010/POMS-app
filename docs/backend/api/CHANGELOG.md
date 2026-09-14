@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+<a id="eligible-factory-registration-numbers"></a>
+
+## 2026-09-14 — แก้เลขทะเบียนเมื่อเลือกโรงงานเข้าข่าย
+
+- **Affected canonical docs:** [เลขทะเบียนโรงงานเข้าข่าย](./menus/eligible-factories/README.md#selection-registration-numbers)
+- **Impact:** POST เก็บ `factoryId` เป็น `factoryRegistrationNoNew` และ `factoryRegistrationNo` เป็น `factoryRegistrationNoOld`; GET คืน `factoryId` จาก source identifier สำหรับแถว legacy ของ `diw.fac_import` ที่เลขเดิมเป็น null แทนเลขเดิมที่เคยคืนผิด ตรวจโรงงานซ้ำครอบคลุม source identifier ของแถว legacy
+- **Migration:** client ส่ง payload เดิมตาม candidate โดยไม่สลับเลขใหม่/เก่า ไม่ส่ง DTO ของ POST เป็น create payload; reload รายการและ cache ที่ผูกกับ `factoryId` หลัง deploy ใช้ `id` เดิมสำหรับแถวเข้าข่าย ไม่เปลี่ยน IDs ของเอกสารหรือ snapshots ตามค่าที่แสดง ไม่มีการซ่อมข้อมูลในฐานอัตโนมัติ; ตรวจด้วย SQL audit และตรวจรายการอ้างอิงก่อนอนุมัติซ่อมข้อมูลจริง
+- **Breaking change:** yes — ค่าของฟิลด์เลขทะเบียนที่เคยตอบผิดถูกแก้ แม้ชื่อ fields และรูปแบบ request ไม่เปลี่ยน
+
 <a id="request-actions-factory-scope"></a>
 
 ## 2026-09-13 — ทุก action ของคำขอใช้สิทธิ์โรงงานแทนผู้สร้าง

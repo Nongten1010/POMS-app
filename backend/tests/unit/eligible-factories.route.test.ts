@@ -339,7 +339,8 @@ describe('eligible factory routes', () => {
     expect(mockedEligibleFactoriesService.create).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceFactoryId: 'real-17',
-        factoryRegistrationNoNew: 'real-reg-17',
+        factoryRegistrationNoNew: 'real-17',
+        factoryRegistrationNoOld: 'real-reg-17',
         provinceName: 'ระยอง',
       }),
       42,

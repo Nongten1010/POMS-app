@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import knex from 'knex';
 
 const mockDb = jest.fn();
 const mockFactorySourceDb = jest.fn();
@@ -25,6 +26,54 @@ import {
   resolveEligibleFactoryAddressForStorage,
   resolveEligibleFactoryIndustrialEstateForStorage,
 } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
+
+describe('eligible factory registration lookup during the legacy data transition', () => {
+  it('returns both stored registration numbers for excluding selected candidates', async () => {
+    const sqlDb = knex({ client: 'mssql' });
+    const query = sqlDb('eligible_factories as ef');
+    const run = jest.fn(async () => [
+      { factory_registration_no_new: '72220100125563', factory_registration_no_old: '3-60-1/43ปท' },
+      { factory_registration_no_new: 'LEGACY-REG', factory_registration_no_old: null },
+      { factory_registration_no_new: 'SAME-REG', factory_registration_no_old: 'SAME-REG' },
+    ]);
+    jest.spyOn(sqlDb.client, 'runner').mockReturnValue({ run } as never);
+    mockDb.mockReturnValueOnce(query);
+    try {
+      expect(await eligibleFactoriesRepository.listActiveRegistrationNumbers()).toEqual([
+        '72220100125563',
+        '3-60-1/43ปท',
+        'LEGACY-REG',
+        'SAME-REG',
+      ]);
+    } finally {
+      await sqlDb.destroy();
+    }
+  });
+
+  it('groups canonical and legacy identity matches under the active-row filter', async () => {
+    const sqlDb = knex({ client: 'mssql' });
+    const query = sqlDb('eligible_factories');
+    const run = jest.fn(async () => ({
+      id: 7,
+      factory_registration_no_new: '3-60-1/43ปท',
+      monitoring_point_form_id: null,
+    }));
+    jest.spyOn(sqlDb.client, 'runner').mockReturnValue({ run } as never);
+    mockDb.mockReturnValueOnce(query);
+    try {
+      const existing = await eligibleFactoriesRepository.findByRegistrationNoNew('72220100125563');
+      const compiled = query.toSQL();
+
+      expect(existing?.id).toBe(7);
+      expect(compiled.sql).toContain(
+        '([factory_registration_no_new] = ? or ([source_system] = ? and [source_factory_id] = ? and [factory_registration_no_old] is null)) and [deleted_at] is null',
+      );
+      expect(compiled.bindings).toEqual([1, '72220100125563', 'diw.fac_import', '72220100125563']);
+    } finally {
+      await sqlDb.destroy();
+    }
+  });
+});
 
 describe('eligibleFactoriesRepository.list', () => {
   const selectedFactoryRow = {

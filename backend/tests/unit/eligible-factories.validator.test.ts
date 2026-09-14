@@ -40,7 +40,8 @@ describe('eligible factories validators', () => {
     if (result.success) {
       expect(result.data).toMatchObject({
         sourceFactoryId: validPayload.factoryId,
-        factoryRegistrationNoNew: validPayload.factoryRegistrationNo,
+        factoryRegistrationNoNew: validPayload.factoryId,
+        factoryRegistrationNoOld: validPayload.factoryRegistrationNo,
         factoryTypeSequence: 'ลำดับหลัก / ลำดับรอง',
         coordinates: {
           latitude: validPayload.latitude,
