@@ -45,8 +45,9 @@ const lawCategories = [
   { value: 'OTHER', label: 'อื่นๆ' },
 ]
 const lawTypes = [
-  { value: 'MINISTERIAL_REGULATION', label: 'กฎกระทรวง' },
-  { value: 'RULE_AND_ANNOUNCEMENT', label: 'กฎและประกาศ' },
+  { value: 'MINISTERIAL_REGULATION', label: 'กฎกระทรวงอุตสาหกรรม' },
+  { value: 'MINISTRY_ANNOUNCEMENT', label: 'ประกาศกระทรวงอุตสาหกรรม' },
+  { value: 'DEPARTMENT_ANNOUNCEMENT', label: 'ประกาศกรมโรงงานอุตสาหกรรม' },
   { value: 'REGULATION_REQUIREMENT', label: 'ระเบียบ ข้อบังคับ และข้อกำหนด' },
   { value: 'OTHER', label: 'อื่นๆ' },
 ]
@@ -68,7 +69,11 @@ function getLawCategoryLabel(category, categoryLabel = '') {
 }
 
 function getLawTypeLabel(type, typeLabel = '') {
-  return typeLabel || lawTypes.find((option) => option.value === type)?.label || type
+  return lawTypes.find((option) => option.value === type)?.label || typeLabel || type
+}
+
+function getEditableLawType(type) {
+  return lawTypes.some((option) => option.value === type) ? type : ''
 }
 
 function formatBuddhistDate(value) {
@@ -211,7 +216,7 @@ function LawsPage({ isAdmin = false, accessToken = '' }) {
     setForm({
       title: law.title,
       category: law.category,
-      type: law.type,
+      type: getEditableLawType(law.type),
       publishedDate: law.publishedDate,
       file: null,
     })
@@ -262,7 +267,7 @@ function LawsPage({ isAdmin = false, accessToken = '' }) {
       nextErrors.title = 'ชื่อรายการต้องยาวไม่เกิน 500 ตัวอักษร'
     }
 
-    if (!form.type) {
+    if (!getEditableLawType(form.type)) {
       nextErrors.type = 'กรุณาเลือกประเภท'
     }
 
@@ -590,7 +595,6 @@ function LawsPage({ isAdmin = false, accessToken = '' }) {
 
 function LawListItem({ law, isAdmin, onEdit, onDelete }) {
   const downloadUrl = resolveContentDownloadUrl(law.file?.downloadUrl)
-  const downloadFileName = law.file?.fileName || undefined
 
   return (
     <Box
@@ -639,7 +643,8 @@ function LawListItem({ law, isAdmin, onEdit, onDelete }) {
         <IconButton
           component="a"
           href={downloadUrl || undefined}
-          download={downloadFileName}
+          target="_blank"
+          rel="noopener noreferrer"
           color="primary"
           aria-label="ดาวน์โหลดไฟล์"
           disabled={!downloadUrl}
@@ -651,7 +656,8 @@ function LawListItem({ law, isAdmin, onEdit, onDelete }) {
       <Button
         component="a"
         href={downloadUrl || undefined}
-        download={downloadFileName}
+        target="_blank"
+        rel="noopener noreferrer"
         variant="contained"
         startIcon={<DownloadIcon />}
         disabled={!downloadUrl}
