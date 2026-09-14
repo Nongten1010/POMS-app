@@ -19,16 +19,31 @@ test('eligible factory status filters and monitoring-point form options', async 
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/EligibleFactoriesPage.jsx')) {
-          return `${code}\nexport { eligibleMonitoringColumns, mapEligibleFactory, MonitoringPointForm, ParameterMultiSelect, createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload };`
+          return `${code}\nexport { eligibleMonitoringColumns, mapEligibleFactory, mapEligibleFactoryAddRequest, MonitoringPointForm, ParameterMultiSelect, createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload };`
         }
       },
     }],
   })
   try {
     const {
-      eligibleMonitoringColumns, mapEligibleFactory, MonitoringPointForm, ParameterMultiSelect,
+      eligibleMonitoringColumns, mapEligibleFactory, mapEligibleFactoryAddRequest, MonitoringPointForm, ParameterMultiSelect,
       createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload,
     } = await server.ssrLoadModule('/src/pages/EligibleFactoriesPage.jsx')
+    await t.test('add-request rows preserve contact names and phone numbers with blank fallbacks', () => {
+      const row = mapEligibleFactoryAddRequest({
+        id: 8, factoryId: '91090001125583', status: 'APPROVED',
+        contactName: '  Test Contact  ', contactPhone: '  0812345678  ',
+      }, 0)
+      assert.equal(row.contactName, 'Test Contact')
+      assert.equal(row.contactPhone, '0812345678')
+      assert.equal(row.factoryId, '91090001125583')
+      assert.equal(row.status, 'APPROVED')
+      for (const value of [null, undefined, '', '   ']) {
+        const emptyRow = mapEligibleFactoryAddRequest({ contactName: value, contactPhone: value }, 0)
+        assert.equal(emptyRow.contactName, '-')
+        assert.equal(emptyRow.contactPhone, '-')
+      }
+    })
     await t.test('parameter dropdowns put none first, keep it exclusive, and submit annex 13', () => {
       const fields = {
         eligibleParameters: 'พารามิเตอร์ที่เข้าข่าย',

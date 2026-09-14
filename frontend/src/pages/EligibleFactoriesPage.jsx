@@ -630,6 +630,8 @@ function mapEligibleFactoryAddRequest(row, index) {
     factoryName: row.factoryName ?? emptyValue,
     factoryRegistrationNo: row.factoryRegistrationNo ?? emptyValue,
     province: row.provinceName ?? emptyValue,
+    contactName: row.contactName?.trim() || emptyValue,
+    contactPhone: row.contactPhone?.trim() || emptyValue,
     reason: row.reason ?? emptyValue,
     status: row.status ?? emptyValue,
     statusLabel: row.statusLabel ?? row.status ?? emptyValue,
@@ -1590,6 +1592,8 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
       { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', minWidth: 260, flex: 1 },
       { field: 'factoryId', headerName: 'เลขทะเบียนโรงงาน', width: 190 },
       { field: 'province', headerName: 'จังหวัด', width: 150 },
+      { field: 'contactName', headerName: 'ชื่อ-นามสกุล', width: 220 },
+      { field: 'contactPhone', headerName: 'เบอร์โทร', width: 160 },
       {
         field: 'statusLabel',
         headerName: 'สถานะ',
