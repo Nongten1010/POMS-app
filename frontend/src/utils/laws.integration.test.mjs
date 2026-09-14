@@ -26,7 +26,7 @@ test('law file controls keep PDF validation and open existing buttons in a new t
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/LawsPage.jsx')) {
-          return `${code}\nexport { LawListItem, LawFormDialog, FileAttachField, getFileValidationMessage, getEditableLawType, getLawTypeLabel, buildLawFormData, emptyForm };`
+          return `${code}\nexport { LawListItem, LawFormDialog, FileAttachField, getFileValidationMessage, getEditableLawType, getLawTypeLabel, buildLawFormData, emptyForm, compareLaws };`
         }
       },
     }],
@@ -34,8 +34,23 @@ test('law file controls keep PDF validation and open existing buttons in a new t
   try {
     const {
       LawListItem, LawFormDialog, FileAttachField, getFileValidationMessage,
-      getEditableLawType, getLawTypeLabel, buildLawFormData, emptyForm,
+      getEditableLawType, getLawTypeLabel, buildLawFormData, emptyForm, compareLaws,
     } = await server.ssrLoadModule('/src/pages/LawsPage.jsx')
+    await t.test('list sorts by type before Thai title and keeps legacy types at the end', () => {
+      const rows = [
+        { id: 1, type: 'OTHER', title: 'กฎหมาย', category: 'CEMS' },
+        { id: 2, type: 'REGULATION_REQUIREMENT', title: 'กฎหมาย', category: 'WPMS' },
+        { id: 3, type: 'DEPARTMENT_ANNOUNCEMENT', title: 'กฎหมาย', category: 'CEMS' },
+        { id: 4, type: 'MINISTRY_ANNOUNCEMENT', title: 'ข', category: 'CEMS' },
+        { id: 5, type: 'MINISTERIAL_REGULATION', title: 'ข', category: 'WPMS' },
+        { id: 6, type: 'MINISTRY_ANNOUNCEMENT', title: 'ก', category: 'CEMS' },
+        { id: 7, type: 'RULE_AND_ANNOUNCEMENT', title: 'ก', category: 'CEMS' },
+        { id: 8, type: null, title: 'ข', category: 'WPMS' },
+      ]
+      assert.deepEqual([...rows].sort(compareLaws).map(({ id }) => id), [5, 6, 4, 3, 2, 1, 7, 8])
+      assert.deepEqual(rows.filter(({ category }) => category === 'CEMS').sort(compareLaws).map(({ id }) => id), [6, 4, 3, 1, 7])
+      assert.deepEqual(rows.map(({ id }) => id), [1, 2, 3, 4, 5, 6, 7, 8])
+    })
     await t.test('create and edit offer five new types in order and send distinct multipart values', () => {
       const options = [
         ['MINISTERIAL_REGULATION', 'กฎกระทรวงอุตสาหกรรม'],

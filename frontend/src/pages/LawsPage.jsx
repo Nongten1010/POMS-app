@@ -51,6 +51,7 @@ const lawTypes = [
   { value: 'REGULATION_REQUIREMENT', label: 'ระเบียบ ข้อบังคับ และข้อกำหนด' },
   { value: 'OTHER', label: 'อื่นๆ' },
 ]
+const lawTypeOrder = new Map(lawTypes.map((type, index) => [type.value, index]))
 const lawCategoryOptions = [
   { value: 'all', label: 'ทั้งหมด' },
   ...lawCategories,
@@ -74,6 +75,12 @@ function getLawTypeLabel(type, typeLabel = '') {
 
 function getEditableLawType(type) {
   return lawTypes.some((option) => option.value === type) ? type : ''
+}
+
+function compareLaws(first, second) {
+  const firstOrder = lawTypeOrder.get(first.type) ?? lawTypes.length
+  const secondOrder = lawTypeOrder.get(second.type) ?? lawTypes.length
+  return firstOrder - secondOrder || String(first.title).localeCompare(String(second.title), 'th')
 }
 
 function formatBuddhistDate(value) {
@@ -198,7 +205,7 @@ function LawsPage({ isAdmin = false, accessToken = '' }) {
             .filter(Boolean)
             .some((value) => String(value).toLocaleLowerCase('th').includes(normalizedSearchTerm))
         })
-        .sort((first, second) => String(first.title).localeCompare(String(second.title), 'th'))
+        .sort(compareLaws)
     },
     [laws, searchTerm, selectedCategory],
   )
