@@ -2,11 +2,24 @@ import type { PomsManagedStatusDTO } from './poms-status-management.types';
 import type { ConnectionRequestEiaAssessment } from '../connection-requests/connection-request-eia';
 import type {
   ContactPersonInput,
+  ConnectionRequestFormDTO,
+  ConnectionSystemType,
   MeasurementInstrumentsInput,
   MeasurementPointDetailsInput,
   RequestDocumentImageInput,
 } from '../connection-requests/connection-requests.types';
 import type { MonitoringPointStatus } from '../monitoring-point-forms/monitoring-point-forms.types';
+
+/** An ID-based edit form may cover more than one monitoring system. */
+export interface PomsFactoryEditRequestFormDTO extends Omit<
+  ConnectionRequestFormDTO,
+  'systemType' | 'measurementPoints'
+> {
+  systemType: ConnectionSystemType | null;
+  measurementPoints: (ConnectionRequestFormDTO['measurementPoints'][number] & {
+    systemType?: ConnectionSystemType;
+  })[];
+}
 
 export const POMS_FACTORY_EDIT_REQUEST_STATUS = {
   PENDING_REVIEW: 'PENDING_REVIEW',

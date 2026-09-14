@@ -24,6 +24,7 @@ import type {
   PomsFactoryDetailDTO,
   PomsFactoryFormContactsDTO,
   PomsFactoryEditRequestDetailDTO,
+  PomsFactoryEditRequestFormDTO,
   PomsFactoryEditRequestDTO,
   PomsFactoryReviewActorContext,
   PomsFactoryProfileDTO,
@@ -247,8 +248,14 @@ export const pomsFactoriesService = {
     viewScope: AccessScope,
     query: { systemType?: ConnectionSystemType },
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<ConnectionRequestFormDTO> {
-    const request = await this.getEditRequest(id, actorUserId, viewScope, regionalAccess);
+  ): Promise<PomsFactoryEditRequestFormDTO> {
+    // Read stored snapshots before detail-response enrichment changes parameter groups.
+    const request = await pomsFactoriesRepository.findEditRequestById(id, {
+      actorUserId,
+      scope: viewScope,
+      regionalAccess,
+    });
+    if (!request) throw new NotFoundError('POMS factory edit request not found');
     const current = await this.getFactoryDetail(
       request.factoryId,
       actorUserId,
@@ -263,14 +270,21 @@ export const pomsFactoriesService = {
     const points =
       request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
         ? (request.proposedMeasurementPoints ??
-          request.currentMeasurementPoints ??
+          request.currentMeasurementPoints?.map((point) => ({
+            ...point,
+            details: deriveCurrentPomsParameterDetails(point),
+          })) ??
           current.measurementPoints)
         : current.measurementPoints;
-    const systemType = resolveFormSystemType(points, query.systemType);
-    const formContacts = await pomsFactoriesRepository.findFactoryFormContacts(
-      request.eligibleFactoryId,
-      systemType,
-    );
+    const systemType = resolveEditRequestFormSystemType(request, points, query.systemType);
+    const formContacts =
+      systemType === null &&
+      request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+        ? null
+        : await pomsFactoriesRepository.findFactoryFormContacts(
+            request.eligibleFactoryId,
+            systemType ?? undefined,
+          );
     const proposedContacts =
       request.proposedContacts &&
       (request.proposedContacts.systemType === null ||
@@ -457,18 +471,40 @@ function resolveFormSystemType(
   );
 }
 
-function toPomsConnectionRequestForm(
+function resolveEditRequestFormSystemType(
+  request: PomsFactoryEditRequestDTO,
+  points: PomsMeasurementPointDTO[],
+  requestedSystemType?: ConnectionSystemType,
+): ConnectionSystemType | null {
+  if (points.length === 0) {
+    throw new NotFoundError('POMS factory edit request has no measurement points');
+  }
+  // Explicit filters preserve the existing validation and single-system response.
+  if (requestedSystemType) return resolveFormSystemType(points, requestedSystemType);
+  const available = [...new Set(points.map((point) => point.systemType))];
+  if (available.length === 1) return available[0];
+  if (request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO) return null;
+
+  const inferred = resolveEditRequestContactSystemType(request);
+  const contactSystem = request.proposedContacts?.systemType;
+  const selected =
+    inferred ?? (changedEditRequestPoints(request).length === 0 ? contactSystem : null);
+  return selected && available.includes(selected) ? selected : null;
+}
+
+function toPomsConnectionRequestForm<T extends ConnectionSystemType | null>(
   profile: PomsFactoryProfileDTO,
   points: PomsMeasurementPointDTO[],
-  systemType: ConnectionSystemType,
+  systemType: T,
   remarks?: string | null,
   formContacts?: PomsFactoryFormContactsDTO | null,
   deriveCurrentParameterGroups = false,
-): ConnectionRequestFormDTO {
+): Omit<PomsFactoryEditRequestFormDTO, 'systemType'> & { systemType: T } {
   const baseForm = emptyConnectionRequestForm(profile, systemType);
   const measurementPoints = points
-    .filter((point) => point.systemType === systemType)
+    .filter((point) => systemType === null || point.systemType === systemType)
     .map((point) => ({
+      ...(systemType === null ? { systemType: point.systemType } : {}),
       pointName: point.pointName,
       pointCode: point.pointCode,
       pointType: point.pointType,
@@ -514,7 +550,7 @@ function toPomsConnectionRequestForm(
     contactPersons: (formContacts?.contactPersons ?? []).map((contact) => ({ ...contact })),
     notificationEmails: [...(formContacts?.notificationEmails ?? [])],
     officerNotificationEmails: measurementPointOfficerEmails(
-      points.filter((point) => point.systemType === systemType),
+      points.filter((point) => systemType === null || point.systemType === systemType),
       formContacts?.officerNotificationEmails,
     ),
     informationProviderName: formContacts?.informationProviderName ?? null,
@@ -531,18 +567,8 @@ function toPomsConnectionRequestForm(
 function resolveEditRequestContactSystemType(
   request: PomsFactoryEditRequestDTO,
 ): ConnectionSystemType | null {
-  const currentById = new Map(
-    (request.currentMeasurementPoints ?? []).map((point) => [point.connectedPointId, point]),
-  );
   const proposedPoints = request.proposedMeasurementPoints ?? [];
-  const changedPoints = proposedPoints.filter((point) => {
-    const current = currentById.get(point.connectedPointId);
-    return (
-      !current ||
-      JSON.stringify(editableMeasurementPoint(current)) !==
-        JSON.stringify(editableMeasurementPoint(point))
-    );
-  });
+  const changedPoints = changedEditRequestPoints(request);
   const candidatePoints =
     changedPoints.length > 0
       ? changedPoints
@@ -553,10 +579,25 @@ function resolveEditRequestContactSystemType(
   return systemTypes.length === 1 ? systemTypes[0] : null;
 }
 
-function emptyConnectionRequestForm(
+function changedEditRequestPoints(request: PomsFactoryEditRequestDTO): PomsMeasurementPointDTO[] {
+  const currentById = new Map(
+    (request.currentMeasurementPoints ?? []).map((point) => [point.connectedPointId, point]),
+  );
+  const proposedPoints = request.proposedMeasurementPoints ?? [];
+  return proposedPoints.filter((point) => {
+    const current = currentById.get(point.connectedPointId);
+    return (
+      !current ||
+      JSON.stringify(editableMeasurementPoint(current)) !==
+        JSON.stringify(editableMeasurementPoint(point))
+    );
+  });
+}
+
+function emptyConnectionRequestForm<T extends ConnectionSystemType | null>(
   profile: PomsFactoryProfileDTO,
-  systemType: ConnectionSystemType,
-): ConnectionRequestFormDTO {
+  systemType: T,
+): Omit<PomsFactoryEditRequestFormDTO, 'systemType'> & { systemType: T } {
   return {
     requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
     factoryId: profile.factoryId,

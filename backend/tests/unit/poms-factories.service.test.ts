@@ -607,6 +607,225 @@ describe('pomsFactoriesService edit-request workflow', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
+  it.each(['BASIC_INFO', 'MEASUREMENT_POINTS'] as const)(
+    'opens a mixed-system %s edit-request form by ID without a system query',
+    async (formType) => {
+      const detail = factoryDetail();
+      const points = [
+        detail.measurementPoints[0],
+        {
+          ...detail.measurementPoints[0],
+          connectedPointId: 16,
+          systemType: 'WPMS' as const,
+          pointCode: 'W0001',
+          pointType: 'WASTEWATER' as const,
+          parameters: ['BOD (mg/l)'],
+        },
+      ];
+      mockedRepository.findFactoryDetail.mockResolvedValue({
+        ...detail,
+        measurementPoints: points,
+        systemTypes: ['CEMS', 'WPMS'],
+      });
+      mockedRepository.findEditRequestById.mockResolvedValue(
+        editRequest('REVISION_REQUESTED', {
+          id: 29,
+          formType,
+          currentMeasurementPoints: points,
+          proposedMeasurementPoints: points,
+          proposedFactory: { ...detail, projectName: 'โครงการแก้ไข' },
+          proposedContacts: {
+            systemType: null,
+            contactPersons: [],
+            notificationEmails: [],
+            officerNotificationEmails: [],
+          },
+        }),
+      );
+
+      const result = await pomsFactoriesService.getEditRequestForm(
+        29,
+        42,
+        ownFactoryScope,
+        {},
+        null,
+      );
+
+      expect(result.systemType).toBeNull();
+      expect(result.projectName).toBe('โครงการแก้ไข');
+      expect(result.measurementPoints).toEqual([
+        expect.objectContaining({
+          systemType: 'CEMS',
+          pointCode: 'S0001',
+          parameters: ['CO (ppm)'],
+        }),
+        expect.objectContaining({
+          systemType: 'WPMS',
+          pointCode: 'W0001',
+          parameters: ['BOD (mg/l)'],
+        }),
+      ]);
+      expect(result.contactPersons).toEqual([]);
+      expect(result.notificationEmails).toEqual([]);
+      expect(result.officerNotificationEmails).toEqual([]);
+    },
+  );
+
+  it('infers the changed system from an edit request whose snapshot includes both systems', async () => {
+    const cems = factoryDetail().measurementPoints[0];
+    const wpms = { ...cems, connectedPointId: 16, systemType: 'WPMS' as const, pointCode: 'W0001' };
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: [cems, wpms],
+        proposedMeasurementPoints: [cems, { ...wpms, pointName: 'แก้ไขจุดน้ำ' }],
+      }),
+    );
+    const result = await pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, {}, null);
+    expect(result.systemType).toBe('WPMS');
+    expect(result.measurementPoints).toEqual([
+      expect.objectContaining({ pointName: 'แก้ไขจุดน้ำ' }),
+    ]);
+    expect(mockedRepository.findFactoryFormContacts).toHaveBeenLastCalledWith(7, 'WPMS');
+  });
+
+  it('keeps ambiguous measurement-point form providers empty instead of choosing a system', async () => {
+    const cems = factoryDetail().measurementPoints[0];
+    const points = [cems, { ...cems, connectedPointId: 16, systemType: 'WPMS' as const }];
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: points,
+        proposedMeasurementPoints: points,
+      }),
+    );
+    const result = await pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, {}, null);
+    expect(result.systemType).toBeNull();
+    expect(result.informationProviderName).toBeNull();
+    expect(mockedRepository.findFactoryFormContacts).not.toHaveBeenCalled();
+  });
+
+  it('uses the system saved with a contact-only edit request', async () => {
+    const cems = factoryDetail().measurementPoints[0];
+    const points = [cems, { ...cems, connectedPointId: 16, systemType: 'WPMS' as const }];
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: points,
+        proposedMeasurementPoints: points,
+        proposedContacts: {
+          systemType: 'WPMS',
+          contactPersons: [],
+          notificationEmails: ['water@example.com'],
+          officerNotificationEmails: [],
+        },
+      }),
+    );
+    const result = await pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, {}, null);
+    expect(result.systemType).toBe('WPMS');
+    expect(result.notificationEmails).toEqual(['water@example.com']);
+  });
+
+  it('keeps both edited systems even when the contact snapshot is system-specific', async () => {
+    const cems = factoryDetail().measurementPoints[0];
+    const points = [cems, { ...cems, connectedPointId: 16, systemType: 'WPMS' as const }];
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: points,
+        proposedMeasurementPoints: points.map((point) => ({ ...point, pointName: 'แก้ไข' })),
+        proposedContacts: {
+          systemType: 'WPMS',
+          contactPersons: [],
+          notificationEmails: ['water@example.com'],
+          officerNotificationEmails: [],
+        },
+      }),
+    );
+    const result = await pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, {}, null);
+    expect(result.systemType).toBeNull();
+    expect(result.measurementPoints).toHaveLength(2);
+    expect(result.notificationEmails).toEqual([]);
+  });
+
+  it('preserves current parameter groups when a legacy edit form has no proposed points', async () => {
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: factoryDetail().measurementPoints,
+        proposedMeasurementPoints: null,
+      }),
+    );
+    const result = await pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, {}, null);
+    expect(result.measurementPoints[0].details).toEqual({
+      eligibleParameters: [],
+      connectedParameters: ['CO (ppm)'],
+      pendingParameters: [],
+      requestedParameters: ['CO (ppm)'],
+    });
+  });
+
+  it('returns 404 when the factory no longer has connected measurement points', async () => {
+    // The real repository returns null when there are no connected-point rows.
+    mockedRepository.findFactoryDetail.mockResolvedValue(null);
+    await expect(
+      pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, {}, null),
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'NOT_FOUND',
+      message: 'POMS factory not found',
+    });
+    expect(mockedRepository.findFactoryFormContacts).not.toHaveBeenCalled();
+  });
+
+  it.each([{}, { systemType: 'CEMS' as const }])(
+    'rejects an empty stored measurement-point snapshot for query %j',
+    async (query) => {
+      mockedRepository.findEditRequestById.mockResolvedValue(
+        editRequest('REVISION_REQUESTED', {
+          formType: 'MEASUREMENT_POINTS',
+          currentMeasurementPoints: factoryDetail().measurementPoints,
+          proposedMeasurementPoints: [],
+        }),
+      );
+      await expect(
+        pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, query, null),
+      ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+      expect(mockedRepository.findFactoryFormContacts).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not load factory or contact data for an edit request outside view scope', async () => {
+    mockedRepository.findEditRequestById.mockResolvedValue(null);
+    await expect(
+      pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, {}, null),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(mockedRepository.findEditRequestById).toHaveBeenCalledWith(29, {
+      actorUserId: 42,
+      scope: ownFactoryScope,
+      regionalAccess: null,
+    });
+    expect(mockedRepository.findFactoryDetail).not.toHaveBeenCalled();
+    expect(mockedRepository.findFactoryFormContacts).not.toHaveBeenCalled();
+  });
+
+  it('preserves single-system inference and rejects an unavailable explicit form filter', async () => {
+    const result = await pomsFactoriesService.getEditRequestForm(29, 42, ownFactoryScope, {}, null);
+    expect(result.systemType).toBe('CEMS');
+    await expect(
+      pomsFactoriesService.getEditRequestForm(
+        29,
+        42,
+        ownFactoryScope,
+        { systemType: 'WPMS' },
+        null,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      details: { requestedSystemType: 'WPMS', availableSystemTypes: ['CEMS'] },
+    });
+  });
+
   it('prefills only editable proposed values and keeps live identity from legacy requests', async () => {
     const {
       industryMainOrder: _industryMainOrder,

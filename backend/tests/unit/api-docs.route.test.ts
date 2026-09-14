@@ -167,7 +167,7 @@ describe('API documentation routes', () => {
     expect(operationCount).toBe(153);
   });
 
-  it('serves one canonical form-prefill response schema on connection and POMS endpoints', async () => {
+  it('serves shared form schemas with the edit-request mixed-system variant', async () => {
     const response = await request(createDocsTestApp()).get('/api/v1/openapi.json');
     const paths = response.body.paths as Record<
       string,
@@ -183,15 +183,18 @@ describe('API documentation routes', () => {
     >;
     const expected = { $ref: '#/components/schemas/ConnectionRequestFormResponse' };
 
-    for (const path of [
-      '/cems-wpms-requests/{id}/form',
-      '/poms-factories/{factoryId}/form',
-      '/poms-factories/edit-requests/{id}/form',
-    ]) {
+    for (const path of ['/cems-wpms-requests/{id}/form', '/poms-factories/{factoryId}/form']) {
       expect(paths[path].get.responses?.['200'].content?.['application/json'].schema).toEqual(
         expected,
       );
     }
+    expect(
+      paths['/poms-factories/edit-requests/{id}/form'].get.responses?.['200'].content?.[
+        'application/json'
+      ].schema,
+    ).toEqual({
+      $ref: '#/components/schemas/PomsFactoryEditRequestFormResponse',
+    });
   });
 
   it('documents the key write flows with a required request body', async () => {

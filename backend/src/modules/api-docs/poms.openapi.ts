@@ -5351,19 +5351,19 @@ const extraPaths: Record<string, OpenApiObject> = {
   '/poms-factories/edit-requests/{id}/form': {
     get: securedOperation({
       tag: 'Master Data',
-      summary: 'Get proposed POMS edit request as connection-request form',
+      summary: 'Get proposed POMS edit-request form by ID',
       operationId: 'getPomsFactoryEditRequestForm',
       description:
-        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ทั้ง BASIC_INFO และ MEASUREMENT_POINTS overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. ผู้ติดต่อ อีเมลแจ้งเตือน informationProviderName และ informationProviderPosition อ่านจาก source connection request ล่าสุดของ systemType ที่เลือก โดย fallback provider เป็น null เมื่อไม่มีค่า. Permission: factories:view; ถ้ามีทั้ง CEMS และ WPMS ต้องระบุ systemType',
+        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ทั้ง BASIC_INFO และ MEASUREMENT_POINTS overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. เปิดด้วย id ได้โดยไม่ต้องส่ง systemType. ต้องมี current/live POMS และจุดตรวจวัดสำหรับฟอร์มอย่างน้อยหนึ่งจุดเสมอ; หากไม่พบโรงงานที่มีจุดตรวจวัดในขอบเขตสิทธิ์ หรือ snapshot ที่ใช้สร้างฟอร์มว่าง ตอบ 404 NOT_FOUND. เมื่อ points มีระบบเดียวให้ใช้ระบบนั้น; MEASUREMENT_POINTS อนุมานจากจุดที่เปลี่ยนใน stored snapshots หรือ proposedContacts.systemType เมื่อไม่มีจุดเปลี่ยน. หากยังครอบคลุมหลายระบบคืน systemType: null และ measurementPoints ครบพร้อม systemType ของแต่ละจุด; BASIC_INFO ใช้ข้อมูลทั่วไปทั้งโรงงาน. query systemType เป็น optional filter สำหรับผู้เรียกเดิม และตอบ 400 เมื่อระบบที่เลือกไม่มีในชุดจุดตรวจวัด. ผู้ติดต่อและอีเมลใช้ proposedContacts เมื่อขอบเขตตรงกัน รวมถึง [] ที่ล้างไว้. fallback ใช้ source ล่าสุดของระบบที่เลือก หรือทั้งโรงงานสำหรับ BASIC_INFO; MEASUREMENT_POINTS ที่ไม่ระบุระบบชัดเจนไม่เลือก source และคืน provider เป็น null. Permission: factories:view พร้อม data scope เดิม',
       parameters: [
         idParameter,
         queryEnum(
           'systemType',
           ['CEMS', 'WPMS'],
-          'เลือกชนิดระบบ; optional เมื่อข้อมูลในคำขอมี point เพียงชนิดเดียว',
+          'Optional filter; ไม่ส่งก็เปิดด้วย id ได้ backend อนุมานระบบจากคำขอ หรือคืนทั้งสองระบบเมื่อ systemType เป็น null',
         ),
       ],
-      successSchema: schemaRef('ConnectionRequestFormResponse'),
+      successSchema: schemaRef('PomsFactoryEditRequestFormResponse'),
     }),
   },
   '/poms-factories/edit-requests/{id}/resubmission': {
@@ -6442,6 +6442,47 @@ function mergePathMaps(...maps: Record<string, OpenApiObject>[]): Record<string,
 
 const baseComponents = (baseDocument.components ?? {}) as OpenApiObject;
 const baseSchemas = (baseComponents.schemas as Record<string, OpenApiObject>) ?? {};
+// Reuse the canonical form fields while limiting mixed-system output to edit requests.
+const baseFormSchema = baseSchemas.ConnectionRequestForm;
+const baseFormProperties = baseFormSchema.properties as Record<string, OpenApiObject>;
+const baseFormPoints = baseFormProperties.measurementPoints;
+const baseMeasurementPoint = baseSchemas.MeasurementPoint;
+const editRequestFormSchemas: Record<string, OpenApiObject> = {
+  PomsFactoryEditRequestFormMeasurementPoint: {
+    ...baseMeasurementPoint,
+    properties: {
+      ...(baseMeasurementPoint.properties as OpenApiObject),
+      systemType: {
+        type: 'string',
+        enum: ['CEMS', 'WPMS'],
+        description: 'ระบบของจุดตรวจวัด; คืนเมื่อ systemType ระดับฟอร์มเป็น null',
+      },
+    },
+  },
+  PomsFactoryEditRequestForm: {
+    ...baseFormSchema,
+    description:
+      'ฟอร์ม proposed values เปิดด้วย edit-request ID; ต้องมีจุดตรวจวัดอย่างน้อยหนึ่งจุดเสมอ และ systemType เป็น null เฉพาะเมื่อครอบคลุมหลายระบบ',
+    properties: {
+      ...baseFormProperties,
+      systemType: { type: 'string', nullable: true, enum: ['CEMS', 'WPMS', null] },
+      measurementPoints: {
+        ...baseFormPoints,
+        minItems: 1,
+        items: schemaRef('PomsFactoryEditRequestFormMeasurementPoint'),
+        description:
+          'คืนจุดของระบบที่เลือกหรืออนุมานได้; ถ้า systemType เป็น null คืนทุกจุดพร้อม systemType รายจุด',
+      },
+    },
+  },
+  PomsFactoryEditRequestFormResponse: {
+    ...baseSchemas.ConnectionRequestFormResponse,
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('PomsFactoryEditRequestForm'),
+    },
+  },
+};
 const baseErrorEnvelope = (baseSchemas.ErrorEnvelope ?? {}) as OpenApiObject;
 const baseErrorEnvelopeProperties =
   (baseErrorEnvelope.properties as Record<string, OpenApiObject>) ?? {};
@@ -6454,6 +6495,7 @@ const components: OpenApiObject = {
     ...componentSchemas,
     ...statusManagementSchemas,
     ...baseSchemas,
+    ...editRequestFormSchemas,
     ErrorEnvelope: {
       ...baseErrorEnvelope,
       properties: {

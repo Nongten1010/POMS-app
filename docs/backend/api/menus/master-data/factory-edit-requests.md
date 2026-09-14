@@ -978,27 +978,47 @@ Minimal response (`200 OK`):
 
 ### `GET /api/v1/poms-factories/edit-requests/:id/form`
 
-คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้เฉพาะ 7 editable fields จาก proposed factory profile โดยชื่อ ที่อยู่ และข้อมูลอ่านอย่างเดียวยึด current/live รวมถึงเมื่อเปิดคำขอเก่า; `MEASUREMENT_POINTS` ใช้ proposed measurement points และใช้ 7 editable fields จาก proposed factory profile เมื่อมีการแก้ข้อมูลทั่วไป; ถ้าแก้เฉพาะจุดใช้ข้อมูลทั่วไป current/live และทั้งสองแบบใช้ `requestNote` เป็น `remarks` (`BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้คืน `null`)
+คืน `data` โดยใช้ field names จาก shared form contract ของ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้เฉพาะ 7 editable fields จาก proposed factory profile โดยชื่อ ที่อยู่ และข้อมูลอ่านอย่างเดียวยึด current/live รวมถึงเมื่อเปิดคำขอเก่า; `MEASUREMENT_POINTS` ใช้ proposed measurement points และใช้ 7 editable fields จาก proposed factory profile เมื่อมีการแก้ข้อมูลทั่วไป; ถ้าแก้เฉพาะจุดใช้ข้อมูลทั่วไป current/live และทั้งสองแบบใช้ `requestNote` เป็น `remarks` (`BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้คืน `null`)
 
 endpoint edit-request form ใช้ผู้ติดต่อและอีเมลจาก `proposedContacts` เมื่อ snapshot ครอบคลุม `systemType` ที่เลือก โดยคง `[]` ที่ล้างไว้; คำขอเก่า fallback เช่นเดียวกับ factory form. `informationProviderName`/`informationProviderPosition` อ่านจากคำขอเชื่อมต่อต้นทางล่าสุด; ถ้าไม่มีต้นทางใช้ `""`, `[]` หรือ `null` ตาม shared contract ส่วน proposed values ของจุดตรวจวัดยังคงเดิม และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`
 
 ชื่อ ที่อยู่ และ identity fields ใน prefill เป็นข้อมูลอ่านอย่างเดียวสำหรับ `BASIC_INFO`; ให้ส่งกลับเฉพาะ [7 editable fields](#shared-basic-info-fields) รวมถึงเมื่อเปิดแก้ไขคำขอเก่า ส่วน `remarks` ยังคงเป็น field ของ shared response แต่ห้ามส่งใน `BASIC_INFO` resubmission
+
+เมนูข้อมูลพื้นฐาน POMS ต้องมีจุดตรวจวัดอย่างน้อยหนึ่งจุดเสมอ ฟอร์มสำเร็จจึงไม่คืน `measurementPoints: []` หากไม่พบโรงงานที่มีจุดตรวจวัดในขอบเขตสิทธิ์ หรือ snapshot ที่ใช้สร้างฟอร์มว่าง ตอบ `404 NOT_FOUND` ตาม [shared error envelope](../../shared/common-api/README.md#shared-response-shape)
+
+เปิดฟอร์มด้วย `id` ได้โดยไม่ต้องส่ง `systemType` เพิ่มเติม:
+
+- ถ้าชุดจุดตรวจวัดที่ใช้สร้างฟอร์มมีระบบเดียว backend ใช้ระบบนั้น
+- `MEASUREMENT_POINTS` ใช้ proposed points → current snapshot → current/live ตามลำดับ และอนุมานระบบจากจุดที่เปลี่ยนใน stored snapshots; ถ้าไม่มีจุดเปลี่ยน ใช้ `proposedContacts.systemType` เมื่อระบุระบบไว้
+- ถ้ายังมีหลายระบบ เช่น `BASIC_INFO` ของโรงงานที่มีทั้ง CEMS/WPMS หรือคำขอแก้หลายระบบ คืน `systemType: null` พร้อมจุดตรวจวัดทั้งหมด และระบุ `measurementPoints[].systemType` ทุกจุด ไม่เลือกระบบแรกแทนผู้ใช้
+- `?systemType=CEMS` หรือ `WPMS` ยังคงใช้เป็นตัวกรองได้ตามเดิม ถ้าระบบนั้นไม่มีในชุดจุดตรวจวัด ตอบ `400 BAD_REQUEST`
+- เมื่อไม่เลือกระบบ `BASIC_INFO` ใช้ผู้ติดต่อจาก snapshot ที่ครอบคลุมทั้งโรงงานก่อน fallback ไปยัง source ล่าสุดทั้งโรงงาน; `MEASUREMENT_POINTS` ที่ยังครอบคลุมหลายระบบใช้ snapshot ที่ครอบคลุมทั้งโรงงานได้ แต่ไม่เลือก source ของระบบใดโดยพลการ จึงคืน provider เป็น `null` และใช้ค่าว่างสำหรับผู้ติดต่อ/อีเมลที่ไม่มี snapshot ส่วน `officerNotificationEmails` รวมจากจุดตรวจวัดได้ตามเดิม
 
 #### Request Fields
 
 | Field        | Location | Type              | Required    | Rules |
 | ------------ | -------- | ----------------- | ----------- | ----- |
 | `id`         | path     | positive integer  | yes         | edit-request ID ที่อยู่ใน `factories:view` scope |
-| `systemType` | query    | `CEMS` \| `WPMS` | conditional | optional เมื่อ proposed/current points มีระบบเดียว; บังคับเมื่อมีทั้ง CEMS และ WPMS |
+| `systemType` | query    | `CEMS` \| `WPMS` | no | ตัวกรองเพิ่มเติม; ไม่ส่งก็เปิดฟอร์มจาก ID ได้ |
 
 ```bash
 curl --request GET \
-  --url '<BASE_URL>/api/v1/poms-factories/edit-requests/11/form?systemType=CEMS' \
+  --url '<BASE_URL>/api/v1/poms-factories/edit-requests/29/form' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Accept: application/json'
 ```
 
-Minimal response (`200 OK`):
+#### Response Fields ที่ต่างจาก shared form
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `data.systemType` | `CEMS` \| `WPMS` \| `null` | ระบบที่เลือก/อนุมานได้; `null` เมื่อไม่ได้จำกัดระบบ |
+| `data.measurementPoints` | array | จุดของระบบที่เลือก หรือทุกจุดเมื่อไม่ได้จำกัดระบบ; อย่างน้อย 1 จุด |
+| `data.measurementPoints[].systemType` | `CEMS` \| `WPMS` | คืนทุกจุดเมื่อ `data.systemType` เป็น `null`; กรณีระบบเดียวคงรูปแบบเดิม |
+
+field อื่นและ error envelope ใช้ [shared contract](../connection-requests/README.md#connection-request-form-prefill) เดิม; OpenAPI ใช้ `PomsFactoryEditRequestFormResponse` ที่ขยายจาก shared fields โดยไม่เปลี่ยน endpoint form อื่น
+
+Minimal response (`200 OK`, ตัวอย่างคำขอที่ครอบคลุมสองระบบ):
 
 ```json
 {
@@ -1010,7 +1030,7 @@ Minimal response (`200 OK`):
     "factoryRegistrationNo": "3-106-33/50สบ",
     "address": "99 หมู่ 1",
     "projectName": "โครงการปรับปรุงระบบตรวจวัด",
-    "systemType": "CEMS",
+    "systemType": null,
     "contactName": "",
     "contactPhone": "",
     "notificationEmails": [],
@@ -1019,10 +1039,20 @@ Minimal response (`200 OK`):
     "informationProviderPosition": null,
     "measurementPoints": [
       {
+        "systemType": "CEMS",
         "pointName": "ปล่อง A",
         "pointCode": "S2001",
         "pointType": "STACK",
         "parameters": ["CO (ppm)"],
+        "documentsAndImages": [],
+        "measurementInstruments": null
+      },
+      {
+        "systemType": "WPMS",
+        "pointName": "จุดระบายน้ำ A",
+        "pointCode": "W2001",
+        "pointType": "WASTEWATER",
+        "parameters": ["BOD (mg/l)"],
         "documentsAndImages": [],
         "measurementInstruments": null
       }

@@ -143,6 +143,23 @@ describe('POMS factory routes', () => {
     );
   });
 
+  it('accepts an edit-request form ID without a system query', async () => {
+    const form = { ...connectionForm(), systemType: null };
+    mockedService.getEditRequestForm.mockResolvedValue(form);
+    const response = await request(createTestApp())
+      .get('/api/v1/poms-factories/edit-requests/29/form')
+      .set('Authorization', `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL' } })}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data.systemType).toBeNull();
+    expect(mockedService.getEditRequestForm).toHaveBeenCalledWith(
+      29,
+      42,
+      { scope: 'ALL' },
+      {},
+      null,
+    );
+  });
+
   it('returns proposed edit-request values through the same form contract', async () => {
     const response = await request(createTestApp())
       .get('/api/v1/poms-factories/edit-requests/11/form?systemType=CEMS')

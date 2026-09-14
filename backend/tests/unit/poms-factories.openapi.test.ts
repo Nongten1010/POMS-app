@@ -370,13 +370,32 @@ describe('POMS factory master-data OpenAPI contract', () => {
     ]);
   });
 
-  it('uses one canonical connection-request form response for every prefill endpoint', () => {
+  it('reuses canonical form fields with a mixed-system variant for edit requests', () => {
     const expectedResponse = { $ref: '#/components/schemas/ConnectionRequestFormResponse' };
     expect(jsonSuccessSchema('/cems-wpms-requests/{id}/form', 'get')).toEqual(expectedResponse);
     expect(jsonSuccessSchema('/poms-factories/{factoryId}/form', 'get')).toEqual(expectedResponse);
-    expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}/form', 'get')).toEqual(
-      expectedResponse,
+    expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}/form', 'get')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryEditRequestFormResponse',
+    });
+    const editForm = asObject(schemas().PomsFactoryEditRequestForm, 'edit form');
+    const editProperties = asObject(editForm.properties, 'edit form properties');
+    expect(editProperties.measurementPoints).toMatchObject({ minItems: 1 });
+    expect(editProperties.systemType).toMatchObject({
+      nullable: true,
+      enum: ['CEMS', 'WPMS', null],
+    });
+    const editPoints = asObject(
+      schemas().PomsFactoryEditRequestFormMeasurementPoint,
+      'edit points',
     );
+    expect(asObject(editPoints.properties, 'point properties').systemType).toMatchObject({
+      enum: ['CEMS', 'WPMS'],
+    });
+    const description = String(
+      operation('/poms-factories/edit-requests/{id}/form', 'get').description,
+    );
+    expect(description).toContain('เปิดด้วย id ได้โดยไม่ต้องส่ง systemType');
+    expect(description).toContain('systemType: null');
 
     const form = asObject(schemas().ConnectionRequestForm, 'ConnectionRequestForm');
     const properties = asObject(form.properties, 'ConnectionRequestForm.properties');
