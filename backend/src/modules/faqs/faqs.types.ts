@@ -13,10 +13,30 @@ export interface FaqInput {
   answer: string;
   category: FaqCategory;
   updatedDate: string;
+  links?: string[];
+  attachmentIds?: string[];
 }
 
-export interface FaqDTO extends FaqInput {
+export interface FaqAttachment {
   id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  downloadUrl: string;
+}
+
+export interface StoredFaqAttachment extends Omit<FaqAttachment, 'downloadUrl'> {
+  storagePath: string;
+}
+
+export interface FaqWriteInput extends FaqInput {
+  newAttachments?: StoredFaqAttachment[];
+}
+
+export interface FaqDTO extends Omit<FaqInput, 'attachmentIds' | 'links'> {
+  id: string;
+  links: string[];
+  attachments: FaqAttachment[];
   categoryLabel: string;
   createdAt: string;
   updatedAt: string;

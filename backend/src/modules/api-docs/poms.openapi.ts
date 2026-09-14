@@ -928,6 +928,17 @@ const faqExample = {
   updatedDate: '2026-09-04',
   createdAt: '2026-09-04T09:30:00.000Z',
   updatedAt: '2026-09-04T09:30:00.000Z',
+  links: ['https://example.com/guide', 'https://example.com/support'],
+  attachments: [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      fileName: 'guide.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+      downloadUrl:
+        '/api/v1/faqs/8d6a040b-f133-41f6-860d-4bb4dc08e72e/attachments/11111111-1111-4111-8111-111111111111',
+    },
+  ],
 };
 
 const faqRequestExample = {
@@ -982,6 +993,21 @@ const lawBinaryFileSchema: OpenApiObject = {
 };
 
 const faqRequestProperties: Record<string, OpenApiObject> = {
+  links: {
+    type: 'array',
+    maxItems: 20,
+    items: { type: 'string', format: 'uri', maxLength: 2048, pattern: '^https?://' },
+    description:
+      'URL ใช้ HTTP/HTTPS ไม่มี credentials; trim ก่อนตรวจ; POST ไม่ส่งได้ []; PUT ไม่ส่งจะคงเดิม ส่ง [] เพื่อล้าง',
+  },
+  attachmentIds: {
+    type: 'array',
+    maxItems: 10,
+    uniqueItems: true,
+    items: { type: 'string', format: 'uuid' },
+    description:
+      'รหัสไฟล์เดิมของ FAQ นี้ที่ต้องการเก็บตามลำดับ; PUT ไม่ส่งจะเก็บทั้งหมด ส่ง [] เพื่อนำไฟล์เดิมทั้งหมดออก; POST ส่งได้เฉพาะ [] หรือไม่ส่ง',
+  },
   question: { type: 'string', minLength: 1, maxLength: 1000 },
   answer: { type: 'string', minLength: 1 },
   category: schemaRef('FaqCategory'),
@@ -992,6 +1018,19 @@ const faqRequestProperties: Record<string, OpenApiObject> = {
     description: 'วันจริงรูปแบบ YYYY-MM-DD ช่วง 1900-01-01 ถึง 9999-12-31',
   },
 };
+
+function faqRequestBody(): OpenApiObject {
+  return {
+    required: true,
+    content: {
+      'application/json': {
+        schema: schemaRef('FaqRequest'),
+        example: { ...faqRequestExample, links: faqExample.links },
+      },
+      'multipart/form-data': { schema: schemaRef('FaqMultipartRequest') },
+    },
+  };
+}
 
 const pomsFactoryRegistrationSchema: OpenApiObject = {
   type: 'string',
@@ -1217,6 +1256,48 @@ const componentSchemas: Record<string, OpenApiObject> = {
     enum: ['CEMS', 'WPMS', 'OTHER'],
     'x-enum-labels': { CEMS: 'CEMS', WPMS: 'WPMS', OTHER: 'อื่นๆ' },
   },
+  FaqAttachment: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'fileName', 'fileSize', 'mimeType', 'downloadUrl'],
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      fileName: { type: 'string', maxLength: 255 },
+      fileSize: { type: 'integer', minimum: 1, maximum: 10485760 },
+      mimeType: { type: 'string' },
+      downloadUrl: {
+        type: 'string',
+        description: 'Public download route ของไฟล์ใน FAQ ที่ยังไม่ถูกลบ',
+      },
+    },
+  },
+  FaqMultipartRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['question', 'answer', 'category', 'updatedDate'],
+    properties: {
+      ...faqRequestProperties,
+      links: {
+        type: 'string',
+        description:
+          'JSON array ของ HTTP/HTTPS URL สูงสุด 20 รายการ รายการละ 2048 ตัวอักษร ไม่มี credentials; ไม่ส่งเมื่อ PUT จะคงเดิม',
+        example: '["https://example.com/a","https://example.com/b"]',
+      },
+      attachmentIds: {
+        type: 'string',
+        description:
+          'JSON array ของ UUID ไฟล์เดิมที่จะเก็บ สูงสุด 10 รายการ ห้ามซ้ำ; POST ใช้ [] หรือไม่ส่ง; PUT ไม่ส่งเก็บทั้งหมด',
+        example: '[]',
+      },
+      files: {
+        type: 'array',
+        maxItems: 10,
+        items: { type: 'string', format: 'binary', 'x-max-size-bytes': 10485760 },
+        description:
+          'ใช้ field files ซ้ำ; PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, JPEG, TXT (UTF-8) ไฟล์ละ 1 byte ถึง 10 MB รวมกับไฟล์เดิมไม่เกิน 10 ไฟล์; ตรวจนามสกุลและลายเซ็นไฟล์',
+      },
+    },
+  },
   Faq: {
     type: 'object',
     additionalProperties: false,
@@ -1229,6 +1310,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'updatedDate',
       'createdAt',
       'updatedAt',
+      'links',
+      'attachments',
     ],
     properties: {
       id: { type: 'string', format: 'uuid' },
@@ -1237,6 +1320,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       category: schemaRef('FaqCategory'),
       categoryLabel: { type: 'string', enum: ['CEMS', 'WPMS', 'อื่นๆ'] },
       updatedDate: faqRequestProperties.updatedDate,
+      links: faqRequestProperties.links,
+      attachments: { type: 'array', maxItems: 10, items: schemaRef('FaqAttachment') },
       createdAt: { type: 'string', format: 'date-time' },
       updatedAt: { type: 'string', format: 'date-time' },
     },
@@ -4732,12 +4817,15 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'FAQs',
       summary: 'เพิ่มคำถามที่พบบ่อย',
       operationId: 'createFaq',
-      requestBody: jsonRequestBody(schemaRef('FaqRequest'), faqRequestExample),
+      requestBody: faqRequestBody(),
       successStatus: '201',
       successDescription: 'สร้างคำถามที่พบบ่อยสำเร็จ',
       successSchema: schemaRef('FaqResponse'),
       extraResponses: {
-        '400': errorResponse('JSON body ไม่ผ่าน validation', faqValidationErrorExample),
+        '400': errorResponse(
+          'ข้อมูลหรือไฟล์ไม่ผ่าน validation; VALIDATION_ERROR หรือ UPLOAD_ERROR (เกินขนาด/จำนวนไฟล์ หรือ multipart ไม่ถูกต้อง)',
+          faqValidationErrorExample,
+        ),
       },
     }),
   },
@@ -4747,14 +4835,18 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'แก้ไขคำถามที่พบบ่อย',
       operationId: 'updateFaq',
       parameters: [contentIdParameter],
-      requestBody: jsonRequestBody(schemaRef('FaqRequest'), {
-        ...faqRequestExample,
-        question: 'หากระบบ CEMS ขัดข้อง ต้องดำเนินการอย่างไร?',
-      }),
+      requestBody: faqRequestBody(),
       successDescription: 'แก้ไขคำถามที่พบบ่อยสำเร็จ',
       successSchema: schemaRef('FaqResponse'),
       extraResponses: {
-        '400': errorResponse('UUID หรือ JSON body ไม่ผ่าน validation', faqValidationErrorExample),
+        '400': errorResponse(
+          'UUID ข้อมูลหรือไฟล์ไม่ผ่าน validation; VALIDATION_ERROR หรือ UPLOAD_ERROR',
+          faqValidationErrorExample,
+        ),
+        '409': errorResponse('CONFLICT: รายการแนบถูกแก้ไขพร้อมกัน กรุณาโหลดข้อมูลใหม่', {
+          success: false,
+          error: { code: 'CONFLICT', message: 'FAQ changed; reload before saving' },
+        }),
       },
     }),
     delete: securedOperation({
@@ -4764,6 +4856,33 @@ const extraPaths: Record<string, OpenApiObject> = {
       parameters: [contentIdParameter],
       successDescription: 'ลบคำถามที่พบบ่อยสำเร็จ',
       successSchema: schemaRef('DeletedContentResponse'),
+    }),
+  },
+  '/faqs/{id}/attachments/{attachmentId}': {
+    get: publicOperation({
+      tag: 'FAQs',
+      summary: 'ดาวน์โหลดไฟล์แนบคำถามที่พบบ่อย',
+      operationId: 'downloadFaqAttachment',
+      description:
+        'Public; เฉพาะไฟล์ที่ยังอยู่ใน FAQ ที่ยังไม่ถูกลบ; ตอบ Content-Disposition: attachment, Cache-Control: no-store, X-Content-Type-Options: nosniff; ไฟล์ที่นำออกไม่สามารถดาวน์โหลดผ่าน API ได้',
+      parameters: [
+        contentIdParameter,
+        {
+          name: 'attachmentId',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        },
+      ],
+      successSchema: { type: 'string', format: 'binary' },
+      successContentType: 'application/octet-stream',
+      extraResponses: {
+        '400': errorResponse('UUID ไม่ถูกต้อง', faqValidationErrorExample),
+        '404': errorResponse('ไม่พบ FAQ หรือไฟล์แนบ', {
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'FAQ attachment not found' },
+        }),
+      },
     }),
   },
   '/users': {

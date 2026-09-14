@@ -11,7 +11,7 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **144**
+จำนวน explicit endpoints: **145**
 
 | Method   | Full path                                                                 | Canonical owner                                                                 | Guard                                                                           | Route source                                                                                                |
 | -------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -31,6 +31,7 @@
 | `POST`   | `/api/v1/faqs`                                                            | `docs/backend/api/menus/faqs/`                                                  | `authenticate + authorize(faq:edit)`                                            | `backend/src/modules/faqs/faqs.routes.ts`                                                                  |
 | `PUT`    | `/api/v1/faqs/:id`                                                        | `docs/backend/api/menus/faqs/`                                                  | `authenticate + authorize(faq:edit)`                                            | `backend/src/modules/faqs/faqs.routes.ts`                                                                  |
 | `DELETE` | `/api/v1/faqs/:id`                                                        | `docs/backend/api/menus/faqs/`                                                  | `authenticate + authorize(faq:edit)`                                            | `backend/src/modules/faqs/faqs.routes.ts`                                                                  |
+| `GET` | `/api/v1/faqs/:id/attachments/:attachmentId` | `docs/backend/api/menus/faqs/` | `public` | `backend/src/modules/faqs/faqs.routes.ts` |
 | `GET`    | `/api/v1/users`                                                           | `docs/backend/api/menus/permissions/`                                           | `authenticate + authorize(users:view, permissions:manage)`                      | `backend/src/modules/users/users.routes.ts`                                                                 |
 | `GET`    | `/api/v1/users/:id/permissions`                                           | `docs/backend/api/menus/permissions/`                                           | `authenticate + authorize(permissions:manage)`                                  | `backend/src/modules/users/users.routes.ts`                                                                 |
 | `PUT`    | `/api/v1/users/:id/permissions`                                           | `docs/backend/api/menus/permissions/`                                           | `authenticate + authorize(permissions:manage)`                                  | `backend/src/modules/users/users.routes.ts`                                                                 |

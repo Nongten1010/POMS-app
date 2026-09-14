@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-jest.mock('../../src/config/database', () => ({
-  db: Object.assign(jest.fn(), {
+jest.mock('../../src/config/database', () => {
+  const connection = Object.assign(jest.fn(), {
     fn: { now: jest.fn(() => 'db-now') },
-  }),
-}));
+    transaction: jest.fn(),
+  });
+  connection.transaction.mockImplementation(async (callback: unknown) =>
+    (callback as (db: unknown) => Promise<unknown>)(connection),
+  );
+  return { db: connection };
+});
 
 import { db } from '../../src/config/database';
 import { faqsRepository } from '../../src/modules/faqs/faqs.repository';
@@ -44,6 +49,8 @@ describe('faqsRepository', () => {
         updatedDate: '2026-09-04',
         createdAt: '2026-09-04T09:30:00.000Z',
         updatedAt: '2026-09-04T10:30:00.000Z',
+        links: [],
+        attachments: [],
       },
     ]);
     expect(query.whereNull).toHaveBeenCalledWith('deleted_at');
@@ -55,6 +62,8 @@ describe('faqsRepository', () => {
       'updated_date',
       'created_at',
       'updated_at',
+      'links_json',
+      'attachments_json',
     );
   });
 
@@ -168,7 +177,112 @@ describe('faqsRepository', () => {
 
     await expect(faqsRepository.list()).rejects.toThrow('Stored FAQ category is invalid');
   });
+
+  it('round trips multiple files and links without exposing private storage paths', async () => {
+    const files = [
+      storedFile('11111111-1111-4111-8111-111111111111'),
+      storedFile('22222222-2222-4222-8222-222222222222'),
+    ];
+    mockedDb.mockReturnValue(
+      listQuery([
+        {
+          ...row,
+          attachments_json: JSON.stringify(files),
+          links_json: JSON.stringify(['https://example.com/a', 'https://example.com/b']),
+        },
+      ]),
+    );
+    const [result] = await faqsRepository.list();
+    expect(result.links).toHaveLength(2);
+    expect(result.attachments).toHaveLength(2);
+    expect(result.attachments[1].downloadUrl).toBe(
+      `/api/v1/faqs/${publicId}/attachments/${files[1].id}`,
+    );
+    expect(result.attachments[0]).not.toHaveProperty('storagePath');
+  });
+
+  it('retains selected files, adds new files and removes omitted files in one update', async () => {
+    const first = storedFile('11111111-1111-4111-8111-111111111111');
+    const second = storedFile('22222222-2222-4222-8222-222222222222');
+    const added = storedFile('33333333-3333-4333-8333-333333333333');
+    const previousJson = JSON.stringify([first, second]);
+    const mutation = mutationQuery(1);
+    mockedDb
+      .mockReturnValueOnce(findOneQuery({ ...row, attachments_json: previousJson }))
+      .mockReturnValueOnce(mutation)
+      .mockReturnValueOnce(
+        findOneQuery({ ...row, attachments_json: JSON.stringify([second, added]) }),
+      );
+    const updated = await faqsRepository.update(
+      publicId,
+      {
+        question: 'Q',
+        answer: 'A',
+        category: 'OTHER',
+        updatedDate: '2026-09-14',
+        attachmentIds: [second.id],
+        newAttachments: [added],
+        links: [],
+      },
+      42,
+    );
+    expect(updated?.attachments.map((file) => file.id)).toEqual([second.id, added.id]);
+    expect(mutation.where).toHaveBeenCalledWith('attachments_json', previousJson);
+    expect(mutation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments_json: JSON.stringify([second, added]),
+        links_json: '[]',
+      }),
+    );
+  });
+
+  it('rejects attachment ids from another FAQ before writing', async () => {
+    const mutation = mutationQuery(1);
+    mockedDb.mockReturnValueOnce(findOneQuery(row)).mockReturnValueOnce(mutation);
+    await expect(
+      faqsRepository.update(
+        publicId,
+        {
+          question: 'Q',
+          answer: 'A',
+          category: 'OTHER',
+          updatedDate: '2026-09-14',
+          attachmentIds: ['11111111-1111-4111-8111-111111111111'],
+        },
+        42,
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(mutation.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a concurrent attachment replacement', async () => {
+    mockedDb.mockReturnValueOnce(findOneQuery(row)).mockReturnValueOnce(mutationQuery(0));
+    await expect(
+      faqsRepository.update(
+        publicId,
+        {
+          question: 'Q',
+          answer: 'A',
+          category: 'OTHER',
+          updatedDate: '2026-09-14',
+          attachmentIds: [],
+        },
+        42,
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('does not expose a file belonging to a missing or deleted FAQ', async () => {
+    mockedDb.mockReturnValue(findOneQuery(undefined));
+    await expect(
+      faqsRepository.findAttachment(publicId, '11111111-1111-4111-8111-111111111111'),
+    ).resolves.toBeUndefined();
+  });
 });
+
+function storedFile(id: string) {
+  return { id, fileName: `${id}.pdf`, fileSize: 12, mimeType: 'application/pdf', storagePath: id };
+}
 
 function listQuery(rows: unknown[]) {
   const query: Record<string, jest.Mock> & PromiseLike<unknown[]> = {} as never;

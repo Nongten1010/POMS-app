@@ -11,10 +11,45 @@ const faqPayloadShape = {
   answer: z.string().trim().min(1),
   category: z.enum(FAQ_CATEGORIES),
   updatedDate: supportedDateOnlySchema,
+  links: z
+    .array(
+      z
+        .string()
+        .trim()
+        .max(2048)
+        .url()
+        .refine((value) => {
+          try {
+            const url = new URL(value);
+            return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+          } catch {
+            return false;
+          }
+        }, 'URL must use HTTP or HTTPS without credentials'),
+    )
+    .max(20)
+    .optional(),
 };
 
-export const createFaqSchema = z.object(faqPayloadShape).strict();
-export const updateFaqSchema = z.object(faqPayloadShape).strict();
+const attachmentIds = z
+  .array(z.string().uuid())
+  .max(10)
+  .refine((ids) => new Set(ids).size === ids.length, 'Attachment ids must be unique');
+export const createFaqSchema = z
+  .object({
+    ...faqPayloadShape,
+    attachmentIds: attachmentIds
+      .refine((ids) => ids.length === 0, 'Cannot retain attachments on create')
+      .optional(),
+  })
+  .strict();
+export const updateFaqSchema = z
+  .object({ ...faqPayloadShape, attachmentIds: attachmentIds.optional() })
+  .strict();
+
+export const faqAttachmentParamsSchema = z
+  .object({ id: z.string().uuid(), attachmentId: z.string().uuid() })
+  .strict();
 
 export const faqIdParamsSchema = z
   .object({

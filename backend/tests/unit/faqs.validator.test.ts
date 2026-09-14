@@ -49,6 +49,38 @@ describe('FAQ validation', () => {
     expect(faqIdParamsSchema.safeParse({ id: 'faq_001' }).success).toBe(false);
   });
 
+  it('accepts multiple links and retained attachment ids on update', () => {
+    expect(
+      updateFaqSchema.safeParse({
+        ...validPayload,
+        links: ['https://example.com/a', 'https://example.com/b'],
+        attachmentIds: [
+          '11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222',
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each(['javascript:alert(1)', 'data:text/html,test', 'ftp://example.com/a'])(
+    'rejects unsafe link %s',
+    (url) => {
+      expect(createFaqSchema.safeParse({ ...validPayload, links: [url] }).success).toBe(false);
+    },
+  );
+
+  it('rejects excess links, duplicate attachment ids, and retaining files on create', () => {
+    expect(
+      createFaqSchema.safeParse({ ...validPayload, links: Array(21).fill('https://example.com') })
+        .success,
+    ).toBe(false);
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(updateFaqSchema.safeParse({ ...validPayload, attachmentIds: [id, id] }).success).toBe(
+      false,
+    );
+    expect(createFaqSchema.safeParse({ ...validPayload, attachmentIds: [id] }).success).toBe(false);
+  });
+
   it('rejects pagination, filtering, and sorting query parameters', () => {
     expect(faqListQuerySchema.parse({})).toEqual({});
     expect(faqListQuerySchema.safeParse({ page: '1' }).success).toBe(false);

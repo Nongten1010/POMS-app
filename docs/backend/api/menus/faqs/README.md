@@ -11,6 +11,8 @@
 1. เรียก `GET /api/v1/faqs` หนึ่งครั้งเพื่อรับรายการทั้งหมด
 2. เก็บ `data[]` แล้วค้นจาก `question`, `answer`, `categoryLabel` และกรองด้วย `category` ใน frontend
 3. ผู้ใช้ที่มี `faq:edit` จัดการรายการผ่าน `POST`, `PUT` และ `DELETE`
+4. แนบหลายไฟล์พร้อมบันทึกด้วย `multipart/form-data` โดยใช้ field `files` ซ้ำ และส่ง `links`/`attachmentIds` เป็น JSON array string
+5. แสดง `attachments[]` และ `links[]` จาก response; ดาวน์โหลดไฟล์ผ่าน `attachments[].downloadUrl`
 
 ```bash
 curl --request GET \
@@ -38,6 +40,7 @@ curl --request POST \
 | เพิ่มคำถาม | `POST` | `/api/v1/faqs` | Bearer | `faq:edit` |
 | แก้ไขคำถาม | `PUT` | `/api/v1/faqs/:id` | Bearer | `faq:edit` |
 | ลบคำถาม | `DELETE` | `/api/v1/faqs/:id` | Bearer | `faq:edit` |
+| ดาวน์โหลดไฟล์แนบ | `GET` | `/api/v1/faqs/:id/attachments/:attachmentId` | Public | - |
 
 ## Category Enum
 
@@ -63,6 +66,10 @@ curl --request POST \
 | `updatedDate` | string (`YYYY-MM-DD`) | No | วันที่เนื้อหาอัปเดต ค.ศ. ช่วง `1900-01-01` ถึง `9999-12-31` |
 | `createdAt` | ISO 8601 datetime | No | เวลาสร้าง |
 | `updatedAt` | ISO 8601 datetime | No | เวลาแก้ไขล่าสุดของระบบ |
+| `links` | string[] | No | URL แบบ HTTP/HTTPS สูงสุด 20 รายการ; ไม่มีรายการคืน `[]` |
+| `attachments` | object[] | No | ไฟล์แนบสูงสุด 10 รายการ; ไม่มีรายการคืน `[]` |
+
+แต่ละรายการใน `attachments[]` มี `id` (UUID), `fileName` (string ไม่เกิน 255 ตัวอักษร), `fileSize` (bytes), `mimeType` และ `downloadUrl` โดยไม่เปิดเผย path จัดเก็บไฟล์
 
 ## Contracts
 
@@ -85,7 +92,9 @@ curl --request POST \
       "categoryLabel": "CEMS",
       "updatedDate": "2026-09-04",
       "createdAt": "2026-09-04T09:30:00.000Z",
-      "updatedAt": "2026-09-04T09:30:00.000Z"
+      "updatedAt": "2026-09-04T09:30:00.000Z",
+      "links": [],
+      "attachments": []
     }
   ]
 }
@@ -95,14 +104,53 @@ Frontend เป็นผู้ค้นหาและกรอง; ห้าม
 
 ### Request Body สำหรับ `POST` และ `PUT`
 
-Body เป็น strict JSON object; unknown field เช่น `id` ถูกปฏิเสธ และ `PUT` เป็น full replacement ของ 4 fields นี้
+รับ strict JSON object หรือ multipart form; unknown field เช่น `id` ถูกปฏิเสธ และ `PUT` ต้องส่ง 4 fields เดิมครบ ส่วน `links`/`attachmentIds` เป็น optional เพื่อรองรับ client เดิม
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
 | `question` | string | Yes | trim แล้ว 1-1,000 ตัวอักษร |
-| `answer` | string | Yes | trim แล้วอย่างน้อย 1 ตัวอักษร; payload ทั้งก้อนยังอยู่ภายใต้ global JSON body limit 1 MB |
+| `answer` | string | Yes | trim แล้วอย่างน้อย 1 ตัวอักษร; JSON payload ทั้งก้อนไม่เกิน 1 MB; multipart จำกัดข้อความแต่ละ field ไม่เกิน 1 MB |
 | `category` | enum | Yes | `CEMS`, `WPMS`, `OTHER`; ห้ามใช้ `all` |
 | `updatedDate` | string | Yes | วันจริงรูป `YYYY-MM-DD` ช่วงปี 1900-9999; future date ใช้ได้ |
+| `links` | string[] | No | สูงสุด 20 URL; trim แล้วไม่เกิน 2,048 ตัวอักษรต่อรายการ; ต้องเป็น HTTP/HTTPS ไม่มี username/password; POST ไม่ส่งได้ `[]`; PUT ไม่ส่งจะคงเดิม ส่ง `[]` เพื่อล้าง |
+| `attachmentIds` | UUID[] | No | รหัสไฟล์เดิมของ FAQ นี้ที่จะเก็บตามลำดับ สูงสุด 10 และไม่ซ้ำ; POST ส่งได้เฉพาะ `[]` หรือไม่ส่ง; PUT ไม่ส่งเก็บทั้งหมด ส่ง `[]` เพื่อนำไฟล์เดิมทั้งหมดออก |
+| `files` | binary[] | No | เฉพาะ multipart; ใช้ชื่อ field `files` ซ้ำ; ไฟล์ใหม่จะต่อท้ายไฟล์เดิมที่เก็บไว้ |
+
+ใน multipart ให้ส่ง `links` และ `attachmentIds` เป็น JSON array string เช่น `["https://example.com/a","https://example.com/b"]` ไม่ใช้ `links[]` หรือ `files[]` เป็นชื่อ field
+
+### หลายไฟล์และหลาย URL
+
+- รองรับ PDF, DOC, DOCX, XLS, XLSX, PNG, JPG/JPEG และ TXT (UTF-8) โดยตรวจนามสกุลและลายเซ็นไฟล์ไบนารี; MIME ใน response กำหนดจากชนิดไฟล์ที่ตรวจ ไม่เชื่อ MIME ที่ client ส่ง
+- ไฟล์ต้องไม่ว่าง ขนาดไม่เกิน 10 MB ต่อไฟล์ รวมไฟล์ใหม่และไฟล์เดิมที่เก็บไว้ไม่เกิน 10 ไฟล์ต่อคำถาม; URL สูงสุด 20 รายการ
+- การบันทึก FAQ และรายการแนบอยู่ใน database transaction; หากบันทึกไม่สำเร็จจะพยายามล้างไฟล์ใหม่ที่เขียนไปแล้ว
+- ไฟล์เก็บใน `UPLOAD_DIR/.private/faqs/` และให้ดาวน์โหลดผ่าน API เท่านั้น ต้องไม่เปิดโฟลเดอร์ `.private` ผ่าน web server
+- การนำไฟล์ออกและการลบ FAQ จะยกเลิกการดาวน์โหลดผ่าน API แต่ยังเก็บไฟล์จริงไว้ตามแนวทาง soft delete; ไม่มีงานล้างไฟล์ย้อนหลังอัตโนมัติใน change นี้
+- การบันทึกที่ชนกับการแก้รายการแนบระหว่าง request จะคืน `409 CONFLICT` ให้โหลดข้อมูลใหม่
+
+```bash
+curl --request POST \
+  --url '<BASE_URL>/api/v1/faqs' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --form-string 'question=การส่งข้อมูลต้องทำอย่างไร?' \
+  --form-string 'answer=ตรวจสอบตามเอกสารแนบและลิงก์' \
+  --form-string 'category=OTHER' \
+  --form-string 'updatedDate=2026-09-14' \
+  --form-string 'links=["https://example.com/a","https://example.com/b"]' \
+  --form 'files=@guide.pdf' \
+  --form 'files=@checklist.xlsx'
+```
+
+ตัวอย่างรายการแนบใน response:
+
+```json
+{
+  "id": "11111111-1111-4111-8111-111111111111",
+  "fileName": "guide.pdf",
+  "fileSize": 1024,
+  "mimeType": "application/pdf",
+  "downloadUrl": "/api/v1/faqs/8d6a040b-f133-41f6-860d-4bb4dc08e72e/attachments/11111111-1111-4111-8111-111111111111"
+}
+```
 
 ```json
 {
@@ -131,7 +179,9 @@ Body เป็น strict JSON object; unknown field เช่น `id` ถูก�
     "categoryLabel": "CEMS",
     "updatedDate": "2026-09-04",
     "createdAt": "2026-09-04T09:30:00.000Z",
-    "updatedAt": "2026-09-04T09:30:00.000Z"
+    "updatedAt": "2026-09-04T09:30:00.000Z",
+    "links": [],
+    "attachments": []
   }
 }
 ```
@@ -167,7 +217,9 @@ Body เป็น strict JSON object; unknown field เช่น `id` ถูก�
     "categoryLabel": "CEMS",
     "updatedDate": "2026-09-04",
     "createdAt": "2026-09-04T09:30:00.000Z",
-    "updatedAt": "2026-09-04T10:00:00.000Z"
+    "updatedAt": "2026-09-04T10:00:00.000Z",
+    "links": [],
+    "attachments": []
   }
 }
 ```
@@ -200,6 +252,23 @@ Response `200 OK`:
 }
 ```
 
+### `GET /api/v1/faqs/:id/attachments/:attachmentId`
+
+Public endpoint ไม่มี request body หรือ query; `id` และ `attachmentId` เป็น UUID ใน path ทั้งคู่ และไฟล์ต้องยังเป็นรายการแนบของ FAQ ที่ยังไม่ถูกลบ
+
+| Field | Location | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `id` | path | UUID | Yes | รหัส FAQ |
+| `attachmentId` | path | UUID | Yes | รหัสไฟล์แนบของ FAQ นี้ |
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/faqs/8d6a040b-f133-41f6-860d-4bb4dc08e72e/attachments/11111111-1111-4111-8111-111111111111' \
+  --output guide.pdf
+```
+
+ตอบ `200 OK` เป็น binary (ไม่มี JSON envelope) พร้อม `Content-Type: application/octet-stream`, `Content-Disposition: attachment`, `Content-Length`, `Cache-Control: no-store` และ `X-Content-Type-Options: nosniff`; รหัสไม่ถูกต้องคืน `400` และไฟล์ไม่มีอยู่/ถูกนำออก/FAQ ถูกลบคืน `404`
+
 ## Errors
 
 ใช้ [shared error envelope](../../shared/common-api/README.md) โดย frontend อ่าน `error.message` และ `error.details` เมื่อมี:
@@ -221,6 +290,8 @@ Response `200 OK`:
 | HTTP | Code | Condition | Client action |
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | path, query หรือ JSON body ไม่ตรง schema | แสดงรายละเอียดราย field และแก้ request |
+| `400` | `UPLOAD_ERROR` | ไฟล์เกินขนาด/จำนวน หรือ multipart ผิดข้อกำหนด | ลดจำนวน/ขนาด หรือแก้ชื่อ field |
+| `409` | `CONFLICT` | รายการแนบมีการแก้ไขพร้อมกัน | โหลด FAQ ใหม่ก่อนบันทึก |
 | `401` | `UNAUTHORIZED` | write request ไม่มี token หรือ token ใช้ไม่ได้ | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี `faq:edit` | ซ่อน action หรือแจ้งผู้ดูแลสิทธิ์ |
 | `404` | `NOT_FOUND` | UUID ไม่มีอยู่หรือรายการถูกลบแล้ว | โหลดรายการใหม่และแจ้งผู้ใช้ |
@@ -241,6 +312,9 @@ Response `200 OK`:
 | Service | [`faqs.service.ts`](../../../../../backend/src/modules/faqs/faqs.service.ts) |
 | Repository | [`faqs.repository.ts`](../../../../../backend/src/modules/faqs/faqs.repository.ts) |
 | Migration | [`0108_create_laws_and_faqs.ts`](../../../../../backend/src/db/migrations/0108_create_laws_and_faqs.ts) |
+| Attachments migration | [`0119_add_faq_attachments_and_links.ts`](../../../../../backend/src/db/migrations/0119_add_faq_attachments_and_links.ts) |
+| File storage | [`faqs-file-storage.ts`](../../../../../backend/src/modules/faqs/faqs-file-storage.ts) |
+| File validation/storage tests | [`faqs-file-storage.test.ts`](../../../../../backend/tests/unit/faqs-file-storage.test.ts) |
 | Runtime tests | [`faqs.validator.test.ts`](../../../../../backend/tests/unit/faqs.validator.test.ts), [`faqs.service.test.ts`](../../../../../backend/tests/unit/faqs.service.test.ts), [`faqs.repository.test.ts`](../../../../../backend/tests/unit/faqs.repository.test.ts), [`faqs.controller.test.ts`](../../../../../backend/tests/unit/faqs.controller.test.ts), [`faqs.route.test.ts`](../../../../../backend/tests/unit/faqs.route.test.ts) |
 | Contract test | [`laws-faqs.openapi.test.ts`](../../../../../backend/tests/unit/laws-faqs.openapi.test.ts) |
 | OpenAPI source | [`poms.openapi.ts`](../../../../../backend/src/modules/api-docs/poms.openapi.ts) |

@@ -27,6 +27,8 @@ const faq = {
   categoryLabel: 'WPMS',
   createdAt: '2026-09-04T09:30:00.000Z',
   updatedAt: '2026-09-04T09:30:00.000Z',
+  links: [],
+  attachments: [],
 };
 
 describe('faqsController', () => {
@@ -85,7 +87,11 @@ describe('faqsController', () => {
     const { response } = responseHarness();
     const next = jest.fn() as NextFunction;
 
-    await faqsController.create({ body: input } as Request, response, next);
+    await faqsController.create(
+      { body: input, is: () => false } as unknown as Request,
+      response,
+      next,
+    );
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'UNAUTHORIZED', statusCode: 401 }),
@@ -97,6 +103,7 @@ describe('faqsController', () => {
 function authenticatedRequest(values: Partial<Request>): Request {
   return {
     ...values,
+    is: () => false,
     user: {
       id: 1,
       userType: 'officer',

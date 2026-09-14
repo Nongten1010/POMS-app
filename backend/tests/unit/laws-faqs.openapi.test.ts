@@ -62,11 +62,12 @@ function expectSharedErrorEnvelope(response: unknown): void {
 }
 
 describe('laws and FAQs OpenAPI contract', () => {
-  it('publishes all nine operations under their user-facing menu tags', () => {
+  it('publishes all ten operations under their user-facing menu tags', () => {
     const publicOperations = [
       ['/laws', 'get', MENU_TAGS.LAWS],
       ['/laws/{id}/file', 'get', MENU_TAGS.LAWS],
       ['/faqs', 'get', MENU_TAGS.FAQS],
+      ['/faqs/{id}/attachments/{attachmentId}', 'get', MENU_TAGS.FAQS],
     ] as const;
     const writeOperations = [
       ['/laws', 'post', MENU_TAGS.LAWS, 'laws:edit'],
@@ -94,8 +95,8 @@ describe('laws and FAQs OpenAPI contract', () => {
     }
 
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 144,
-      operationCount: 153,
+      canonicalOperationCount: 145,
+      operationCount: 154,
       tagCount: 13,
     });
   });
@@ -218,6 +219,8 @@ describe('laws and FAQs OpenAPI contract', () => {
       'updatedDate',
       'createdAt',
       'updatedAt',
+      'links',
+      'attachments',
     ]);
     expect(schemaProperties('Faq').category).toEqual({ $ref: '#/components/schemas/FaqCategory' });
     expect(schemaProperties('Faq').updatedDate).toEqual(
@@ -231,11 +234,21 @@ describe('laws and FAQs OpenAPI contract', () => {
       expect(requestSchema(path, method, 'application/json')).toEqual({
         $ref: '#/components/schemas/FaqRequest',
       });
+      expect(requestSchema(path, method, 'multipart/form-data')).toEqual({
+        $ref: '#/components/schemas/FaqMultipartRequest',
+      });
     }
     const faqRequest = asObject(schemas().FaqRequest, 'FaqRequest');
     expect(faqRequest.additionalProperties).toBe(false);
     expect(faqRequest.required).toEqual(['question', 'answer', 'category', 'updatedDate']);
     expect(schemaProperties('FaqRequest')).not.toHaveProperty('id');
+    expect(schemaProperties('FaqRequest').links).toEqual(
+      expect.objectContaining({ type: 'array', maxItems: 20 }),
+    );
+    expect(schemaProperties('FaqMultipartRequest').files).toEqual(
+      expect.objectContaining({ type: 'array', maxItems: 10 }),
+    );
+    expect(operation('/faqs/{id}/attachments/{attachmentId}', 'get').security).toEqual([]);
     expect(successSchema('/faqs', 'post', '201')).toEqual({
       $ref: '#/components/schemas/FaqResponse',
     });

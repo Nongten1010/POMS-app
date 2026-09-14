@@ -1,4 +1,8 @@
 import express from 'express';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { NotFoundError } from '../../src/shared/errors/AppError';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { signAccessToken } from '../../src/shared/utils/jwt';
@@ -10,6 +14,7 @@ jest.mock('../../src/modules/faqs/faqs.service', () => ({
     list: jest.fn(),
     remove: jest.fn(),
     update: jest.fn(),
+    download: jest.fn(),
   },
 }));
 
@@ -27,6 +32,8 @@ const faq = {
   updatedDate: '2026-09-04',
   createdAt: '2026-09-04T09:30:00.000Z',
   updatedAt: '2026-09-04T09:30:00.000Z',
+  links: [],
+  attachments: [],
 };
 const input = {
   question: 'คำถาม',
@@ -150,6 +157,100 @@ describe('FAQ routes', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true, data: { id, deleted: true } });
     expect(mockedService.remove).toHaveBeenCalledWith(id, 1);
+  });
+
+  it('accepts two uploads and two URLs through the actual multipart route', async () => {
+    mockedService.create.mockResolvedValue(faq);
+    const response = await request(app())
+      .post('/api/v1/faqs')
+      .set('Authorization', `Bearer ${accessToken({ 'faq:edit': null })}`)
+      .field('question', 'Q')
+      .field('answer', 'A')
+      .field('category', 'OTHER')
+      .field('updatedDate', '2026-09-14')
+      .field('links', JSON.stringify(['https://example.com/a', 'https://example.com/b']))
+      .field('attachmentIds', '[]')
+      .attach('files', Buffer.from('%PDF-first'), 'first.pdf')
+      .attach('files', Buffer.from('%PDF-second'), 'second.pdf');
+    expect(response.status).toBe(201);
+    expect(mockedService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        links: ['https://example.com/a', 'https://example.com/b'],
+        attachmentIds: [],
+      }),
+      1,
+      [
+        expect.objectContaining({ originalname: 'first.pdf' }),
+        expect.objectContaining({ originalname: 'second.pdf' }),
+      ],
+    );
+  });
+
+  it.each(['not-json', 'null', '{"a":1}'])(
+    'rejects malformed multipart links %s',
+    async (links) => {
+      const response = await request(app())
+        .post('/api/v1/faqs')
+        .set('Authorization', `Bearer ${accessToken({ 'faq:edit': null })}`)
+        .field('question', 'Q')
+        .field('answer', 'A')
+        .field('category', 'OTHER')
+        .field('updatedDate', '2026-09-14')
+        .field('links', links);
+      expect(response.status).toBe(400);
+      expect(mockedService.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects more than ten uploads before calling the service', async () => {
+    let call = request(app())
+      .post('/api/v1/faqs')
+      .set('Authorization', `Bearer ${accessToken({ 'faq:edit': null })}`);
+    for (let i = 0; i < 11; i++) call = call.attach('files', Buffer.from('%PDF-test'), `${i}.pdf`);
+    const response = await call;
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('UPLOAD_ERROR');
+    expect(mockedService.create).not.toHaveBeenCalled();
+  });
+
+  it('streams a public download with safe attachment headers and the original bytes', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'faq-download-'));
+    try {
+      const filePath = path.join(root, 'test.pdf');
+      const buffer = Buffer.from('%PDF-test');
+      await writeFile(filePath, buffer);
+      mockedService.download.mockResolvedValue({
+        id,
+        filePath,
+        storagePath: id,
+        fileName: 'คู่มือ.pdf',
+        fileSize: buffer.length,
+        mimeType: 'application/pdf',
+      });
+      const response = await request(app()).get(`/api/v1/faqs/${id}/attachments/${id}`);
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toBe('application/octet-stream');
+      expect(response.headers['content-disposition']).toContain('attachment;');
+      expect(response.headers['content-disposition']).toContain(encodeURIComponent('คู่มือ.pdf'));
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.body).toEqual(buffer);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns 404 for removed attachments', async () => {
+    mockedService.download.mockRejectedValue(new NotFoundError('FAQ attachment not found'));
+    const response = await request(app()).get(`/api/v1/faqs/${id}/attachments/${id}`);
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('rejects malformed download ids before accessing storage', async () => {
+    const response = await request(app()).get(`/api/v1/faqs/${id}/attachments/not-a-uuid`);
+    expect(response.status).toBe(400);
+    expect(mockedService.download).not.toHaveBeenCalled();
   });
 });
 
