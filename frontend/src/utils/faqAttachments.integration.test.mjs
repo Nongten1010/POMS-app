@@ -81,13 +81,37 @@ test('FAQ attachment controls and rendered responses', async (t) => {
       for (const isAdmin of [false, true]) {
         const markup = renderToStaticMarkup(createElement(FaqListItem, { faq, isAdmin, defaultExpanded: true }))
         assert.match(markup, /guide\.pdf/)
-        assert.match(markup, /href="\/api-proxy\/v1\/faqs\/faq-id\/attachments\/file-id"/)
+        assert.doesNotMatch(markup, /href="\/api-proxy\/v1\/faqs\/faq-id\/attachments\/file-id"/)
+        assert.match(markup, /aria-label="ดาวน์โหลด guide.pdf"/)
         assert.match(markup, /href="https:\/\/example.com\/guide"/)
         assert.match(markup, /target="_blank"/)
         assert.match(markup, /First\nSecond/)
       }
       const markup = renderToStaticMarkup(createElement(FaqListItem, { faq: { ...faq, links: ['javascript:alert(1)'] } }))
       assert.doesNotMatch(markup, /href="javascript:/)
+    })
+    await t.test('PDF attachments use buttons while other file types keep download links in both layouts', () => {
+      for (const compact of [true, false]) {
+        for (const file of [
+          { fileName: 'guide.PDF' },
+          { fileName: 'document', mimeType: 'application/pdf' },
+        ]) {
+          const markup = renderToStaticMarkup(createElement(FaqAttachmentItem, { attachment: { ...attachment, ...file }, compact }))
+          assert.doesNotMatch(markup, /href=|download=/)
+          assert.match(markup, /<button/)
+          assert.match(markup, /aria-busy="false"/)
+        }
+        for (const extension of ['doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'txt']) {
+          const name = `guide.${extension}`
+          const markup = renderToStaticMarkup(createElement(FaqAttachmentItem, { attachment: { ...attachment, fileName: name }, compact }))
+          assert.match(markup, /href="\/api-proxy\/v1\/faqs\/faq-id\/attachments\/file-id"/)
+          assert.ok(markup.includes(`download="${name}"`))
+        }
+        for (const props of [{ disabled: true }, { attachment: { ...attachment, downloadUrl: '' } }]) {
+          const markup = renderToStaticMarkup(createElement(FaqAttachmentItem, { attachment, compact, ...props }))
+          assert.match(markup, /disabled=""/)
+        }
+      }
     })
     await t.test('create and edit use attachment editor and conflicts block save until reload', () => {
       for (const mode of ['create', 'edit']) {

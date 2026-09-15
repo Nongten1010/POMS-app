@@ -46,6 +46,7 @@ import {
   FAQ_FILE_ACCEPT, FAQ_MAX_FILES, FAQ_MAX_LINKS,
   getFaqLink, getFaqAttachmentErrors, getFaqEditForm, buildFaqFormData,
 } from '../utils/faqAttachments.mjs'
+import { openLawPdf } from '../utils/openLawPdf.mjs'
 
 const faqCategories = [
   { value: 'CEMS', label: 'CEMS' },
@@ -834,6 +835,10 @@ function FaqFormDialog({
 
 function FaqAttachmentItem({ attachment, file, onRemove, disabled = false, compact = false }) {
   const previewRef = useRef(null)
+  const requestRef = useRef(null)
+  const [isOpening, setIsOpening] = useState(false)
+  const [openError, setOpenError] = useState('')
+  useEffect(() => () => requestRef.current?.abort(), [])
   const isImage = file && ['image/png', 'image/jpeg'].includes(file.type)
   useEffect(() => {
     if (!isImage || !previewRef.current) return
@@ -844,6 +849,22 @@ function FaqAttachmentItem({ attachment, file, onRemove, disabled = false, compa
   const name = file?.name ?? attachment?.fileName ?? ''
   const size = file?.size ?? attachment?.fileSize ?? 0
   const downloadUrl = resolveContentDownloadUrl(attachment?.downloadUrl)
+  const isPdf = attachment?.mimeType?.toLowerCase() === 'application/pdf' || /\.pdf$/i.test(name)
+  const handleOpenPdf = async () => {
+    if (!downloadUrl || disabled || requestRef.current) return
+    const controller = new AbortController()
+    requestRef.current = controller
+    setIsOpening(true)
+    setOpenError('')
+    try {
+      await openLawPdf(downloadUrl, { title: name, signal: controller.signal })
+    } catch (error) {
+      if (error?.name !== 'AbortError') setOpenError(error?.message || 'ไม่สามารถเปิดเอกสาร PDF ได้')
+    } finally {
+      requestRef.current = null
+      if (!controller.signal.aborted) setIsOpening(false)
+    }
+  }
   return (
     <Box sx={{
       display: 'flex', alignItems: 'center', gap: 1, p: compact ? 0.75 : 1,
@@ -865,7 +886,16 @@ function FaqAttachmentItem({ attachment, file, onRemove, disabled = false, compa
       </Box>
       {attachment ? (
         <Tooltip title="ดาวน์โหลดไฟล์">
-          <span><IconButton component="a" href={downloadUrl || undefined} download={name} size={compact ? 'small' : 'medium'} disabled={!downloadUrl || disabled} aria-label={`ดาวน์โหลด ${name}`}><DownloadIcon fontSize={compact ? 'small' : 'medium'} /></IconButton></span>
+          <span><IconButton
+            component={isPdf ? 'button' : 'a'}
+            href={isPdf ? undefined : downloadUrl || undefined}
+            download={isPdf ? undefined : name}
+            onClick={isPdf ? handleOpenPdf : undefined}
+            size={compact ? 'small' : 'medium'} disabled={!downloadUrl || disabled || isOpening}
+            aria-busy={isOpening} aria-label={`ดาวน์โหลด ${name}`}
+          >
+            {isOpening ? <CircularProgress size={compact ? 20 : 24} color="inherit" /> : <DownloadIcon fontSize={compact ? 'small' : 'medium'} />}
+          </IconButton></span>
         </Tooltip>
       ) : null}
       {onRemove ? (
@@ -873,6 +903,10 @@ function FaqAttachmentItem({ attachment, file, onRemove, disabled = false, compa
           <span><IconButton onClick={onRemove} disabled={disabled} aria-label={`นำไฟล์ ${name} ออก`}><CloseIcon /></IconButton></span>
         </Tooltip>
       ) : null}
+      <Snackbar open={Boolean(openError)} autoHideDuration={6000} onClose={() => setOpenError('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity="error" variant="filled" onClose={() => setOpenError('')}>{openError}</Alert>
+      </Snackbar>
     </Box>
   )
 }
