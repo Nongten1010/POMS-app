@@ -154,25 +154,25 @@ const approvePointCodeModeOptions = [
   {
     value: 'AUTO',
     label: 'ระบบออกรหัสจุดตรวจวัดใหม่อัตโนมัติ',
-    description: 'รหัสจุดตรวจวัดใหม่จะเริ่มตั้งแต่ S2001 หรือ W2001 เป็นต้นไป',
+    description: 'รหัสจุดตรวจวัดใหม่จะเริ่มตั้งแต่ S2001 หรือ P2001 เป็นต้นไป',
     color: 'primary',
   },
   {
     value: 'EXISTING',
     label: 'ใช้รหัสจุดตรวจวัดเดิม',
-    description: 'รหัสจุดตรวจวัดเดิมกรอกได้ในช่วง S0001-S1999 หรือ W0001-W1999',
+    description: 'รหัสจุดตรวจวัดเดิมกรอกได้ในช่วง S0001-S1999 หรือ P0001-P1999',
     color: 'success',
   },
 ]
 const isExistingPointCodeInAllowedRange = (value) => {
   const normalizedValue = String(value ?? '').trim().toUpperCase()
-  const match = normalizedValue.match(/^([SW])(\d{4})$/)
+  const match = normalizedValue.match(/^([SP])(\d{4})$/)
   if (!match) return false
 
   const sequence = Number(match[2])
   return Number.isInteger(sequence) && sequence >= 1 && sequence <= 1999
 }
-const getLegacyPointCodePrefix = (systemType) => (systemType === 'WPMS' ? 'W' : 'S')
+const getLegacyPointCodePrefix = (systemType) => (systemType === 'WPMS' ? 'P' : 'S')
 const getPointAssignmentId = (point = {}) => point.id ?? point.measurementPointId ?? point.measurement_point_id ?? null
 const getUnassignedMeasurementPoints = (request = {}) => {
   const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
@@ -190,7 +190,7 @@ function buildRequestApprovalPayload(request, pointCodeMode, existingPointCode =
   const unassignedPoints = getUnassignedMeasurementPoints(request)
   const systemType = getRequestSystemType(request)
   if (!isExistingPointCodeInAllowedRange(normalizedPointCode)) {
-    throw new Error('กรุณากรอกรหัสจุดตรวจวัดเดิมในช่วง S0001-S1999 หรือ W0001-W1999')
+    throw new Error('กรุณากรอกรหัสจุดตรวจวัดเดิมในช่วง S0001-S1999 หรือ P0001-P1999')
   }
   if (normalizedPointCode[0] !== getLegacyPointCodePrefix(systemType)) {
     throw new Error(`รหัสจุดตรวจวัดเดิมของ ${systemType} ต้องขึ้นต้นด้วย ${getLegacyPointCodePrefix(systemType)}`)
@@ -9215,9 +9215,9 @@ function ConnectionRequestPage({
                             setApproveExistingPointCode(event.target.value.toUpperCase())
                             setApprovePointCodeError('')
                           }}
-                          placeholder="เช่น S0001 หรือ W0001"
+                          placeholder="เช่น S0001 หรือ P0001"
                           error={Boolean(approvePointCodeError)}
-                          helperText={approvePointCodeError || 'กรอกได้เฉพาะช่วง S0001-S1999 หรือ W0001-W1999'}
+                          helperText={approvePointCodeError || 'กรอกได้เฉพาะช่วง S0001-S1999 หรือ P0001-P1999'}
                           disabled={requestDocumentApproving}
                           fullWidth
                           size="small"
