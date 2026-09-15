@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -36,6 +36,7 @@ import {
   readContentApiResponse,
   resolveContentDownloadUrl,
 } from '../utils/contentApi.mjs'
+import { openLawPdf } from '../utils/openLawPdf.mjs'
 
 const MAX_PDF_SIZE = 10 * 1024 * 1024
 
@@ -143,6 +144,34 @@ function LawsPage({ isAdmin = false, accessToken = '' }) {
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [openingLawIds, setOpeningLawIds] = useState(() => new Set())
+  const [fileOpenError, setFileOpenError] = useState('')
+  const fileRequestsRef = useRef(new Map())
+
+  useEffect(() => {
+    const requests = fileRequestsRef.current
+    return () => {
+      requests.forEach((controller) => controller.abort())
+      requests.clear()
+    }
+  }, [])
+
+  const handleOpenLaw = async (law) => {
+    const url = resolveContentDownloadUrl(law.file?.downloadUrl)
+    if (!url || fileRequestsRef.current.has(law.id)) return
+    const controller = new AbortController()
+    fileRequestsRef.current.set(law.id, controller)
+    setOpeningLawIds(new Set(fileRequestsRef.current.keys()))
+    setFileOpenError('')
+    try {
+      await openLawPdf(url, { signal: controller.signal, title: law.file?.fileName || law.title })
+    } catch (error) {
+      if (error?.name !== 'AbortError') setFileOpenError(error?.message || 'ไม่สามารถเปิดเอกสาร PDF ได้')
+    } finally {
+      fileRequestsRef.current.delete(law.id)
+      if (!controller.signal.aborted) setOpeningLawIds(new Set(fileRequestsRef.current.keys()))
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -533,6 +562,8 @@ function LawsPage({ isAdmin = false, accessToken = '' }) {
                   isAdmin={isAdmin}
                   onEdit={openEditDialog}
                   onDelete={openDeleteDialog}
+                  onOpen={handleOpenLaw}
+                  isOpening={openingLawIds.has(law.id)}
                 />
               ))
             ) : (
@@ -582,6 +613,12 @@ function LawsPage({ isAdmin = false, accessToken = '' }) {
       </Dialog>
 
       <Snackbar
+        open={Boolean(fileOpenError)} autoHideDuration={6000} onClose={() => setFileOpenError('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="error" variant="filled" onClose={() => setFileOpenError('')}>{fileOpenError}</Alert>
+      </Snackbar>
+      <Snackbar
         open={Boolean(successMessage)}
         autoHideDuration={4000}
         onClose={() => setSuccessMessage('')}
@@ -600,7 +637,7 @@ function LawsPage({ isAdmin = false, accessToken = '' }) {
   )
 }
 
-function LawListItem({ law, isAdmin, onEdit, onDelete }) {
+function LawListItem({ law, isAdmin, onEdit, onDelete, onOpen, isOpening = false }) {
   const downloadUrl = resolveContentDownloadUrl(law.file?.downloadUrl)
 
   return (
@@ -648,26 +685,22 @@ function LawListItem({ law, isAdmin, onEdit, onDelete }) {
 
       <Tooltip title="ดาวน์โหลดไฟล์">
         <IconButton
-          component="a"
-          href={downloadUrl || undefined}
-          target="_blank"
-          rel="noopener noreferrer"
+          onClick={() => onOpen(law)}
           color="primary"
           aria-label="ดาวน์โหลดไฟล์"
-          disabled={!downloadUrl}
+          disabled={!downloadUrl || isOpening}
+          aria-busy={isOpening}
           sx={{ display: { xs: 'inline-flex', md: 'none' }, justifySelf: 'start' }}
         >
-          <DownloadIcon />
+          {isOpening ? <CircularProgress size={24} color="inherit" /> : <DownloadIcon />}
         </IconButton>
       </Tooltip>
       <Button
-        component="a"
-        href={downloadUrl || undefined}
-        target="_blank"
-        rel="noopener noreferrer"
+        onClick={() => onOpen(law)}
         variant="contained"
-        startIcon={<DownloadIcon />}
-        disabled={!downloadUrl}
+        startIcon={isOpening ? <CircularProgress size={20} color="inherit" /> : <DownloadIcon />}
+        disabled={!downloadUrl || isOpening}
+        aria-busy={isOpening}
         sx={{
           display: { xs: 'none', md: 'inline-flex' },
           justifySelf: 'end',

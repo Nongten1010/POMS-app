@@ -75,24 +75,29 @@ test('law file controls keep PDF validation and open existing buttons in a new t
       }
       assert.equal(getLawTypeLabel('RULE_AND_ANNOUNCEMENT', 'กฎและประกาศ'), 'กฎและประกาศ')
     })
-    await t.test('desktop and mobile links use new tabs without forcing downloads', () => {
+    await t.test('desktop and mobile buttons use the PDF opener and retain their labels and loading states', () => {
       for (const isAdmin of [true, false]) {
         for (const downloadUrl of ['https://example.com/law.pdf', '']) {
+          let openedLaw = null
+          const law = { title: 'Test law', file: { downloadUrl, fileName: 'law.pdf' } }
           const element = LawListItem({
-            law: { title: 'Test law', file: { downloadUrl, fileName: 'law.pdf' } },
-            isAdmin,
+            law, isAdmin, onOpen: (selected) => { openedLaw = selected },
           })
-          const links = findElements(element, (child) => child.props.component === 'a')
+          const links = findElements(element, (child) => child.props['aria-busy'] === false)
           assert.equal(links.length, 2)
           for (const { props } of links) {
-            assert.equal(props.href, downloadUrl || undefined)
-            assert.equal(props.target, '_blank')
-            assert.equal(props.rel, 'noopener noreferrer')
+            assert.equal(props.href, undefined)
             assert.equal(props.download, undefined)
             assert.equal(props.disabled, !downloadUrl)
+            props.onClick()
+            assert.equal(openedLaw, law)
           }
           assert.equal(links[0].props['aria-label'], 'ดาวน์โหลดไฟล์')
           assert.equal(links[1].props.children, 'ดาวน์โหลดไฟล์')
+          const loadingElement = LawListItem({ law, isAdmin, isOpening: true })
+          const loadingButtons = findElements(loadingElement, (child) => child.props['aria-busy'] === true)
+          assert.equal(loadingButtons.length, 2)
+          assert.ok(loadingButtons.every((button) => button.props.disabled))
         }
       }
     })
