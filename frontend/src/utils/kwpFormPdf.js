@@ -2,6 +2,8 @@ import fontkit from '@pdf-lib/fontkit'
 import { PDFDocument, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
+import { formatKwpDocumentDate } from './kwpFormPresentation.mjs'
+import { KwpPdfTemplate } from './kwpPdfTemplate.mjs'
 
 const colors = {
   black: rgb(0, 0, 0),
@@ -128,13 +130,8 @@ async function embedKwpImage(layout, document = {}) {
   }
 }
 
-function splitTextToTokens(text) {
-  return String(text ?? '').split(/(\s+)/).filter((token) => token.length > 0)
-}
-
-function trimLineEnd(value) {
-  return String(value).replace(/\s+$/u, '')
-}
+const wordSegmenter = new Intl.Segmenter('th', { granularity: 'word' })
+const graphemeSegmenter = new Intl.Segmenter('th', { granularity: 'grapheme' })
 
 class KwpPdfLayout {
   constructor(pdfDoc, fonts) {
@@ -171,44 +168,28 @@ class KwpPdfLayout {
   }
 
   wrapText(text, maxWidth, size = textSizes.body, bold = false) {
-    const lines = []
-    let currentLine = ''
-    const tokens = splitTextToTokens(text)
-
-    tokens.forEach((token) => {
-      const nextLine = `${currentLine}${token}`
-      if (this.textWidth(nextLine, size, bold) <= maxWidth) {
-        currentLine = nextLine
-        return
-      }
-
-      if (currentLine) {
-        lines.push(trimLineEnd(currentLine))
-      }
-
-      if (this.textWidth(token, size, bold) <= maxWidth) {
-        currentLine = token.trimStart()
-        return
-      }
-
-      let brokenLine = ''
-      Array.from(token).forEach((char) => {
-        const nextBrokenLine = `${brokenLine}${char}`
-        if (!brokenLine || this.textWidth(nextBrokenLine, size, bold) <= maxWidth) {
-          brokenLine = nextBrokenLine
-          return
+    return String(text ?? '').replace(/\r\n?/g, '\n').split('\n').flatMap((paragraph) => {
+      const lines = []
+      let line = ''
+      for (const { segment } of wordSegmenter.segment(paragraph)) {
+        if (this.textWidth(line + segment, size, bold) <= maxWidth) {
+          line += segment
+          continue
         }
-        lines.push(brokenLine)
-        brokenLine = char
-      })
-      currentLine = brokenLine
+        if (line.trimEnd()) lines.push(line.trimEnd())
+        line = ''
+        // Long URLs/identifiers must wrap without dropping text or separating Thai marks.
+        for (const { segment: grapheme } of graphemeSegmenter.segment(segment.trimStart())) {
+          if (line && this.textWidth(line + grapheme, size, bold) > maxWidth) {
+            lines.push(line)
+            line = ''
+          }
+          line += grapheme
+        }
+      }
+      if (line || !lines.length) lines.push(line.trimEnd())
+      return lines
     })
-
-    if (currentLine) {
-      lines.push(trimLineEnd(currentLine))
-    }
-
-    return lines.length ? lines : ['']
   }
 
   drawTextAt(text, x, y, options = {}) {
@@ -261,6 +242,25 @@ class KwpPdfLayout {
       this.y -= 24
     })
     this.space(8)
+  }
+
+  requestMetaHeader(data) {
+    const size = 13
+    const y = this.pageSize[1] - 24
+    const left = `เลขที่ : ${getRequestNo(data) || '-'}`
+    const right = `วันที่ยื่นคำขอ : ${displayValue(data.submittedDate)}`
+    const approved = [data.statusCode, data.status, data.statusLabel].includes('APPROVED')
+      || [data.statusCode, data.status, data.statusLabel].includes('ผ่านการพิจารณา')
+    const rightWidth = this.textWidth(right, size)
+    const leftWidth = this.textWidth(left, size)
+    const approvalText = approved ? 'ผ่านการพิจารณา' : ''
+    const approvalWidth = approvalText ? this.textWidth(approvalText, size, true) + 10 : 0
+    const leftAvailable = this.contentWidth - rightWidth - approvalWidth - 14
+    const leftSize = leftWidth > leftAvailable ? Math.max(9, size * leftAvailable / leftWidth) : size
+    this.drawTextAt(left, this.margin.left, y, { size: leftSize })
+    if (approved) this.drawTextAt(approvalText, this.margin.left + this.textWidth(left, leftSize) + 10, y, { size, bold: true })
+    this.drawTextAt(right, this.width - this.margin.right - rightWidth, y, { size })
+    this.y = Math.min(this.y, y - 18)
   }
 
   sectionTitle(text) {
@@ -439,6 +439,7 @@ function drawKwp01(layout, data) {
   const rowLine = 0.35
   const grey = rgb(0.74, 0.74, 0.74)
   let y = layout.y
+  const flow = new KwpPdfTemplate(layout)
 
   const drawLine = (x1, y1, x2, y2, thickness = rowLine) => {
     layout.page.drawLine({
@@ -448,7 +449,9 @@ function drawKwp01(layout, data) {
       color: colors.border,
     })
   }
-  const drawRow = (height, { fill = null, verticals = [] } = {}) => {
+  const drawRow = (height, { fill = null, verticals = [], keepWithNext = false } = {}) => {
+    if (fill) flow.section(y)
+    flow.row(y, height, { header: Boolean(fill), keepWithNext })
     layout.page.drawRectangle({
       x,
       y: y - height,
@@ -467,7 +470,7 @@ function drawKwp01(layout, data) {
       size: options.size ?? labelSize,
       bold: options.bold ?? false,
       maxWidth,
-      lineHeight: (options.size ?? labelSize) * 1.22,
+      lineHeight: (options.size ?? labelSize) * 1.35,
     })
   }
   const drawDottedValue = (label, value, tx, ty, endX, options = {}) => {
@@ -508,15 +511,10 @@ function drawKwp01(layout, data) {
     if (!text) return []
     const firstLine = layout.wrapText(text, firstLineWidth, labelSize)[0] ?? ''
     const remainingText = text.slice(firstLine.length).trimStart()
-    const secondLine = remainingText ? (layout.wrapText(remainingText, secondLineWidth, labelSize)[0] ?? '') : ''
-    return [firstLine, secondLine].filter(Boolean).slice(0, 2)
+    return [firstLine, ...(remainingText ? layout.wrapText(remainingText, secondLineWidth, labelSize) : [])]
   }
 
   const formNo = 'แบบ กวภ.01'
-  const requestNo = getRequestNo(data)
-  if (requestNo) {
-    drawCellText(`เลขที่ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
-  }
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
   y -= 36
   layout.drawCentered('แบบแจ้งเหตุขัดข้องของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ เพื่อรายงานมลพิษอากาศจากปล่องโรงงาน', {
@@ -531,7 +529,7 @@ function drawKwp01(layout, data) {
   drawRow(20, { fill: grey })
   drawCellText('1.    รายละเอียดเกี่ยวกับโรงงาน  (1 แบบต่อ 1 ปล่อง)', x + 10, y + 8, width - 20, { bold: true })
   drawRow(20)
-  drawDottedValue('วันที่', '', right - 160, y + 8, right)
+  drawDottedValue('วันที่', data.submittedDate, right - 160, y + 8, right)
   drawRow(20)
   drawDottedValue('ชื่อโรงงาน', data.factoryName, x + 8, y + 8, right)
   drawRow(20, { verticals: [x + width * 0.66] })
@@ -567,7 +565,7 @@ function drawKwp01(layout, data) {
 
   drawRow(20, { fill: grey })
   drawCellText('3.    สาเหตุของการไม่สามารถรายงานผลการตรวจวัดได้', x + 10, y + 8, width - 20, { bold: true })
-  drawRow(20)
+  drawRow(20, { keepWithNext: true })
   drawCellText('3.1 สาเหตุ', x + 8, y + 8, width - 16)
   const brokenTool = data.issueReason === 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง'
   const stoppedProduction = data.issueReason === 'หยุดหน่วยการผลิต'
@@ -587,12 +585,11 @@ function drawKwp01(layout, data) {
     drawCellText(label, textX, optionY, labelWidth)
     layout.drawDottedLine(firstLineStartX, lineEndX, optionY - 4)
     layout.drawDottedLine(secondLineStartX, lineEndX, optionY - 21)
-    if (reasonLines[0]) {
-      drawCellText(reasonLines[0], firstLineStartX + 3, optionY, firstLineWidth)
-    }
-    if (reasonLines[1]) {
-      drawCellText(reasonLines[1], secondLineStartX + 3, optionY - 17, secondLineWidth)
-    }
+    reasonLines.forEach((line, index) => {
+      const lineX = index === 0 ? firstLineStartX : secondLineStartX
+      drawCellText(line, lineX + 3, optionY - index * 17, index === 0 ? firstLineWidth : secondLineWidth)
+      if (index > 1) layout.drawDottedLine(lineX, lineEndX, optionY - index * 17 - 4)
+    })
   }
   const drawTwoLineDottedField = ({ label, value, rowHeight, firstLineY, secondLineY }) => {
     const textX = x + 8
@@ -606,30 +603,37 @@ function drawKwp01(layout, data) {
     const secondLineWidth = Math.max(40, lineEndX - secondLineStartX - 4)
     const valueLines = wrapTwoLineDottedValue(valueText, firstLineWidth, secondLineWidth)
 
-    drawRow(rowHeight)
-    drawCellText(labelText, textX, y + firstLineY, labelWidth)
-    layout.drawDottedLine(firstLineStartX, lineEndX, y + firstLineY - 4)
-    layout.drawDottedLine(secondLineStartX, lineEndX, y + secondLineY - 4)
-    if (valueLines[0]) {
-      drawCellText(valueLines[0], firstLineStartX + 3, y + firstLineY, firstLineWidth)
-    }
-    if (valueLines[1]) {
-      drawCellText(valueLines[1], secondLineStartX + 3, y + secondLineY, secondLineWidth)
+    const gap = firstLineY - secondLineY
+    const extra = Math.max(0, valueLines.length - 2) * gap
+    drawRow(rowHeight + extra)
+    const baseline = y + firstLineY + extra
+    drawCellText(labelText, textX, baseline, labelWidth)
+    for (let index = 0; index < Math.max(2, valueLines.length); index += 1) {
+      const lineX = index === 0 ? firstLineStartX : secondLineStartX
+      layout.drawDottedLine(lineX, lineEndX, baseline - index * gap - 4)
+      if (valueLines[index]) drawCellText(valueLines[index], lineX + 3, baseline - index * gap, index === 0 ? firstLineWidth : secondLineWidth)
     }
   }
-  drawRow(82)
+  const reasonExtra = (label, value) => {
+    const firstWidth = right - 12 - (x + 24 + layout.textWidth(label, labelSize) + 8) - 4
+    const lines = wrapTwoLineDottedValue(value, firstWidth, right - 12 - (x + 8) - 4)
+    return Math.max(0, lines.length - 2) * 17
+  }
+  const firstReasonExtra = reasonExtra('เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง เนื่องจาก :', brokenTool ? data.reasonDetail : '')
+  const secondReasonExtra = reasonExtra('หยุดหน่วยการผลิต เนื่องจาก :', stoppedProduction ? data.reasonDetail : '')
+  drawRow(82 + firstReasonExtra + secondReasonExtra)
   drawReasonOption({
     checked: brokenTool,
     label: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง เนื่องจาก :',
     value: brokenTool ? data.reasonDetail : '',
-    optionY: y + 64,
+    optionY: y + 64 + firstReasonExtra + secondReasonExtra,
     labelWidth: 300,
   })
   drawReasonOption({
     checked: stoppedProduction,
     label: 'หยุดหน่วยการผลิต เนื่องจาก :',
     value: stoppedProduction ? data.reasonDetail : '',
-    optionY: y + 28,
+    optionY: y + 28 + secondReasonExtra,
     labelWidth: 190,
   })
   drawRow(20)
@@ -653,9 +657,13 @@ function drawKwp01(layout, data) {
     secondLineY: 9,
   })
 
+  flow.section(y)
+  const nameExtra = Math.max(0, layout.wrapText(displayValue(data.reporterName, ''), 144, labelSize).length - 1) * labelSize * 1.35
+  const positionExtra = Math.max(0, layout.wrapText(displayValue(data.reporterPosition, ''), 144, labelSize).length - 1) * labelSize * 1.35
+  const signatureExtra = nameExtra + positionExtra
   const signatureBoxTop = y
   const signatureBoxBottom = Math.max(28, layout.margin.bottom - 20)
-  const signatureBoxHeight = Math.max(90, signatureBoxTop - signatureBoxBottom)
+  const signatureBoxHeight = Math.max(150, signatureBoxTop - signatureBoxBottom) + signatureExtra
   drawRow(signatureBoxHeight)
   const signCenterX = x + width * 0.5
   const signTopY = signatureBoxTop - 18
@@ -665,8 +673,11 @@ function drawKwp01(layout, data) {
   const drawCenteredCellText = (text, centerX, ty, maxWidth, options = {}) => {
     const size = options.size ?? labelSize
     const bold = options.bold ?? false
-    const textWidth = layout.textWidth(text, size, bold)
-    drawCellText(text, centerX - (textWidth / 2), ty, maxWidth, { size, bold })
+    const lines = layout.wrapText(text, maxWidth, size, bold)
+    lines.forEach((line, index) => {
+      const textWidth = layout.textWidth(line, size, bold)
+      layout.drawTextAt(line, centerX - textWidth / 2, ty - index * size * 1.35, { size, bold })
+    })
   }
   const drawSignatureLine = (lineY, startX = lineStartX, endX = lineEndX) => {
     layout.page.drawLine({
@@ -687,24 +698,24 @@ function drawKwp01(layout, data) {
   drawSignatureLine(parenthesisY - 4, lineStartX, lineEndX)
   const reporterName = displayValue(data.reporterName, '')
   if (reporterName) {
-    const nameWidth = layout.textWidth(reporterName, labelSize)
-    drawCellText(reporterName, signCenterX - (nameWidth / 2), parenthesisY, lineEndX - lineStartX)
+    drawCenteredCellText(reporterName, signCenterX, parenthesisY, lineEndX - lineStartX)
   }
   drawCellText(')', lineEndX + 14, parenthesisY, 10)
 
-  const positionY = signTopY - 70
+  const positionY = signTopY - 70 - nameExtra
   const positionLabel = 'ตำแหน่ง'
   drawCellText(positionLabel, lineStartX - 40, positionY, 38)
   drawSignatureLine(positionY - 4, lineStartX, lineEndX)
   const reporterPosition = displayValue(data.reporterPosition, '')
   if (reporterPosition) {
-    const positionWidth = layout.textWidth(reporterPosition, labelSize)
-    const positionLineStartX = lineStartX
-    drawCellText(reporterPosition, positionLineStartX + ((lineEndX - positionLineStartX - positionWidth) / 2), positionY, lineEndX - positionLineStartX)
+    drawCenteredCellText(reporterPosition, signCenterX, positionY, lineEndX - lineStartX)
   }
-  drawCenteredCellText('ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ', signCenterX, signTopY - 91, 240)
-  drawCenteredCellText('ผู้จัดทำรายงาน', signCenterX, signTopY - 108, 120)
-  layout.y = y
+  drawCellText('วันที่', lineStartX - 40, signTopY - 91 - signatureExtra, 38)
+  drawSignatureLine(signTopY - 95 - signatureExtra, lineStartX, lineEndX)
+  drawCenteredCellText(displayValue(data.signatureDate, ''), signCenterX, signTopY - 91 - signatureExtra, signLineWidth)
+  drawCenteredCellText('ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ', signCenterX, signTopY - 112 - signatureExtra, 240)
+  drawCenteredCellText('ผู้จัดทำรายงาน', signCenterX, signTopY - 127 - signatureExtra, 120)
+  flow.finish(y)
 }
 
 function getKwpPdfAttachmentSections(data = {}) {
@@ -746,12 +757,13 @@ function drawKwpAttachmentListItem(layout, index, text) {
   const lines = layout.wrapText(text, maxWidth, size)
   const lineHeight = size * 1.35
 
-  layout.ensureSpace(lines.length * lineHeight + 4)
+  layout.ensureSpace(Math.min(lines.length * lineHeight + 4, layout.pageSize[1] - layout.margin.top - layout.margin.bottom))
   layout.drawTextAt(label, x, layout.y, { size })
-  lines.forEach((line, lineIndex) => {
-    layout.drawTextAt(line, valueX, layout.y - (lineIndex * lineHeight), { size, maxWidth })
+  lines.forEach((line) => {
+    layout.ensureSpace(lineHeight)
+    layout.drawTextAt(line, valueX, layout.y, { size, maxWidth })
+    layout.y -= lineHeight
   })
-  layout.y -= lines.length * lineHeight
 }
 
 function drawKwpEmbeddedImage(layout, image) {
@@ -821,6 +833,7 @@ async function drawKwp02(layout, data) {
   const rowLine = 0.35
   const grey = rgb(0.74, 0.74, 0.74)
   let y = layout.y
+  const flow = new KwpPdfTemplate(layout)
 
   const drawLine = (x1, y1, x2, y2, thickness = rowLine) => {
     layout.page.drawLine({
@@ -830,7 +843,9 @@ async function drawKwp02(layout, data) {
       color: colors.border,
     })
   }
-  const drawRow = (height, { fill = null, verticals = [] } = {}) => {
+  const drawRow = (height, { fill = null, verticals = [], keepWithNext = false } = {}) => {
+    if (fill) flow.section(y)
+    flow.row(y, height, { header: Boolean(fill), keepWithNext })
     layout.page.drawRectangle({
       x,
       y: y - height,
@@ -849,7 +864,7 @@ async function drawKwp02(layout, data) {
       size: options.size ?? labelSize,
       bold: options.bold ?? false,
       maxWidth,
-      lineHeight: (options.size ?? labelSize) * 1.22,
+      lineHeight: (options.size ?? labelSize) * 1.35,
     })
   }
   const drawDottedValue = (label, value, tx, ty, endX, options = {}) => {
@@ -888,14 +903,13 @@ async function drawKwp02(layout, data) {
   const drawCenteredCellText = (text, centerX, ty, maxWidth, options = {}) => {
     const size = options.size ?? labelSize
     const bold = options.bold ?? false
-    const textWidth = layout.textWidth(text, size, bold)
-    drawCellText(text, centerX - (textWidth / 2), ty, maxWidth, { size, bold })
+    const lines = layout.wrapText(text, maxWidth, size, bold)
+    lines.forEach((line, index) => {
+      const textWidth = layout.textWidth(line, size, bold)
+      layout.drawTextAt(line, centerX - textWidth / 2, ty - index * size * 1.35, { size, bold })
+    })
   }
 
-  const requestNo = getRequestNo(data)
-  if (requestNo) {
-    drawCellText(`เลขที่ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
-  }
   const formNo = isKwp04 ? 'แบบ กวภ.04' : 'แบบ กวภ.02'
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
   y -= 36
@@ -914,9 +928,9 @@ async function drawKwp02(layout, data) {
 
   drawRow(20, { fill: grey })
   drawCellText('1.    รายละเอียดเกี่ยวกับโรงงาน  (1 แบบต่อ 1 ปล่องต่อ 1 ครั้ง)', x + 10, y + 8, width - 210, { bold: true })
-  drawDottedValue('รายงานครั้งที่', data.reportRound, right - 188, y + 8, right)
+  drawDottedValue('รายงานครั้งที่', `${displayValue(data.reportRound)}/${displayValue(data.reportYear)}`, right - 188, y + 8, right)
   drawRow(20)
-  drawDottedValue('วันที่', '', right - 160, y + 8, right)
+  drawDottedValue('วันที่', data.submittedDate, right - 160, y + 8, right)
   drawRow(20)
   drawDottedValue('ชื่อโรงงาน', data.factoryName, x + 8, y + 8, right)
   drawRow(20, { verticals: [x + width * 0.66] })
@@ -953,9 +967,7 @@ async function drawKwp02(layout, data) {
   drawRow(20, { fill: grey })
   drawCellText('3.    รายการตรวจวัดมลพิษอากาศจากปล่องระบาย', x + 10, y + 8, width - 20, { bold: true })
 
-  const tableTop = y
   const headerHeight = 36
-  const rowHeight = 20
   const rows = data.measurementRows?.length ? data.measurementRows : []
   const tableColumns = [
     { label: 'รายการ\nสารมลพิษ', width: 1.05 },
@@ -968,65 +980,55 @@ async function drawKwp02(layout, data) {
   ]
   const totalColumnWeight = tableColumns.reduce((sum, column) => sum + column.width, 0)
   const colWidths = tableColumns.map((column) => (column.width / totalColumnWeight) * width)
-  const tableHeight = headerHeight + (rows.length * rowHeight)
 
-  layout.page.drawRectangle({
-    x,
-    y: tableTop - tableHeight,
-    width,
-    height: tableHeight,
-    borderColor: colors.border,
-    borderWidth: rowLine,
-  })
-  drawLine(x, tableTop - headerHeight, right, tableTop - headerHeight)
+  flow.row(y, headerHeight, { header: true })
+  layout.page.drawRectangle({ x, y: y - headerHeight, width, height: headerHeight, borderColor: colors.border, borderWidth: rowLine })
   let currentX = x
   tableColumns.forEach((column, index) => {
     const colWidth = colWidths[index]
-    if (index > 0) drawLine(currentX, tableTop, currentX, tableTop - tableHeight)
+    if (index > 0) drawLine(currentX, y, currentX, y - headerHeight)
     const headerLines = column.label.split('\n')
-    const lineHeight = 13
-    const firstY = tableTop - ((headerHeight - (headerLines.length * lineHeight)) / 2) - 9
-    headerLines.forEach((line, lineIndex) => {
-      drawCenteredCellText(line, currentX + (colWidth / 2), firstY - (lineIndex * lineHeight), colWidth - 6, { size: 13, bold: true })
-    })
+    const firstY = y - ((headerHeight - headerLines.length * 13) / 2) - 9
+    headerLines.forEach((line, lineIndex) => drawCenteredCellText(line, currentX + colWidth / 2, firstY - lineIndex * 13, colWidth - 6, { size: 13, bold: true }))
     currentX += colWidth
   })
-  rows.forEach((row, rowIndex) => {
-    const rowTop = tableTop - headerHeight - (rowIndex * rowHeight)
-    if (rowIndex > 0) drawLine(x, rowTop, right, rowTop)
+  y -= headerHeight
+  rows.forEach((row) => {
     const cells = [
-      displayValue(row.pollutant, ''),
-      formatDate(row.sampleDate),
-      displayValue(row.measuredValue, ''),
-      displayValue(row.unit, ''),
-      displayValue(row.laboratoryNo, ''),
-      displayValue(row.reportNo, ''),
+      displayValue(row.pollutant, ''), formatDate(row.sampleDate), displayValue(row.measuredValue, ''),
+      displayValue(row.unit, ''), displayValue(row.laboratoryNo, ''), displayValue(row.reportNo, ''),
       displayValue(row.methodOther || row.method, ''),
-    ]
+    ].map((cell, index) => layout.wrapText(cell, colWidths[index] - 8, 11.4))
+    const maxLines = Math.max(1, ...cells.map((lines) => lines.length))
+    const lineHeight = maxLines === 1 ? 12 : 15.4
+    const height = Math.max(20, maxLines * lineHeight + 8)
+    flow.row(y, height)
+    layout.page.drawRectangle({ x, y: y - height, width, height, borderColor: colors.border, borderWidth: rowLine })
     let cellX = x
-    cells.forEach((cell, cellIndex) => {
-      const colWidth = colWidths[cellIndex]
-      const cellLines = layout.wrapText(cell, colWidth - 8, 11.4)
-      const lineHeight = 12
-      const firstY = rowTop - ((rowHeight - (cellLines.length * lineHeight)) / 2) - 8
-      cellLines.slice(0, 2).forEach((line, lineIndex) => {
-        drawCenteredCellText(line, cellX + (colWidth / 2), firstY - (lineIndex * lineHeight), colWidth - 8, { size: 11.4 })
-      })
+    cells.forEach((lines, index) => {
+      const colWidth = colWidths[index]
+      if (index > 0) drawLine(cellX, y, cellX, y - height)
+      const firstY = y - ((height - lines.length * lineHeight) / 2) - 8
+      lines.forEach((line, lineIndex) => drawCenteredCellText(line, cellX + colWidth / 2, firstY - lineIndex * lineHeight, colWidth - 8, { size: 11.4 }))
       cellX += colWidth
     })
+    y -= height
   })
-  y = tableTop - tableHeight
 
   drawRow(24)
   drawCellText('หมายเหตุ : การเก็บและวิเคราะห์ตัวอย่างต้องดำเนินการโดยห้องปฏิบัติการวิเคราะห์ของหน่วยงานราชการ หรือห้องปฏิบัติการวิเคราะห์เอกชนที่ขึ้นทะเบียนกับกรมโรงงานอุตสาหกรรม', x + 8, y + 10, width - 16, { size: 9.8, bold: true })
 
+  flow.section(y)
+  const nameExtra = Math.max(0, layout.wrapText(displayValue(data.reporterName, ''), 144, labelSize).length - 1) * labelSize * 1.35
+  const positionExtra = Math.max(0, layout.wrapText(displayValue(data.reporterPosition, ''), 144, labelSize).length - 1) * labelSize * 1.35
+  const signatureExtra = nameExtra + positionExtra
   const signatureBoxTop = y
   const signatureBoxBottom = Math.max(28, layout.margin.bottom - 20)
-  const signatureBoxHeight = Math.max(90, signatureBoxTop - signatureBoxBottom)
+  const signatureBoxHeight = Math.max(170, signatureBoxTop - signatureBoxBottom) + signatureExtra
   drawRow(signatureBoxHeight)
   const signatureBoxBottomY = signatureBoxTop - signatureBoxHeight
   const signCenterX = x + width * 0.5
-  const signTopY = signatureBoxBottomY + 126
+  const signTopY = signatureBoxBottomY + 148 + signatureExtra
   const signLineWidth = 144
   const lineStartX = signCenterX - (signLineWidth / 2)
   const lineEndX = signCenterX + (signLineWidth / 2)
@@ -1048,21 +1050,22 @@ async function drawKwp02(layout, data) {
   drawSignatureLine(parenthesisY - 4)
   const reporterName = displayValue(data.reporterName, '')
   if (reporterName) {
-    const nameWidth = layout.textWidth(reporterName, labelSize)
-    drawCellText(reporterName, signCenterX - (nameWidth / 2), parenthesisY, lineEndX - lineStartX)
+    drawCenteredCellText(reporterName, signCenterX, parenthesisY, lineEndX - lineStartX)
   }
   drawCellText(')', lineEndX + 14, parenthesisY, 10)
-  const positionY = signTopY - 70
+  const positionY = signTopY - 70 - nameExtra
   drawCellText('ตำแหน่ง', lineStartX - 42, positionY, 40)
   drawSignatureLine(positionY - 4)
   const reporterPosition = displayValue(data.reporterPosition, '')
   if (reporterPosition) {
-    const positionWidth = layout.textWidth(reporterPosition, labelSize)
-    drawCellText(reporterPosition, lineStartX + ((lineEndX - lineStartX - positionWidth) / 2), positionY, lineEndX - lineStartX)
+    drawCenteredCellText(reporterPosition, signCenterX, positionY, lineEndX - lineStartX)
   }
-  drawCenteredCellText('ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ', signCenterX, signTopY - 91, 240)
-  drawCenteredCellText('ผู้จัดทำรายงาน', signCenterX, signTopY - 108, 120)
-  layout.y = y
+  drawCellText('วันที่', lineStartX - 40, signTopY - 91 - signatureExtra, 38)
+  drawSignatureLine(signTopY - 95 - signatureExtra, lineStartX, lineEndX)
+  drawCenteredCellText(displayValue(data.signatureDate, ''), signCenterX, signTopY - 91 - signatureExtra, signLineWidth)
+  drawCenteredCellText('ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ', signCenterX, signTopY - 112 - signatureExtra, 240)
+  drawCenteredCellText('ผู้จัดทำรายงาน', signCenterX, signTopY - 127 - signatureExtra, 120)
+  flow.finish(y)
 
   await drawKwpAttachmentPages(layout, data, `เอกสารแนบ แบบ ${isKwp04 ? 'กวภ.04' : 'กวภ.02'}`)
 }
@@ -1076,6 +1079,7 @@ function drawKwp03(layout, data) {
   const rowLine = 0.35
   const grey = rgb(0.74, 0.74, 0.74)
   let y = layout.y
+  const flow = new KwpPdfTemplate(layout)
 
   const selectedInstruments = Array.isArray(data.instruments) ? data.instruments : []
   const selectedReasons = Array.isArray(data.issueReasons) ? data.issueReasons : []
@@ -1089,7 +1093,9 @@ function drawKwp03(layout, data) {
       color: colors.border,
     })
   }
-  const drawRow = (height, { fill = null, verticals = [] } = {}) => {
+  const drawRow = (height, { fill = null, verticals = [], keepWithNext = false } = {}) => {
+    if (fill) flow.section(y)
+    flow.row(y, height, { header: Boolean(fill), keepWithNext })
     layout.page.drawRectangle({
       x,
       y: y - height,
@@ -1108,14 +1114,17 @@ function drawKwp03(layout, data) {
       size: options.size ?? labelSize,
       bold: options.bold ?? false,
       maxWidth,
-      lineHeight: (options.size ?? labelSize) * 1.2,
+      lineHeight: (options.size ?? labelSize) * 1.35,
     })
   }
   const drawCenteredCellText = (text, centerX, ty, maxWidth, options = {}) => {
     const size = options.size ?? labelSize
     const bold = options.bold ?? false
-    const textWidth = layout.textWidth(text, size, bold)
-    drawCellText(text, centerX - (textWidth / 2), ty, maxWidth, { size, bold })
+    const lines = layout.wrapText(text, maxWidth, size, bold)
+    lines.forEach((line, index) => {
+      const textWidth = layout.textWidth(line, size, bold)
+      layout.drawTextAt(line, centerX - textWidth / 2, ty - index * size * 1.35, { size, bold })
+    })
   }
   const drawDottedValue = (label, value, tx, ty, endX, options = {}) => {
     const labelText = `${label} : `
@@ -1178,6 +1187,13 @@ function drawKwp03(layout, data) {
       dashArray: [1.2, 2.1],
     })
   }
+  const reasonLines = (label, checked) => {
+    const text = checked ? displayValue(data.reasonDetail, '') : ''
+    const firstX = x + 46 + layout.textWidth(`${label} เนื่องจาก : `, labelSize) + 3
+    const first = layout.wrapText(text, Math.max(20, right - 8 - firstX - 8), labelSize)[0] ?? ''
+    const rest = text.slice(first.length).trimStart()
+    return [first, ...(rest ? layout.wrapText(rest, width - 24, labelSize) : [])]
+  }
   const drawReasonOption = (rowTop, label, checked) => {
     const optionY = rowTop - 13
     const boxX = x + 28
@@ -1186,22 +1202,20 @@ function drawKwp03(layout, data) {
     const labelWidth = layout.textWidth(labelText, labelSize)
     const lineStartX = labelX + labelWidth + 3
     const lineEndX = right - 8
-    const value = checked ? data.reasonDetail : ''
-
+    const lines = reasonLines(label, checked)
     drawBox(boxX, optionY + 1, checked)
     drawCellText(labelText, labelX, optionY, labelWidth)
-    layout.drawDottedLine(lineStartX, lineEndX, optionY - 4)
-    layout.drawDottedLine(x + 8, lineEndX, optionY - 18)
-    drawCellText(displayValue(value, ''), lineStartX + 3, optionY, Math.max(20, lineEndX - lineStartX - 8))
+    for (let index = 0; index < Math.max(2, lines.length); index += 1) {
+      const offset = index === 0 ? 0 : 14 + (index - 1) * 17
+      const tx = index === 0 ? lineStartX : x + 8
+      layout.drawDottedLine(tx, lineEndX, optionY - offset - 4)
+      if (lines[index]) drawCellText(lines[index], tx + 3, optionY - offset, lineEndX - tx - 8)
+    }
   }
 
-  const requestNo = getRequestNo(data)
-  if (requestNo) {
-    drawCellText(`เลขที่ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
-  }
   const formNo = 'แบบ กวภ.03'
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
-  y -= 38
+  y -= 22
   layout.drawCentered('แบบแจ้งเหตุขัดข้องหรือหยุดส่งข้อมูลการตรวจวัดมลพิษทางน้ำแบบอัตโนมัติอย่างต่อเนื่อง (WPMS)', {
     y,
     size: titleSize,
@@ -1212,7 +1226,7 @@ function drawKwp03(layout, data) {
   drawRow(20, { fill: grey })
   drawCellText('1.รายละเอียดเกี่ยวกับโรงงาน  (1 แบบต่อ 1 จุดตรวจวัด)', x + 8, y + 8, width - 16, { bold: true })
   drawRow(20)
-  drawPlainValue('วันที่', '', right - 210, y + 8, 200)
+  drawPlainValue('วันที่', data.submittedDate, right - 210, y + 8, 200)
   drawRow(20)
   drawPlainValue('ชื่อโรงงาน', data.factoryName, x + 8, y + 8, width - 16)
   drawRow(20, { verticals: [x + width * 0.5] })
@@ -1254,14 +1268,18 @@ function drawKwp03(layout, data) {
 
   drawRow(20, { fill: grey })
   drawCellText('4.สาเหตุของการไม่สามารถรายงานผลการตรวจวัดได้', x + 8, y + 8, width - 16, { bold: true })
-  drawRow(20)
+  drawRow(20, { keepWithNext: true })
   drawCellText('4.1 สาเหตุ', x + 8, y + 8, width - 16)
-  const reasonBlockHeight = 112
+  const reasons = ['เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง', 'ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน', 'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง']
+  const reasonExtras = reasons.map((label) => Math.max(0, reasonLines(label, selectedReasons.includes(label)).length - 2) * 17)
+  const reasonBlockHeight = 112 + reasonExtras.reduce((sum, extra) => sum + extra, 0)
   drawRow(reasonBlockHeight)
   const reasonSectionTop = y + reasonBlockHeight
-  drawReasonOption(reasonSectionTop - 4, 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง', selectedReasons.includes('เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง'))
-  drawReasonOption(reasonSectionTop - 38, 'ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน', selectedReasons.includes('ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน'))
-  drawReasonOption(reasonSectionTop - 72, 'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง', selectedReasons.includes('ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง'))
+  let reasonOffset = 4
+  reasons.forEach((label, index) => {
+    drawReasonOption(reasonSectionTop - reasonOffset, label, selectedReasons.includes(label))
+    reasonOffset += 34 + reasonExtras[index]
+  })
   drawRow(20)
   drawDottedValue('4.2 วัน/เดือน/ปี ที่พบปัญหาหรือหยุดหน่วยการผลิต', data.problemDate, x + 8, y + 8, right)
   drawRow(44)
@@ -1277,20 +1295,36 @@ function drawKwp03(layout, data) {
   })
   const otherFailedParameters = failedParameters.filter((parameter) => !parameterOptions.some((option) => String(parameter).toLowerCase().includes(option.toLowerCase())))
   if (otherFailedParameters.length) {
-    drawCellText(joinList(otherFailedParameters, ''), optionX, y + 8, right - optionX - 8)
+    drawCellText(joinList(otherFailedParameters, ''), x + 8, y - 10, width - 16)
   }
-  drawRow(60)
-  drawDottedValue('4.5 แนวทางการปรับปรุงแก้ไข (เฉพาะเครื่องมือหรืออุปกรณ์พิเศษขัดข้อง)', data.correctiveAction, x + 8, y + 46, right)
-  layout.drawDottedLine(x + 8, right - 8, y + 25)
-  layout.drawDottedLine(x + 8, right - 8, y + 8)
+  const correctiveLabel = '4.5 แนวทางการปรับปรุงแก้ไข (เฉพาะเครื่องมือหรืออุปกรณ์พิเศษขัดข้อง) : '
+  const correctiveX = x + 8 + layout.textWidth(correctiveLabel, labelSize) + 2
+  const correctiveText = displayValue(data.correctiveAction, '')
+  const firstCorrectiveLine = layout.wrapText(correctiveText, Math.max(20, right - correctiveX - 10), labelSize)[0] ?? ''
+  const remainingCorrectiveText = correctiveText.slice(firstCorrectiveLine.length).trimStart()
+  const correctiveLines = [firstCorrectiveLine, ...(remainingCorrectiveText ? layout.wrapText(remainingCorrectiveText, width - 24, labelSize) : [])]
+  const correctiveExtra = Math.max(0, correctiveLines.length - 3) * 17
+  drawRow(60 + correctiveExtra)
+  const correctiveY = y + 46 + correctiveExtra
+  drawCellText(correctiveLabel, x + 8, correctiveY, correctiveX - x - 8)
+  for (let index = 0; index < Math.max(3, correctiveLines.length); index += 1) {
+    const tx = index === 0 ? correctiveX : x + 8
+    const lineY = index === 0 ? correctiveY : correctiveY - 17 - (index - 1) * 17
+    layout.drawDottedLine(tx, right - 8, lineY - 4)
+    if (correctiveLines[index]) drawCellText(correctiveLines[index], tx + 2, lineY, right - tx - 10)
+  }
 
+  flow.section(y)
+  const nameExtra = Math.max(0, layout.wrapText(displayValue(data.reporterName, ''), 144, labelSize).length - 1) * labelSize * 1.35
+  const positionExtra = Math.max(0, layout.wrapText(displayValue(data.reporterPosition, ''), 144, labelSize).length - 1) * labelSize * 1.35
+  const signatureExtra = nameExtra + positionExtra
   const signatureBoxTop = y
   const signatureBoxBottom = Math.max(28, layout.margin.bottom - 20)
-  const signatureBoxHeight = Math.max(150, signatureBoxTop - signatureBoxBottom)
+  const signatureBoxHeight = Math.max(150, signatureBoxTop - signatureBoxBottom) + signatureExtra
   drawRow(signatureBoxHeight)
   const signatureBoxBottomY = signatureBoxTop - signatureBoxHeight
   const signCenterX = x + width * 0.5
-  const signTopY = signatureBoxBottomY + 134
+  const signTopY = signatureBoxBottomY + 134 + signatureExtra
   const signLineWidth = 144
   const lineStartX = signCenterX - (signLineWidth / 2)
   const lineEndX = signCenterX + (signLineWidth / 2)
@@ -1303,20 +1337,21 @@ function drawKwp03(layout, data) {
   drawSignatureLine(parenthesisY - 4, lineStartX, lineEndX)
   const reporterName = displayValue(data.reporterName, '')
   if (reporterName) {
-    const nameWidth = layout.textWidth(reporterName, labelSize)
-    drawCellText(reporterName, signCenterX - (nameWidth / 2), parenthesisY, lineEndX - lineStartX)
+    drawCenteredCellText(reporterName, signCenterX, parenthesisY, lineEndX - lineStartX)
   }
   drawCellText(')', lineEndX + 14, parenthesisY, 10)
-  const positionY = signTopY - 70
+  const positionY = signTopY - 70 - nameExtra
   drawCellText('ตำแหน่ง', lineStartX - 42, positionY, 40)
   drawSignatureLine(positionY - 4, lineStartX, lineEndX)
   const reporterPosition = displayValue(data.reporterPosition, '')
   if (reporterPosition) {
-    const positionWidth = layout.textWidth(reporterPosition, labelSize)
-    drawCellText(reporterPosition, lineStartX + ((lineEndX - lineStartX - positionWidth) / 2), positionY, lineEndX - lineStartX)
+    drawCenteredCellText(reporterPosition, signCenterX, positionY, lineEndX - lineStartX)
   }
-  drawCenteredCellText('ผู้จัดทำรายงาน/ผู้ดูแลระบบบำบัด', signCenterX, signTopY - 93, 220)
-  layout.y = y
+  drawCellText('วันที่', lineStartX - 42, signTopY - 91 - signatureExtra, 40)
+  drawSignatureLine(signTopY - 95 - signatureExtra, lineStartX, lineEndX)
+  drawCenteredCellText(displayValue(data.signatureDate, ''), signCenterX, signTopY - 91 - signatureExtra, signLineWidth)
+  drawCenteredCellText('ผู้จัดทำรายงาน/ผู้ดูแลระบบบำบัด', signCenterX, signTopY - 116 - signatureExtra, 220)
+  flow.finish(y)
 }
 
 function drawKwp05(layout, data) {
@@ -1328,6 +1363,7 @@ function drawKwp05(layout, data) {
   const rowLine = 0.35
   const grey = rgb(0.74, 0.74, 0.74)
   let y = layout.y
+  const flow = new KwpPdfTemplate(layout)
   const contentX = x
   const contentRight = right
   const contentWidth = contentRight - contentX
@@ -1345,14 +1381,17 @@ function drawKwp05(layout, data) {
       size: options.size ?? labelSize,
       bold: options.bold ?? false,
       maxWidth,
-      lineHeight: (options.size ?? labelSize) * 1.22,
+      lineHeight: (options.size ?? labelSize) * 1.35,
     })
   }
   const drawCenteredCellText = (text, centerX, ty, maxWidth, options = {}) => {
     const size = options.size ?? labelSize
     const bold = options.bold ?? false
-    const textWidth = layout.textWidth(text, size, bold)
-    drawCellText(text, centerX - (textWidth / 2), ty, maxWidth, { size, bold })
+    const lines = layout.wrapText(text, maxWidth, size, bold)
+    lines.forEach((line, index) => {
+      const textWidth = layout.textWidth(line, size, bold)
+      layout.drawTextAt(line, centerX - textWidth / 2, ty - index * size * 1.35, { size, bold })
+    })
   }
   const drawDottedValue = (label, value, tx, ty, endX, options = {}) => {
     const labelText = `${label} : `
@@ -1365,20 +1404,6 @@ function drawKwp05(layout, data) {
     drawCellText(labelText, tx, ty, Math.max(20, endX - tx), { size, bold: options.boldLabel })
     layout.drawDottedLine(valueX, endX, lineY)
 
-    if (options.fitSingleLine) {
-      let valueText = displayValue(value, '')
-      let valueSize = size
-      while (valueText && valueSize > 9 && layout.textWidth(valueText, valueSize) > valueMaxWidth) {
-        valueSize -= 0.25
-      }
-
-      while (valueText && layout.textWidth(valueText, valueSize) > valueMaxWidth) {
-        valueText = valueText.slice(0, -1)
-      }
-
-      layout.drawTextAt(valueText, valueX + 2, ty, { size: valueSize })
-      return
-    }
 
     drawCellText(displayValue(value, ''), valueX + 2, ty, valueMaxWidth, { size })
   }
@@ -1405,9 +1430,9 @@ function drawKwp05(layout, data) {
     const size = options.size ?? 11.4
     const bold = options.bold ?? false
     const lines = String(text ?? '').split('\n').flatMap((line) => layout.wrapText(line, maxWidth, size, bold))
-    const lineHeight = size * 1.18
+    const lineHeight = size * 1.35
 
-    lines.slice(0, options.maxLines ?? lines.length).forEach((line, index) => {
+    lines.forEach((line, index) => {
       if (options.align === 'center') {
         const lineWidth = layout.textWidth(line, size, bold)
         layout.drawTextAt(line, tx + Math.max(0, (maxWidth - lineWidth) / 2), ty - (index * lineHeight), { size, bold })
@@ -1417,10 +1442,6 @@ function drawKwp05(layout, data) {
     })
   }
 
-  const requestNo = getRequestNo(data)
-  if (requestNo) {
-    drawCellText(`เลขที่ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
-  }
   const formNo = 'แบบ กวภ.05'
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
   y -= 36
@@ -1455,27 +1476,39 @@ function drawKwp05(layout, data) {
   const leftFieldEndX = contentX + 238
   const rightFieldX = contentX + 254
 
+  flow.section(y + 12)
+  flow.row(y + 12, 18)
   drawDottedValue('ชื่อบริษัท', data.companyName, contentX, y, leftFieldEndX)
   y -= 18
+  flow.row(y + 12, 18)
   drawDottedValue('เลขทะเบียนโรงงาน', data.factoryRegistration, contentX, y, leftFieldEndX)
   drawDottedValue('ประกอบกิจการ', data.businessActivity, rightFieldX, y, contentRight, { fitSingleLine: true })
   y -= 18
+  flow.row(y + 12, 18)
   drawDottedValue('สถานที่ตั้ง', data.factoryAddress, contentX, y, contentRight)
   y -= 18
+  flow.row(y + 12, 18)
   drawDottedValue('ผู้เก็บตัวอย่าง', data.samplerName, contentX, y, leftFieldEndX)
   drawDottedValue('ทะเบียนเจ้าหน้าที่', data.officerRegistration, rightFieldX, y, contentRight, { fitSingleLine: true })
   y -= 18
+  flow.row(y + 12, 18)
   drawDottedValue('หน่วยงาน/ชื่อห้องปฏิบัติการ', data.laboratoryName, contentX, y, contentRight)
   y -= 18
+  flow.row(y + 12, 18)
   drawDottedValue('ทะเบียนห้องปฏิบัติการ', data.laboratoryRegistration, contentX, y, leftFieldEndX)
   y -= 18
+  flow.row(y + 12, 18)
   drawDottedValue('รหัสจุดตรวจวัด', data.pointCode, contentX, y, leftFieldEndX)
   y -= 18
+  flow.row(y + 12, 18)
   drawDottedValue('ชื่อจุดตรวจวัด', data.pointName, contentX, y, leftFieldEndX)
   y -= 18
+  flow.row(y + 12, 18)
   drawDottedValue('รายละเอียดของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ ยี่ห้อ (Brand)', data.cemsBrand || data.cemsDetail, contentX, y, contentRight)
   y -= 20
 
+  flow.section(y + 12)
+  flow.row(y + 12, 40, { header: true })
   drawCellText('รายการผลการสอบเทียบหรือทวนสอบ CEMS', contentX, y, contentWidth, { bold: true })
   y -= 28
 
@@ -1496,72 +1529,46 @@ function drawKwp05(layout, data) {
   const rows = data.calibrationRows?.length ? data.calibrationRows : [{}]
   const headerHeight = 76
   const tableBodySize = 12.8
-  const rowHeight = Math.max(78, ...rows.map((row) => Math.max(1, normalizeParameters(row.parameter).length) * 16 + 30))
-  const tableHeight = headerHeight + (rows.length * rowHeight)
+  const minimumRowHeight = Math.max(78, ...rows.map((row) => Math.max(1, normalizeParameters(row.parameter).length) * 16 + 30))
+  flow.row(y, headerHeight, { header: true })
+  layout.page.drawRectangle({ x: tableX, y: y - headerHeight, width: tableWidth, height: headerHeight, color: grey, borderColor: colors.border, borderWidth: rowLine })
   let currentX = tableX
-
-  layout.page.drawRectangle({
-    x: tableX,
-    y: y - tableHeight,
-    width: tableWidth,
-    height: tableHeight,
-    borderColor: colors.border,
-    borderWidth: rowLine,
-  })
-  layout.page.drawRectangle({
-    x: tableX,
-    y: y - headerHeight,
-    width: tableWidth,
-    height: headerHeight,
-    color: grey,
-    borderColor: colors.border,
-    borderWidth: rowLine,
-  })
-  drawLine(tableX, y - headerHeight, tableX + tableWidth, y - headerHeight)
   columns.forEach((column, index) => {
     const colWidth = colWidths[index]
-    if (index > 0) {
-      drawLine(currentX, y, currentX, y - tableHeight)
-    }
-    const headerLines = column.label.split('\n')
-    const lineHeight = 15
-    const firstY = y - ((headerHeight - (headerLines.length * lineHeight)) / 2) - 8
-    headerLines.forEach((line, lineIndex) => {
-      drawCenteredCellText(line, currentX + (colWidth / 2), firstY - (lineIndex * lineHeight), colWidth - 6, {
-        size: labelSize,
-        bold: true,
-      })
-    })
+    if (index > 0) drawLine(currentX, y, currentX, y - headerHeight)
+    const lines = column.label.split('\n')
+    const firstY = y - ((headerHeight - lines.length * 15) / 2) - 8
+    lines.forEach((line, lineIndex) => drawCenteredCellText(line, currentX + colWidth / 2, firstY - lineIndex * 15, colWidth - 6, { size: labelSize, bold: true }))
     currentX += colWidth
   })
-  rows.forEach((row, rowIndex) => {
-    const rowTop = y - headerHeight - (rowIndex * rowHeight)
-    if (rowIndex > 0) {
-      drawLine(tableX, rowTop, tableX + tableWidth, rowTop)
-    }
+  y -= headerHeight
+  rows.forEach((row) => {
     const cells = [
-      normalizeParameters(row.parameter).join('\n'),
-      formatDate(row.startDate),
-      formatDate(row.endDate),
-      displayValue(row.result),
-      displayValue(row.verifierCompany || data.laboratoryName),
-      displayValue(row.cemsModel),
+      normalizeParameters(row.parameter).join('\n'), formatDate(row.startDate), formatDate(row.endDate),
+      displayValue(row.result), displayValue(row.verifierCompany || data.laboratoryName), displayValue(row.cemsModel),
       displayValue(row.rataReportLink || row.rataReportFiles?.[0]?.name),
       displayValue(row.calibrationPhotoLink || row.calibrationPhotoFiles?.[0]?.name),
     ]
+    const lineCount = Math.max(1, ...cells.map((cell, index) => layout.wrapText(cell, colWidths[index] - 12, tableBodySize).length))
+    const height = Math.max(minimumRowHeight, lineCount * tableBodySize * 1.35 + 18)
+    flow.row(y, height)
+    layout.page.drawRectangle({ x: tableX, y: y - height, width: tableWidth, height, borderColor: colors.border, borderWidth: rowLine })
     let cellX = tableX
-    cells.forEach((cell, cellIndex) => {
-      const colWidth = colWidths[cellIndex]
-      drawTableText(cell, cellX + 6, rowTop - 17, colWidth - 12, {
-        size: tableBodySize,
-        maxLines: Math.max(4, Math.floor((rowHeight - 14) / (tableBodySize * 1.18))),
-      })
+    cells.forEach((cell, index) => {
+      const colWidth = colWidths[index]
+      if (index > 0) drawLine(cellX, y, cellX, y - height)
+      drawTableText(cell, cellX + 6, y - 17, colWidth - 12, { size: tableBodySize })
       cellX += colWidth
     })
+    y -= height
   })
-  y -= tableHeight
 
-  const signatureTopY = Math.max(layout.margin.bottom + 94, y - 46)
+  flow.section(y)
+  const nameExtra = Math.max(0, layout.wrapText(displayValue(data.reporterName, ''), 132, labelSize).length - 1) * labelSize * 1.35
+  const positionExtra = Math.max(0, layout.wrapText(displayValue(data.reporterPosition, ''), 132, labelSize).length - 1) * labelSize * 1.35
+  flow.row(y, 137 + nameExtra + positionExtra)
+
+  const signatureTopY = y - 46
   const lineEndX = contentRight
   const lineStartX = contentRight - 132
   const signCenterX = (lineStartX + lineEndX) / 2
@@ -1578,27 +1585,32 @@ function drawKwp05(layout, data) {
   drawSignatureLine(parenthesisY - 4, lineStartX, lineEndX)
   const reporterName = displayValue(data.reporterName, '')
   if (reporterName) {
-    const nameWidth = layout.textWidth(reporterName, labelSize)
-    drawCellText(reporterName, signCenterX - (nameWidth / 2), parenthesisY, lineEndX - lineStartX)
+    drawCenteredCellText(reporterName, signCenterX, parenthesisY, lineEndX - lineStartX)
   }
   drawCellText(')', lineEndX + 2, parenthesisY, 10)
-  const positionY = signatureTopY - 45
+  const positionY = signatureTopY - 45 - nameExtra
   drawSignatureLabel('ตำแหน่ง', positionY)
   drawSignatureLine(positionY - 4, lineStartX, lineEndX)
   const reporterPosition = displayValue(data.reporterPosition, '')
   if (reporterPosition) {
-    const positionWidth = layout.textWidth(reporterPosition, labelSize)
-    drawCellText(reporterPosition, lineStartX + ((lineEndX - lineStartX - positionWidth) / 2), positionY, lineEndX - lineStartX)
+    drawCenteredCellText(reporterPosition, signCenterX, positionY, lineEndX - lineStartX)
   }
-  const dateY = signatureTopY - 67
+  const dateY = signatureTopY - 67 - nameExtra - positionExtra
   drawSignatureLabel('ลงวันที่', dateY)
   drawSignatureLine(dateY - 4, lineStartX, lineEndX)
-  layout.y = dateY - 24
+  drawCenteredCellText(displayValue(data.signatureDate, ''), signCenterX, dateY, lineEndX - lineStartX)
+  flow.finish(dateY - 24)
 }
 
 export async function createKwpFormPdf(data) {
   if (!data) {
     throw new Error('ไม่พบข้อมูลสำหรับสร้าง PDF')
+  }
+
+  data = {
+    ...data,
+    submittedDate: formatKwpDocumentDate(data.submittedDate || data.submittedAt),
+    signatureDate: formatKwpDocumentDate(data.signatureDate || data.submittedDate || data.submittedAt),
   }
 
   const pdfDoc = await PDFDocument.create()
@@ -1614,6 +1626,7 @@ export async function createKwpFormPdf(data) {
   }
   const layout = new KwpPdfLayout(pdfDoc, fonts)
   layout.data = data
+  layout.requestMetaHeader(data)
 
   if (data.formType === 'kwp02' || data.formType === 'kwp04') {
     await drawKwp02(layout, data)

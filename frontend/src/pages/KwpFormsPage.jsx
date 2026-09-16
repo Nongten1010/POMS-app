@@ -20,6 +20,7 @@ import {
   Paper,
   Popover,
   Select,
+  Snackbar,
   Stack,
   Tab,
   Table,
@@ -48,6 +49,7 @@ import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasurementMethodOptions.json'
 import { createKwpFormPdf } from '../utils/kwpFormPdf'
+import { canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata, getKwpReportPeriod, getKwpAttachmentValidationError } from '../utils/kwpFormPresentation.mjs'
 
 dayjs.extend(buddhistEra)
 dayjs.locale('th')
@@ -476,7 +478,7 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function RequestActions({ row, isOperator, onOpenDocument }) {
+function RequestActions({ row, isOperator, onOpenDocument, onCancelRequest }) {
   const rowStatuses = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
   const cannotProcess = rowStatuses.some((status) => (
     ['ผ่านการพิจารณา', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(status)
@@ -501,8 +503,8 @@ function RequestActions({ row, isOperator, onOpenDocument }) {
           size="small"
           variant="outlined"
           color="error"
-          disabled={!canOperatorModify}
-          onClick={() => {}}
+          disabled={!canCancelKwpRequest(row)}
+          onClick={() => onCancelRequest?.(row)}
         >
           ยกเลิกคำขอ
         </Button>
@@ -958,6 +960,8 @@ function Kwp01Form({
   onProblemDateChange,
   onExpectedDoneDateChange,
   onUnreportedParametersChange,
+  attachmentFiles = [],
+  onAttachmentFilesChange,
 }) {
   const [combustionSystem, setCombustionSystem] = useState(() => defaults.combustionSystem ?? '')
   const [issueReason, setIssueReason] = useState(() => defaults.issueReason ?? '')
@@ -1117,6 +1121,8 @@ function Kwp01Form({
           </Grid>
         </SectionPaper>
 
+        <KwpGeneralAttachments files={attachmentFiles} onChange={onAttachmentFilesChange} link={defaults.attachmentLink} />
+
         <SectionPaper title="ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ (ผู้จัดทำรายงาน)">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 3 }}>
@@ -1158,12 +1164,14 @@ function getDatePickerValue(value) {
   return value && dayjs(value).isValid() ? dayjs(value) : null
 }
 
-function buildKwp01PreviewData(form, formElement, dates, unreportedParameters) {
+function buildKwp01PreviewData(form, formElement, dates, unreportedParameters, attachmentFiles = []) {
   const formData = formElement ? new FormData(formElement) : new FormData()
   const startDate = dates.problemDate
   const endDate = dates.expectedDoneDate
 
   return {
+    ...getKwpPreviewMetadata(form),
+    attachmentSections: buildKwpGeneralAttachmentSections(formData, attachmentFiles),
     title: form?.title ?? '',
     requestNo: form?.requestNo ?? '',
     requestId: form?.requestId ?? form?.id ?? '',
@@ -1198,6 +1206,7 @@ function buildCommonFormPreviewData(form, formElement) {
   const formData = formElement ? new FormData(formElement) : new FormData()
 
   return {
+    ...getKwpPreviewMetadata(form),
     requestNo: form?.requestNo ?? '',
     requestId: form?.requestId ?? form?.id ?? '',
     factoryName: form?.factory?.factoryName ?? '',
@@ -1221,7 +1230,10 @@ function buildCommonFormPreviewData(form, formElement) {
 }
 
 function buildKwpAttachmentPreviewFiles(files) {
-  return files.map((file, index) => ({
+  return files.map((file, index) => file.isSubmitted ? {
+    ...file,
+    url: getKwpAttachmentFileUrl(file),
+  } : ({
     id: `${file.name}-${file.lastModified ?? index}-${index}`,
     name: file.name,
     type: file.type,
@@ -1230,6 +1242,20 @@ function buildKwpAttachmentPreviewFiles(files) {
     rawFile: file,
     isSubmitted: false,
   }))
+}
+
+function getKwpPreviewMetadata(form) {
+  return getKwpDocumentMetadata(form?.documentMetadata ?? {}, {
+    submittedAt: form?.mode === 'edit' ? undefined : new Date().toISOString(),
+  })
+}
+
+function buildKwpGeneralAttachmentSections(formData, files) {
+  return [{
+    key: 'generalAttachments', title: 'เอกสารแนบ',
+    link: getFormText(formData, 'attachmentLink'),
+    files: buildKwpAttachmentPreviewFiles(files),
+  }]
 }
 
 function normalizeKwpAttachmentUrl(url) {
@@ -1326,21 +1352,25 @@ function getKwpPreviewAttachmentGroups(data = {}) {
 
 function buildKwp02PreviewData(form, formElement, measurementRows, attachmentFiles = {}) {
   const isKwp04 = form?.title?.startsWith('กวภ.04')
+  const formData = formElement ? new FormData(formElement) : new FormData()
 
   return {
     formType: isKwp04 ? 'kwp04' : 'kwp02',
     title: form?.title ?? '',
     ...buildCommonFormPreviewData(form, formElement),
+    ...getKwpReportPeriod(formData),
     measurementRows,
     attachmentSections: [
       {
         key: 'samplingPhotos',
         title: 'ภาพถ่ายขณะเก็บตัวอย่าง',
+        link: getFormText(formData, 'samplingPhotoLink'),
         files: buildKwpAttachmentPreviewFiles(attachmentFiles.samplingPhotoFiles ?? []),
       },
       {
         key: 'labReports',
         title: 'รายงานผลจากห้องปฏิบัติการ',
+        link: getFormText(formData, 'labReportLink'),
         files: buildKwpAttachmentPreviewFiles(attachmentFiles.labReportFiles ?? []),
       },
     ],
@@ -1380,11 +1410,13 @@ function buildKwpCommonSubmissionPayload(form, formElement) {
   }
 }
 
-function buildKwp01SubmissionPayload(form, formElement, dates, unreportedParameters) {
+function buildKwp01SubmissionPayload(form, formElement, dates, unreportedParameters, attachments = []) {
   const formData = formElement ? new FormData(formElement) : new FormData()
 
   return {
     ...buildKwpCommonSubmissionPayload(form, formElement),
+    attachments,
+    attachmentLink: getFormText(formData, 'attachmentLink') || null,
     issueReason: getFormText(formData, 'issueReason'),
     reasonDetail: getFormText(formData, 'reasonDetail'),
     problemDate: formatApiHourDateTimeValue(dates.problemDate),
@@ -1408,8 +1440,12 @@ function buildKwpEmissionMeasurementItem(row, attachments = []) {
 }
 
 function buildKwp02SubmissionPayload(form, formElement, measurementRows, measurementAttachments = []) {
+  const formData = formElement ? new FormData(formElement) : new FormData()
   return {
     ...buildKwpCommonSubmissionPayload(form, formElement),
+    ...getKwpReportPeriod(formData),
+    samplingPhotoLink: getFormText(formData, 'samplingPhotoLink') || null,
+    labReportLink: getFormText(formData, 'labReportLink') || null,
     measurementItems: measurementRows.map((row, index) =>
       buildKwpEmissionMeasurementItem(row, index === 0 ? measurementAttachments : []),
     ),
@@ -1436,6 +1472,7 @@ function buildKwp03SubmissionPayload(form, formElement, dates, selectedValues, a
     failedParameters: selectedValues.failedParameters,
     correctiveAction: getFormText(formData, 'correctiveAction') || null,
     attachments,
+    attachmentLink: getFormText(formData, 'attachmentLink') || null,
   }
 }
 
@@ -1465,13 +1502,14 @@ function buildKwp05SubmissionPayload(form, formElement, calibrationRows) {
   }
 }
 
-function buildKwp03PreviewData(form, formElement, dates, selectedValues) {
+function buildKwp03PreviewData(form, formElement, dates, selectedValues, attachmentFiles = []) {
   const formData = formElement ? new FormData(formElement) : new FormData()
 
   return {
     formType: 'kwp03',
     title: form?.title ?? '',
     ...buildCommonFormPreviewData(form, formElement),
+    attachmentSections: buildKwpGeneralAttachmentSections(formData, attachmentFiles),
     instruments: selectedValues.instruments,
     measurementTimes: selectedValues.measurementTimes ?? [],
     wastewaterSource: getFormText(formData, 'wastewaterSource'),
@@ -1495,6 +1533,7 @@ function buildKwp05PreviewData(form, formElement, calibrationRows) {
   const formData = formElement ? new FormData(formElement) : new FormData()
 
   return {
+    ...getKwpPreviewMetadata(form),
     formType: 'kwp05',
     title: form?.title ?? '',
     requestNo: form?.requestNo ?? '',
@@ -1741,6 +1780,7 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
     titleText: option?.title ?? '',
     description: option?.description ?? '',
     mode: 'edit',
+    documentMetadata: getKwpDocumentMetadata(detail, row),
     requestId: detail.id ?? row.id,
     requestNo: detail.requestNo ?? row.requestNo,
     latestRevisionMessage: row.revisionNote ?? detail.revisionReason ?? detail.officerNote ?? '',
@@ -1786,8 +1826,11 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
       minimumDischarge: wpmsIssueReport.minimumDischarge ?? '',
       maximumDischarge: wpmsIssueReport.maximumDischarge ?? '',
       businessActivity: calibrationReport.businessActivity ?? detail.businessActivity ?? '',
-      reportRound: calibrationReport.reportRound ?? '',
-      reportYear: calibrationReport.reportYear ?? '',
+      reportRound: detail.reportRound ?? calibrationReport.reportRound ?? '',
+      reportYear: detail.reportYear ?? calibrationReport.reportYear ?? '',
+      attachmentLink: detail.attachmentLink ?? '',
+      samplingPhotoLink: detail.samplingPhotoLink ?? '',
+      labReportLink: detail.labReportLink ?? '',
       samplerName: calibrationReport.samplerName ?? '',
       officerRegistration: calibrationReport.officerRegistration ?? '',
       laboratoryName: calibrationReport.laboratoryName ?? '',
@@ -1795,6 +1838,7 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
       cemsBrand: calibrationReport.cemsBrand ?? '',
     },
     initialState: {
+      attachmentFiles: (detail.attachments ?? issueReport.attachments ?? wpmsIssueReport.attachments ?? []).map(buildSubmittedAttachmentFile),
       problemDate: issueReport.problemDate ?? wpmsIssueReport.problemDate ?? null,
       expectedDoneDate: issueReport.expectedDoneDate ?? wpmsIssueReport.expectedDoneDate ?? null,
       unreportedParameters: issueReport.unreportedParameters ?? [],
@@ -1849,6 +1893,7 @@ function normalizeKwpAttachmentFile(file, index = 0) {
 
 function getKwpDetailCommonData(detail, row = {}) {
   return {
+    ...getKwpDocumentMetadata(detail, row),
     title: detail.form ?? row.form ?? '',
     requestNo: detail.requestNo ?? detail.requestNumber ?? detail.requestCode ?? row.requestNo ?? row.requestNumber ?? row.requestCode ?? '',
     requestId: detail.id ?? detail.requestId ?? row.id ?? row.requestId ?? '',
@@ -1888,6 +1933,8 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
     return {
       formType: 'kwp03',
       ...commonData,
+      attachmentSections: [{ title: 'เอกสารแนบ', link: detail.attachmentLink ?? '',
+        files: (detail.attachments ?? issueReport.attachments ?? []).map(normalizeKwpAttachmentFile) }],
       instruments: issueReport.instruments ?? [],
       measurementTimes: issueReport.measurementTimes ?? [],
       wastewaterSource: issueReport.wastewaterSource ?? '',
@@ -1929,11 +1976,14 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
     return {
       formType: isKwp04 ? 'kwp04' : 'kwp02',
       ...commonData,
+      reportRound: detail.reportRound ?? '',
+      reportYear: detail.reportYear ?? '',
       measurementRows,
       attachmentSections: [
         {
           key: 'samplingPhotos',
           title: 'ภาพถ่ายขณะเก็บตัวอย่าง',
+          link: detail.samplingPhotoLink ?? '',
           files: allAttachments
             .filter((file) => file.attachmentType === 'SAMPLING_PHOTO')
             .map(normalizeKwpAttachmentFile),
@@ -1941,6 +1991,7 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
         {
           key: 'labReports',
           title: 'รายงานผลจากห้องปฏิบัติการ',
+          link: detail.labReportLink ?? '',
           files: allAttachments
             .filter((file) => file.attachmentType === 'LAB_REPORT')
             .map(normalizeKwpAttachmentFile),
@@ -1967,6 +2018,7 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
 
     return {
       formType: 'kwp05',
+      ...commonData,
       title: detail.form ?? row.form ?? 'กวภ.05',
       requestNo: detail.requestNo ?? detail.requestNumber ?? detail.requestCode ?? row.requestNo ?? row.requestNumber ?? row.requestCode ?? '',
       requestId: detail.id ?? detail.requestId ?? row.id ?? row.requestId ?? '',
@@ -1999,6 +2051,8 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
 
   return {
     ...commonData,
+    attachmentSections: [{ title: 'เอกสารแนบ', link: detail.attachmentLink ?? '',
+      files: (detail.attachments ?? issueReport.attachments ?? []).map(normalizeKwpAttachmentFile) }],
     issueReason: issueReport.issueReason ?? '',
     reasonDetail: issueReport.reasonDetail ?? '',
     problemDate: formatThaiDateHourValue(issueReport.problemDate),
@@ -3395,11 +3449,13 @@ const emptyEmissionMeasurement = {
   labReportFileType: '',
 }
 
-function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
+function MultiFileInputButton({ label, files, onChange, maxFiles = 5, maxSizeMb = 5 }) {
   const safeFiles = Array.isArray(files) ? files : []
   const isLimitReached = safeFiles.length >= maxFiles
+  const [fileError, setFileError] = useState('')
 
   const removeFile = (removeIndex) => {
+    setFileError('')
     onChange(safeFiles.filter((_, index) => index !== removeIndex))
   }
 
@@ -3411,12 +3467,16 @@ function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
           <input
             hidden
             type="file"
+            multiple
             accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
             onChange={(event) => {
-              const selectedFile = event.target.files?.[0] ?? null
+              const selectedFiles = Array.from(event.target.files ?? [])
               event.target.value = ''
-              if (!selectedFile || isLimitReached) return
-              onChange([...safeFiles, selectedFile].slice(0, maxFiles))
+              if (!selectedFiles.length || isLimitReached) return
+              const nextFiles = [...safeFiles, ...selectedFiles]
+              const error = getKwpAttachmentValidationError(nextFiles, maxFiles, maxSizeMb)
+              setFileError(error)
+              if (!error) onChange(nextFiles)
             }}
           />
         </Button>
@@ -3424,6 +3484,7 @@ function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
           {label}
         </Typography>
       </Stack>
+      {fileError ? <Alert severity="error">{fileError}</Alert> : null}
       <TableContainer sx={{ border: 1, borderColor: 'divider' }}>
         <Table size="small" sx={borderedTableSx}>
           <TableHead>
@@ -3459,6 +3520,21 @@ function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
         </Table>
       </TableContainer>
     </Stack>
+  )
+}
+
+function KwpGeneralAttachments({ files, onChange, link = '' }) {
+  return (
+    <SectionPaper title="เอกสารแนบ">
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <MultiFileInputButton label="เอกสารแนบ (JPG/PNG/PDF ไม่เกิน 10 MB ต่อไฟล์)" files={files} onChange={onChange} maxSizeMb={10} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <TextField name="attachmentLink" label="Link เอกสารแนบ" size="small" defaultValue={link} fullWidth />
+        </Grid>
+      </Grid>
+    </SectionPaper>
   )
 }
 
@@ -3674,6 +3750,14 @@ function Kwp02Form({
         <SectionPaper title="ข้อมูลจุดตรวจวัด">
           <Stack spacing={2}>
             <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <TextField name="reportRound" label="รายงานครั้งที่" type="number" size="small" defaultValue={defaults.reportRound ?? ''} fullWidth />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <TextField name="reportYear" label="ปี พ.ศ." type="number" size="small" defaultValue={defaults.reportYear || getCurrentThaiYear()} fullWidth />
+              </Grid>
+            </Grid>
+            <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 3 }}>
                 <ReadOnlyField label="รหัสจุดตรวจวัด" value={point?.code ?? ''} />
               </Grid>
@@ -3807,6 +3891,12 @@ function Kwp02Form({
                 onChange={setLabReportFiles}
               />
             </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField name="samplingPhotoLink" label="Link ภาพถ่ายขณะเก็บตัวอย่าง" size="small" defaultValue={defaults.samplingPhotoLink ?? ''} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField name="labReportLink" label="Link รายงานผลจากห้องปฏิบัติการ" size="small" defaultValue={defaults.labReportLink ?? ''} fullWidth />
+            </Grid>
           </Grid>
         </SectionPaper>
 
@@ -3846,6 +3936,8 @@ function Kwp03Form({
   onInstrumentsChange,
   onIssueReasonsChange,
   onFailedParametersChange,
+  attachmentFiles = [],
+  onAttachmentFilesChange,
 }) {
   const totalDuration = getHourDuration(problemDate, expectedDoneDate)
   const pointParameterOptions = uniqueTextValues(point?.parameterDetails ?? [])
@@ -3988,6 +4080,8 @@ function Kwp03Form({
             </Grid>
           </Grid>
         </SectionPaper>
+
+        <KwpGeneralAttachments files={attachmentFiles} onChange={onAttachmentFilesChange} link={defaults.attachmentLink} />
 
         <SectionPaper title="ผู้จัดทำรายงาน/ผู้ดูแลระบบบำบัด">
           <Grid container spacing={2}>
@@ -4227,6 +4321,7 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
             <Grid size={{ xs: 12, md: 6 }}>
               <MultiFileInputButton
                 label="รายงานผล RATA (JPG/PNG/PDF ไม่เกิน 10 MB)"
+                maxSizeMb={10}
                 files={calibrationRow.rataReportFiles ?? []}
                 onChange={(nextFiles) => updateCalibrationRow({ rataReportFiles: nextFiles })}
               />
@@ -4234,6 +4329,7 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
             <Grid size={{ xs: 12, md: 6 }}>
               <MultiFileInputButton
                 label="ภาพขณะสอบเทียบ (JPG/PNG/PDF ไม่เกิน 10 MB)"
+                maxSizeMb={10}
                 files={calibrationRow.calibrationPhotoFiles ?? []}
                 onChange={(nextFiles) => updateCalibrationRow({ calibrationPhotoFiles: nextFiles })}
               />
@@ -4289,6 +4385,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const [measurementRows, setMeasurementRows] = useState(() => initialState.measurementRows ?? [])
   const [samplingPhotoFiles, setSamplingPhotoFiles] = useState(() => initialState.samplingPhotoFiles ?? [])
   const [labReportFiles, setLabReportFiles] = useState(() => initialState.labReportFiles ?? [])
+  const [attachmentFiles, setAttachmentFiles] = useState(() => initialState.attachmentFiles ?? [])
   const [wpmsInstrument, setWpmsInstrument] = useState(() => initialState.wpmsInstrument ?? '')
   const [wpmsIssueReason, setWpmsIssueReason] = useState(() => initialState.wpmsIssueReason ?? '')
   const [wpmsFailedParameters, setWpmsFailedParameters] = useState(() => initialState.wpmsFailedParameters ?? [])
@@ -4301,6 +4398,20 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const headerDescription = form?.description ?? ''
   const latestRevisionMessage = form?.latestRevisionMessage ?? ''
   const isEditMode = form?.mode === 'edit'
+
+  const validateFormInputs = () => {
+    const formData = formRef.current ? new FormData(formRef.current) : new FormData()
+    if (['กวภ.02', 'กวภ.04'].includes(form?.code)) {
+      getKwpReportPeriod(formData)
+    }
+    for (const field of ['attachmentLink', 'samplingPhotoLink', 'labReportLink']) {
+      const value = getFormText(formData, field)
+      if (!value) continue
+      let url
+      try { url = new URL(value) } catch { throw new Error('กรุณากรอก Link เป็น URL ที่ขึ้นต้นด้วย http:// หรือ https://') }
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Link ต้องขึ้นต้นด้วย http:// หรือ https://')
+    }
+  }
 
   const uploadKwpAttachment = async (file, attachmentType) => {
     if (file?.isSubmitted) {
@@ -4370,6 +4481,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
     setSubmitError('')
 
     try {
+      validateFormInputs()
       let endpoint = ''
       let payload = null
 
@@ -4380,6 +4492,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
           formRef.current,
           { problemDate, expectedDoneDate },
           unreportedParameters,
+          await uploadKwpAttachments(attachmentFiles, 'GENERAL'),
         )
       } else if (form.code === 'กวภ.02' || form.code === 'กวภ.04') {
         endpoint = form.code === 'กวภ.04' ? 'kwp04' : 'kwp02'
@@ -4403,6 +4516,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
             issueReasons: wpmsIssueReason ? [wpmsIssueReason] : [],
             failedParameters: wpmsFailedParameters,
           },
+          await uploadKwpAttachments(attachmentFiles, 'GENERAL'),
         )
       } else if (form.code === 'กวภ.05') {
         endpoint = 'kwp05'
@@ -4471,41 +4585,47 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
 
   const openPreview = () => {
     setSubmitError('')
+    try {
+      validateFormInputs()
+      if (form?.title?.startsWith('กวภ.05')) {
+        setPreviewData(buildKwp05PreviewData(form, formRef.current, calibrationRows))
+        return
+      }
 
-    if (form?.title?.startsWith('กวภ.05')) {
-      setPreviewData(buildKwp05PreviewData(form, formRef.current, calibrationRows))
-      return
-    }
+      if (form?.title?.startsWith('กวภ.03')) {
+        setPreviewData(buildKwp03PreviewData(
+          form,
+          formRef.current,
+          { problemDate, expectedDoneDate },
+          {
+            instruments: wpmsInstrument ? [wpmsInstrument] : [],
+            issueReasons: wpmsIssueReason ? [wpmsIssueReason] : [],
+            failedParameters: wpmsFailedParameters,
+          },
+          attachmentFiles,
+        ))
+        return
+      }
 
-    if (form?.title?.startsWith('กวภ.03')) {
-      setPreviewData(buildKwp03PreviewData(
-        form,
-        formRef.current,
-        { problemDate, expectedDoneDate },
-        {
-          instruments: wpmsInstrument ? [wpmsInstrument] : [],
-          issueReasons: wpmsIssueReason ? [wpmsIssueReason] : [],
-          failedParameters: wpmsFailedParameters,
-        },
-      ))
-      return
-    }
+      if (form?.title?.startsWith('กวภ.02') || form?.title?.startsWith('กวภ.04')) {
+        setPreviewData(buildKwp02PreviewData(form, formRef.current, measurementRows, {
+          samplingPhotoFiles,
+          labReportFiles,
+        }))
+        return
+      }
 
-    if (form?.title?.startsWith('กวภ.02') || form?.title?.startsWith('กวภ.04')) {
-      setPreviewData(buildKwp02PreviewData(form, formRef.current, measurementRows, {
-        samplingPhotoFiles,
-        labReportFiles,
-      }))
-      return
-    }
-
-    if (form?.title?.startsWith('กวภ.01')) {
-      setPreviewData(buildKwp01PreviewData(
-        form,
-        formRef.current,
-        { problemDate, expectedDoneDate },
-        unreportedParameters,
-      ))
+      if (form?.title?.startsWith('กวภ.01')) {
+        setPreviewData(buildKwp01PreviewData(
+          form,
+          formRef.current,
+          { problemDate, expectedDoneDate },
+          unreportedParameters,
+          attachmentFiles,
+        ))
+      }
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'ข้อมูลในแบบฟอร์มไม่ถูกต้อง')
     }
   }
 
@@ -4565,6 +4685,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
             ref={formRef}
             sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 } }}
           >
+            {submitError ? <Alert severity="error" sx={{ mb: 2 }}>{submitError}</Alert> : null}
             {latestRevisionMessage ? (
               <Paper
                 elevation={0}
@@ -4599,6 +4720,8 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
                 onProblemDateChange={setProblemDate}
                 onExpectedDoneDateChange={setExpectedDoneDate}
                 onUnreportedParametersChange={setUnreportedParameters}
+                attachmentFiles={attachmentFiles}
+                onAttachmentFilesChange={setAttachmentFiles}
               />
             ) : form?.title?.startsWith('กวภ.03') ? (
               <Kwp03Form
@@ -4615,6 +4738,8 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
                 onInstrumentsChange={setWpmsInstrument}
                 onIssueReasonsChange={setWpmsIssueReason}
                 onFailedParametersChange={setWpmsFailedParameters}
+                attachmentFiles={attachmentFiles}
+                onAttachmentFilesChange={setAttachmentFiles}
               />
             ) : form?.title?.startsWith('กวภ.02') || form?.title?.startsWith('กวภ.04') ? (
               <Kwp02Form
@@ -4695,7 +4820,7 @@ function getFactoryColumns(onOpenMonitoringPoints) {
   ]
 }
 
-function getRequestColumns(onOpenDocument, isOperator = false) {
+function getRequestColumns(onOpenDocument, isOperator = false, onCancelRequest) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     {
@@ -4723,7 +4848,7 @@ function getRequestColumns(onOpenDocument, isOperator = false) {
       width: isOperator ? 250 : 190,
       sortable: false,
       filterable: false,
-      renderCell: (params) => <RequestActions row={params.row} isOperator={isOperator} onOpenDocument={onOpenDocument} />,
+      renderCell: (params) => <RequestActions row={params.row} isOperator={isOperator} onOpenDocument={onOpenDocument} onCancelRequest={onCancelRequest} />,
     },
   ]
 }
@@ -4749,6 +4874,24 @@ function applyKwpLoginDefaults(form, currentUser) {
   }
 }
 
+function KwpCancelRequestDialog({ request, submitting, error, onClose, onConfirm }) {
+  return (
+    <Dialog open={Boolean(request)} onClose={submitting ? undefined : onClose} fullWidth maxWidth="sm">
+      <DialogTitle>ยืนยันการยกเลิกคำขอ</DialogTitle>
+      <DialogContent>
+        <Typography>ต้องการยกเลิกคำขอ {request?.requestNo || '-'} ใช่หรือไม่?</Typography>
+        {error ? <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert> : null}
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center' }}>
+        <Button variant="outlined" disabled={submitting} onClick={onClose}>กลับ</Button>
+        <Button variant="contained" color="error" disabled={submitting || !request || !canCancelKwpRequest(request)} onClick={onConfirm}>
+          {submitting ? 'กำลังยกเลิก' : 'ยืนยันยกเลิกคำขอ'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
 function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
   const isOperator = userType === 'operator'
   const availableSubMenus = isOperator ? operatorSubMenus : officerSubMenus
@@ -4766,6 +4909,11 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
   const [isLoadingRequests, setIsLoadingRequests] = useState(false)
   const [factoriesError, setFactoriesError] = useState('')
   const [requestsError, setRequestsError] = useState('')
+  const [cancelRequestTarget, setCancelRequestTarget] = useState(null)
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [cancelError, setCancelError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const cancelSubmittingRef = useRef(false)
   const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
     ? selectedSubMenu
     : availableSubMenus[0].value
@@ -5115,13 +5263,37 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
   }, [])
 
   const factoryColumns = useMemo(() => getFactoryColumns(openMonitoringPointDialog), [openMonitoringPointDialog])
+  const openCancelRequestDialog = useCallback((row) => {
+    if (!isOperator || !canCancelKwpRequest(row)) return
+    setCancelError('')
+    setCancelRequestTarget(row)
+  }, [isOperator])
+
+  const confirmCancelRequest = async () => {
+    if (!isOperator || !cancelRequestTarget || cancelSubmittingRef.current) return
+    cancelSubmittingRef.current = true
+    setCancelSubmitting(true)
+    setCancelError('')
+    try {
+      await cancelKwpSubmission({ request: cancelRequestTarget, accessToken, apiBaseUrl: kwpFormSubmissionsApiBaseUrl })
+      setCancelRequestTarget(null)
+      setSuccessMessage('ยกเลิกคำขอสำเร็จ')
+      await loadRequestRows()
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : 'ยกเลิกคำขอไม่สำเร็จ')
+    } finally {
+      cancelSubmittingRef.current = false
+      setCancelSubmitting(false)
+    }
+  }
   const requestColumns = useMemo(
     () =>
       getRequestColumns(
         openRequestDocument,
         isOperator,
+        openCancelRequestDialog,
       ),
-    [isOperator, openRequestDocument],
+    [isOperator, openRequestDocument, openCancelRequestDialog],
   )
   const table = useMemo(
     () =>
@@ -5276,6 +5448,18 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
           </Paper>
         )}
       </Stack>
+      <KwpCancelRequestDialog
+        request={cancelRequestTarget}
+        submitting={cancelSubmitting}
+        error={cancelError}
+        onClose={() => {
+          if (!cancelSubmittingRef.current) setCancelRequestTarget(null)
+        }}
+        onConfirm={confirmCancelRequest}
+      />
+      <Snackbar open={Boolean(successMessage)} autoHideDuration={4000} onClose={() => setSuccessMessage('')}>
+        <Alert severity="success" onClose={() => setSuccessMessage('')}>{successMessage}</Alert>
+      </Snackbar>
       <MonitoringPointDialog
         open={Boolean(monitoringPointContext)}
         context={monitoringPointContext}
