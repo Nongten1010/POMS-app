@@ -1453,7 +1453,7 @@ class PdfLayout {
   }
 }
 
-function getRequestContext(request) {
+function getRequestContext(request, options = {}) {
   const isWpms = request?.type === 'WPMS' || request?.systemType === 'WPMS'
   const factory = request?.factory ?? {}
   const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
@@ -1474,11 +1474,30 @@ function getRequestContext(request) {
     ...removeRequestedParameterSpecialOptions(details.requestedParameters),
     ...normalizeArrayValue(point.parameters),
   ]
-  const documentParameters = isFullyExempted
+  let documentParameters = isFullyExempted
     ? []
     : instrumentParameters.length
       ? instrumentParameters
       : Array.from(new Set(fallbackParameterLabels.filter(Boolean))).map((parameter) => ({ parameter }))
+
+  // Master-data PDFs describe the whole point; connection PDFs describe the requested change.
+  if (!['measurement-point', 'factory-general-info'].includes(options.contentMode)) {
+    const requestType = options.requestType ?? request?.requestType
+    const isAddParameter = requestType
+      ? requestType === 'ADD_PARAMETER'
+      : (request?.form ?? request?.formType) === 'เพิ่มพารามิเตอร์'
+    const parameterLabels = [
+      ...(isAddParameter ? normalizeArrayValue(details.connectedParameters) : []),
+      ...removeRequestedParameterSpecialOptions(details.requestedParameters),
+    ]
+    const parametersByName = new Map([
+      ...(isAddParameter && Array.isArray(options.connectedInstrumentParameters) ? options.connectedInstrumentParameters : []),
+      ...instrumentParameters,
+    ].map((parameter) => [parameter.parameter, parameter]))
+    documentParameters = isFullyExempted ? [] : Array.from(new Set(parameterLabels.filter((parameter) => (
+      !isBlankValue(parameter) && parameter !== 'ไม่มี' && parameter !== requestedParametersExemptAllOption
+    )))).map((parameter) => parametersByName.get(parameter) ?? { parameter })
+  }
 
   return {
     isWpms,
@@ -2099,7 +2118,7 @@ export async function createConnectionRequestPdf(request, options = {}) {
   }
   const layout = new PdfLayout(pdfDoc, fonts)
   const context = {
-    ...getRequestContext(request),
+    ...getRequestContext(request, options),
     signatureDate: options.showRequestMetaHeader
       ? displayValue(request?.submittedDate || formatRequestSubmittedDate(request?.submittedAt))
       : undefined,

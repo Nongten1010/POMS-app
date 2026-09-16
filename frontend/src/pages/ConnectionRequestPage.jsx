@@ -2550,8 +2550,9 @@ function getRequestActionStatuses(request) {
   return statusCode ? [statusCode] : [request?.status, request?.statusLabel]
 }
 
-function OfficerRequestActions({ row, canProcessRequest = false, onOpenRequestDocument, onOpenRequestProcess }) {
+function OfficerRequestActions({ row, canProcessRequest = false, canEditRequest = false, onOpenRequestDocument, onOpenRequestProcess, onOpenRequestEdit, onOpenConnectionSettings }) {
   const statuses = getRequestActionStatuses(row)
+  const isRevisionRequested = statuses.some((status) => ['รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION'].includes(status))
   const isProcessDisabled = !canProcessRequest
     || statuses.some((status) => [
       'รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION',
@@ -2572,6 +2573,18 @@ function OfficerRequestActions({ row, canProcessRequest = false, onOpenRequestDo
       >
         ดำเนินการ
       </Button>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={!canEditRequest || !isRevisionRequested}
+        onClick={() => onOpenRequestEdit?.(row)}
+      >
+        แก้ไข
+      </Button>
+      <ConnectionSettingsButton
+        disabled={!canEditRequest || !isWaitingFactoryDeviceConfigStatus(row)}
+        onClick={() => onOpenConnectionSettings?.(row)}
+      />
     </Stack>
   )
 }
@@ -7236,7 +7249,15 @@ export function RequestFormBottomSheet({
     setSubmitPreviewPdfLoading(true)
 
     try {
-      const pdfBytes = await createConnectionRequestPdf(requestBody, { contentMode: submitPreviewContentMode })
+      const pdfBytes = await createConnectionRequestPdf(requestBody, {
+        contentMode: submitPreviewContentMode,
+        requestType: isAddParameterMode || (isEditMode && isAddParameterRequest(initialRequest))
+          ? 'ADD_PARAMETER'
+          : 'ADD_MEASUREMENT_POINT',
+        connectedInstrumentParameters: isAddParameterMode
+          ? measurementInstrumentRows.filter((row) => initialConnectedParameters.includes(row.parameter))
+          : undefined,
+      })
       const blob = new Blob([pdfBytes], { type: 'application/pdf' })
       const pdfUrl = URL.createObjectURL(blob)
       if (submitPreviewSessionRef.current !== previewSessionId) {
@@ -7922,6 +7943,7 @@ function getRequestColumns(
   onOpenRequestProcess,
   onOpenRequestEdit,
   onOpenRequestCancel,
+  canEditRequest = false,
 ) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
@@ -7958,7 +7980,7 @@ function getRequestColumns(
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: isOperator ? 350 : 180,
+      width: 350,
       sortable: false,
       filterable: false,
       renderCell: (params) =>
@@ -7974,8 +7996,11 @@ function getRequestColumns(
           <OfficerRequestActions
             row={params.row}
             canProcessRequest={canProcessRequest}
+            canEditRequest={canEditRequest}
             onOpenRequestDocument={onOpenRequestDocument}
             onOpenRequestProcess={onOpenRequestProcess}
+            onOpenRequestEdit={onOpenRequestEdit}
+            onOpenConnectionSettings={onOpenConnectionSettings}
           />
         ),
     },
@@ -8037,6 +8062,7 @@ function ConnectionRequestPage({
   const isOperator = userType === 'operator'
   const isAdmin = roleCode === 'admin'
   const canApproveConnectionRequests = userType === 'officer' && permissions?.connection?.approve === true
+  const canEditConnectionRequests = (isAdmin || userType === 'officer') && permissions?.connection?.edit === true
   const canDirectConnect = isAdmin
     || permissions?.connection?.direct_connect === true
     || permissions?.connection?.directConnect === true
@@ -8306,6 +8332,13 @@ function ConnectionRequestPage({
   const handleOpenEditRequestForm = useCallback((row) => {
     setRequestFormError('')
 
+    if (!isOperator && (!canEditConnectionRequests || !getRequestActionStatuses(row).some((status) => (
+      ['รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION'].includes(status)
+    )))) {
+      setRequestFormError('ไม่สามารถแก้ไขคำขอนี้ได้ ต้องมีสิทธิ์แก้ไขและอยู่ในสถานะรอโรงงานแก้ไข')
+      return
+    }
+
     if (!row?.id) {
       setRequestFormError('ไม่พบรหัสคำขอสำหรับแก้ไขแบบฟอร์ม')
       return
@@ -8357,7 +8390,7 @@ function ConnectionRequestPage({
         setRequestForm((current) => (current?.requestId === row.id ? { ...current, loading: false } : current))
         setRequestFormError(error instanceof Error ? error.message : 'โหลดข้อมูลคำขอเดิมไม่สำเร็จ')
       })
-  }, [accessToken])
+  }, [accessToken, isOperator, canEditConnectionRequests])
   const handleOpenAddParameterForm = useCallback((point) => {
     setRequestFormError('')
 
@@ -8695,9 +8728,11 @@ function ConnectionRequestPage({
         handleOpenRequestDocumentProcess,
         handleOpenEditRequestForm,
         openCancelRequestDialog,
+        canEditConnectionRequests,
       ),
     [
       canApproveConnectionRequests,
+      canEditConnectionRequests,
       handleOpenEditRequestForm,
       handleOpenRequestDocumentProcess,
       handleOpenRequestDocumentView,

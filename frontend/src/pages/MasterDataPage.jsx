@@ -714,7 +714,20 @@ function MonitoringPointActions({ point, onEdit }) {
   )
 }
 
-function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, isAdmin = false) {
+function isFactoryRequestAwaitingRevision(request) {
+  const status = String(request?.statusCode || request?.status || '').trim()
+  return ['REVISION_REQUESTED', 'รอโรงงานแก้ไข'].includes(status)
+}
+
+function canSubmitMasterDataForm(factory, { isAdmin, isOperator, canEditRevision }) {
+  return isAdmin || isOperator || Boolean(canEditRevision && factory?.__isResubmission && factory?.__editRequestId)
+}
+
+function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, isAdmin = false, {
+  isOfficer = false,
+  canEditRequest = false,
+  onEditRevisionRequest,
+} = {}) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     {
@@ -743,7 +756,7 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, is
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: isAdmin ? 200 : 300,
+      width: 300,
       sortable: false,
       filterable: false,
       renderCell: (params) => (
@@ -751,12 +764,25 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, is
           <Button size="small" variant="outlined" onClick={() => onOpenRequest?.(params.row)}>
             เปิดดู
           </Button>
-          {isAdmin ? (
-            actionableRequestStatuses.includes(params.row.status) ? (
-              <Button size="small" variant="contained" onClick={() => onEditRequest?.(params.row)}>
+          {isAdmin || isOfficer ? (
+            <>
+              <Button
+                size="small"
+                variant="contained"
+                disabled={!isAdmin || !actionableRequestStatuses.includes(params.row.status)}
+                onClick={() => onEditRequest?.(params.row)}
+              >
                 ดำเนินการ
               </Button>
-            ) : null
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={!canEditRequest || !isFactoryRequestAwaitingRevision(params.row)}
+                onClick={() => onEditRevisionRequest?.(params.row)}
+              >
+                แก้ไข
+              </Button>
+            </>
           ) : (
             <>
               <Button
@@ -2184,7 +2210,7 @@ function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}
   }
 }
 
-function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessToken = '' }) {
+function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessToken = '', permissions = {} }) {
   const [selectedFactory, setSelectedFactory] = useState(null)
   const [editingFactory, setEditingFactory] = useState(null)
   const [editingGeneralFactory, setEditingGeneralFactory] = useState(null)
@@ -2216,12 +2242,16 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   const [validationSnackbarMessage, setValidationSnackbarMessage] = useState('')
   const isAdmin = [roleCode, ...roleCodes].some((role) => String(role).toLowerCase() === 'admin')
   const isOperator = String(userType).toLowerCase() === 'operator'
-  const canSubmitMasterData = isAdmin || String(userType).toLowerCase() === 'operator'
+  const isOfficer = String(userType).toLowerCase() === 'officer'
+  const canViewRequests = isAdmin || isOperator || isOfficer
+  const canEditRevision = (isAdmin || isOfficer) && permissions?.factories?.edit === true
+  const canSubmitMeasurementRequest = canSubmitMasterDataForm(editingFactory, { isAdmin, isOperator, canEditRevision })
+  const canSubmitGeneralRequest = canSubmitMasterDataForm(editingGeneralFactory, { isAdmin, isOperator, canEditRevision })
   const visibleSubMenus = useMemo(
-    () => (isAdmin || isOperator ? pageSubMenus : pageSubMenus.filter((menu) => menu.value !== 'requests')),
-    [isAdmin, isOperator],
+    () => (canViewRequests ? pageSubMenus : pageSubMenus.filter((menu) => menu.value !== 'requests')),
+    [canViewRequests],
   )
-  const effectiveSubMenu = isAdmin || isOperator ? activeSubMenu : 'factories'
+  const effectiveSubMenu = canViewRequests ? activeSubMenu : 'factories'
   const rows = factoryRows
 
   const openEditingFactory = useCallback((factory) => {
@@ -2266,7 +2296,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   }, [accessToken])
 
   const loadRequests = useCallback(async () => {
-    if (!accessToken || (!isAdmin && !isOperator)) {
+    if (!accessToken || !canViewRequests) {
       setRequestRows([])
       return
     }
@@ -2288,7 +2318,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     } finally {
       setLoadingRequests(false)
     }
-  }, [accessToken, factoryRows, isAdmin, isOperator])
+  }, [accessToken, factoryRows, canViewRequests])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -2519,7 +2549,13 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     setActionLoading(true)
     setTableError('')
     try {
+      if ((!isOperator && !canEditRevision) || !isFactoryRequestAwaitingRevision(request)) {
+        throw new Error('ไม่สามารถแก้ไขคำขอนี้ได้ ต้องมีสิทธิ์แก้ไขและอยู่ในสถานะรอโรงงานแก้ไข')
+      }
       const detail = await loadRequestDetail(request)
+      if (!isFactoryRequestAwaitingRevision(detail)) {
+        throw new Error('สถานะคำขอเปลี่ยนแล้ว กรุณาโหลดรายการใหม่')
+      }
       const formData = await loadRequestForm(detail)
       if ((detail?.formType ?? formData.__formType) === 'MEASUREMENT_POINTS') {
         openEditingFactory(formData)
@@ -2531,7 +2567,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     } finally {
       setActionLoading(false)
     }
-  }, [loadRequestDetail, loadRequestForm, openEditingFactory, openEditingGeneralFactory])
+  }, [loadRequestDetail, loadRequestForm, openEditingFactory, openEditingGeneralFactory, isOperator, canEditRevision])
   const handleOpenRequest = useCallback(async (request, review = false) => {
     setActionLoading(true)
     setTableError('')
@@ -2559,13 +2595,17 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
       isAdmin ? (request) => handleOpenRequest(request, true) : handleEditRequest,
       setCancelRequestTarget,
       isAdmin,
+      { isOfficer, canEditRequest: canEditRevision, onEditRevisionRequest: handleEditRequest },
     ),
-    [handleEditRequest, handleOpenRequest, isAdmin],
+    [handleEditRequest, handleOpenRequest, isAdmin, isOfficer, canEditRevision],
   )
 
   const submitFactoryEditRequest = useCallback(async (factory, body) => {
     const factoryId = getFactoryRowId(factory)
     const editRequestId = factory?.__editRequestId
+    if (!canSubmitMasterDataForm(factory, { isAdmin, isOperator, canEditRevision })) {
+      throw new Error('คุณไม่มีสิทธิ์ส่งคำขอแก้ไขนี้')
+    }
     if (!accessToken || (!factoryId && !editRequestId)) {
       throw new Error('ไม่พบข้อมูลโรงงานสำหรับส่งคำขอแก้ไข')
     }
@@ -2586,7 +2626,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     await Promise.all([loadFactories(), loadRequests()])
     setSnackbarMessage('ส่งคำขอแก้ไขสำเร็จ')
     return response?.data
-  }, [accessToken, loadFactories, loadRequests])
+  }, [accessToken, loadFactories, loadRequests, isAdmin, isOperator, canEditRevision])
 
   const handleSubmitGeneralInfo = useCallback((factory, formData, documentPatch) => {
     setTableError('')
@@ -2869,14 +2909,14 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         submitPreviewContentMode="measurement-point"
         accessToken={accessToken}
         submitButtonLabel="บันทึก"
-        customSubmit={canSubmitMasterData ? handleSubmitMeasurementPoints : null}
+        customSubmit={canSubmitMeasurementRequest ? handleSubmitMeasurementPoints : null}
         documentImagesUploadUrl={`${pomsFactoriesApiBaseUrl}/document-images`}
         generalFactoryFieldsReadOnly
         factoryProfilePatchMode
         monitoringPointTypeReadOnly
         pointCodeReadOnly
-        officerNotificationEmailsEditable={canSubmitMasterData}
-        footerActions={canSubmitMasterData ? undefined : null}
+        officerNotificationEmailsEditable={canSubmitMeasurementRequest}
+        footerActions={canSubmitMeasurementRequest ? undefined : null}
         onClose={() => setEditingFactoryOpen(false)}
         onExited={() => setEditingFactory(null)}
       />
@@ -2886,7 +2926,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         open={editingGeneralFactoryOpen}
         factory={editingGeneralFactory}
         accessToken={accessToken}
-        showSaveButton={canSubmitMasterData}
+        showSaveButton={canSubmitGeneralRequest}
         submitting={actionLoading}
         onSubmit={handleSubmitGeneralInfo}
         onClose={() => setEditingGeneralFactoryOpen(false)}

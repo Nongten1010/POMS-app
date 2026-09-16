@@ -33,7 +33,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/utils/connectionRequestPdf.js')) {
-          return `${code}\nexport { renderInstrumentTable };`
+          return `${code}\nexport { renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
         }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
           return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
@@ -68,6 +68,82 @@ test('add-parameter form and payload preserve live groups without affecting othe
           },
         }, [{ parameter: 'CO (ppm)', eiaStandard: '120' }], isWpms)
         assert.equal(rendered, true)
+      }
+    })
+
+    await t.test('connection PDFs select instrument rows by request type without changing master-data PDFs or payloads', async () => {
+      const { getRequestContext, getRequestedParametersDisplay } = await server.ssrLoadModule('/src/utils/connectionRequestPdf.js')
+      for (const systemType of ['CEMS', 'WPMS']) {
+        const [connected, requested, unrelated] = systemType === 'CEMS'
+          ? ['CO (ppm)', 'NOx (ppm)', 'SO2 (ppm)']
+          : ['BOD (mg/l)', 'COD (mg/l)', 'SS (mg/l)']
+        const saved = { parameter: connected, brand: 'Existing brand' }
+        const added = { parameter: requested, brand: 'New brand', eiaStandard: '120' }
+        const extra = { parameter: unrelated, brand: 'Unrelated brand' }
+        const request = {
+          systemType, requestType: 'ADD_MEASUREMENT_POINT', measurementPoints: [{
+            details: {
+              eligibleParameters: [connected, requested, unrelated], connectedParameters: [connected],
+              pendingParameters: [requested, unrelated], requestedParameters: [],
+            },
+            parameters: [unrelated], measurementInstruments: { parameters: [saved, added, extra] },
+          }],
+        }
+        const point = request.measurementPoints[0]
+        assert.equal(getRequestedParametersDisplay(point, point.details), '-')
+        assert.deepEqual(getRequestContext(request).documentParameters, [])
+        point.details.requestedParameters = [requested]
+        assert.deepEqual(getRequestContext(request).documentParameters, [added])
+        assert.equal(getRequestedParametersDisplay(point, point.details), requested)
+
+        request.requestType = 'ADD_PARAMETER'
+        assert.deepEqual(getRequestContext(request).documentParameters, [saved, added])
+        point.details.requestedParameters = [connected, requested, requested]
+        assert.deepEqual(getRequestContext(request).documentParameters, [saved, added])
+        point.details.requestedParameters = []
+        assert.deepEqual(getRequestContext(request).documentParameters, [saved])
+
+        point.measurementInstruments.parameters = []
+        assert.deepEqual(getRequestContext(request).documentParameters, [{ parameter: connected }])
+        point.details.connectedParameters = ['ไม่มี']
+        assert.deepEqual(getRequestContext(request).documentParameters, [])
+        point.details.connectedParameters = [connected]
+        point.details.requestedParameters = [requested]
+        assert.deepEqual(getRequestContext(request).documentParameters, [{ parameter: connected }, { parameter: requested }])
+
+        // Preview receives retained rows separately; the API payload still contains only new instruments.
+        delete request.requestType
+        point.measurementInstruments.parameters = [added]
+        const before = structuredClone(request)
+        assert.deepEqual(getRequestContext(request, {
+          requestType: 'ADD_PARAMETER', connectedInstrumentParameters: [saved],
+        }).documentParameters, [saved, added])
+        assert.deepEqual(request, before)
+        request.form = 'เพิ่มพารามิเตอร์'
+        assert.deepEqual(getRequestContext(request).documentParameters, [{ parameter: connected }, added])
+        request.requestType = 'ADD_MEASUREMENT_POINT'
+        assert.deepEqual(getRequestContext(request).documentParameters, [added])
+
+        point.measurementInstruments.parameters = [saved, added, extra]
+        for (const contentMode of ['measurement-point', 'factory-general-info']) {
+          assert.deepEqual(getRequestContext(request, { contentMode }).documentParameters, [saved, added, extra])
+        }
+        point.measurementInstruments.parameters = []
+        assert.deepEqual(getRequestContext(request, { contentMode: 'measurement-point' }).documentParameters,
+          [connected, requested, unrelated].map((parameter) => ({ parameter })))
+        assert.deepEqual(getRequestContext(request).documentParameters, [{ parameter: requested }])
+
+        for (const requestType of ['ADD_MEASUREMENT_POINT', 'ADD_PARAMETER']) {
+          request.requestType = requestType
+          point.measurementInstruments.parameters = [saved, added, extra]
+          point.monitoringPointStatus = 'ได้รับการยกเว้นทั้งหมด'
+          point.details.requestedParameters = []
+          assert.deepEqual(getRequestContext(request).documentParameters, [])
+          assert.equal(getRequestedParametersDisplay(point, point.details), 'ได้รับการยกเว้นทั้งหมด')
+          delete point.monitoringPointStatus
+          point.details.requestedParameters = ['ได้รับการยกเว้นทั้งหมด']
+          assert.deepEqual(getRequestContext(request).documentParameters, [])
+        }
       }
     })
 
