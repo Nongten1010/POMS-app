@@ -353,7 +353,17 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
           assert.ok(drawn.some(({ text }) => text === `เลขที่ : ${data.requestNo}`))
           assert.ok(drawn.some(({ text, options }) => text === 'ผ่านการพิจารณา' && options.bold === true))
           assert.ok(!drawn.some(({ text }) => text.includes('ผู้แก้ไขข้อมูล')))
-          assert.ok(drawn.some(({ text, y }) => text === 'นายทดสอบ ระบบ' && y > 50 && y < 796))
+          const names = drawn.filter(({ text }) => text === data.reporterName)
+          const signatureLabel = drawn.find(({ text }) => text === (code === '05' ? 'ผู้รายงานผลการทดสอบ' : '(ลงชื่อ)'))
+          const parenthesis = drawn.find(({ text }) => text === '(')
+          assert.equal(names.length, 2, `${code}: name on signature line and in parentheses`)
+          assert.equal(names[0].page, signatureLabel.page)
+          assert.equal(names[0].y, signatureLabel.y)
+          assert.equal(names[1].page, parenthesis.page)
+          assert.equal(names[1].y, parenthesis.y)
+          assert.equal(names[0].page, names[1].page)
+          assert.equal(names[0].x, names[1].x)
+          assert.ok(names[0].y > names[1].y)
           assert.ok(drawn.some(({ text }) => text === 'วันที่ยื่นคำขอ : 16/09/2569'))
           assert.ok(drawn.some(({ text, y }) => text === '16/09/2569' && y > 50 && y < 796))
           if (['02', '04'].includes(code)) assert.ok(drawn.some(({ text }) => text.includes('1/2569')))
@@ -376,18 +386,33 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
         assert.ok(!drawn.some(({ text }) => text === 'ผ่านการพิจารณา'))
         for (const code of ['01', '02', '03', '04', '05']) {
           drawn.length = 0
+          await pdf.createKwpFormPdf({ formType: `kwp${code}`, reporterName: null })
+          const signatureLabel = drawn.find(({ text }) => text === (code === '05' ? 'ผู้รายงานผลการทดสอบ' : '(ลงชื่อ)'))
+          assert.ok(signatureLabel)
+          assert.ok(!drawn.some(({ text }) => /undefined|null/.test(text)))
+          assert.ok(!drawn.some(({ text, page, y }) => text.trim() && text !== signatureLabel.text
+            && page === signatureLabel.page && y === signatureLabel.y))
+        }
+        for (const code of ['01', '02', '03', '04', '05']) {
+          drawn.length = 0
           const reporterName = `${'นายทดสอบนามสกุลยาว '.repeat(5)}NAME-END`
           const reporterPosition = `${'ผู้รับผิดชอบการตรวจสอบระบบ '.repeat(5)}POSITION-END`
-          await pdf.createKwpFormPdf({ formType: `kwp${code}`, reporterName, reporterPosition,
+          const bytes = await pdf.createKwpFormPdf({ formType: `kwp${code}`, reporterName, reporterPosition,
             submittedAt: '2026-09-16T00:00:00Z' })
           const allText = drawn.map(({ text }) => text).join('').replace(/\s/g, '')
-          assert.ok(allText.includes(reporterName.replace(/\s/g, '')), `${code}: complete reporter name`)
+          assert.equal(allText.split(reporterName.replace(/\s/g, '')).length - 1, 2, `${code}: both complete reporter names`)
           assert.ok(allText.includes(reporterPosition.replace(/\s/g, '')), `${code}: complete reporter position`)
-          const nameEnd = drawn.find(({ text }) => text.includes('NAME-END'))
+          const nameEnds = drawn.filter(({ text }) => text.includes('NAME-END'))
+          const parenthesis = drawn.find(({ text }) => text === '(')
+          const positionLabel = drawn.find(({ text }) => text === 'ตำแหน่ง')
           const positionEnd = drawn.find(({ text }) => text.includes('POSITION-END'))
-          assert.equal(nameEnd.page, positionEnd.page)
-          assert.ok(nameEnd.y > positionEnd.y)
+          assert.equal(nameEnds.length, 2)
+          assert.equal(nameEnds[0].page, positionEnd.page)
+          assert.equal(nameEnds[1].page, positionEnd.page)
+          assert.ok(nameEnds[0].y - parenthesis.y >= 17, `${code}: signature name does not overlap parentheses`)
+          assert.ok(nameEnds[1].y - positionLabel.y >= 17, `${code}: parenthesized name does not overlap position`)
           assert.ok(drawn.every(({ y }) => y >= 24 && y <= 818))
+          if (process.env.KWP_PDF_QA_DIR) await writeFile(join(process.env.KWP_PDF_QA_DIR, `kwp${code}-long-signature.pdf`), bytes)
         }
         for (const formType of ['kwp02', 'kwp04']) {
           drawn.length = 0
