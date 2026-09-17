@@ -1,3 +1,8 @@
+export function canCreateKwpRequest(userType, roleCode = '', roleCodes = []) {
+  return userType === 'operator'
+    || [roleCode, ...roleCodes].some((role) => String(role).toLowerCase() === 'admin')
+}
+
 export function canCancelKwpRequest(request = {}) {
   const statuses = [request?.statusCode, request?.status, request?.statusLabel]
     .map((value) => String(value ?? '').trim()).filter(Boolean)
@@ -46,7 +51,7 @@ export function getKwpAttachmentValidationError(files, maxFiles = 5, maxSizeMb =
   return ''
 }
 
-export async function cancelKwpSubmission({ request, accessToken, apiBaseUrl, fetchImpl = fetch }) {
+export async function cancelKwpSubmission({ request, accessToken, apiBaseUrl, fetchImpl = fetch, onConflict }) {
   if (!request?.id || !canCancelKwpRequest(request)) throw new Error('ไม่สามารถยกเลิกคำขอในสถานะนี้ได้')
   if (!accessToken) throw new Error('กรุณาเข้าสู่ระบบเพื่อยกเลิกคำขอ')
   const result = await fetchImpl(`${apiBaseUrl}/${encodeURIComponent(request.id)}/workflow-actions`, {
@@ -54,15 +59,98 @@ export async function cancelKwpSubmission({ request, accessToken, apiBaseUrl, fe
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ action: 'CANCEL' }),
   })
-  const response = await result.json().catch(() => null)
-  if (!result.ok || response?.success === false) throw new Error(response?.error?.message ?? response?.message ?? 'ยกเลิกคำขอไม่สำเร็จ')
+  try {
+    return await readKwpApiResponse(result, 'ยกเลิกคำขอไม่สำเร็จ')
+  } catch (error) {
+    if (error.status === 409) await onConflict?.()
+    throw error
+  }
+}
+
+export function getKwpReportPeriod(formData, { allowEmpty = false } = {}) {
+  const reportRound = String(formData.get('reportRound') ?? '').trim()
+  const reportYear = String(formData.get('reportYear') ?? '').trim()
+  if (!(allowEmpty && !reportRound) && (!/^[1-9]\d*$/.test(reportRound) || Number(reportRound) > 2147483647)) {
+    throw new Error('กรุณากรอกรายงานครั้งที่เป็นจำนวนเต็ม 1–2147483647')
+  }
+  if (!(allowEmpty && !reportYear) && (!/^\d{4}$/.test(reportYear) || Number(reportYear) < 2400)) {
+    throw new Error('กรุณากรอกปี พ.ศ. ระหว่าง 2400–9999')
+  }
+  return { reportRound: reportRound ? Number(reportRound) : null, reportYear: reportYear ? Number(reportYear) : null }
+}
+
+export function getKwpLink(value) {
+  const raw = String(value ?? '')
+  if (/[\u0000-\u001f\u007f]/u.test(raw)) throw new Error('Link ต้องไม่มีอักขระควบคุม')
+  const text = raw.trim()
+  if (!text) return null
+  if (text.length > 1000) throw new Error('Link ต้องมีความยาวไม่เกิน 1,000 ตัวอักษร')
+  let url
+  try { url = new URL(text) } catch { throw new Error('กรุณากรอก Link เป็น URL ที่ขึ้นต้นด้วย http:// หรือ https://') }
+  if (!['http:', 'https:'].includes(url.protocol) || !/^https?:\/\//i.test(text)) {
+    throw new Error('Link ต้องขึ้นต้นด้วย http:// หรือ https://')
+  }
+  if (url.username || url.password) throw new Error('Link ต้องไม่มีชื่อผู้ใช้หรือรหัสผ่านใน URL')
+  return text
+}
+
+export async function readKwpApiResponse(result, fallbackMessage) {
+  const raw = await result.text()
+  let response
+  try { response = raw ? JSON.parse(raw) : null } catch { response = null }
+  if (!result.ok || response?.success === false) {
+    const error = new Error(response?.error?.message ?? response?.message ?? `${fallbackMessage} (${result.status})`)
+    error.status = result.status
+    error.code = response?.error?.code
+    error.details = response?.error?.details
+    error.issues = response?.error?.issues ?? []
+    throw error
+  }
   return response
 }
 
-export function getKwpReportPeriod(formData) {
-  const reportRound = String(formData.get('reportRound') ?? '').trim()
-  const reportYear = String(formData.get('reportYear') ?? '').trim()
-  if (!/^[1-9]\d*$/.test(reportRound)) throw new Error('กรุณากรอกรายงานครั้งที่เป็นจำนวนเต็มมากกว่า 0')
-  if (!/^\d{4}$/.test(reportYear) || Number(reportYear) < 2400) throw new Error('กรุณากรอกปี พ.ศ. ให้ถูกต้อง')
-  return { reportRound: Number(reportRound), reportYear: Number(reportYear) }
+export async function fetchKwpMeasurementPoints({ factoryId, accessToken, apiBaseUrl, signal, fetchImpl = fetch }) {
+  if (!factoryId || !accessToken) throw new Error('ไม่พบโรงงานหรือสิทธิ์สำหรับโหลดจุดตรวจวัด')
+  const result = await fetchImpl(`${apiBaseUrl}/factories/${encodeURIComponent(factoryId)}/measurement-points`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` }, signal,
+  })
+  const response = await readKwpApiResponse(result, 'โหลดรายละเอียดจุดตรวจวัดไม่สำเร็จ')
+  if (!Array.isArray(response?.data)) throw new Error('ข้อมูลจุดตรวจวัดจาก API ไม่ถูกต้อง')
+  return response.data
+}
+
+export function withKwpParameterOptions(point, points) {
+  const id = point?.connectedPointId
+  const code = point?.code ?? point?.pointCode
+  const type = point?.type ?? point?.pointType
+  const name = point?.name ?? point?.pointName
+  const matches = points.filter((candidate) => {
+    if (id != null) return candidate.connectedPointId != null && String(candidate.connectedPointId) === String(id)
+    return candidate.pointType === type && (code ? candidate.pointCode === code : name && candidate.pointName === name)
+  })
+  if (matches.length !== 1) throw new Error('ไม่พบจุดตรวจวัดที่ตรงกับคำขออย่างชัดเจน กรุณาโหลดข้อมูลใหม่')
+  const source = matches[0]
+  return { ...point,
+    parameterDetails: Array.isArray(source.parameterDetails) ? [...source.parameterDetails] : [],
+    parameterInstrumentDetails: Array.isArray(source.parameterInstrumentDetails) ? [...source.parameterInstrumentDetails] : [],
+  }
+}
+
+export function isKwpParameterError(error) {
+  return error?.status === 400 && Array.isArray(error?.details?.allowedParameters)
+}
+
+export function buildKwpAttachmentMetadata(file, attachmentType) {
+  return {
+    attachmentType: file?.isSubmitted ? file.attachmentType : attachmentType,
+    originalFileName: file?.originalFileName ?? '',
+    storedFileName: file?.storedFileName ?? null,
+    mimeType: file?.mimeType ?? null,
+    fileSize: file?.fileSize ?? null,
+    storagePath: file?.storagePath ?? null,
+  }
+}
+
+export function isKwpMeasurementAttachment(file) {
+  return ['SAMPLING_PHOTO', 'LAB_REPORT'].includes(file?.attachmentType)
 }

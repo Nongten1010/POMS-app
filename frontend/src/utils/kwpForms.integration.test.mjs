@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { PDFDocument } from 'pdf-lib'
 import { createServer } from 'vite'
 import {
-  canCancelKwpRequest, cancelKwpSubmission, formatKwpDocumentDate,
+  canCreateKwpRequest, canCancelKwpRequest, cancelKwpSubmission, formatKwpDocumentDate,
   getCurrentThaiYear, getKwpAttachmentValidationError, getKwpReportPeriod,
 } from './kwpFormPresentation.mjs'
 
@@ -18,6 +18,12 @@ function findButtons(element) {
     ...(element.props.onClick ? [element] : []),
     ...Children.toArray(element.props.children).flatMap(findButtons),
   ]
+}
+
+function findComponent(element, type) {
+  if (!isValidElement(element)) return undefined
+  if (element.type === type) return element
+  return Children.toArray(element.props.children).map((child) => findComponent(child, type)).find(Boolean)
 }
 
 test('KWP cancellation blocks only reviewed and cancelled requests and handles API errors', async () => {
@@ -80,7 +86,7 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
   const server = await createServer({ cacheDir, optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'kwp-test-exports', enforce: 'pre', transform(code, id) {
-      if (id.endsWith('/src/pages/KwpFormsPage.jsx')) return `${code}\nexport { Kwp01Form, Kwp02Form, Kwp03Form, RequestActions, KwpCancelRequestDialog, buildKwp01PreviewData, buildKwp02PreviewData, buildKwp03PreviewData, buildKwp01SubmissionPayload, buildKwp02SubmissionPayload, buildKwp03SubmissionPayload, buildKwpEditFormFromDetail, buildKwpRequestPreviewDataFromDetail, getKwpPreviewAttachmentGroups };`
+      if (id.endsWith('/src/pages/KwpFormsPage.jsx')) return `${code}\nexport { Kwp01Form, Kwp02Form, Kwp03Form, RequestActions, KwpCancelRequestDialog, KwpLegacyAttachmentWarning, ParameterMultiSelect, fetchKwpEditForm, buildKwp01PreviewData, buildKwp02PreviewData, buildKwp03PreviewData, buildKwp01SubmissionPayload, buildKwp02SubmissionPayload, buildKwp03SubmissionPayload, buildKwpEditFormFromDetail, buildKwpRequestPreviewDataFromDetail, getKwpPreviewAttachmentGroups, FormSelectionMenu, MonitoringPointDialog, getFactoryColumns, isKwpFormOptionDisabledForPoint };`
       if (id.endsWith('/src/utils/kwpFormPdf.js')) return `${code}\nexport { KwpPdfLayout };`
     } }],
   })
@@ -99,6 +105,49 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
       ['samplingPhotoLink', 'https://example.com/photos'], ['labReportLink', 'https://example.com/lab'], ['reporterName', 'นายทดสอบ ระบบ']]
     const dates = { problemDate: null, expectedDoneDate: null }
     const selected = { instruments: [], issueReasons: [], failedParameters: [] }
+
+    await t.test('all roles have the factory list while only operators and admins can select forms', () => {
+      const cases = [
+        { userType: 'operator', roleCode: 'operator', enabled: true },
+        { userType: 'officer', roleCode: 'officer', enabled: false },
+        { userType: 'officer', roleCode: 'admin', enabled: true },
+        { userType: 'officer', roleCode: 'officer', roleCodes: ['admin'], enabled: true },
+      ]
+      const factory = { factoryId: 'F1', factoryName: 'โรงงานทดสอบ' }
+      const point = { id: 8, code: 'S2001', name: 'Boiler', type: 'CEMS', parameters: 'CO (ppm)' }
+      const fields = page.getFactoryColumns(() => {}).map(({ field }) => field)
+      for (const props of cases) {
+        const canCreate = canCreateKwpRequest(props.userType, props.roleCode, props.roleCodes)
+        const html = renderToStaticMarkup(React.createElement(page.default, props))
+        assert.ok(html.includes('รายชื่อโรงงาน'))
+        assert.ok(html.includes('รายการคำขอ'))
+        if (props.userType === 'officer') assert.ok(html.includes('สถิติข้อมูล'))
+        const dialog = page.MonitoringPointDialog({ context: factory, rows: [point], open: true, canCreate })
+        const selector = findComponent(dialog, page.FormSelectionMenu)
+        assert.equal(selector.props.canCreate, props.enabled)
+        const selectorHtml = renderToStaticMarkup(selector)
+        const buttonTag = selectorHtml.match(/<button[^>]*>/)?.[0]
+        assert.ok(buttonTag)
+        assert.equal(buttonTag.includes('disabled'), !props.enabled)
+        let opened
+        const columns = page.getFactoryColumns((row) => { opened = row })
+        assert.deepEqual(columns.map(({ field }) => field), fields)
+        const actions = columns.find(({ field }) => field === 'actions').renderCell({ row: factory })
+        findButtons(actions.type(actions.props))[0].props.onClick()
+        assert.equal(opened, factory)
+      }
+      assert.equal(page.isKwpFormOptionDisabledForPoint('กวภ.03', point), true)
+      assert.equal(page.isKwpFormOptionDisabledForPoint('กวภ.01', point), false)
+      assert.equal(page.isKwpFormOptionDisabledForPoint('กวภ.03', { type: 'WPMS' }), false)
+    })
+
+    await t.test('adding admin creation does not grant operator edit or cancel actions in the request table', () => {
+      const row = { id: 1, status: 'REVISION_REQUESTED' }
+      const staff = page.RequestActions({ row, isOperator: false })
+      assert.deepEqual(findButtons(staff).map((button) => button.props.children), ['เปิดดู', 'ดำเนินการ'])
+      const operator = page.RequestActions({ row, isOperator: true })
+      assert.deepEqual(findButtons(operator).map((button) => button.props.children), ['เปิดดู', 'แก้ไข', 'ยกเลิกคำขอ'])
+    })
 
     await t.test('01 and 03 each have one multi-file collection, one link, and preserve them on edit and preview', () => {
       for (const code of ['01', '03']) {
@@ -163,6 +212,100 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
         assert.equal(view.reportRound, 1)
         assert.equal(view.reportYear, 2569)
         assert.equal(view.attachmentSections[0].link, payload.samplingPhotoLink)
+      }
+    })
+
+    await t.test('editing all form types loads KWP parameter choices without replacing submission snapshots or selected parameters', async () => {
+      const points = [{ connectedPointId: 8, pointType: 'CEMS', pointCode: 'S2001',
+        parameterDetails: ['CO (ppm)', 'SO2 (ppm)'], parameterInstrumentDetails: [{ parameter: 'SO2 (ppm)', cemsModel: 'MODEL' }] }]
+      let requests = 0
+      globalThis.fetch = async (url, options) => {
+        requests += 1
+        assert.ok(url.endsWith('/kwp-form-reports/factories/F1/measurement-points'))
+        assert.equal(options.headers.Authorization, 'Bearer test-token')
+        return Response.json({ success: true, data: points })
+      }
+      for (const code of ['01', '02', '03', '04', '05']) {
+        const detail = { id: 12, formType: `KWP${code}`, factoryId: 'F1', factoryName: 'Saved factory',
+          connectedPointId: 8, pointCode: 'S2001', pointType: 'CEMS', pointName: 'Saved point',
+          parameterDetails: ['OLD'], issueReport: { unreportedParameters: ['OLD'] },
+          wpmsIssueReport: { failedParameters: ['OLD'] }, measurementItems: [{ pollutant: 'OLD' }],
+          calibrationItems: [{ parameter: 'OLD', parameters: ['OLD', 'CO (ppm)'] }],
+          reportRound: null, reportYear: null }
+        const form = await page.fetchKwpEditForm(detail, {}, 'test-token')
+        assert.deepEqual(form.point.parameterDetails, points[0].parameterDetails)
+        assert.deepEqual(form.point.parameterInstrumentDetails, points[0].parameterInstrumentDetails)
+        assert.equal(form.point.connectedPointId, 8)
+        assert.equal(form.point.name, 'Saved point')
+        assert.equal(form.factory.factoryName, 'Saved factory')
+        assert.deepEqual(form.initialState.unreportedParameters, ['OLD'])
+        assert.deepEqual(form.initialState.wpmsFailedParameters, ['OLD'])
+        assert.deepEqual(form.initialState.calibrationRows[0].parameter, ['OLD', 'CO (ppm)'])
+        assert.equal(form.initialState.measurementRows[0].pollutant, 'OLD')
+        if (['02', '04'].includes(code)) {
+          const empty = [['reportRound', ''], ['reportYear', '']]
+          const payload = page.buildKwp02SubmissionPayload(form, empty, [])
+          assert.equal(payload.reportRound, null)
+          assert.equal(payload.reportYear, null)
+          assert.equal(payload.connectedPointId, 8)
+          const preview = page.buildKwp02PreviewData(form, empty, [])
+          assert.equal(preview.reportYear, null)
+          const html = renderToStaticMarkup(React.createElement(page.Kwp02Form, { factory: {}, point: {},
+            defaults: form.defaults, measurementRows: [], samplingPhotoFiles: [], labReportFiles: [] }))
+          assert.match(html, /name="reportYear"[^>]*value=""/)
+        }
+      }
+      assert.equal(requests, 5)
+      const selected = ['OLD']
+      const selector = page.ParameterMultiSelect({ label: 'พารามิเตอร์', value: selected, options: ['CO (ppm)'] })
+      assert.deepEqual(selector.props.value, ['OLD'])
+      assert.deepEqual(selector.props.options, ['CO (ppm)', 'OLD'])
+      assert.deepEqual(selector.props.legacyOptions, ['OLD'])
+      const deselected = page.ParameterMultiSelect({ label: 'พารามิเตอร์', value: [], options: ['CO (ppm)'] })
+      assert.deepEqual(deselected.props.options, ['CO (ppm)'])
+    })
+
+    await t.test('KWP03 never falls back to static parameters and expands select-all into current API labels with units', () => {
+      let selected
+      const props = { factory: {}, defaults: {}, problemDate: null, expectedDoneDate: null,
+        instruments: '', issueReasons: '', failedParameters: [], attachmentFiles: [],
+        onFailedParametersChange: (value) => { selected = value } }
+      const parameters = ['BOD (mg/l)', 'COD (mg/l)']
+      const form = page.Kwp03Form({ ...props, point: { parameterDetails: parameters } })
+      const selector = findComponent(form, page.ParameterMultiSelect)
+      assert.deepEqual(selector.props.options, [...parameters, 'ทั้งหมด'])
+      selector.props.onChange(['ทั้งหมด'])
+      assert.deepEqual(selected, parameters)
+      selector.props.onChange(['BOD (mg/l)'])
+      assert.deepEqual(selected, ['BOD (mg/l)'])
+      const empty = page.Kwp03Form({ ...props, point: { parameterDetails: [] } })
+      assert.deepEqual(findComponent(empty, page.ParameterMultiSelect).props.options, [])
+    })
+
+    await t.test('unknown measurement attachments stay visible until explicitly removed and valid groups retain their types', () => {
+      const attachments = [
+        { ...file, originalFileName: 'old.pdf', attachmentType: 'GENERAL' },
+        { ...file, originalFileName: 'sample.pdf', attachmentType: 'SAMPLING_PHOTO' },
+        { ...file, originalFileName: 'lab.pdf', attachmentType: 'LAB_REPORT' },
+      ]
+      for (const code of ['02', '04']) {
+        const detail = { formType: `KWP${code}`, measurementItems: [{ attachments }] }
+        const form = page.buildKwpEditFormFromDetail(detail)
+        assert.equal(form.initialState.unsupportedMeasurementFiles.length, 1)
+        assert.equal(form.initialState.unsupportedMeasurementFiles[0].name, 'old.pdf')
+        assert.equal(form.initialState.samplingPhotoFiles[0].attachmentType, 'SAMPLING_PHOTO')
+        assert.equal(form.initialState.labReportFiles[0].attachmentType, 'LAB_REPORT')
+        const preview = page.buildKwpRequestPreviewDataFromDetail(detail)
+        assert.equal(preview.attachmentSections.find((group) => group.key === 'legacyAttachments').files[0].name, 'old.pdf')
+        let removed
+        const warning = page.KwpLegacyAttachmentWarning({ files: form.initialState.unsupportedMeasurementFiles,
+          onRemove: (index) => { removed = index } })
+        const html = renderToStaticMarkup(warning)
+        assert.ok(html.includes('old.pdf'))
+        assert.ok(html.includes('GENERAL'))
+        assert.equal(removed, undefined)
+        findButtons(warning)[0].props.onClick()
+        assert.equal(removed, 0)
       }
     })
 

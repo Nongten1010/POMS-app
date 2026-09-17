@@ -49,7 +49,12 @@ import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasurementMethodOptions.json'
 import { createKwpFormPdf } from '../utils/kwpFormPdf'
-import { canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata, getKwpReportPeriod, getKwpAttachmentValidationError } from '../utils/kwpFormPresentation.mjs'
+import {
+  canCreateKwpRequest, canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata,
+  getKwpReportPeriod, getKwpAttachmentValidationError, getKwpLink, readKwpApiResponse,
+  fetchKwpMeasurementPoints, withKwpParameterOptions, isKwpParameterError,
+  buildKwpAttachmentMetadata, isKwpMeasurementAttachment,
+} from '../utils/kwpFormPresentation.mjs'
 
 dayjs.extend(buddhistEra)
 dayjs.locale('th')
@@ -67,40 +72,16 @@ const kwpFormSubmissionsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/kwp-form-submissions'
   : 'https://d-poms.diw.go.th/api/v1/kwp-form-submissions'
 
-const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
-  ? '/api-proxy/v1/connected-measurement-points'
-  : 'https://d-poms.diw.go.th/api/v1/connected-measurement-points'
-
 const operatorSubMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
   { value: 'requests', label: 'รายการคำขอ' },
 ]
 
 const officerSubMenus = [
+  { value: 'factories', label: 'รายชื่อโรงงาน' },
   { value: 'requests', label: 'รายการคำขอ' },
   { value: 'statistics', label: 'สถิติข้อมูล' },
 ]
-
-async function readKwpApiResponse(result, fallbackMessage) {
-  const rawText = await result.text()
-  let response
-
-  try {
-    response = rawText ? JSON.parse(rawText) : null
-  } catch {
-    response = rawText
-  }
-
-  if (!result.ok || response?.success === false) {
-    const message =
-      response?.error?.message ??
-      response?.message ??
-      `${fallbackMessage} (${result.status} ${result.statusText})`
-    throw new Error(message)
-  }
-
-  return response
-}
 
 function normalizeMonitoringPointDetailRows(rows) {
   return Array.isArray(rows)
@@ -111,7 +92,7 @@ function normalizeMonitoringPointDetailRows(rows) {
         return {
           ...row,
           details,
-          connectedPointId: row.connectedPointId ?? row.id ?? null,
+          connectedPointId: row.connectedPointId ?? null,
           id: row.pointCode ?? row.stationId ?? row.pointName ?? `monitoring-point-detail-${index + 1}`,
           code: row.pointCode ?? '',
           name: row.pointName ?? '',
@@ -635,7 +616,7 @@ function KwpStatusChip({ row = {} }) {
   )
 }
 
-function FormSelectionMenu({ factory, point, onSelectForm }) {
+function FormSelectionMenu({ factory, point, onSelectForm, canCreate = false }) {
   const [anchorEl, setAnchorEl] = useState(null)
   const isOpen = Boolean(anchorEl)
 
@@ -644,14 +625,15 @@ function FormSelectionMenu({ factory, point, onSelectForm }) {
       <Button
         size="small"
         variant="outlined"
+        disabled={!canCreate}
         endIcon={<KeyboardArrowDownIcon />}
-        onClick={(event) => setAnchorEl(event.currentTarget)}
+        onClick={(event) => { if (canCreate) setAnchorEl(event.currentTarget) }}
       >
         เลือกแบบฟอร์ม
       </Button>
       <Menu
         anchorEl={anchorEl}
-        open={isOpen}
+        open={canCreate && isOpen}
         onClose={() => setAnchorEl(null)}
         slotProps={{
           paper: {
@@ -662,7 +644,7 @@ function FormSelectionMenu({ factory, point, onSelectForm }) {
         {kwpFormOptions.map((option) => {
           const fullTitle = `${option.code} ${option.title}`
           const initialValues = getKwpFormInitialValues(option.code, point)
-          const isDisabled = isKwpFormOptionDisabledForPoint(option.code, point)
+          const isDisabled = !canCreate || isKwpFormOptionDisabledForPoint(option.code, point)
 
           return (
             <MenuItem
@@ -707,7 +689,7 @@ function FormSelectionMenu({ factory, point, onSelectForm }) {
   )
 }
 
-function MonitoringPointDialog({ context, rows, loading, error, open, onClose, onSelectForm }) {
+function MonitoringPointDialog({ context, rows, loading, error, open, onClose, onSelectForm, canCreate = false }) {
   const factoryTitle = context?.factoryName
     ? `รายการจุดตรวจวัด - ${context.factoryName}${context.monitoringPointCount ? ` (${context.monitoringPointCount} จุด)` : ''}`
     : 'รายการจุดตรวจวัด'
@@ -771,7 +753,7 @@ function MonitoringPointDialog({ context, rows, loading, error, open, onClose, o
                     <TableCell>{row.type}</TableCell>
                     <TableCell>{row.parameters}</TableCell>
                     <TableCell>
-                      <FormSelectionMenu factory={context} point={row} onSelectForm={onSelectForm} />
+                      <FormSelectionMenu factory={context} point={row} onSelectForm={onSelectForm} canCreate={canCreate} />
                     </TableCell>
                   </TableRow>
                 ))
@@ -824,7 +806,7 @@ function SectionPaper({ title, children }) {
   )
 }
 
-function OptionMultiSelect({ label, value, onChange, options }) {
+function OptionMultiSelect({ label, value, onChange, options, legacyOptions = [] }) {
   return (
     <FormControl size="small" fullWidth>
       <InputLabel>{label}</InputLabel>
@@ -847,7 +829,7 @@ function OptionMultiSelect({ label, value, onChange, options }) {
       >
         {options.map((option) => (
           <MenuItem key={option} value={option}>
-            {option}
+            {option}{legacyOptions.includes(option) ? ' (ค่าเดิม)' : ''}
           </MenuItem>
         ))}
       </Select>
@@ -856,7 +838,9 @@ function OptionMultiSelect({ label, value, onChange, options }) {
 }
 
 function ParameterMultiSelect({ label, value, onChange, options = cemsParameterOptions }) {
-  return <OptionMultiSelect label={label} value={value} onChange={onChange} options={options} />
+  const legacyOptions = value.filter((option) => !options.includes(option))
+  return <OptionMultiSelect label={label} value={value} onChange={onChange}
+    options={[...options, ...legacyOptions]} legacyOptions={legacyOptions} />
 }
 
 function OptionSelect({ label, value, onChange, options }) {
@@ -1358,7 +1342,7 @@ function buildKwp02PreviewData(form, formElement, measurementRows, attachmentFil
     formType: isKwp04 ? 'kwp04' : 'kwp02',
     title: form?.title ?? '',
     ...buildCommonFormPreviewData(form, formElement),
-    ...getKwpReportPeriod(formData),
+    ...getKwpReportPeriod(formData, { allowEmpty: form?.mode === 'edit' }),
     measurementRows,
     attachmentSections: [
       {
@@ -1416,7 +1400,7 @@ function buildKwp01SubmissionPayload(form, formElement, dates, unreportedParamet
   return {
     ...buildKwpCommonSubmissionPayload(form, formElement),
     attachments,
-    attachmentLink: getFormText(formData, 'attachmentLink') || null,
+    attachmentLink: getKwpLink(formData.get('attachmentLink')),
     issueReason: getFormText(formData, 'issueReason'),
     reasonDetail: getFormText(formData, 'reasonDetail'),
     problemDate: formatApiHourDateTimeValue(dates.problemDate),
@@ -1443,9 +1427,9 @@ function buildKwp02SubmissionPayload(form, formElement, measurementRows, measure
   const formData = formElement ? new FormData(formElement) : new FormData()
   return {
     ...buildKwpCommonSubmissionPayload(form, formElement),
-    ...getKwpReportPeriod(formData),
-    samplingPhotoLink: getFormText(formData, 'samplingPhotoLink') || null,
-    labReportLink: getFormText(formData, 'labReportLink') || null,
+    ...getKwpReportPeriod(formData, { allowEmpty: form?.mode === 'edit' }),
+    samplingPhotoLink: getKwpLink(formData.get('samplingPhotoLink')),
+    labReportLink: getKwpLink(formData.get('labReportLink')),
     measurementItems: measurementRows.map((row, index) =>
       buildKwpEmissionMeasurementItem(row, index === 0 ? measurementAttachments : []),
     ),
@@ -1472,7 +1456,7 @@ function buildKwp03SubmissionPayload(form, formElement, dates, selectedValues, a
     failedParameters: selectedValues.failedParameters,
     correctiveAction: getFormText(formData, 'correctiveAction') || null,
     attachments,
-    attachmentLink: getFormText(formData, 'attachmentLink') || null,
+    attachmentLink: getKwpLink(formData.get('attachmentLink')),
   }
 }
 
@@ -1743,7 +1727,7 @@ function getKwp05ItemAttachments(item = {}) {
 }
 
 function getKwp05ItemParameter(item = {}) {
-  return item.parameter ?? item.parameterName ?? item.parameter_name ?? item.parameterLabel ?? item.pollutant ?? ''
+  return item.parameters ?? item.parameter ?? item.parameterName ?? item.parameter_name ?? item.parameterLabel ?? item.pollutant ?? ''
 }
 
 function buildKwp05CalibrationRow(item = {}, index = 0) {
@@ -1795,6 +1779,7 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
     },
     point: {
       id: detail.connectedPointId ?? row.connectedPointId,
+      connectedPointId: detail.connectedPointId ?? row.connectedPointId,
       code: detail.pointCode ?? row.monitoringPointCode,
       name: detail.pointName ?? row.monitoringPointName,
       type: detail.pointType ?? row.type,
@@ -1855,6 +1840,8 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
       })),
       samplingPhotoFiles: measurementItems.flatMap((item) => getAttachmentsByType(item.attachments, 'SAMPLING_PHOTO')),
       labReportFiles: measurementItems.flatMap((item) => getAttachmentsByType(item.attachments, 'LAB_REPORT')),
+      unsupportedMeasurementFiles: measurementItems.flatMap((item) => (item.attachments ?? [])
+        .filter((file) => !isKwpMeasurementAttachment(file)).map(buildSubmittedAttachmentFile)),
       wpmsInstrument: wpmsIssueReport.instruments?.[0] ?? '',
       wpmsIssueReason: wpmsIssueReport.issueReasons?.[0] ?? '',
       wpmsFailedParameters: wpmsIssueReport.failedParameters ?? [],
@@ -1879,6 +1866,13 @@ function getKwpSubmissionFormSlug(row) {
   }
 
   return formMap[formCode] ?? ''
+}
+
+async function fetchKwpEditForm(detail, row, accessToken) {
+  const form = buildKwpEditFormFromDetail(detail, row)
+  const points = await fetchKwpMeasurementPoints({ factoryId: getMonitoringPointFactoryId(form.factory),
+    accessToken, apiBaseUrl: kwpFormReportsApiBaseUrl })
+  return { ...form, point: withKwpParameterOptions(form.point, points) }
 }
 
 function normalizeKwpAttachmentFile(file, index = 0) {
@@ -1995,6 +1989,11 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
           files: allAttachments
             .filter((file) => file.attachmentType === 'LAB_REPORT')
             .map(normalizeKwpAttachmentFile),
+        },
+        {
+          key: 'legacyAttachments',
+          title: 'เอกสารแนบเดิมที่ต้องแก้ไขประเภท',
+          files: allAttachments.filter((file) => !isKwpMeasurementAttachment(file)).map(normalizeKwpAttachmentFile),
         },
       ],
     }
@@ -3538,6 +3537,24 @@ function KwpGeneralAttachments({ files, onChange, link = '' }) {
   )
 }
 
+function KwpLegacyAttachmentWarning({ files, onRemove }) {
+  return (
+    <Alert severity="warning" sx={{ mb: 2 }}>
+      ไฟล์แนบเดิมมีประเภทไม่ถูกต้อง กรุณาอัปโหลดใหม่ในชุดภาพถ่ายขณะเก็บตัวอย่างหรือรายงานผลห้องปฏิบัติการ แล้วนำไฟล์เดิมออกก่อนบันทึก
+      {files.map((file, index) => (
+        <Stack key={`${file.id}-${index}`} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography component="a" href={getKwpAttachmentFileUrl(file)} target="_blank" rel="noreferrer"
+            variant="body2" sx={{ overflowWrap: 'anywhere', minWidth: 0, flex: 1 }}>
+            {file.name} ({file.attachmentType || 'ไม่ระบุประเภท'})
+          </Typography>
+          <IconButton size="small" aria-label={`นำไฟล์เดิมออก ${file.name}`} title="นำไฟล์เดิมออก"
+            onClick={() => onRemove(index)}><DeleteIcon fontSize="small" /></IconButton>
+        </Stack>
+      ))}
+    </Alert>
+  )
+}
+
 function EmissionMeasurementDialog({ open, value, parameterOptions, onClose, onSave }) {
   if (!open) {
     return null
@@ -3590,6 +3607,9 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
                 onChange={(event) => updateForm('pollutant', event.target.value)}
                 fullWidth
               >
+                {form.pollutant && !parameterOptions.includes(form.pollutant) ? (
+                  <MenuItem value={form.pollutant} disabled>{form.pollutant} (ค่าเดิม)</MenuItem>
+                ) : null}
                 {parameterOptions.map((option) => (
                   <MenuItem key={option} value={option}>
                     {option}
@@ -3754,7 +3774,7 @@ function Kwp02Form({
                 <TextField name="reportRound" label="รายงานครั้งที่" type="number" size="small" defaultValue={defaults.reportRound ?? ''} fullWidth />
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <TextField name="reportYear" label="ปี พ.ศ." type="number" size="small" defaultValue={defaults.reportYear || getCurrentThaiYear()} fullWidth />
+                <TextField name="reportYear" label="ปี พ.ศ." type="number" size="small" defaultValue={defaults.reportYear ?? getCurrentThaiYear()} fullWidth />
               </Grid>
             </Grid>
             <Grid container spacing={2}>
@@ -3942,10 +3962,7 @@ function Kwp03Form({
   const totalDuration = getHourDuration(problemDate, expectedDoneDate)
   const pointParameterOptions = uniqueTextValues(point?.parameterDetails ?? [])
   const instrumentOptions = uniqueTextValues([...wpmsInstrumentOptions, instruments])
-  const failedParameterOptions = [
-    ...(pointParameterOptions.length ? pointParameterOptions : wpmsParameterOptions).filter((option) => option !== 'ทั้งหมด'),
-    'ทั้งหมด',
-  ]
+  const failedParameterOptions = pointParameterOptions.length ? [...pointParameterOptions, 'ทั้งหมด'] : []
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
@@ -4060,10 +4077,10 @@ function Kwp03Form({
               <ReadOnlyField label="รวมระยะเวลา" value={totalDuration} />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <OptionMultiSelect
+              <ParameterMultiSelect
                 label="รายการตรวจวัด (พารามิเตอร์) ที่ไม่สามารถรายงานผลได้"
                 value={failedParameters}
-                onChange={onFailedParametersChange}
+                onChange={(selected) => onFailedParametersChange(selected.includes('ทั้งหมด') ? pointParameterOptions : selected)}
                 options={failedParameterOptions}
               />
             </Grid>
@@ -4258,7 +4275,7 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
         <SectionPaper title="รายการผลการสอบเทียบหรือทวนสอบ CEMS">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <OptionMultiSelect
+              <ParameterMultiSelect
                 label="พารามิเตอร์"
                 value={selectedParameters}
                 options={parameterOptions}
@@ -4370,8 +4387,9 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
   )
 }
 
-function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubmitted }) {
+function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubmitted, canSubmit = false }) {
   const formRef = useRef(null)
+  const [point, setPoint] = useState(() => form?.point)
   const initialState = form?.initialState ?? {}
   const [problemDate, setProblemDate] = useState(() => (
     initialState.problemDate && dayjs(initialState.problemDate).isValid() ? dayjs(initialState.problemDate) : null
@@ -4386,6 +4404,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const [samplingPhotoFiles, setSamplingPhotoFiles] = useState(() => initialState.samplingPhotoFiles ?? [])
   const [labReportFiles, setLabReportFiles] = useState(() => initialState.labReportFiles ?? [])
   const [attachmentFiles, setAttachmentFiles] = useState(() => initialState.attachmentFiles ?? [])
+  const [unsupportedMeasurementFiles, setUnsupportedMeasurementFiles] = useState(() => initialState.unsupportedMeasurementFiles ?? [])
   const [wpmsInstrument, setWpmsInstrument] = useState(() => initialState.wpmsInstrument ?? '')
   const [wpmsIssueReason, setWpmsIssueReason] = useState(() => initialState.wpmsIssueReason ?? '')
   const [wpmsFailedParameters, setWpmsFailedParameters] = useState(() => initialState.wpmsFailedParameters ?? [])
@@ -4400,28 +4419,27 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const isEditMode = form?.mode === 'edit'
 
   const validateFormInputs = () => {
+    if (!canSubmit) throw new Error('ไม่มีสิทธิ์ส่งแบบฟอร์มคำขอ')
     const formData = formRef.current ? new FormData(formRef.current) : new FormData()
+    if (unsupportedMeasurementFiles.length) throw new Error('กรุณาจัดการไฟล์แนบเดิมที่มีประเภทไม่ถูกต้องก่อนบันทึก')
     if (['กวภ.02', 'กวภ.04'].includes(form?.code)) {
-      getKwpReportPeriod(formData)
+      getKwpReportPeriod(formData, { allowEmpty: isEditMode })
+      if (!measurementRows.length && (samplingPhotoFiles.length || labReportFiles.length)) {
+        throw new Error('กรุณาเพิ่มรายการตรวจวัดก่อนแนบเอกสาร เพื่อให้ไฟล์ถูกบันทึกกับรายการ')
+      }
     }
     for (const field of ['attachmentLink', 'samplingPhotoLink', 'labReportLink']) {
-      const value = getFormText(formData, field)
-      if (!value) continue
-      let url
-      try { url = new URL(value) } catch { throw new Error('กรุณากรอก Link เป็น URL ที่ขึ้นต้นด้วย http:// หรือ https://') }
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Link ต้องขึ้นต้นด้วย http:// หรือ https://')
+      getKwpLink(formData.get(field))
+    }
+    for (const [files, limit] of [[attachmentFiles, 10], [samplingPhotoFiles, 5], [labReportFiles, 5]]) {
+      const error = getKwpAttachmentValidationError(files, 5, limit)
+      if (error) throw new Error(error)
     }
   }
 
   const uploadKwpAttachment = async (file, attachmentType) => {
     if (file?.isSubmitted) {
-      return {
-        originalFileName: file.originalFileName ?? file.name ?? '',
-        storedFileName: file.storedFileName ?? null,
-        mimeType: file.mimeType ?? file.type ?? null,
-        fileSize: file.fileSize ?? file.size ?? null,
-        storagePath: file.storagePath ?? null,
-      }
+      return file
     }
 
     const uploadBody = new FormData()
@@ -4445,14 +4463,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const uploadKwpAttachments = async (files, attachmentType) => {
     const uploadedFiles = await Promise.all(files.map((file) => uploadKwpAttachment(file, attachmentType)))
 
-    return uploadedFiles.map((file) => ({
-      attachmentType,
-      originalFileName: file?.originalFileName ?? '',
-      storedFileName: file?.storedFileName ?? null,
-      mimeType: file?.mimeType ?? null,
-      fileSize: file?.fileSize ?? null,
-      storagePath: file?.storagePath ?? null,
-    }))
+    return uploadedFiles.map((file) => buildKwpAttachmentMetadata(file, attachmentType))
   }
 
   const buildCalibrationRowsWithAttachments = async (rows) => {
@@ -4578,6 +4589,17 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
       onClose?.()
     } catch (requestError) {
       setSubmitError(requestError.message)
+      if (isKwpParameterError(requestError)) {
+        const allowed = requestError.details.allowedParameters.join(', ') || 'ไม่มีพารามิเตอร์ที่เข้าข่าย'
+        try {
+          const points = await fetchKwpMeasurementPoints({ factoryId: getMonitoringPointFactoryId(form.factory),
+            accessToken, apiBaseUrl: kwpFormReportsApiBaseUrl })
+          setPoint(withKwpParameterOptions(point, points))
+          setSubmitError(`${requestError.message} พารามิเตอร์ที่ API อนุญาต: ${allowed} โหลดตัวเลือกล่าสุดแล้ว กรุณาตรวจสอบค่าที่เลือกอีกครั้ง`)
+        } catch (refreshError) {
+          setSubmitError(`${requestError.message} พารามิเตอร์ที่ API อนุญาต: ${allowed} โหลดตัวเลือกใหม่ไม่สำเร็จ: ${refreshError.message}`)
+        }
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -4686,6 +4708,10 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
             sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 } }}
           >
             {submitError ? <Alert severity="error" sx={{ mb: 2 }}>{submitError}</Alert> : null}
+            {unsupportedMeasurementFiles.length ? (
+              <KwpLegacyAttachmentWarning files={unsupportedMeasurementFiles}
+                onRemove={(index) => setUnsupportedMeasurementFiles((files) => files.filter((_, i) => i !== index))} />
+            ) : null}
             {latestRevisionMessage ? (
               <Paper
                 elevation={0}
@@ -4712,7 +4738,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
             {form?.title?.startsWith('กวภ.01') ? (
               <Kwp01Form
                 factory={form.factory}
-                point={form.point}
+                point={point}
                 defaults={form.defaults}
                 problemDate={problemDate}
                 expectedDoneDate={expectedDoneDate}
@@ -4726,7 +4752,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
             ) : form?.title?.startsWith('กวภ.03') ? (
               <Kwp03Form
                 factory={form.factory}
-                point={form.point}
+                point={point}
                 defaults={form.defaults}
                 problemDate={problemDate}
                 expectedDoneDate={expectedDoneDate}
@@ -4744,7 +4770,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
             ) : form?.title?.startsWith('กวภ.02') || form?.title?.startsWith('กวภ.04') ? (
               <Kwp02Form
                 factory={form.factory}
-                point={form.point}
+                point={point}
                 defaults={form.defaults}
                 measurementRows={measurementRows}
                 setMeasurementRows={setMeasurementRows}
@@ -4756,7 +4782,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
             ) : form?.title?.startsWith('กวภ.05') ? (
               <Kwp05Form
                 factory={form.factory}
-                point={form.point}
+                point={point}
                 defaults={form.defaults}
                 calibrationRows={calibrationRows}
                 setCalibrationRows={setCalibrationRows}
@@ -4777,7 +4803,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
             <Button variant="outlined" color="inherit" onClick={onClose}>
               ยกเลิก
             </Button>
-            <Button variant="contained" onClick={openPreview}>
+            <Button variant="contained" onClick={openPreview} disabled={!canSubmit}>
               {isEditMode ? 'บันทึกการแก้ไข' : 'ส่งแบบฟอร์ม'}
             </Button>
           </Stack>
@@ -4892,8 +4918,9 @@ function KwpCancelRequestDialog({ request, submitting, error, onClose, onConfirm
   )
 }
 
-function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
+function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToken = '', currentUser = null }) {
   const isOperator = userType === 'operator'
+  const canCreate = canCreateKwpRequest(userType, roleCode, roleCodes)
   const availableSubMenus = isOperator ? operatorSubMenus : officerSubMenus
   const [monitoringPointContext, setMonitoringPointContext] = useState(null)
   const [monitoringPointRows, setMonitoringPointRows] = useState([])
@@ -5001,18 +5028,9 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
     setMonitoringPointError('')
 
     try {
-      const result = await fetch(
-        `${connectedMeasurementPointsApiBaseUrl}/factories/${encodeURIComponent(factoryId)}`,
-        {
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          signal,
-        },
-      )
-      const response = await readKwpApiResponse(result, 'โหลดรายละเอียดจุดตรวจวัดไม่สำเร็จ')
-      setMonitoringPointRows(normalizeMonitoringPointDetailRows(response?.data))
+      const points = await fetchKwpMeasurementPoints({ factoryId, accessToken,
+        apiBaseUrl: kwpFormReportsApiBaseUrl, signal })
+      setMonitoringPointRows(normalizeMonitoringPointDetailRows(points))
     } catch (requestError) {
       if (requestError.name !== 'AbortError') {
         setMonitoringPointRows([])
@@ -5124,7 +5142,7 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
 
       try {
         const detail = await fetchKwpSubmissionDetail(row)
-        openFormBottomSheet(buildKwpEditFormFromDetail(detail, row))
+        openFormBottomSheet(await fetchKwpEditForm(detail, row, accessToken))
       } catch (requestError) {
         setRequestsError(requestError.message)
       } finally {
@@ -5275,12 +5293,21 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
     setCancelSubmitting(true)
     setCancelError('')
     try {
-      await cancelKwpSubmission({ request: cancelRequestTarget, accessToken, apiBaseUrl: kwpFormSubmissionsApiBaseUrl })
+      await cancelKwpSubmission({ request: cancelRequestTarget, accessToken, apiBaseUrl: kwpFormSubmissionsApiBaseUrl,
+        onConflict: async () => {
+          setCancelRequestTarget(null)
+          await loadRequestRows()
+        },
+      })
       setCancelRequestTarget(null)
       setSuccessMessage('ยกเลิกคำขอสำเร็จ')
       await loadRequestRows()
     } catch (error) {
-      setCancelError(error instanceof Error ? error.message : 'ยกเลิกคำขอไม่สำเร็จ')
+      if (error.status === 409) {
+        setRequestsError(`${error.message} กรุณาตรวจสอบสถานะล่าสุดก่อนทำรายการอีกครั้ง`)
+      } else {
+        setCancelError(error instanceof Error ? error.message : 'ยกเลิกคำขอไม่สำเร็จ')
+      }
     } finally {
       cancelSubmittingRef.current = false
       setCancelSubmitting(false)
@@ -5467,7 +5494,9 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
         loading={isLoadingMonitoringPoint}
         error={monitoringPointError}
         onClose={closeMonitoringPointDialog}
+        canCreate={canCreate}
         onSelectForm={(form) => {
+          if (!canCreate) return
           openFormBottomSheet(applyKwpLoginDefaults(form, currentUser))
           setMonitoringPointContext(null)
         }}
@@ -5481,6 +5510,7 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
         open={isFormSheetOpen}
         form={selectedForm}
         accessToken={accessToken}
+        canSubmit={selectedForm?.mode === 'edit' ? isOperator : canCreate}
         onClose={closeFormBottomSheet}
         onExited={clearClosedFormBottomSheet}
         onSubmitted={handleFormSubmitted}
