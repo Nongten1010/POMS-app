@@ -1,13 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { BadRequestError } from '../../shared/errors/AppError';
+import type { KwpFormAttachmentInput } from './kwp-form-submissions.types';
 
 export const DEFAULT_KWP_ATTACHMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 export const KWP05_ATTACHMENT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export const MAX_KWP_ATTACHMENT_FILE_SIZE_BYTES = KWP05_ATTACHMENT_FILE_SIZE_BYTES;
 const STORAGE_PREFIX = 'kwp/form-attachments';
-const KWP05_TEN_MEGABYTE_ATTACHMENT_TYPES = new Set(['RATA_REPORT', 'CALIBRATION_PHOTO']);
+const KWP05_TEN_MEGABYTE_ATTACHMENT_TYPES = new Set([
+  'GENERAL',
+  'RATA_REPORT',
+  'CALIBRATION_PHOTO',
+]);
 
 export const allowedKwpAttachmentFileTypes = new Map([
   ['image/jpeg', new Set(['.jpg', '.jpeg'])],
@@ -16,6 +21,7 @@ export const allowedKwpAttachmentFileTypes = new Map([
 ]);
 
 export interface UploadedKwpAttachmentFile {
+  actorUserId?: number;
   attachmentType?: string;
   buffer: Buffer;
   originalName: string;
@@ -49,7 +55,14 @@ export class LocalKwpAttachmentStorage {
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const extension = path.extname(file.originalName).toLowerCase();
     const storedFileName = `${randomUUID()}${extension}`;
-    const storagePath = path.posix.join(STORAGE_PREFIX, yyyy, mm, storedFileName);
+    const ownerDirectory = file.actorUserId === undefined ? [] : [String(file.actorUserId)];
+    const storagePath = path.posix.join(
+      STORAGE_PREFIX,
+      yyyy,
+      mm,
+      ...ownerDirectory,
+      storedFileName,
+    );
     const absolutePath = path.join(this.options.uploadDir, storagePath);
 
     await mkdir(path.dirname(absolutePath), { recursive: true });
@@ -63,6 +76,64 @@ export class LocalKwpAttachmentStorage {
       storagePath,
       fileUrl: buildPublicFileUrl(this.options.publicBaseUrl, this.options.publicPath, storagePath),
     };
+  }
+}
+
+/** New files belong to their uploader; legacy files can only be retained on their existing submission. */
+export async function validateStoredKwpAttachments(
+  attachments: KwpFormAttachmentInput[],
+  retained: KwpFormAttachmentInput[],
+  actorUserId: number,
+  options: Pick<KwpAttachmentStorageOptions, 'uploadDir' | 'publicPath'>,
+): Promise<void> {
+  for (const attachment of attachments) {
+    const storagePath = attachment.storagePath;
+    if (
+      !storagePath ||
+      /[\\%\u0000-\u001f]/.test(storagePath) ||
+      storagePath.split('/').some((part) => part === '.' || part === '..')
+    ) {
+      throw new BadRequestError('Invalid KWP attachment storage path');
+    }
+    const existing = retained.find((item) => item.storagePath === storagePath);
+    if (existing) {
+      for (const field of ['storedFileName', 'mimeType', 'fileSize', 'attachmentType'] as const) {
+        if ((attachment[field] ?? null) !== (existing[field] ?? null))
+          throw new BadRequestError('Stored attachment metadata cannot be changed');
+      }
+      continue;
+    }
+    const expectedOwner = new RegExp(`^kwp/form-attachments/\\d{4}/\\d{2}/${actorUserId}/[^/]+$`);
+    if (!expectedOwner.test(storagePath))
+      throw new BadRequestError(
+        'Upload this attachment using the current account before submitting',
+      );
+    const filePath = path.resolve(options.uploadDir, storagePath);
+    try {
+      const root = await realpath(options.uploadDir);
+      const resolved = await realpath(filePath);
+      if (!resolved.startsWith(`${root}${path.sep}`))
+        throw new BadRequestError('Invalid KWP attachment storage path');
+      const info = await stat(resolved);
+      if (!info.isFile() || info.size > getKwpAttachmentFileSizeLimit(attachment.attachmentType))
+        throw new BadRequestError('Invalid attachment file size');
+      const buffer = await readFile(resolved);
+      if (
+        attachment.storedFileName !== path.basename(resolved) ||
+        attachment.fileSize !== buffer.length
+      )
+        throw new BadRequestError('Attachment metadata does not match the uploaded file');
+      validateKwpAttachmentFile({
+        attachmentType: attachment.attachmentType,
+        buffer,
+        originalName: attachment.originalFileName,
+        mimeType: attachment.mimeType ?? '',
+        size: buffer.length,
+      });
+    } catch (error) {
+      if (error instanceof BadRequestError) throw error;
+      throw new BadRequestError('Uploaded attachment is unavailable; upload it again');
+    }
   }
 }
 

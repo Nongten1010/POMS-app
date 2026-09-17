@@ -17,6 +17,29 @@ const nullableText = (max: number) =>
   z.preprocess(emptyStringToNull, z.string().trim().min(1).max(max).nullable().optional());
 
 const requiredText = (max: number) => z.string().trim().min(1).max(max);
+const attachmentLinkSchema = z.preprocess(
+  emptyStringToNull,
+  z
+    .string()
+    .trim()
+    .max(1000)
+    .url()
+    .refine((value) => {
+      try {
+        const url = new URL(value);
+        return (
+          ['http:', 'https:'].includes(url.protocol) &&
+          !url.username &&
+          !url.password &&
+          !/[\u0000-\u0020\u007f]/.test(value)
+        );
+      } catch {
+        return false;
+      }
+    }, 'Expected an HTTP(S) URL without credentials')
+    .nullable()
+    .optional(),
+);
 const optionalNullableText = (max: number) =>
   z
     .preprocess(emptyStringToNull, z.string().trim().min(1).max(max).nullable().optional())
@@ -68,6 +91,27 @@ const kwpAttachmentSchema = z
     storagePath: nullableText(1000),
   })
   .strict();
+
+const generalAttachmentsSchema = z.array(kwpAttachmentSchema).max(5).optional();
+
+function validateAttachmentLimits(
+  attachments: z.infer<typeof kwpAttachmentSchema>[],
+  context: z.RefinementCtx,
+  maxBytes: number,
+): void {
+  for (const attachment of attachments) {
+    if (
+      attachment.fileSize != null &&
+      (attachment.fileSize <= 0 || attachment.fileSize > maxBytes)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['attachments'],
+        message: 'Attachment size exceeds the allowed limit or is empty',
+      });
+    }
+  }
+}
 
 const kwpEmissionMeasurementItemSchema = z
   .object({
@@ -154,6 +198,8 @@ const kwp05CalibrationItemSchema = z
 export const createKwp01SubmissionSchema = z
   .object({
     ...commonKwpSubmissionShape,
+    attachments: generalAttachmentsSchema,
+    attachmentLink: attachmentLinkSchema,
     issueReason: z.enum(KWP01_ISSUE_REASONS),
     reasonDetail: nullableText(2000),
     problemDate: z.preprocess(emptyStringToNull, kwpDateOrHourDateTime.nullable().optional()),
@@ -166,6 +212,9 @@ export const createKwp01SubmissionSchema = z
     correctiveAction: nullableText(2000),
   })
   .strict()
+  .superRefine((value, context) =>
+    validateAttachmentLimits(value.attachments ?? [], context, 10 * 1024 * 1024),
+  )
   .refine((value) => isKwpFormDateRangeOrdered(value.problemDate, value.expectedDoneDate), {
     path: ['expectedDoneDate'],
     message: 'Expected done date must be on or after problem date',
@@ -178,15 +227,33 @@ export const createKwp01SubmissionSchema = z
 export const createKwp02SubmissionSchema = z
   .object({
     ...commonKwpSubmissionShape,
+    reportRound: z.number().int().positive().max(2147483647).nullable().optional(),
+    reportYear: z.number().int().min(2400).max(9999).nullable().optional(),
+    samplingPhotoLink: attachmentLinkSchema,
+    labReportLink: attachmentLinkSchema,
     measurementItems: z.array(kwpEmissionMeasurementItemSchema).min(1).max(100),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const attachments = value.measurementItems.flatMap((item) => item.attachments);
+    validateAttachmentLimits(attachments, context, 5 * 1024 * 1024);
+    for (const type of ['SAMPLING_PHOTO', 'LAB_REPORT']) {
+      if (attachments.filter((attachment) => attachment.attachmentType === type).length > 5) {
+        context.addIssue({
+          code: 'custom',
+          path: ['measurementItems'],
+          message: `At most 5 ${type} files are allowed per submission`,
+        });
+      }
+    }
+  });
 
 export const createKwp04SubmissionSchema = createKwp02SubmissionSchema;
 
 export const createKwp03SubmissionSchema = z
   .object({
     ...commonKwpSubmissionShape,
+    attachmentLink: attachmentLinkSchema,
     instruments: z
       .array(requiredText(255))
       .min(1)
@@ -220,9 +287,12 @@ export const createKwp03SubmissionSchema = z
       .max(100)
       .transform((parameters) => [...new Set(parameters)]),
     correctiveAction: nullableText(2000),
-    attachments: z.array(kwpAttachmentSchema).max(20).optional().default([]),
+    attachments: generalAttachmentsSchema,
   })
   .strict()
+  .superRefine((value, context) =>
+    validateAttachmentLimits(value.attachments ?? [], context, 10 * 1024 * 1024),
+  )
   .refine((value) => isKwpFormDateRangeOrdered(value.problemDate, value.expectedDoneDate), {
     path: ['expectedDoneDate'],
     message: 'Expected done date must be on or after problem date',
@@ -250,6 +320,7 @@ export const createKwp05SubmissionSchema = z
 
 export const changeKwpWorkflowStatusSchema = z
   .discriminatedUnion('action', [
+    z.object({ action: z.literal('CANCEL') }).strict(),
     z
       .object({
         action: z.literal('REQUEST_REVISION'),
@@ -266,7 +337,7 @@ export const changeKwpWorkflowStatusSchema = z
   ])
   .transform((payload) => ({
     ...payload,
-    officerNote: payload.officerNote ?? null,
+    officerNote: 'officerNote' in payload ? (payload.officerNote ?? null) : null,
   }));
 
 export const resubmitKwpFormSubmissionSchema = z

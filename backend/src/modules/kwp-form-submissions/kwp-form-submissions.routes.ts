@@ -134,7 +134,12 @@ kwpFormSubmissionsRoutes.get(
 
 kwpFormSubmissionsRoutes.post(
   '/:id/workflow-actions',
-  authorize('kwp_forms:approve'),
+  (req, res, next) =>
+    authorize(req.body?.action === 'CANCEL' ? 'kwp_forms:edit' : 'kwp_forms:approve')(
+      req,
+      res,
+      next,
+    ),
   kwpFormSubmissionsController.changeWorkflowStatus,
 );
 

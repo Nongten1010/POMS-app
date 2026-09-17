@@ -46,6 +46,89 @@ const mockedService = jest.mocked(kwpFormSubmissionsService);
 const expectedPublicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://d-poms.diw.go.th';
 
 describe('KWP form submission routes', () => {
+  it('lets an operator cancel using edit permission and forces assigned-factory scope', async () => {
+    const token = signAccessToken({
+      sub: '42',
+      userType: 'operator',
+      roles: ['factory_operator'],
+      scopes: { 'kwp_forms:edit': 'ALL' },
+    });
+    const response = await request(createApp())
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'CANCEL' });
+    expect(response.status).toBe(200);
+    expect(mockedService.changeWorkflowStatus).toHaveBeenCalledWith(
+      12,
+      expect.objectContaining({ action: 'CANCEL' }),
+      expect.objectContaining({ actorUserId: 42, scope: { scope: 'OWN_FACTORY' } }),
+    );
+  });
+
+  it.each([operatorViewToken, officerApproveToken])(
+    'rejects cancellation without operator edit permission',
+    async (token) => {
+      const response = await request(createApp())
+        .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ action: 'CANCEL' });
+      expect(response.status).toBe(403);
+      expect(mockedService.changeWorkflowStatus).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not let an officer cancel even with edit permission', async () => {
+    const token = signAccessToken({
+      sub: '77',
+      userType: 'officer',
+      roles: ['admin'],
+      scopes: { 'kwp_forms:edit': 'ALL' },
+    });
+    const response = await request(createApp())
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'CANCEL' });
+    expect(response.status).toBe(403);
+  });
+
+  it('does not grant approval to operators who can cancel', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({ action: 'APPROVE' });
+    expect(response.status).toBe(403);
+  });
+
+  it('passes explicit KWP01 attachment removal and KWP02 report periods through PATCH', async () => {
+    const app = createApp();
+    const first = await request(app)
+      .patch('/api/v1/kwp-form-submissions/kwp01/12')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({ ...validKwp01Payload(), attachments: [], attachmentLink: null });
+    expect(first.status).toBe(200);
+    expect(mockedService.updateKwp01).toHaveBeenCalledWith(
+      12,
+      expect.objectContaining({ attachments: [], attachmentLink: null }),
+      expect.anything(),
+    );
+    const second = await request(app)
+      .patch('/api/v1/kwp-form-submissions/kwp02/13')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp02Payload(),
+        reportRound: 3,
+        reportYear: 2569,
+        samplingPhotoLink: null,
+        labReportLink: 'https://example.com/lab',
+      });
+    expect(second.status).toBe(200);
+    expect(mockedService.updateKwp02).toHaveBeenCalledWith(
+      13,
+      expect.objectContaining({ reportRound: 3, reportYear: 2569, samplingPhotoLink: null }),
+      expect.anything(),
+    );
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockedService.createKwp01.mockResolvedValue({
@@ -368,15 +451,12 @@ describe('KWP form submission routes', () => {
       .send(validKwp01Payload());
 
     expect(response.status).toBe(201);
-    expect(mockedService.createKwp01).toHaveBeenCalledWith(
-      expect.any(Object),
-      {
-        actorUserId: 77,
-        scope: { scope: 'IN_REGION' },
-        roles: ['monitoring_kpm'],
-        regionalAccess: { regions: ['ภาคกลาง'] },
-      },
-    );
+    expect(mockedService.createKwp01).toHaveBeenCalledWith(expect.any(Object), {
+      actorUserId: 77,
+      scope: { scope: 'IN_REGION' },
+      roles: ['monitoring_kpm'],
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    });
   });
 
   it('gets submitted KWP01 detail with issue report and unreported parameters', async () => {
@@ -598,6 +678,8 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.getWorkflow).toHaveBeenCalledWith(12, {
       actorUserId: 42,
+      canEdit: false,
+      canApprove: false,
       scope: { scope: 'OWN_FACTORY' },
       roles: ['factory_operator'],
       regionalAccess: undefined,
@@ -625,6 +707,8 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.getWorkflow).toHaveBeenCalledWith(12, {
       actorUserId: 42,
+      canEdit: false,
+      canApprove: false,
       scope: { scope: 'IN_ESTATE' },
       roles: ['factory_operator'],
       regionalAccess: undefined,

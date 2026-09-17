@@ -17,11 +17,12 @@ export type KwpFormSubmissionDetailType = 'KWP01' | 'KWP02' | 'KWP03' | 'KWP04' 
 export type KwpFormSubmissionStatus =
   | 'DRAFT'
   | 'SUBMITTED'
+  | 'UNDER_REVIEW'
   | 'APPROVED'
   | 'REJECTED'
   | 'REVISION_REQUESTED'
   | 'CANCELLED';
-export type KwpFormWorkflowAction = 'REQUEST_REVISION' | 'APPROVE';
+export type KwpFormWorkflowAction = 'REQUEST_REVISION' | 'APPROVE' | 'CANCEL';
 export type KwpFormAllowedAction = KwpFormWorkflowAction | 'RESUBMIT';
 
 export interface KwpFormSubmissionAccess {
@@ -43,7 +44,10 @@ export interface KwpFormSubmissionUpdateAccess extends KwpFormSubmissionAccess {
   publicPath: string;
 }
 
-export type KwpFormWorkflowAccess = KwpFormSubmissionAccess;
+export type KwpFormWorkflowAccess = KwpFormSubmissionAccess & {
+  canEdit?: boolean;
+  canApprove?: boolean;
+};
 
 export interface ChangeKwpFormWorkflowStatusDTO {
   action: KwpFormWorkflowAction;
@@ -77,6 +81,8 @@ export interface KwpFormWorkflowDTO {
 }
 
 export interface CreateKwp01SubmissionDTO {
+  attachments?: KwpFormAttachmentInput[];
+  attachmentLink?: string | null;
   factoryId: string;
   factoryName: string;
   factoryRegistrationNo?: string | null;
@@ -128,6 +134,10 @@ export interface KwpEmissionMeasurementItemInput {
 }
 
 export interface CreateKwp02SubmissionDTO {
+  reportRound?: number | null;
+  reportYear?: number | null;
+  samplingPhotoLink?: string | null;
+  labReportLink?: string | null;
   factoryId: string;
   factoryName: string;
   factoryRegistrationNo?: string | null;
@@ -154,6 +164,7 @@ export interface CreateKwp02SubmissionDTO {
 export type CreateKwp04SubmissionDTO = CreateKwp02SubmissionDTO;
 
 export interface CreateKwp03SubmissionDTO {
+  attachmentLink?: string | null;
   factoryId: string;
   factoryName: string;
   factoryRegistrationNo?: string | null;
@@ -337,6 +348,12 @@ export interface Kwp03WpmsIssueReportDTO {
 }
 
 export interface KwpFormSubmissionDetailDTO {
+  attachmentLink?: string | null;
+  attachments?: KwpFormAttachmentDTO[];
+  reportRound?: number | null;
+  reportYear?: number | null;
+  samplingPhotoLink?: string | null;
+  labReportLink?: string | null;
   id: number;
   requestNo: string;
   form: 'กวภ.01' | 'กวภ.02' | 'กวภ.03' | 'กวภ.04' | 'กวภ.05';

@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
 import { getScopeDetails } from '../../shared/middlewares/authorize';
-import { BadRequestError } from '../../shared/errors/AppError';
+import { BadRequestError, ForbiddenError } from '../../shared/errors/AppError';
 import { createKwpAttachmentStorage } from './kwp-form-attachments.service';
 import { kwpFormSubmissionsService } from './kwp-form-submissions.service';
 import {
@@ -23,6 +23,8 @@ export const kwpFormSubmissionsController = {
       const id = requireSubmissionId(req);
       const result = await kwpFormSubmissionsService.getWorkflow(id, {
         actorUserId,
+        canEdit: getScopeDetails(req, 'kwp_forms:edit') !== undefined,
+        canApprove: getScopeDetails(req, 'kwp_forms:approve') !== undefined,
         scope: getScopeDetails(req, 'kwp_forms:view'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
@@ -38,9 +40,13 @@ export const kwpFormSubmissionsController = {
       const actorUserId = requireActorUserId(req);
       const id = requireSubmissionId(req);
       const payload = changeKwpWorkflowStatusSchema.parse(req.body);
+      const isCancel = payload.action === 'CANCEL';
+      if (isCancel && req.user?.userType !== 'operator') {
+        throw new ForbiddenError('Only operators can cancel KWP submissions');
+      }
       const result = await kwpFormSubmissionsService.changeWorkflowStatus(id, payload, {
         actorUserId,
-        scope: getScopeDetails(req, 'kwp_forms:approve'),
+        scope: isCancel ? { scope: 'OWN_FACTORY' } : getScopeDetails(req, 'kwp_forms:approve'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
       });
@@ -112,7 +118,7 @@ export const kwpFormSubmissionsController = {
 
   async uploadAttachment(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      requireActorUserId(req);
+      const actorUserId = requireActorUserId(req);
       if (!req.file) {
         throw new BadRequestError('Attachment file is required');
       }
@@ -123,6 +129,7 @@ export const kwpFormSubmissionsController = {
         publicBaseUrl: getPublicBaseUrl(req),
       });
       const data = await storage.save({
+        actorUserId,
         attachmentType: optionalAttachmentType(req.body?.attachmentType),
         buffer: req.file.buffer,
         originalName: req.file.originalname,

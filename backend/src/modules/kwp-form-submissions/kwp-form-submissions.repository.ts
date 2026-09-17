@@ -10,12 +10,14 @@ import {
   NotFoundError,
 } from '../../shared/errors/AppError';
 import { db } from '../../config/database';
+import { env } from '../../config/env';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
-import { buildPublicFileUrl } from './kwp-form-attachments.service';
+import { buildPublicFileUrl, validateStoredKwpAttachments } from './kwp-form-attachments.service';
 import { isHourlyKwpFormDateTime, toKwpFormDateOnly } from './kwp-form-duration';
+import { getKwpEligibleParameters, validateKwpParameterSelection } from './kwp-form-parameters';
 import {
   buddhistYearInBangkok,
   formatKwpFormSubmissionNo,
@@ -37,6 +39,7 @@ import type {
   Kwp05CalibrationReportDTO,
   Kwp01IssueReason,
   KwpFormAttachmentDTO,
+  KwpFormAttachmentInput,
   KwpFormSubmissionDetailType,
   KwpFormSubmissionStatus,
   KwpFormSubmissionDetailDTO,
@@ -117,6 +120,17 @@ interface Kwp05InsertRecords {
 interface KwpSubmissionFactoryReference {
   factoryId: string;
   connectedPointId?: number | null;
+  pointCode?: string | null;
+  pointName?: string | null;
+  unreportedParameters?: string[];
+  failedParameters?: string[];
+  attachments?: KwpFormAttachmentInput[];
+  measurementItems?: Array<{ pollutant: string; attachments?: KwpFormAttachmentInput[] }>;
+  calibrationItems?: Array<{
+    parameter?: string;
+    parameters?: string[];
+    attachments?: KwpFormAttachmentInput[];
+  }>;
 }
 
 interface KwpSubmissionRegionRow {
@@ -132,6 +146,11 @@ interface KwpSubmissionNumberReservation {
 }
 
 interface SubmissionDetailRow {
+  attachment_link: string | null;
+  sampling_photo_link: string | null;
+  lab_report_link: string | null;
+  report_round: number | string | null;
+  report_year: number | string | null;
   id: number | string;
   submission_no: string;
   form_type: KwpFormSubmissionDetailType;
@@ -285,7 +304,13 @@ export const kwpFormSubmissionsRepository = {
     }
 
     const historyRows = await listWorkflowHistory(Number(submission.id));
-    return toWorkflowDTO(submission, historyRows, access.scope, access.roles);
+    const workflow = toWorkflowDTO(submission, historyRows, access.scope, access.roles);
+    workflow.allowedActions = workflow.allowedActions.filter((action) =>
+      action === 'CANCEL' || action === 'RESUBMIT'
+        ? access.canEdit !== false
+        : access.canApprove !== false,
+    );
+    return workflow;
   },
 
   async changeWorkflowStatus(
@@ -299,19 +324,38 @@ export const kwpFormSubmissionsRepository = {
         throw new NotFoundError('KWP form submission not found');
       }
 
+      if (input.action === 'CANCEL' && scopeValue(access.scope) !== 'OWN_FACTORY') {
+        throw new ForbiddenError('Only operators can cancel KWP submissions');
+      }
+      if (
+        input.action !== 'CANCEL' &&
+        !allowedWorkflowActions(submission.status, access.scope, access.roles).includes(
+          input.action,
+        )
+      ) {
+        throw new ForbiddenError('KWP workflow action is not permitted');
+      }
       const nextStatus = nextWorkflowStatus(submission.status, input.action);
       const now = new Date();
       const note = workflowHistoryNote(input);
-      await trx('kwp_form_submissions')
+      const changed = await trx('kwp_form_submissions')
         .where('id', id)
+        .where('status', submission.status)
+        .whereNull('deleted_at')
         .update({
           status: nextStatus,
-          officer_note: workflowOfficerNote(input),
-          reviewed_at: now,
-          reviewed_by: access.actorUserId,
+          ...(input.action === 'CANCEL'
+            ? {}
+            : {
+                officer_note: workflowOfficerNote(input),
+                reviewed_at: now,
+                reviewed_by: access.actorUserId,
+              }),
           updated_at: now,
           updated_by: access.actorUserId,
         });
+      if (changed !== 1)
+        throw new ConflictError('KWP submission status has changed; reload before retrying');
       await trx('kwp_form_status_history').insert({
         submission_id: id,
         status: nextStatus,
@@ -343,6 +387,7 @@ export const kwpFormSubmissionsRepository = {
       return {
         ...baseDetail,
         issueReport: await getKwp01IssueReport(Number(submission.id)),
+        attachments: await listSubmissionAttachments(Number(submission.id), access),
       };
     }
 
@@ -350,6 +395,7 @@ export const kwpFormSubmissionsRepository = {
       return {
         ...baseDetail,
         wpmsIssueReport: await getKwp03WpmsIssueReport(Number(submission.id), access),
+        attachments: await listSubmissionAttachments(Number(submission.id), access),
       };
     }
 
@@ -383,6 +429,7 @@ export const kwpFormSubmissionsRepository = {
       });
 
       await updateCommonSubmission(id, payload, access, now, trx);
+      await replaceKwp01Attachments(trx, id, payload.attachments, access.actorUserId, now);
       await trx('kwp01_issue_reports').where('submission_id', id).update(records.issueReport);
       await trx('kwp01_unreported_parameters').where('submission_id', id).delete();
       if (records.unreportedParameters.length > 0) {
@@ -421,7 +468,9 @@ export const kwpFormSubmissionsRepository = {
       });
 
       await updateCommonSubmission(id, payload, access, now, trx);
-      await trx('kwp_form_attachments').where('submission_id', id).delete();
+      if (payload.attachments !== undefined) {
+        await trx('kwp_form_attachments').where('submission_id', id).delete();
+      }
       await trx('kwp03_selected_options').where('submission_id', id).delete();
       await trx('kwp03_wpms_issue_reports')
         .where('submission_id', id)
@@ -564,6 +613,13 @@ export const kwpFormSubmissionsRepository = {
         .returning<{ id: number | string }[]>('id');
       const submissionId = Number(inserted[0]?.id);
 
+      await replaceKwp01Attachments(
+        trx,
+        submissionId,
+        payload.attachments,
+        access.actorUserId,
+        now,
+      );
       await trx('kwp01_issue_reports').insert({
         ...records.issueReport,
         submission_id: submissionId,
@@ -891,6 +947,13 @@ async function assertCanEditReturnedSubmission(
       requiredStatus: 'REVISION_REQUESTED',
     });
   }
+  const locked = await trx('kwp_form_submissions')
+    .where('id', id)
+    .where('status', 'REVISION_REQUESTED')
+    .whereNull('deleted_at')
+    .update({ status: 'REVISION_REQUESTED' });
+  if (locked !== 1)
+    throw new ConflictError('KWP submission status has changed; reload before retrying');
   return row;
 }
 
@@ -941,11 +1004,12 @@ async function updateCommonSubmission(
   now: Date,
   trx: Knex.Transaction,
 ): Promise<void> {
-  await assertCanCreateForFactory(trx, payload, access);
+  await assertCanCreateForFactory(trx, payload, access, id);
 
   await trx('kwp_form_submissions')
     .where('id', id)
     .update({
+      ...submissionHandoffFields(payload, access.formType),
       factory_id: payload.factoryId,
       factory_name: payload.factoryName,
       factory_registration_no: payload.factoryRegistrationNo ?? null,
@@ -1075,8 +1139,9 @@ async function assertCanCreateForFactory(
   trx: Knex.Transaction,
   payload: KwpSubmissionFactoryReference,
   access: KwpFormSubmissionAccess,
+  existingSubmissionId?: number,
 ): Promise<void> {
-  if (scopeValue(access.scope) === 'OWN_FACTORY') {
+  if (scopeValue(access.scope) !== 'ALL') {
     const row = await buildFactoryAccessQuery(trx, payload.factoryId, access).first();
     if (!row) {
       throw new ForbiddenError('User cannot submit KWP form for this factory');
@@ -1084,6 +1149,44 @@ async function assertCanCreateForFactory(
   }
 
   await assertConnectedPointBelongsToFactory(trx, payload);
+  const selected = [
+    ...(payload.unreportedParameters ?? []),
+    ...(payload.failedParameters ?? []),
+    ...(payload.measurementItems ?? []).map((item) => item.pollutant),
+    ...(payload.calibrationItems ?? []).flatMap(
+      (item) => item.parameters ?? (item.parameter ? [item.parameter] : []),
+    ),
+  ];
+  if (selected.length) {
+    const eligible = await getKwpEligibleParameters(trx, payload);
+    validateKwpParameterSelection(selected, eligible);
+  }
+  const attachments = [
+    ...(payload.attachments ?? []),
+    ...(payload.measurementItems ?? []).flatMap((item) => item.attachments ?? []),
+    ...(payload.calibrationItems ?? []).flatMap((item) => item.attachments ?? []),
+  ];
+  if (attachments.length) {
+    const retainedRows =
+      existingSubmissionId == null
+        ? []
+        : await trx<KwpAttachmentRow>('kwp_form_attachments')
+            .where('submission_id', existingSubmissionId)
+            .whereNull('deleted_at')
+            .select('*');
+    const retained = retainedRows.map((row) => ({
+      attachmentType: row.attachment_type,
+      originalFileName: row.original_file_name,
+      storedFileName: row.stored_file_name,
+      mimeType: row.mime_type,
+      fileSize: row.file_size == null ? null : Number(row.file_size),
+      storagePath: row.storage_path,
+    }));
+    await validateStoredKwpAttachments(attachments, retained, access.actorUserId, {
+      uploadDir: env.UPLOAD_DIR,
+      publicPath: env.UPLOAD_PUBLIC_PATH,
+    });
+  }
 }
 
 async function assertConnectedPointBelongsToFactory(
@@ -1139,6 +1242,23 @@ function buildFactoryAccessQuery(
   }
 
   applyFactoryLocationFilters(builder, access.scope);
+  if (scopeValue(access.scope) === 'IN_REGION') {
+    const regions = resolveAssignedRegions(
+      scopeDetails(access.scope)?.region,
+      access.regionalAccess,
+    );
+    builder.whereExists(function regionFilter() {
+      this.select(knexOrTrx.raw('1'))
+        .from('provinces as p')
+        .whereRaw(
+          isCanonicalFactoryProfilesEnabled()
+            ? '(p.name_th = ef.province_name OR (ef.id IS NULL AND p.id = f.province_id))'
+            : 'p.id = f.province_id',
+        )
+        .whereIn('p.region', regions);
+    });
+  }
+  if (!scopeValue(access.scope)) builder.whereRaw('1 = ?', [0]);
 
   return builder;
 }
@@ -1257,6 +1377,11 @@ function buildSubmissionDetailQuery(
       's.contact_email',
       's.reporter_name',
       's.reporter_position',
+      's.attachment_link',
+      's.sampling_photo_link',
+      's.lab_report_link',
+      's.report_round',
+      's.report_year',
       's.submitted_at',
       's.created_at',
       's.updated_at',
@@ -1730,6 +1855,44 @@ function normalizeKwp05CalibrationItemParameters(values: unknown[]): string[] {
   return parameters;
 }
 
+async function replaceKwp01Attachments(
+  trx: Knex.Transaction,
+  submissionId: number,
+  attachments: KwpFormAttachmentInput[] | undefined,
+  actorUserId: number,
+  now: Date,
+): Promise<void> {
+  if (attachments === undefined) return;
+  await trx('kwp_form_attachments').where('submission_id', submissionId).delete();
+  if (attachments.length > 0) {
+    await trx('kwp_form_attachments').insert(
+      attachments.map((attachment) => ({
+        submission_id: submissionId,
+        attachment_type: attachment.attachmentType,
+        original_file_name: attachment.originalFileName,
+        stored_file_name: attachment.storedFileName ?? null,
+        mime_type: attachment.mimeType ?? null,
+        file_size: attachment.fileSize ?? null,
+        storage_path: attachment.storagePath ?? null,
+        uploaded_by: actorUserId,
+        uploaded_at: now,
+      })),
+    );
+  }
+}
+
+async function listSubmissionAttachments(
+  submissionId: number,
+  access: KwpFormSubmissionReadAccess,
+): Promise<KwpFormAttachmentDTO[]> {
+  const rows = await db<KwpAttachmentRow>('kwp_form_attachments')
+    .where('submission_id', submissionId)
+    .whereNull('deleted_at')
+    .orderBy('id', 'asc')
+    .select('*');
+  return rows.map((row) => toAttachmentDTO(row, access));
+}
+
 async function listAttachmentsByItemId(
   submissionId: number,
   itemIds: number[],
@@ -1754,6 +1917,7 @@ async function listAttachmentsByRelatedId(
   const rows = await db<KwpAttachmentRow>('kwp_form_attachments')
     .where('submission_id', submissionId)
     .where('related_table', relatedTable)
+    .whereNull('deleted_at')
     .whereIn('related_id', itemIds)
     .orderBy('attachment_type', 'asc')
     .orderBy('id', 'asc')
@@ -1791,16 +1955,20 @@ async function listWorkflowHistory(
 
 function toSubmissionDetailDTO(row: SubmissionDetailRow): KwpFormSubmissionDetailDTO {
   return {
+    ...(['KWP01', 'KWP03'].includes(row.form_type)
+      ? { attachmentLink: row.attachment_link ?? null }
+      : {}),
+    ...(['KWP02', 'KWP04'].includes(row.form_type)
+      ? {
+          reportRound: row.report_round == null ? null : Number(row.report_round),
+          reportYear: row.report_year == null ? null : Number(row.report_year),
+          samplingPhotoLink: row.sampling_photo_link ?? null,
+          labReportLink: row.lab_report_link ?? null,
+        }
+      : {}),
     id: Number(row.id),
     requestNo: row.submission_no,
-    form:
-      row.form_type === 'KWP05'
-        ? 'กวภ.05'
-        : row.form_type === 'KWP04'
-          ? 'กวภ.04'
-          : row.form_type === 'KWP02'
-            ? 'กวภ.02'
-            : 'กวภ.01',
+    form: KWP_FORM_TYPE_LABELS[row.form_type],
     formType: row.form_type,
     status: row.status,
     submittedAt: toIsoString(row.submitted_at),
@@ -1886,8 +2054,8 @@ function allowedWorkflowActions(
   roles: string[] = [],
 ): KwpFormAllowedAction[] {
   if (scopeValue(scope) === 'OWN_FACTORY') {
-    if (status === 'REVISION_REQUESTED') return ['RESUBMIT'];
-    return [];
+    if (status === 'APPROVED' || status === 'CANCELLED') return [];
+    return status === 'REVISION_REQUESTED' ? ['RESUBMIT', 'CANCEL'] : ['CANCEL'];
   }
   if (!roles.some((role) => ['monitoring_kpm', 'monitoring_5_centers', 'admin'].includes(role))) {
     return [];
@@ -1913,6 +2081,12 @@ function nextWorkflowStatus(
   currentStatus: KwpFormSubmissionStatus,
   action: KwpFormWorkflowAction,
 ): KwpFormSubmissionStatus {
+  if (action === 'CANCEL') {
+    if (currentStatus === 'APPROVED' || currentStatus === 'CANCELLED') {
+      throw new ConflictError('Approved or cancelled KWP submissions cannot be cancelled');
+    }
+    return 'CANCELLED';
+  }
   if (!allowedWorkflowStatusActions(currentStatus).includes(action)) {
     throw new BadRequestError('Invalid KWP workflow action for current status', {
       currentStatus,
@@ -2273,6 +2447,29 @@ function toKwp05InsertRecords(input: Kwp05InsertInput): Kwp05InsertRecords {
   };
 }
 
+function submissionHandoffFields(
+  payload:
+    | CreateKwp01SubmissionDTO
+    | CreateKwp02SubmissionDTO
+    | CreateKwp03SubmissionDTO
+    | CreateKwp05SubmissionDTO,
+  formType: KwpFormSubmissionDetailType,
+): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  if (formType === 'KWP01' || formType === 'KWP03') {
+    const input = payload as CreateKwp01SubmissionDTO | CreateKwp03SubmissionDTO;
+    if (input.attachmentLink !== undefined) fields.attachment_link = input.attachmentLink;
+  }
+  if (formType === 'KWP02' || formType === 'KWP04') {
+    const input = payload as CreateKwp02SubmissionDTO;
+    if (input.reportRound !== undefined) fields.report_round = input.reportRound;
+    if (input.reportYear !== undefined) fields.report_year = input.reportYear;
+    if (input.samplingPhotoLink !== undefined) fields.sampling_photo_link = input.samplingPhotoLink;
+    if (input.labReportLink !== undefined) fields.lab_report_link = input.labReportLink;
+  }
+  return fields;
+}
+
 function toCommonSubmissionRecord(
   payload:
     | CreateKwp01SubmissionDTO
@@ -2287,6 +2484,7 @@ function toCommonSubmissionRecord(
   numbering?: KwpSubmissionNumberReservation,
 ): Record<string, unknown> {
   return {
+    ...submissionHandoffFields(payload, formType),
     submission_no: numbering?.submissionNo ?? submissionNo,
     submission_region_code: numbering?.regionCode ?? null,
     submission_region_name: numbering?.regionName ?? null,
@@ -2389,6 +2587,7 @@ const KWP_FORM_TYPE_LABELS: Record<
 };
 
 const KWP_FORM_STATUS_LABELS: Record<KwpFormSubmissionStatus, string> = {
+  UNDER_REVIEW: 'อยู่ระหว่างพิจารณา',
   DRAFT: 'แบบร่าง',
   SUBMITTED: 'รอพิจารณา',
   APPROVED: 'ผ่านการพิจารณา',

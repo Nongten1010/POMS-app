@@ -19,6 +19,15 @@ import {
 } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.repository';
 
 describe('kwpFormSubmissionsRepository', () => {
+  it.each(['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'REVISION_REQUESTED', 'REJECTED'] as const)(
+    'allows operator cancellation from %s',
+    (status) => {
+      expect(nextKwpWorkflowStatusForTests(status, 'CANCEL')).toBe('CANCELLED');
+    },
+  );
+  it.each(['APPROVED', 'CANCELLED'] as const)('rejects cancellation from %s', (status) => {
+    expect(() => nextKwpWorkflowStatusForTests(status, 'CANCEL')).toThrow('cannot be cancelled');
+  });
   it('reads KWP DATETIME2 values as civil-time strings without timezone conversion', () => {
     const sql = buildKwpCivilDateTimeSelectForTests('problem_datetime').toSQL().sql.toLowerCase();
 
@@ -321,7 +330,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(revision.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
     expect(revision.allowedActions).toEqual([]);
     expect(nextKwpWorkflowStatusForTests('REVISION_REQUESTED', 'APPROVE')).toBe('APPROVED');
-    expect(operatorRevision.allowedActions).toEqual(['RESUBMIT']);
+    expect(operatorRevision.allowedActions).toEqual(['RESUBMIT', 'CANCEL']);
   });
 
   it('allows KWP officer workflow actions only for monitoring approvers and admin', () => {
@@ -399,7 +408,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(resubmitted.statusLabel).toBe('แก้ไขแล้ว/รอพิจารณา');
     expect(resubmitted.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
     expect(resubmitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
-    expect(resubmitted.allowedActions).toEqual([]);
+    expect(resubmitted.allowedActions).toEqual(['CANCEL']);
   });
 
   it('maps KWP01 payload to submission, issue report, parameters, and initial history records', () => {

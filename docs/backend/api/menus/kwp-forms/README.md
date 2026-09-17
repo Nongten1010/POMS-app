@@ -10,7 +10,7 @@ permission code และ scope ที่อ้างในหน้านี้
 
 ### Main Flow
 
-1. อ่านจุดตรวจวัดและข้อมูล prefill ด้วย `GET /api/v1/connected-measurement-points/factories/:factoryId`; สำหรับ กวภ.05 ใช้ `parameterInstrumentDetails[].cemsModel` ตามพารามิเตอร์ที่เลือก
+1. อ่านจุดตรวจวัดและข้อมูล prefill ด้วย `GET /api/v1/kwp-form-reports/factories/:factoryId/measurement-points`; สำหรับ กวภ.05 ใช้ `parameterInstrumentDetails[].cemsModel` ตามพารามิเตอร์ที่เลือก
 2. อัปโหลดไฟล์แนบด้วย `POST /api/v1/kwp-form-submissions/attachments` และเก็บ metadata กลับไปผูกในฟอร์ม
 3. ส่งแบบ `POST /api/v1/kwp-form-submissions/kwp01` ถึง `kwp05`
 4. อ่านรายการและรายละเอียดแบบผ่าน `kwp-form-reports/*` และ `kwp-form-submissions/*`
@@ -36,7 +36,7 @@ curl --request POST \
 
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
-| อ่านจุดตรวจวัดและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Connected measurement points](../../shared/connected-measurement-points/README.md) |
+| อ่านจุดตรวจวัดและพารามิเตอร์ที่เข้าข่าย | `GET` | `/api/v1/kwp-form-reports/factories/:factoryId/measurement-points` | Bearer | `kwp_forms:view` | [พารามิเตอร์ กวภ.](#kwp-eligible-parameters) |
 | อัปโหลดไฟล์แนบ | `POST` | `/api/v1/kwp-form-submissions/attachments` | Bearer | `kwp_forms:edit` | [Upload attachment](#post-apiv1kwp-form-submissionsattachments) |
 | ส่งแบบ กวภ.01 | `POST` | `/api/v1/kwp-form-submissions/kwp01` | Bearer | `kwp_forms:edit` | [KWP01 submit/update](#postpatch-kwp01-hourly-duration-contract) |
 | แก้ไขแบบ กวภ.01 | `PATCH` | `/api/v1/kwp-form-submissions/kwp01/:id` | Bearer | `kwp_forms:edit` | [KWP01 submit/update](#postpatch-kwp01-hourly-duration-contract) |
@@ -51,11 +51,16 @@ curl --request POST \
 | อ่านรายละเอียดแบบ | `GET` | `/api/v1/kwp-form-submissions/kwp01/:id` ถึง `/api/v1/kwp-form-submissions/kwp05/:id` | Bearer | `kwp_forms:view` | [Read detail](#get-detail-endpoints) |
 | ส่งแบบกลับหลังแก้ไข | `POST` | `/api/v1/kwp-form-submissions/kwp01/:id/resubmit` ถึง `/api/v1/kwp-form-submissions/kwp05/:id/resubmit` | Bearer | `kwp_forms:edit` | [Resubmit](#post-resubmit-endpoints) |
 | อ่าน workflow | `GET` | `/api/v1/kwp-form-submissions/:id/workflow` | Bearer | `kwp_forms:view` | [Workflow read](#get-apiv1kwp-form-submissionsidworkflow) |
-| อนุมัติหรือ request revision | `POST` | `/api/v1/kwp-form-submissions/:id/workflow-actions` | Bearer | `kwp_forms:approve` | [Workflow action](#post-apiv1kwp-form-submissionsidworkflow-actions) |
+| อนุมัติ ขอแก้ไข หรือยกเลิก | `POST` | `/api/v1/kwp-form-submissions/:id/workflow-actions` | Bearer | `CANCEL`: `kwp_forms:edit`; คำสั่งอื่น: `kwp_forms:approve` | [Workflow action](#post-apiv1kwp-form-submissionsidworkflow-actions) |
 | รายชื่อโรงงานสำหรับเมนู กวภ. | `GET` | `/api/v1/kwp-form-reports/factories` | Bearer | `kwp_forms:view` | [Reports](#get-apiv1kwp-form-reportsfactories) |
 | รายการคำขอ กวภ. | `GET` | `/api/v1/kwp-form-reports/requests` | Bearer | `kwp_forms:view` | [Reports](#get-apiv1kwp-form-reportsrequests) |
 
 ## Contracts
+
+- [ฟิลด์เอกสารแนบและรอบรายงาน](#kwp-handoff-fields)
+- [พารามิเตอร์ที่เข้าข่ายและสิทธิ์ prefill](#kwp-eligible-parameters)
+- [ยกเลิกคำขอ](#kwp-cancel)
+
 
 ### `POST /api/v1/kwp-form-submissions/attachments`
 
@@ -103,8 +108,8 @@ curl --request POST \
     "storedFileName": "8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
     "mimeType": "application/pdf",
     "fileSize": 6291456,
-    "storagePath": "kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
-    "fileUrl": "https://example.com/uploads/kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf"
+    "storagePath": "kwp/form-attachments/2026/07/42/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+    "fileUrl": "https://example.com/uploads/kwp/form-attachments/2026/07/42/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf"
   }
 }
 ```
@@ -113,9 +118,9 @@ curl --request POST \
 
 - รับเฉพาะ `application/pdf`, `image/png`, `image/jpeg`
 - Backend ตรวจ signature ของไฟล์จริงให้ตรงกับ MIME type; ไฟล์ปลอม extension จะถูก reject
-- `attachmentType = RATA_REPORT` และ `CALIBRATION_PHOTO` อัปโหลดได้สูงสุด 10 MB
+- `attachmentType = GENERAL`, `RATA_REPORT` และ `CALIBRATION_PHOTO` อัปโหลดได้สูงสุด 10 MB
 - ถ้าไม่ส่ง `attachmentType` หรือส่งค่าอื่น จำกัดที่ 5 MB
-- multer transport limit เปิดไว้ 10 MB เพื่อให้สองประเภทข้างต้นผ่านได้
+- multer transport limit เปิดไว้ 10 MB เพื่อให้ประเภทข้างต้นผ่านได้
 - 1 MB ใน contract นี้เท่ากับ 1,048,576 bytes
 
 ### Errors
@@ -416,7 +421,7 @@ Attachment request เป็น strict object และรับเฉพาะ 
           "storedFileName": "8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
           "mimeType": "application/pdf",
           "fileSize": 6291456,
-          "storagePath": "kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf"
+          "storagePath": "kwp/form-attachments/2026/07/42/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf"
         }
       ]
     }
@@ -470,8 +475,8 @@ Attachment request เป็น strict object และรับเฉพาะ 
             "storedFileName": "8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
             "mimeType": "application/pdf",
             "fileSize": 6291456,
-            "storagePath": "kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
-            "fileUrl": "https://example.com/uploads/kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+            "storagePath": "kwp/form-attachments/2026/07/42/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+            "fileUrl": "https://example.com/uploads/kwp/form-attachments/2026/07/42/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
             "uploadedAt": "2026-07-02T08:30:00.000Z",
             "uploadedBy": 42
           }
@@ -613,9 +618,9 @@ Request fields:
 
 | Field | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `action` | body | `REQUEST_REVISION` \| `APPROVE` | Yes | คำสั่ง workflow ที่รองรับปัจจุบัน |
+| `action` | body | `REQUEST_REVISION` \| `APPROVE` \| `CANCEL` | Yes | `CANCEL` ใช้สิทธิ์ผู้ประกอบการและกฎด้านล่าง |
 | `revisionReason` | body | string | Conditional | ต้องส่งเมื่อ `action = REQUEST_REVISION` |
-| `officerNote` | body | string | No | หมายเหตุเจ้าหน้าที่ |
+| `officerNote` | body | string | No | หมายเหตุเจ้าหน้าที่ ใช้กับ `APPROVE`/`REQUEST_REVISION` เท่านั้น |
 
 Request example:
 
@@ -797,9 +802,139 @@ Query fields:
 - Migration `0092` เพิ่ม `parameters_json` แบบ nullable ให้ calibration item โดยไม่ backfill; ค่า `parameter_name` เดิมยังเป็น fallback และเก็บสมาชิกแรกของ canonical list เพื่อรองรับ client legacy
 - Migration `0093` เปลี่ยน `kwp05_calibration_items.result` เป็น `NVARCHAR(32)` เพื่อให้ค่าใหม่ round-trip ภาษาไทยได้ครบ โดยไม่เดาหรือเขียนทับค่า legacy ที่สูญหายเป็น `?` ไปแล้ว
 - การแก้ factory identity ของ `kwp-form-reports` เป็น read-model correction: ไม่มี schema/data migration และไม่ rewrite snapshot ใน `kwp_form_submissions`
-- Deployment ต้องรัน migrations ถึง `0093` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down และ migration `0093` จะปฏิเสธ rollback หากการแปลงกลับเป็น `VARCHAR` ทำให้ข้อมูล Unicode สูญหาย
+- Deployment ต้องรัน migrations ถึง `0121` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down โดย `0121` ปฏิเสธหากคอลัมน์ใหม่มีข้อมูล และ `0093` ปฏิเสธหากการแปลงกลับเป็น `VARCHAR` ทำให้ข้อมูล Unicode สูญหาย
 - [Endpoint registry owner map](../../ENDPOINTS.md)
 - [ขอเชื่อมต่อ](../connection-requests/README.md)
+
+<a id="kwp-handoff-fields"></a>
+
+### ฟิลด์เอกสารแนบและรอบรายงาน
+
+กฎนี้ใช้กับ POST, PATCH และ GET detail ของแบบที่ระบุ และต่อเนื่องถึง resubmit โดย body ของ resubmit ไม่เปลี่ยน ต้องใช้ migration `0121_add_kwp_submission_attachments_and_report_period.ts` ก่อนเปิดใช้ backend รุ่นนี้
+
+| แบบ | Field ระดับ root | Type | Required | กติกา |
+| --- | --- | --- | --- | --- |
+| กวภ.01/03 | `attachments` | attachment[] | No | ชุดทั่วไปสูงสุด 5 ไฟล์ JPG/JPEG, PNG, PDF ไฟล์ละไม่เกิน 10 MiB; ใช้ `GENERAL` สำหรับไฟล์ใหม่ |
+| กวภ.01/03 | `attachmentLink` | string/null | No | URL `http://` หรือ `https://` ไม่เกิน 1000 ตัวอักษร ไม่รับ credentials หรืออักขระควบคุม |
+| กวภ.02/04 | `reportRound` | integer/null | No | จำนวนเต็ม 1–2147483647; optional เพื่อรองรับ client/คำขอเก่า |
+| กวภ.02/04 | `reportYear` | integer/null | No | ปี พ.ศ. 2400–9999 ไม่บวก 543 อีกครั้ง |
+| กวภ.02/04 | `samplingPhotoLink` | string/null | No | ลิงก์ภาพเก็บตัวอย่าง ใช้กฎ URL เดียวกัน |
+| กวภ.02/04 | `labReportLink` | string/null | No | ลิงก์ผลห้องปฏิบัติการ ใช้กฎ URL เดียวกัน |
+
+- `attachments: []` ลบชุดทั่วไปทั้งหมด; omit `attachments` บน PATCH กวภ.01/03 เก็บชุดเดิม ส่วนลิงก์และรอบรายงานที่ omit บน PATCH เก็บค่าเดิม
+- ลิงก์ `null` หรือข้อความว่างล้างค่า และ GET ต้องคืน `null`; backend ไม่ดึงเอกสารจาก URL ภายนอก
+- กวภ.02/04 ยังคงเก็บไฟล์ใน `measurementItems[].attachments`; frontend รวมชุดไว้ที่แถวแรก ชนิด `SAMPLING_PHOTO` และ `LAB_REPORT` ชนิดละไม่เกิน 5 ไฟล์รวมทุกแถว ไฟล์ละไม่เกิน 5 MiB
+- GET กวภ.01/03 คืน `attachments` ที่ root; กวภ.03 ยังคงคืน `wpmsIssueReport.attachments` เป็น alias เพื่อรองรับ client เก่า
+- คำขอ กวภ.02/04 เก่าที่ไม่มีรอบ/ปี คืน `reportRound: null`, `reportYear: null` โดยไม่เติมปีปัจจุบันย้อนหลัง
+- ไฟล์ใหม่ต้องผ่าน upload API ด้วยบัญชีผู้ส่ง metadata ต้องตรงกับไฟล์จริงทั้งชื่อที่จัดเก็บ MIME และขนาด Backend ตรวจเจ้าของจาก path ที่สร้างตอนอัปโหลด ตรวจ signature ของเนื้อหา และไม่รับ path traversal
+- ไฟล์เก่าที่ผูกกับคำขออยู่แล้วเก็บต่อได้โดยไม่ต้องอัปโหลดใหม่หลังตรวจสิทธิ์คำขอ ห้ามเปลี่ยนชนิด ขนาด MIME หรือชื่อที่จัดเก็บของไฟล์นั้น ไฟล์ค้างที่ยังไม่เคยผูกคำขอก่อนใช้รุ่นนี้ต้องอัปโหลดใหม่
+- `submittedAt` ยังคงเป็น ISO timestamp; frontend ใช้แสดงวันที่หัวกระดาษและลายเซ็นตามเวลาไทย ส่วน `reporterName`/`reporterPosition` ใช้ข้อมูลผู้จัดทำรายงานตามเดิม การแสดงผู้แก้ไขบน PDF ยังอยู่นอกขอบเขต backend นี้
+
+ตัวอย่างส่วนที่เพิ่มใน POST/PATCH กวภ.01/03 ใช้ร่วมกับฟิลด์บังคับเดิม:
+
+```json
+{
+  "attachmentLink": "https://example.com/report.pdf",
+  "attachments": [{
+    "attachmentType": "GENERAL",
+    "originalFileName": "report.pdf",
+    "storedFileName": "uploaded-report.pdf",
+    "mimeType": "application/pdf",
+    "fileSize": 12345,
+    "storagePath": "kwp/form-attachments/2026/09/42/uploaded-report.pdf"
+  }]
+}
+```
+
+ให้ใช้ `storagePath` และ `storedFileName` ที่ upload API คืนจริง ห้ามสร้างตามตัวอย่างเอง GET detail จะคืนส่วนที่เพิ่มดังนี้:
+
+```json
+{
+  "success": true,
+  "data": { "id": 12, "attachmentLink": "https://example.com/report.pdf", "attachments": [] }
+}
+```
+
+ตัวอย่างส่วนที่เพิ่มของ POST/PATCH กวภ.02/04:
+
+```json
+{ "reportRound": 3, "reportYear": 2569, "samplingPhotoLink": null, "labReportLink": "https://example.com/lab.pdf" }
+```
+
+GET detail คืนฟิลด์เหล่านี้ที่ root ภายใต้ `data` ด้วยชนิดเดียวกับ request
+
+<a id="kwp-eligible-parameters"></a>
+
+### พารามิเตอร์ที่เข้าข่ายและสิทธิ์ prefill
+
+`GET /api/v1/kwp-form-reports/factories/:factoryId/measurement-points` ใช้ Bearer และ `kwp_forms:view` พร้อมขอบเขตโรงงาน/พื้นที่ของสิทธิ์นี้ ไม่ต้องใช้สิทธิ์เมนูขอเชื่อมต่อ
+
+```bash
+curl '<BASE_URL>/api/v1/kwp-form-reports/factories/F000123/measurement-points' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>'
+```
+
+| Field | Location | Type | Required/Nullable | ความหมาย |
+| --- | --- | --- | --- | --- |
+| `factoryId` | path | string | Required | รหัสโรงงาน 1–64 ตัวอักษรจากตาราง กวภ. |
+| `data[].connectedPointId` | response | integer/null | Nullable | ID จุดเชื่อมต่อ ใช้ส่งกับแบบฟอร์ม |
+| `data[].pointCode`, `pointName`, `pointType` | response | string | code nullable | รหัส ชื่อ และระบบ `CEMS`/`WPMS` |
+| `data[].parameterDetails` | response | string[] | No | พารามิเตอร์ที่เข้าข่ายทั้งหมดพร้อมหน่วย รวมรายการยกเว้นและรายการที่ยังไม่ได้เชื่อมต่อ |
+| `data[].parameterInstrumentDetails` | response | object[] | No | CEMS คืน `parameter` และ `cemsModel` ตามลำดับตัวเลือก; ไม่มีเครื่องมือเป็น `null`; WPMS เป็น `[]` |
+| `meta.total` | response | integer | No | จำนวนจุดที่เข้าถึงได้ |
+
+ฟิลด์ prefill อื่นมีรูปแบบเดียวกับ [รายละเอียดจุดตรวจวัด](../../shared/connected-measurement-points/README.md) แต่ `parameterDetails` ของ API นี้ใช้ข้อมูลที่เข้าข่าย
+
+```json
+{
+  "success": true,
+  "data": [{ "connectedPointId": 8, "pointCode": "P0001", "pointName": "จุดระบายน้ำ", "pointType": "WPMS", "parameterDetails": ["BOD (mg/l)", "COD (mg/l)"], "parameterInstrumentDetails": [] }],
+  "meta": { "total": 1 }
+}
+```
+
+- อ่านจาก `factory_monitoring_points.eligible_parameters_json` ของแบบโรงงานที่เข้าข่ายที่ผูกกับ live connected point จับคู่ระบบและรหัสจุดก่อน จากนั้นใช้ชื่อจุดเมื่อไม่พบรหัส ไม่เลือกสุ่มเมื่อข้อมูลซ้ำ
+- หากไม่มีข้อมูล canonical ที่จับคู่ได้ ใช้เฉพาะ `details_json.eligibleParameters` ที่มีการบันทึกไว้; ไม่ใช้รายการที่เชื่อมต่อแทนรายการที่เข้าข่าย หากไม่มีข้อมูลคืน `[]`
+- ป้ายชื่อที่ไม่เก็บหน่วยใช้หน่วยจากป้ายจุดเชื่อมต่อได้เฉพาะเมื่อจับคู่ได้ค่าเดียว หากไม่ทราบหน่วยแสดง `(ไม่ระบุหน่วย)` เพื่อไม่เดาค่า
+- POST/PATCH กวภ.01–05 ตรวจพารามิเตอร์กับรายการเดียวกัน ปฏิเสธค่าหรือหน่วยที่ไม่เข้าข่ายด้วย HTTP 400 `BAD_REQUEST` พร้อม `allowedParameters`; รับรหัสเก่าที่ไม่มีหน่วยเฉพาะเมื่อจับคู่ได้ค่าเดียว
+- โรงงานนอกขอบเขตไม่คืนข้อมูล; path ไม่ถูกต้องตอบ 400 ไม่มี token ตอบ 401 และไม่มีสิทธิ์เมนูตอบ 403 ใช้ [shared error envelope](../../shared/README.md)
+- Frontend ต้องเปลี่ยนจาก endpoint prefill เดิมมาใช้ endpoint นี้เพื่อแสดงรายการที่เข้าข่ายทั้งหมด
+
+<a id="kwp-cancel"></a>
+
+### ยกเลิกคำขอ
+
+`POST /api/v1/kwp-form-submissions/:id/workflow-actions` รับ body ต่อไปนี้หลังผู้ใช้ยืนยัน dialog:
+
+```json
+{ "action": "CANCEL" }
+```
+
+ใช้ `kwp_forms:edit` และบัญชี `operator`; backend จำกัดเฉพาะโรงงานที่ผู้ทำรายการมี assignment ปัจจุบันเสมอ แม้ permission จะระบุขอบเขตกว้างกว่า ผู้มีสิทธิ์โรงงานทำแทนกันได้โดยไม่จำกัดผู้สร้างคำขอ
+
+| เงื่อนไข | ผลลัพธ์ |
+| --- | --- |
+| `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `REJECTED` | ยกเลิกได้ |
+| `APPROVED`, `CANCELLED` | 409 `CONFLICT` |
+| ไม่มีสิทธิ์ edit หรือไม่ใช่ผู้ประกอบการ | 403 `FORBIDDEN` |
+| ไม่พบคำขอในขอบเขตโรงงานของผู้ใช้ | 404 `NOT_FOUND` |
+| สถานะเปลี่ยนระหว่างอ่านกับบันทึก | 409 `CONFLICT`; ให้โหลดใหม่ |
+
+การแก้ไข ส่งใหม่ อนุมัติ และยกเลิกใช้ transaction พร้อมตรวจสถานะตอนเขียน เพื่อไม่ให้คำสั่งที่ล่าช้าเขียนทับสถานะใหม่ การยกเลิกบันทึก actor/เวลาใน `kwp_form_status_history` และ `updated_by` โดยเก็บข้อมูลการพิจารณาก่อนหน้าไว้ List/detail คืน `CANCELLED` หลังสำเร็จ; GET workflow ไม่คืนคำสั่งแก้ไขหรือยกเลิกให้ผู้ที่มีสิทธิ์ดูอย่างเดียว
+
+ตัวอย่างส่วนสำคัญใน response:
+
+```json
+{ "success": true, "data": { "id": 12, "requestNo": "F01-04-0001/2569", "formType": "KWP01", "status": "CANCELLED", "statusLabel": "ยกเลิก", "allowedActions": [] } }
+```
+
+### การตรวจสอบและการนำขึ้นระบบ
+
+- Regression: [`kwp-handoff.persistence.test.ts`](../../../../../backend/tests/unit/kwp-handoff.persistence.test.ts), [`kwp-handoff.validator.test.ts`](../../../../../backend/tests/unit/kwp-handoff.validator.test.ts), [`kwp-form-parameters.test.ts`](../../../../../backend/tests/unit/kwp-form-parameters.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts)
+- Runtime schema: [`kwp-handoff.openapi.ts`](../../../../../backend/src/modules/api-docs/kwp-handoff.openapi.ts)
+- Migration: [`0121_add_kwp_submission_attachments_and_report_period.ts`](../../../../../backend/src/db/migrations/0121_add_kwp_submission_attachments_and_report_period.ts); ไม่มีการ backfill ปี/ลิงก์ของคำขอเดิม และ rollback ปฏิเสธหากคอลัมน์ใหม่มีข้อมูล
+- [ผลกระทบและการย้าย client](../../CHANGELOG.md#kwp-handoff-20260917)
+- ก่อน release ต้องทดสอบกับฐาน SQL Server ในสภาพแวดล้อมทดสอบ และหลัง deploy ตรวจ `/api/v1/openapi.json` ว่ามี contract เดียวกัน
 
 ## Backend Maintainer Map
 

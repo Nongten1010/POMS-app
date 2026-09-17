@@ -6,11 +6,56 @@ import {
   getKwpAttachmentFileSizeLimit,
   KWP05_ATTACHMENT_FILE_SIZE_BYTES,
   LocalKwpAttachmentStorage,
+  validateStoredKwpAttachments,
 } from '../../src/modules/kwp-form-submissions/kwp-form-attachments.service';
 
 const temporaryDirectories: string[] = [];
 
 describe('KWP form attachment storage', () => {
+  it('binds new general attachments to the uploader and validates stored bytes', async () => {
+    const uploadDir = await mkdtemp(path.join(tmpdir(), 'kwp-owner-'));
+    temporaryDirectories.push(uploadDir);
+    const options = { uploadDir, publicPath: '/uploads', publicBaseUrl: 'https://example.com' };
+    const storage = new LocalKwpAttachmentStorage(options);
+    const buffer = pdfBuffer(6 * 1024 * 1024);
+    const saved = await storage.save({
+      actorUserId: 42,
+      attachmentType: 'GENERAL',
+      buffer,
+      originalName: 'report.pdf',
+      mimeType: 'application/pdf',
+      size: buffer.length,
+    });
+    const attachment = { ...saved, attachmentType: 'GENERAL' };
+    await expect(
+      validateStoredKwpAttachments([attachment], [], 42, options),
+    ).resolves.toBeUndefined();
+    await expect(validateStoredKwpAttachments([attachment], [], 99, options)).rejects.toThrow(
+      'current account',
+    );
+    await expect(
+      validateStoredKwpAttachments([{ ...attachment, fileSize: 1 }], [], 42, options),
+    ).rejects.toThrow('metadata');
+    await expect(
+      validateStoredKwpAttachments(
+        [{ ...attachment, storagePath: '../secret.pdf' }],
+        [],
+        42,
+        options,
+      ),
+    ).rejects.toThrow('storage path');
+    await expect(
+      validateStoredKwpAttachments([attachment], [attachment], 99, options),
+    ).resolves.toBeUndefined();
+    await expect(
+      validateStoredKwpAttachments(
+        [{ ...attachment, mimeType: 'text/html' }],
+        [attachment],
+        99,
+        options,
+      ),
+    ).rejects.toThrow('metadata');
+  });
   afterEach(async () => {
     await Promise.all(
       temporaryDirectories

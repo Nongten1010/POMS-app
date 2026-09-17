@@ -8,6 +8,12 @@ export const kwpFormReportsRoutes = Router();
 kwpFormReportsRoutes.use(authenticate);
 
 kwpFormReportsRoutes.get(
+  '/factories/:factoryId/measurement-points',
+  authorize('kwp_forms:view'),
+  kwpFormReportsController.listMeasurementPoints,
+);
+
+kwpFormReportsRoutes.get(
   '/factories',
   authorize('kwp_forms:view'),
   kwpFormReportsController.listFactories,

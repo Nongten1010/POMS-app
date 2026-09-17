@@ -4,6 +4,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/kwp-form-reports/kwp-form-reports.service', () => ({
   kwpFormReportsService: {
+    listMeasurementPoints: jest.fn(),
     listFactories: jest.fn(),
     listRequests: jest.fn(),
   },
@@ -15,6 +16,28 @@ import { kwpFormReportsService } from '../../src/modules/kwp-form-reports/kwp-fo
 const mockedService = jest.mocked(kwpFormReportsService);
 
 describe('KWP form report routes', () => {
+  it('uses KWP view scope for point options without connection-menu permission', async () => {
+    mockedService.listMeasurementPoints.mockResolvedValueOnce({ data: [], meta: { total: 0 } });
+    const response = await request(createApp())
+      .get('/api/v1/kwp-form-reports/factories/FID-001/measurement-points')
+      .set('Authorization', `Bearer ${operatorToken()}`);
+    expect(response.status).toBe(200);
+    expect(mockedService.listMeasurementPoints).toHaveBeenCalledWith(
+      'FID-001',
+      42,
+      { scope: 'OWN_FACTORY' },
+      undefined,
+    );
+  });
+  it('requires authentication for KWP point options', async () => {
+    expect(
+      (
+        await request(createApp()).get(
+          '/api/v1/kwp-form-reports/factories/FID-001/measurement-points',
+        )
+      ).status,
+    ).toBe(401);
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     mockedService.listFactories.mockResolvedValue({

@@ -23,6 +23,7 @@ import {
 import { connectionRequestsOpenApiDocument } from './connection-requests.openapi';
 import { MENU_TAGS } from './openapi.shared';
 import { decorateWriteRequestValidationDocs } from './request-validation-docs';
+import { extendKwpHandoffSchemas } from './kwp-handoff.openapi';
 
 type OpenApiObject = Record<string, unknown>;
 
@@ -3781,7 +3782,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'string',
         format: 'binary',
         description:
-          'JPEG, PNG หรือ PDF; ทั่วไปไม่เกิน 5 MiB และ RATA_REPORT/CALIBRATION_PHOTO ไม่เกิน 10 MiB',
+          'JPEG, PNG หรือ PDF; ไม่รับไฟล์ว่าง ตรวจ MIME/extension/signature; GENERAL/RATA_REPORT/CALIBRATION_PHOTO ไม่เกิน 10 MiB ประเภทอื่นไม่เกิน 5 MiB',
       },
     },
   },
@@ -3843,6 +3844,22 @@ const componentSchemas: Record<string, OpenApiObject> = {
         additionalProperties: false,
         required: ['issueReason', 'unreportedParameters'],
         properties: {
+          attachmentLink: {
+            type: 'string',
+            format: 'uri',
+            pattern: '^https?://',
+            maxLength: 1000,
+            nullable: true,
+            description:
+              'HTTP(S) URL ไม่มี credentials; null/ข้อความว่างล้างค่า; omit บน PATCH เก็บค่าเดิม',
+          },
+          attachments: {
+            type: 'array',
+            maxItems: 5,
+            items: schemaRef('KwpAttachmentMetadata'),
+            description:
+              'GENERAL สูงสุด 5 ไฟล์ ไฟล์ละ 10 MiB; [] ลบทั้งหมด; omit บน PATCH เก็บไฟล์เดิม',
+          },
           issueReason: {
             type: 'string',
             enum: ['เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง', 'หยุดหน่วยการผลิต'],
@@ -3873,6 +3890,30 @@ const componentSchemas: Record<string, OpenApiObject> = {
         additionalProperties: false,
         required: ['measurementItems'],
         properties: {
+          reportRound: { type: 'integer', minimum: 1, maximum: 2147483647, nullable: true },
+          reportYear: {
+            type: 'integer',
+            minimum: 2400,
+            maximum: 9999,
+            nullable: true,
+            description: 'ปี พ.ศ. โดยตรง ไม่บวก 543; ข้อมูลเก่าไม่เติมปีปัจจุบัน',
+          },
+          samplingPhotoLink: {
+            type: 'string',
+            format: 'uri',
+            pattern: '^https?://',
+            maxLength: 1000,
+            nullable: true,
+            description: 'HTTP(S) ไม่มี credentials; null ล้างค่า; omit บน PATCH เก็บค่าเดิม',
+          },
+          labReportLink: {
+            type: 'string',
+            format: 'uri',
+            pattern: '^https?://',
+            maxLength: 1000,
+            nullable: true,
+            description: 'HTTP(S) ไม่มี credentials; null ล้างค่า; omit บน PATCH เก็บค่าเดิม',
+          },
           measurementItems: {
             type: 'array',
             minItems: 1,
@@ -3895,6 +3936,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
                 attachments: {
                   type: 'array',
                   maxItems: 20,
+                  description:
+                    'SAMPLING_PHOTO และ LAB_REPORT ชนิดละสูงสุด 5 ไฟล์รวมทุกแถว ไฟล์ละ 5 MiB; frontend รวมไฟล์ไว้ในแถวแรก',
                   default: [],
                   items: schemaRef('KwpAttachmentMetadata'),
                 },
@@ -3913,6 +3956,14 @@ const componentSchemas: Record<string, OpenApiObject> = {
         additionalProperties: false,
         required: ['instruments', 'issueReasons', 'failedParameters'],
         properties: {
+          attachmentLink: {
+            type: 'string',
+            format: 'uri',
+            pattern: '^https?://',
+            maxLength: 1000,
+            nullable: true,
+            description: 'HTTP(S) ไม่มี credentials; null ล้างค่า; omit บน PATCH เก็บค่าเดิม',
+          },
           instruments: {
             type: 'array',
             minItems: 1,
@@ -3971,8 +4022,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
           correctiveAction: nullableStringSchema(2000),
           attachments: {
             type: 'array',
-            maxItems: 20,
-            default: [],
+            maxItems: 5,
+            description:
+              'GENERAL สูงสุด 5 ไฟล์ ไฟล์ละ 10 MiB; รองรับ attachmentType เก่าที่ผูกคำขอแล้ว; [] ลบทั้งหมด; omit บน PATCH เก็บไฟล์เดิม',
             items: schemaRef('KwpAttachmentMetadata'),
           },
         },
@@ -4048,6 +4100,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
   },
   KwpWorkflowActionRequest: {
     oneOf: [
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['action'],
+        properties: { action: { type: 'string', enum: ['CANCEL'] } },
+      },
       {
         type: 'object',
         additionalProperties: false,
@@ -4606,6 +4664,7 @@ flattenObjectSchema('Kwp01Request', 'KwpBaseRequest');
 flattenObjectSchema('Kwp02Or04Request', 'KwpBaseRequest');
 flattenObjectSchema('Kwp03Request', 'KwpBaseRequest');
 flattenObjectSchema('Kwp05Request', 'KwpBaseRequest');
+extendKwpHandoffSchemas(componentSchemas);
 
 const extraResponses: Record<string, OpenApiObject> = {
   TooManyRequests: {
@@ -5783,6 +5842,17 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('KwpFormFactoriesResponse'),
     }),
   },
+  '/kwp-form-reports/factories/{factoryId}/measurement-points': {
+    get: securedOperation({
+      tag: 'KWP Forms',
+      summary: 'อ่านจุดตรวจวัดและพารามิเตอร์ที่เข้าข่ายสำหรับ กวภ.',
+      operationId: 'listKwpEligibleMeasurementPoints',
+      parameters: [stringPath('factoryId', 'รหัสโรงงานจากตาราง กวภ.')],
+      description:
+        'ใช้ kwp_forms:view และ data scope ของเมนู กวภ. คืนข้อมูล prefill รูปแบบเดิมแต่ parameterDetails ใช้พารามิเตอร์ที่เข้าข่ายทั้งหมด รวมรายการที่ยกเว้น ไม่ต้องมีสิทธิ์ cems_wpms_requests:view',
+      successSchema: schemaRef('KwpEligibleMeasurementPointsResponse'),
+    }),
+  },
   '/kwp-form-reports/requests': {
     get: securedOperation({
       tag: 'KWP Forms',
@@ -5808,6 +5878,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Upload KWP attachment',
       operationId: 'uploadKwpAttachment',
+      successSchema: schemaRef('KwpAttachmentUploadResponse'),
+      description:
+        'ใช้ kwp_forms:edit; ไฟล์ใหม่เก็บในพื้นที่ของผู้ใช้ปัจจุบัน ส่ง metadata ที่คืนมาโดยไม่แก้ storagePath/storedFileName/mimeType/fileSize',
       requestBody: multipartRequestBody(schemaRef('KwpAttachmentUploadRequest')),
       successStatus: '201',
     }),
@@ -5817,6 +5890,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Create KWP01',
       operationId: 'createKwp01',
+      successSchema: schemaRef('KwpCreatedResponse'),
+      description:
+        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
       requestBody: jsonRequestBody(schemaRef('Kwp01Request'), kwp01Example),
       successStatus: '201',
     }),
@@ -5826,12 +5902,14 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Get KWP01 detail',
       operationId: 'getKwp01ById',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
     }),
     patch: securedOperation({
       tag: 'KWP Forms',
       summary: 'Update KWP01',
       operationId: 'updateKwp01',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp01Request'), kwp01Example),
     }),
@@ -5841,6 +5919,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Resubmit KWP01',
       operationId: 'resubmitKwp01',
+      successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('KwpResubmitRequest'), { note: 'แก้ไขแล้ว' }),
     }),
@@ -5850,6 +5929,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Create KWP02',
       operationId: 'createKwp02',
+      successSchema: schemaRef('KwpCreatedResponse'),
+      description:
+        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
       requestBody: jsonRequestBody(schemaRef('Kwp02Or04Request'), {
         factoryId: 'F000123',
         factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
@@ -5863,12 +5945,14 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Get KWP02 detail',
       operationId: 'getKwp02ById',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
     }),
     patch: securedOperation({
       tag: 'KWP Forms',
       summary: 'Update KWP02',
       operationId: 'updateKwp02',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp02Or04Request'), {
         factoryId: 'F000123',
@@ -5882,6 +5966,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Resubmit KWP02',
       operationId: 'resubmitKwp02',
+      successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('KwpResubmitRequest'), { note: 'แก้ไขแล้ว' }),
     }),
@@ -5891,6 +5976,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Create KWP03',
       operationId: 'createKwp03',
+      successSchema: schemaRef('KwpCreatedResponse'),
+      description:
+        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
       requestBody: jsonRequestBody(schemaRef('Kwp03Request'), kwp03Example),
       successStatus: '201',
     }),
@@ -5900,12 +5988,14 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Get KWP03 detail',
       operationId: 'getKwp03ById',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
     }),
     patch: securedOperation({
       tag: 'KWP Forms',
       summary: 'Update KWP03',
       operationId: 'updateKwp03',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp03Request'), kwp03Example),
     }),
@@ -5915,6 +6005,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Resubmit KWP03',
       operationId: 'resubmitKwp03',
+      successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('KwpResubmitRequest'), { note: 'แก้ไขแล้ว' }),
     }),
@@ -5924,6 +6015,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Create KWP04',
       operationId: 'createKwp04',
+      successSchema: schemaRef('KwpCreatedResponse'),
+      description:
+        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
       requestBody: jsonRequestBody(schemaRef('Kwp02Or04Request'), {
         factoryId: 'F000123',
         factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
@@ -5937,12 +6031,14 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Get KWP04 detail',
       operationId: 'getKwp04ById',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
     }),
     patch: securedOperation({
       tag: 'KWP Forms',
       summary: 'Update KWP04',
       operationId: 'updateKwp04',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp02Or04Request'), {
         factoryId: 'F000123',
@@ -5956,6 +6052,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Resubmit KWP04',
       operationId: 'resubmitKwp04',
+      successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('KwpResubmitRequest'), { note: 'แก้ไขแล้ว' }),
     }),
@@ -5965,6 +6062,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Create KWP05',
       operationId: 'createKwp05',
+      successSchema: schemaRef('KwpCreatedResponse'),
+      description:
+        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
       requestBody: jsonRequestBody(schemaRef('Kwp05Request'), kwp05Example),
       successStatus: '201',
     }),
@@ -5974,12 +6074,14 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Get KWP05 detail',
       operationId: 'getKwp05ById',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
     }),
     patch: securedOperation({
       tag: 'KWP Forms',
       summary: 'Update KWP05',
       operationId: 'updateKwp05',
+      successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp05Request'), kwp05Example),
     }),
@@ -5989,6 +6091,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Resubmit KWP05',
       operationId: 'resubmitKwp05',
+      successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('KwpResubmitRequest'), { note: 'แก้ไขแล้ว' }),
     }),
@@ -5998,6 +6101,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Get KWP workflow',
       operationId: 'getKwpWorkflow',
+      successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
     }),
   },
@@ -6006,6 +6110,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Change KWP workflow status',
       operationId: 'changeKwpWorkflowStatus',
+      description:
+        'CANCEL: เฉพาะผู้ประกอบการที่มี kwp_forms:edit และสิทธิ์โรงงาน; อนุญาตทุกสถานะยกเว้น APPROVED/CANCELLED; ตรวจสถานะซ้ำขณะ UPDATE และตอบ 409 เมื่อสถานะเปลี่ยน REQUEST_REVISION/APPROVE ยังคงต้องใช้ kwp_forms:approve และบทบาทเจ้าหน้าที่ที่อนุมัติได้',
+      successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('KwpWorkflowActionRequest'), {
         action: 'REQUEST_REVISION',
@@ -6462,7 +6569,7 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
       return { permissions: ['kwp_forms:view'], mode: 'any' };
     }
     if (path.endsWith('/workflow-actions')) {
-      return { permissions: ['kwp_forms:approve'], mode: 'any' };
+      return { permissions: ['kwp_forms:approve', 'kwp_forms:edit'], mode: 'any' };
     }
     return method === 'get'
       ? { permissions: ['kwp_forms:view'], mode: 'any' }
