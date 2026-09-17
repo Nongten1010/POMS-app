@@ -81,6 +81,13 @@ describe('KWP handoff persistence through repository entry points', () => {
     const retained = await repository.updateKwp01(created.id, legacyPayload, readAccess);
     expect(retained.attachments).toHaveLength(1);
     expect(retained.attachmentLink).toBe(payload.attachmentLink);
+    await repository.resubmit(created.id, {}, readAccess);
+    expect(await repository.getById(created.id, readAccess)).toMatchObject({
+      status: 'SUBMITTED',
+      attachmentLink: payload.attachmentLink,
+      attachments: [expect.objectContaining({ storagePath: attachment.storagePath })],
+    });
+    submission().status = 'REVISION_REQUESTED';
     const cleared = await repository.updateKwp01(
       created.id,
       { ...payload, attachments: [], attachmentLink: null },
@@ -116,6 +123,15 @@ describe('KWP handoff persistence through repository entry points', () => {
     expect(
       (await repository.updateKwp03(created.id, withoutFiles, readAccess)).attachments,
     ).toHaveLength(1);
+    await repository.resubmit(created.id, {}, readAccess);
+    const resubmitted = await repository.getById(created.id, readAccess);
+    expect(resubmitted).toMatchObject({
+      status: 'SUBMITTED',
+      attachmentLink: payload.attachmentLink,
+      attachments: [expect.objectContaining({ storagePath: attachment.storagePath })],
+    });
+    expect(resubmitted.wpmsIssueReport?.attachments).toEqual(resubmitted.attachments);
+    submission().status = 'REVISION_REQUESTED';
     expect(
       await repository.updateKwp03(
         created.id,
@@ -126,15 +142,26 @@ describe('KWP handoff persistence through repository entry points', () => {
   });
 
   it.each(['KWP02', 'KWP04'] as const)(
-    'preserves %s period and explicit link clearing through edit and resubmit',
+    'preserves %s files, PDF metadata, period and link clearing through edit and resubmit',
     async (formType) => {
+      const files = ['SAMPLING_PHOTO', 'LAB_REPORT'].map((attachmentType) => ({
+        ...attachment,
+        attachmentType,
+        storedFileName: `${attachmentType}.pdf`,
+        storagePath: `kwp/form-attachments/2026/09/42/${attachmentType}.pdf`,
+      }));
       const payload = {
         ...common,
+        reporterName: 'ผู้จัดทำรายงาน',
+        reporterPosition: 'วิศวกร',
         reportRound: 3,
         reportYear: 2569,
         samplingPhotoLink: 'https://example.com/photo',
         labReportLink: 'https://example.com/lab',
-        measurementItems: [{ pollutant: 'BOD (mg/l)' }],
+        measurementItems: [
+          { pollutant: 'BOD (mg/l)', attachments: files },
+          { pollutant: 'COD (mg/l)' },
+        ],
       };
       const created = await (
         formType === 'KWP02' ? repository.createKwp02 : repository.createKwp04
@@ -152,11 +179,69 @@ describe('KWP handoff persistence through repository entry points', () => {
         readAccess,
       );
       await repository.resubmit(created.id, {}, readAccess);
-      expect(await repository.getById(created.id, readAccess)).toMatchObject({
+      const detail = await repository.getById(created.id, readAccess);
+      expect(detail).toMatchObject({
+        requestNo: created.requestNo,
+        status: 'SUBMITTED',
+        submittedAt: expect.any(String),
+        reporterName: payload.reporterName,
+        reporterPosition: payload.reporterPosition,
         reportRound: 4,
         reportYear: 2569,
         labReportLink: null,
         samplingPhotoLink: payload.samplingPhotoLink,
+        measurementItems: [
+          {
+            attachments: files.map((file) =>
+              expect.objectContaining({
+                ...file,
+                fileUrl: `${access.publicBaseUrl}${access.publicPath}/${file.storagePath}`,
+              }),
+            ),
+          },
+          { attachments: [] },
+        ],
+      });
+      if (!detail.submittedAt) throw new Error('Expected a submission timestamp');
+      expect(new Date(detail.submittedAt).toISOString()).toBe(detail.submittedAt);
+      submission().status = 'REVISION_REQUESTED';
+      const {
+        reportRound: _round,
+        reportYear: _year,
+        samplingPhotoLink: _photo,
+        labReportLink: _lab,
+        ...withoutPeriodAndLinks
+      } = payload;
+      const cleared = await (
+        formType === 'KWP02' ? repository.updateKwp02 : repository.updateKwp04
+      )(
+        created.id,
+        {
+          ...withoutPeriodAndLinks,
+          measurementItems: [{ pollutant: 'BOD (mg/l)', attachments: [] }],
+        },
+        readAccess,
+      );
+      expect(cleared).toMatchObject({
+        reportRound: 4,
+        reportYear: 2569,
+        labReportLink: null,
+        samplingPhotoLink: payload.samplingPhotoLink,
+        measurementItems: [{ attachments: [] }],
+      });
+    },
+  );
+
+  it.each(['KWP02', 'KWP04'] as const)(
+    'does not invent a report period for old %s data',
+    async (formType) => {
+      seedSubmission('SUBMITTED');
+      submission().form_type = formType;
+      expect(await repository.getById(1, { ...access, formType })).toMatchObject({
+        reportRound: null,
+        reportYear: null,
+        samplingPhotoLink: null,
+        labReportLink: null,
       });
     },
   );

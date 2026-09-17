@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+<a id="kwp-measurement-attachment-types"></a>
+
+## 2026-09-17 — ตรวจชนิดเอกสารแนบ กวภ.02/04 ให้ตรงกับชุดเอกสาร
+
+- **Affected canonical docs:** [เอกสารแนบ กวภ.02/04](./menus/kwp-forms/README.md#kwp-handoff-fields)
+- **Impact:** POST/PATCH กวภ.02/04 รับ `measurementItems[].attachments[].attachmentType` เฉพาะ `SAMPLING_PHOTO` และ `LAB_REPORT` หลัง trim; ชนิดอื่นตอบ HTTP 400 `VALIDATION_ERROR` แทนการบันทึกไฟล์ที่ไม่ถูกนับในเพดานชนิดละ 5 ไฟล์และไม่ตรงช่องเอกสารของ frontend
+- **Migration:** client ส่งชนิดตรงกับชุดเอกสาร ห้ามส่ง `GENERAL` ใน กวภ.02/04; ถ้ามีไฟล์เก่าที่บันทึกด้วยชนิดอื่น ให้ผู้ใช้เลือกชุดที่ถูกต้องและอัปโหลดใหม่ก่อนแก้ไขคำขอ เนื่องจากไม่อนุญาตเปลี่ยนชนิด metadata ของไฟล์เดิม ไม่มีการเปลี่ยนข้อมูลเดิมหรือ migration ฐานข้อมูล และ GET ยังอ่านไฟล์เดิมได้
+- **Breaking change:** yes — การบันทึกชนิดไฟล์นอก contract ที่เคยผ่าน validation จะถูกปฏิเสธ; กวภ.01/03/05 และ upload API ใช้ชนิดไฟล์ตาม contract เดิม
+
 <a id="kwp-handoff-20260917"></a>
 
 ## 2026-09-17 — ฟิลด์ กวภ. และการตรวจสิทธิ์ไฟล์กับพารามิเตอร์

@@ -3799,6 +3799,20 @@ const componentSchemas: Record<string, OpenApiObject> = {
       storagePath: nullableStringSchema(1000),
     },
   },
+  KwpMeasurementAttachmentMetadata: {
+    allOf: [
+      schemaRef('KwpAttachmentMetadata'),
+      {
+        type: 'object',
+        properties: {
+          attachmentType: { type: 'string', enum: ['SAMPLING_PHOTO', 'LAB_REPORT'] },
+          fileSize: { type: 'integer', minimum: 1, maximum: 5242880, nullable: true },
+        },
+      },
+    ],
+    description:
+      'เอกสาร กวภ.02/04 รับเฉพาะ SAMPLING_PHOTO และ LAB_REPORT; ชนิดอื่นตอบ 400 VALIDATION_ERROR; ชนิดละไม่เกิน 5 ไฟล์รวมทุกแถว',
+  },
   KwpBaseRequest: {
     type: 'object',
     additionalProperties: false,
@@ -3939,7 +3953,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
                   description:
                     'SAMPLING_PHOTO และ LAB_REPORT ชนิดละสูงสุด 5 ไฟล์รวมทุกแถว ไฟล์ละ 5 MiB; frontend รวมไฟล์ไว้ในแถวแรก',
                   default: [],
-                  items: schemaRef('KwpAttachmentMetadata'),
+                  items: schemaRef('KwpMeasurementAttachmentMetadata'),
                 },
               },
             },

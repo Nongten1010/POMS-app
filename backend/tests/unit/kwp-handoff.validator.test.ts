@@ -49,6 +49,62 @@ describe('KWP frontend handoff contract', () => {
     );
   });
   it.each([createKwp02SubmissionSchema, createKwp04SubmissionSchema])(
+    'rejects attachment types outside the two measurement document sets',
+    (schema) => {
+      for (const attachmentType of ['GENERAL', 'RATA_REPORT', 'lab_report', 'OTHER']) {
+        const result = schema.safeParse({
+          ...common,
+          measurementItems: [
+            {
+              pollutant: 'BOD (mg/l)',
+              attachments: [{ ...attachment, attachmentType, fileSize: 100 }],
+            },
+          ],
+        });
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error.issues[0].path).toEqual([
+            'measurementItems',
+            0,
+            'attachments',
+            0,
+            'attachmentType',
+          ]);
+        }
+      }
+    },
+  );
+  it.each([createKwp02SubmissionSchema, createKwp04SubmissionSchema])(
+    'counts each document set across all measurement rows',
+    (schema) => {
+      const files = (attachmentType: string, count: number) =>
+        Array.from({ length: count }, (_, index) => ({
+          ...attachment,
+          attachmentType,
+          originalFileName: `${attachmentType}-${index}.pdf`,
+          fileSize: 5 * 1024 * 1024,
+        }));
+      for (const type of ['SAMPLING_PHOTO', 'LAB_REPORT']) {
+        const measurementItems = [
+          { pollutant: 'BOD (mg/l)', attachments: files(type, 3) },
+          { pollutant: 'COD (mg/l)', attachments: files(type, 3) },
+        ];
+        expect(schema.safeParse({ ...common, measurementItems }).success).toBe(false);
+      }
+      expect(
+        schema.safeParse({
+          ...common,
+          measurementItems: [
+            {
+              pollutant: 'BOD (mg/l)',
+              attachments: [...files('SAMPLING_PHOTO', 5), ...files('LAB_REPORT', 5)],
+            },
+          ],
+        }).success,
+      ).toBe(true);
+    },
+  );
+  it.each([createKwp02SubmissionSchema, createKwp04SubmissionSchema])(
     'accepts Buddhist report periods without converting the year',
     (schema) => {
       const payload = { ...common, measurementItems: [{ pollutant: 'BOD (mg/l)' }] };

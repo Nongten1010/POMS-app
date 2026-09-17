@@ -13,6 +13,31 @@ function objectAt(value: unknown, ...keys: string[]): ObjectSchema {
 const schemas = objectAt(pomsOpenApiDocument, 'components', 'schemas');
 
 describe('KWP handoff runtime contract', () => {
+  it('restricts measurement attachments without narrowing general or legacy attachments', () => {
+    const attachmentItems = objectAt(
+      schemas,
+      'Kwp02Or04Request',
+      'properties',
+      'measurementItems',
+      'items',
+      'properties',
+      'attachments',
+      'items',
+    );
+    expect(attachmentItems.$ref).toBe('#/components/schemas/KwpMeasurementAttachmentMetadata');
+    expect(objectAt(schemas, 'KwpMeasurementAttachmentMetadata').allOf).toEqual([
+      { $ref: '#/components/schemas/KwpAttachmentMetadata' },
+      expect.objectContaining({
+        properties: {
+          attachmentType: { type: 'string', enum: ['SAMPLING_PHOTO', 'LAB_REPORT'] },
+          fileSize: { type: 'integer', minimum: 1, maximum: 5242880, nullable: true },
+        },
+      }),
+    ]);
+    expect(
+      objectAt(schemas, 'KwpAttachmentMetadata', 'properties', 'attachmentType').enum,
+    ).toBeUndefined();
+  });
   it('documents the exact optional report and attachment fields on writes and detail reads', () => {
     for (const name of ['Kwp01Request', 'Kwp03Request']) {
       expect(objectAt(schemas, name, 'properties', 'attachmentLink').pattern).toBe('^https?://');

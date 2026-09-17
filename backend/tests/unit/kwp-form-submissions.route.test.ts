@@ -46,6 +46,45 @@ const mockedService = jest.mocked(kwpFormSubmissionsService);
 const expectedPublicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://d-poms.diw.go.th';
 
 describe('KWP form submission routes', () => {
+  it.each(['kwp02', 'kwp04'] as const)(
+    'rejects unsupported attachment sets on POST and PATCH %s before persistence',
+    async (form) => {
+      const app = createApp();
+      const payload = {
+        ...validKwp02Payload(),
+        measurementItems: [
+          {
+            pollutant: 'BOD (mg/l)',
+            attachments: [{ attachmentType: 'GENERAL', originalFileName: 'report.pdf' }],
+          },
+        ],
+      };
+      for (const response of [
+        await request(app)
+          .post(`/api/v1/kwp-form-submissions/${form}`)
+          .set('Authorization', `Bearer ${operatorToken()}`)
+          .send(payload),
+        await request(app)
+          .patch(`/api/v1/kwp-form-submissions/${form}/12`)
+          .set('Authorization', `Bearer ${operatorToken()}`)
+          .send(payload),
+      ]) {
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_ERROR');
+        expect(response.body.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: ['measurementItems', 0, 'attachments', 0, 'attachmentType'],
+            }),
+          ]),
+        );
+      }
+      expect(mockedService.createKwp02).not.toHaveBeenCalled();
+      expect(mockedService.updateKwp02).not.toHaveBeenCalled();
+      expect(mockedService.createKwp04).not.toHaveBeenCalled();
+      expect(mockedService.updateKwp04).not.toHaveBeenCalled();
+    },
+  );
   it('lets an operator cancel using edit permission and forces assigned-factory scope', async () => {
     const token = signAccessToken({
       sub: '42',

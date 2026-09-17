@@ -824,6 +824,7 @@ Query fields:
 - `attachments: []` ลบชุดทั่วไปทั้งหมด; omit `attachments` บน PATCH กวภ.01/03 เก็บชุดเดิม ส่วนลิงก์และรอบรายงานที่ omit บน PATCH เก็บค่าเดิม
 - ลิงก์ `null` หรือข้อความว่างล้างค่า และ GET ต้องคืน `null`; backend ไม่ดึงเอกสารจาก URL ภายนอก
 - กวภ.02/04 ยังคงเก็บไฟล์ใน `measurementItems[].attachments`; frontend รวมชุดไว้ที่แถวแรก ชนิด `SAMPLING_PHOTO` และ `LAB_REPORT` ชนิดละไม่เกิน 5 ไฟล์รวมทุกแถว ไฟล์ละไม่เกิน 5 MiB
+- POST/PATCH กวภ.02/04 รับ `attachmentType` เฉพาะ `SAMPLING_PHOTO` และ `LAB_REPORT` หลัง trim (ตัวพิมพ์ใหญ่ตามนี้); ชนิดอื่นตอบ HTTP 400 `VALIDATION_ERROR` โดย `error.issues[].path` ระบุ `measurementItems[i].attachments[j].attachmentType` เพื่อไม่ให้ไฟล์หลุดจากการนับแต่ละชุดหรือแยกกลับเข้าช่องเดิมไม่ได้ การอัปโหลด `GENERAL` ยังคงใช้ได้กับ กวภ.01/03 ดู [ผลกระทบต่อ client เดิม](../../CHANGELOG.md#kwp-measurement-attachment-types)
 - GET กวภ.01/03 คืน `attachments` ที่ root; กวภ.03 ยังคงคืน `wpmsIssueReport.attachments` เป็น alias เพื่อรองรับ client เก่า
 - คำขอ กวภ.02/04 เก่าที่ไม่มีรอบ/ปี คืน `reportRound: null`, `reportYear: null` โดยไม่เติมปีปัจจุบันย้อนหลัง
 - ไฟล์ใหม่ต้องผ่าน upload API ด้วยบัญชีผู้ส่ง metadata ต้องตรงกับไฟล์จริงทั้งชื่อที่จัดเก็บ MIME และขนาด Backend ตรวจเจ้าของจาก path ที่สร้างตอนอัปโหลด ตรวจ signature ของเนื้อหา และไม่รับ path traversal

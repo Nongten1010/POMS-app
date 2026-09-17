@@ -125,7 +125,18 @@ const kwpEmissionMeasurementItemSchema = z
     laboratoryNo: nullableText(100),
     reportNo: nullableText(100),
     method: nullableText(1000),
-    attachments: z.array(kwpAttachmentSchema).max(20).optional().default([]),
+    attachments: z
+      .array(
+        kwpAttachmentSchema.extend({
+          attachmentType: z
+            .string()
+            .trim()
+            .pipe(z.enum(['SAMPLING_PHOTO', 'LAB_REPORT'])),
+        }),
+      )
+      .max(20)
+      .optional()
+      .default([]),
   })
   .strict();
 
