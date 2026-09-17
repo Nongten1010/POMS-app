@@ -8,8 +8,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { PDFDocument } from 'pdf-lib'
 import { createServer } from 'vite'
 import {
-  canCreateKwpRequest, canCancelKwpRequest, cancelKwpSubmission, formatKwpDocumentDate,
-  getCurrentThaiYear, getKwpAttachmentValidationError, getKwpReportPeriod,
+  canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, formatKwpDocumentDate,
+  getCurrentThaiYear, getKwpAttachmentValidationError, getKwpReportPeriod, sortKwpRequestRows,
 } from './kwpFormPresentation.mjs'
 
 function findButtons(element) {
@@ -25,6 +25,61 @@ function findComponent(element, type) {
   if (element.type === type) return element
   return Children.toArray(element.props.children).map((child) => findComponent(child, type)).find(Boolean)
 }
+
+test('KWP officer and admin requests follow workflow priority without changing operator order', () => {
+  const statuses = ['SUBMITTED', 'REVISION_REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED', 'DRAFT', 'UNKNOWN']
+  for (const field of ['statusCode', 'status', 'statusLabel']) {
+    const rows = Object.freeze([...statuses].reverse().map((status) => Object.freeze({ [field]: status })))
+    assert.deepEqual(sortKwpRequestRows(rows).map((row) => row[field]), statuses)
+    assert.equal(sortKwpRequestRows(rows, true), rows)
+  }
+  const labels = ['รอพิจารณา', 'รอโรงงานแก้ไข', 'ผ่านการพิจารณา', 'ไม่ผ่านการพิจารณา', 'ยกเลิก', 'ร่าง']
+  assert.deepEqual(sortKwpRequestRows([...labels].reverse().map((statusLabel) => ({ statusLabel })))
+    .map((row) => row.statusLabel), labels)
+  assert.deepEqual(sortKwpRequestRows(), [])
+})
+
+test('KWP requests sort newest first within each status group with stable ties and invalid dates last', () => {
+  const rows = [
+    { id: 'invalid', statusCode: 'SUBMITTED', submittedAt: 'invalid' },
+    { id: 'older', statusCode: 'SUBMITTED', submittedAt: '2026-09-16T00:00:00Z' },
+    { id: 'revision', statusCode: 'REVISION_REQUESTED', submittedAt: '2026-09-19T00:00:00Z' },
+    { id: 'revised', status: 'แก้ไขแล้ว/รอพิจารณา', submittedAt: '2026-09-17T00:00:00Z' },
+    { id: 'reviewing', statusCode: 'UNDER_REVIEW', submittedAt: '2026-09-17T07:00:00+07:00' },
+    { id: 'missing', statusLabel: 'ยื่นแบบสำเร็จ' },
+    { id: 'newest', statusCode: 'REVISED_PENDING_REVIEW', submittedAt: '2026-09-18T00:00:00Z' },
+  ]
+  const original = structuredClone(rows)
+  assert.deepEqual(sortKwpRequestRows(rows).map(({ id }) => id), ['newest', 'revised', 'reviewing', 'older', 'invalid', 'missing', 'revision'])
+  assert.deepEqual(rows, original)
+})
+
+test('KWP sorting prioritizes canonical codes and falls back to recognized labels', () => {
+  const rows = [
+    { id: 1, statusCode: 'APPROVED', statusLabel: 'รอพิจารณา' },
+    { id: 2, statusCode: 'FUTURE_STATUS', statusLabel: 'รอโรงงานแก้ไข' },
+    { id: 3, statusCode: ' CANCELED ' },
+    { id: 4, statusCode: '', status: ' ส่งฟอร์ม ' },
+  ]
+  assert.deepEqual(sortKwpRequestRows(rows).map(({ id }) => id), [4, 2, 1, 3])
+})
+
+test('only operators and admins may edit KWP revision requests', () => {
+  assert.equal(isKwpAdmin('ADMIN'), true)
+  assert.equal(isKwpAdmin('officer', ['officer', 'admin']), true)
+  assert.equal(isKwpAdmin('officer'), false)
+  for (const flags of [{ isOperator: true }, { isAdmin: true }, {}]) {
+    for (const status of ['REVISION_REQUESTED', 'รอโรงงานแก้ไข', 'SUBMITTED', 'DRAFT', 'UNDER_REVIEW',
+      'APPROVED', 'REJECTED', 'CANCELLED', 'ผ่านการพิจารณา', 'ยกเลิก', '']) {
+      const expected = Boolean((flags.isOperator || flags.isAdmin) && ['REVISION_REQUESTED', 'รอโรงงานแก้ไข'].includes(status))
+      for (const field of ['statusCode', 'status', 'statusLabel']) {
+        assert.equal(canEditKwpRequest({ [field]: status }, flags), expected, `${field}=${status}`)
+      }
+    }
+    assert.equal(canEditKwpRequest(null, flags), false)
+    assert.equal(canEditKwpRequest({ statusCode: 'APPROVED', statusLabel: 'รอโรงงานแก้ไข' }, flags), false)
+  }
+})
 
 test('KWP cancellation blocks only reviewed and cancelled requests and handles API errors', async () => {
   const sent = []
@@ -141,12 +196,39 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
       assert.equal(page.isKwpFormOptionDisabledForPoint('กวภ.03', { type: 'WPMS' }), false)
     })
 
-    await t.test('adding admin creation does not grant operator edit or cancel actions in the request table', () => {
+    await t.test('admins can edit revision requests without gaining cancellation or giving officers edit access', () => {
       const row = { id: 1, status: 'REVISION_REQUESTED' }
       const staff = page.RequestActions({ row, isOperator: false })
       assert.deepEqual(findButtons(staff).map((button) => button.props.children), ['เปิดดู', 'ดำเนินการ'])
       const operator = page.RequestActions({ row, isOperator: true })
       assert.deepEqual(findButtons(operator).map((button) => button.props.children), ['เปิดดู', 'แก้ไข', 'ยกเลิกคำขอ'])
+      for (const statusCode of ['REVISION_REQUESTED', 'SUBMITTED', 'APPROVED', 'REJECTED', 'CANCELLED']) {
+        let opened
+        const request = { ...row, statusCode }
+        const admin = page.RequestActions({ row: request, isOperator: false, isAdmin: true,
+          onOpenDocument: (...args) => { opened = args } })
+        const buttons = findButtons(admin)
+        assert.deepEqual(buttons.map((button) => button.props.children), ['เปิดดู', 'ดำเนินการ', 'แก้ไข'])
+        const edit = buttons[2]
+        assert.equal(edit.props.disabled, statusCode !== 'REVISION_REQUESTED')
+        if (!edit.props.disabled) {
+          edit.props.onClick()
+          assert.deepEqual(opened, [request, 'edit'])
+        }
+      }
+    })
+
+    await t.test('all five edit forms retain the latest status for admin save authorization', () => {
+      for (const formType of ['KWP01', 'KWP02', 'KWP03', 'KWP04', 'KWP05']) {
+        const row = { id: 1, formType, statusCode: 'REVISION_REQUESTED' }
+        for (const status of ['REVISION_REQUESTED', 'SUBMITTED', 'APPROVED', 'CANCELLED']) {
+          const form = page.buildKwpEditFormFromDetail({ id: 1, formType, status }, row)
+          assert.equal(form.mode, 'edit')
+          assert.equal(form.statusCode, status)
+          assert.equal(canEditKwpRequest(form, { isAdmin: true }), status === 'REVISION_REQUESTED')
+          assert.equal(canEditKwpRequest(form, { isOperator: false, isAdmin: false }), false)
+        }
+      }
     })
 
     await t.test('01 and 03 each have one multi-file collection, one link, and preserve them on edit and preview', () => {
@@ -385,13 +467,55 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
         await pdf.createKwpFormPdf({ formType: 'kwp01', status: 'SUBMITTED' })
         assert.ok(!drawn.some(({ text }) => text === 'ผ่านการพิจารณา'))
         for (const code of ['01', '02', '03', '04', '05']) {
+          for (const missing of [undefined, null, '', '   ']) {
+            drawn.length = 0
+            const fields = ['factoryName', 'companyName', 'factoryRegistration', 'industryType', 'factoryAddress',
+              'contactName', 'contactPhone', 'contactEmail', 'pointCode', 'pointName', 'productionStack',
+              'primaryFuel', 'secondaryFuel', 'productionCapacity', 'productionCapacityUnit', 'reasonDetail',
+              'problemDate', 'expectedDoneDate', 'totalDays', 'correctiveAction', 'wastewaterSource',
+              'receivingSource', 'treatmentSystemType', 'dischargePoint', 'averageDischarge', 'minimumDischarge',
+              'maximumDischarge', 'businessActivity', 'samplerName', 'officerRegistration', 'laboratoryName',
+              'laboratoryRegistration', 'cemsBrand', 'reportRound', 'reportYear', 'reporterName', 'reporterPosition',
+              'submittedAt', 'signatureDate']
+            const measurement = Object.fromEntries(['pollutant', 'sampleDate', 'measuredValue', 'unit',
+              'laboratoryNo', 'reportNo', 'method'].map((field) => [field, missing]))
+            const calibration = Object.fromEntries(['parameter', 'startDate', 'endDate', 'result',
+              'verifierCompany', 'cemsModel', 'rataReportLink', 'calibrationPhotoLink'].map((field) => [field, missing]))
+            const data = { formType: `kwp${code}`, ...Object.fromEntries(fields.map((field) => [field, missing])),
+              unreportedParameters: [], failedParameters: [],
+              measurementRows: missing === undefined ? [] : [measurement],
+              calibrationRows: missing === undefined ? [] : [calibration] }
+            const originalData = structuredClone(data)
+            const bytes = await pdf.createKwpFormPdf(data)
+            assert.deepEqual(data, originalData, `${code}: PDF placeholders do not mutate form values`)
+            assert.equal((await PDFDocument.load(bytes)).getPageCount(), 1)
+            assert.ok(!drawn.some(({ text }) => /undefined|null/.test(text)))
+            assert.ok(drawn.some(({ text }) => text === 'เลขที่ : -'))
+            assert.ok(drawn.some(({ text }) => text === 'วันที่ยื่นคำขอ : -'))
+            const labels = drawn.filter(({ text }) => (text.endsWith(' : ') || text.endsWith(' :')
+              || ['(ลงชื่อ)', 'ผู้รายงานผลการทดสอบ', '(', 'ตำแหน่ง', 'วันที่', 'ลงวันที่', 'ครั้งที่', 'ประจำปี พ.ศ.'].includes(text))
+              && !['ระบบการเผาไหม้เชื้อเพลิง :', 'เครื่องตรวจวัด :'].includes(text)
+              && !text.startsWith('4.4 '))
+            assert.ok(labels.length >= 15, `${code}: checks all empty text fields`)
+            for (const label of labels) {
+              assert.ok(drawn.some(({ text, page, y }) => text === '-' && page === label.page && y === label.y),
+                `${code}: missing placeholder for ${label.text}`)
+            }
+            if (['02', '04', '05'].includes(code)) {
+              const size = code === '05' ? 12.8 : 11.4
+              assert.equal(drawn.filter(({ text, options }) => text === '-' && options.size === size).length,
+                code === '05' ? 8 : 7, `${code}: each empty table cell has a placeholder`)
+            }
+            if (missing === undefined && process.env.KWP_PDF_QA_DIR) {
+              await writeFile(join(process.env.KWP_PDF_QA_DIR, `kwp${code}-empty.pdf`), bytes)
+            }
+          }
           drawn.length = 0
-          await pdf.createKwpFormPdf({ formType: `kwp${code}`, reporterName: null })
-          const signatureLabel = drawn.find(({ text }) => text === (code === '05' ? 'ผู้รายงานผลการทดสอบ' : '(ลงชื่อ)'))
-          assert.ok(signatureLabel)
-          assert.ok(!drawn.some(({ text }) => /undefined|null/.test(text)))
-          assert.ok(!drawn.some(({ text, page, y }) => text.trim() && text !== signatureLabel.text
-            && page === signatureLabel.page && y === signatureLabel.y))
+          await pdf.createKwpFormPdf({ formType: `kwp${code}`, productionCapacity: 0, totalDays: 0,
+            averageDischarge: 0, minimumDischarge: 0, maximumDischarge: 0,
+            measurementRows: [{ measuredValue: 0 }], calibrationRows: [{ result: 0 }] })
+          assert.equal(drawn.filter(({ text }) => text === '0').length,
+            code === '01' ? 2 : code === '03' ? 4 : code === '05' ? 1 : 2, `${code}: zero is not missing`)
         }
         for (const code of ['01', '02', '03', '04', '05']) {
           drawn.length = 0

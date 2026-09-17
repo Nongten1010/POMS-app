@@ -1,6 +1,14 @@
+export function isKwpAdmin(roleCode = '', roleCodes = []) {
+  return [roleCode, ...roleCodes].some((role) => String(role).toLowerCase() === 'admin')
+}
+
 export function canCreateKwpRequest(userType, roleCode = '', roleCodes = []) {
-  return userType === 'operator'
-    || [roleCode, ...roleCodes].some((role) => String(role).toLowerCase() === 'admin')
+  return userType === 'operator' || isKwpAdmin(roleCode, roleCodes)
+}
+
+export function canEditKwpRequest(request, { isOperator = false, isAdmin = false } = {}) {
+  const status = request?.statusCode || request?.status || request?.statusLabel
+  return (isOperator || isAdmin) && ['REVISION_REQUESTED', 'รอโรงงานแก้ไข'].includes(status)
 }
 
 export function canCancelKwpRequest(request = {}) {
@@ -9,6 +17,33 @@ export function canCancelKwpRequest(request = {}) {
   return statuses.length > 0 && !statuses.some((value) => [
     'APPROVED', 'ผ่านการพิจารณา', 'CANCELLED', 'CANCELED', 'ยกเลิก',
   ].includes(value))
+}
+
+const kwpRequestStatusPriorityGroups = [
+  ['SUBMITTED', 'REVISED_PENDING_REVIEW', 'UNDER_REVIEW', 'รอพิจารณา', 'แก้ไขแล้ว/รอพิจารณา', 'แก้ไขแล้วรอพิจารณา', 'อยู่ระหว่างพิจารณา', 'ส่งฟอร์ม', 'ยื่นแบบสำเร็จ'],
+  ['REVISION_REQUESTED', 'รอโรงงานแก้ไข', 'ส่งแก้ไข'],
+  ['APPROVED', 'ผ่านการพิจารณา'],
+  ['REJECTED', 'ไม่ผ่านการพิจารณา'],
+  ['CANCELLED', 'CANCELED', 'ยกเลิก'],
+  ['DRAFT', 'ร่าง'],
+]
+
+function getKwpRequestStatusPriority(row) {
+  for (const value of [row.statusCode, row.status, row.statusLabel]) {
+    const status = String(value ?? '').trim()
+    const priority = kwpRequestStatusPriorityGroups.findIndex((group) => group.includes(status))
+    if (priority !== -1) return priority
+  }
+  return kwpRequestStatusPriorityGroups.length
+}
+
+export function sortKwpRequestRows(rows = [], isOperator = false) {
+  if (isOperator) return rows
+  return rows
+    .map((row, index) => ({ row, index, priority: getKwpRequestStatusPriority(row),
+      submittedTime: Date.parse(row.submittedAt ?? '') || 0 }))
+    .sort((a, b) => a.priority - b.priority || b.submittedTime - a.submittedTime || a.index - b.index)
+    .map(({ row }) => row)
 }
 
 export function getCurrentThaiYear(now = new Date()) {

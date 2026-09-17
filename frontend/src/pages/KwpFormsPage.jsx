@@ -50,10 +50,10 @@ import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasurementMethodOptions.json'
 import { createKwpFormPdf } from '../utils/kwpFormPdf'
 import {
-  canCreateKwpRequest, canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata,
+  canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata,
   getKwpReportPeriod, getKwpAttachmentValidationError, getKwpLink, readKwpApiResponse,
   fetchKwpMeasurementPoints, withKwpParameterOptions, isKwpParameterError,
-  buildKwpAttachmentMetadata, isKwpMeasurementAttachment,
+  buildKwpAttachmentMetadata, isKwpMeasurementAttachment, sortKwpRequestRows,
 } from '../utils/kwpFormPresentation.mjs'
 
 dayjs.extend(buddhistEra)
@@ -459,12 +459,12 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function RequestActions({ row, isOperator, onOpenDocument, onCancelRequest }) {
+function RequestActions({ row, isOperator, isAdmin = false, onOpenDocument, onCancelRequest }) {
   const rowStatuses = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
   const cannotProcess = rowStatuses.some((status) => (
     ['ผ่านการพิจารณา', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(status)
   ))
-  const canOperatorModify = rowStatuses.some((status) => ['รอโรงงานแก้ไข', 'REVISION_REQUESTED'].includes(status))
+  const canEdit = canEditKwpRequest(row, { isOperator, isAdmin })
 
   if (isOperator) {
     return (
@@ -475,7 +475,7 @@ function RequestActions({ row, isOperator, onOpenDocument, onCancelRequest }) {
         <Button
           size="small"
           variant="contained"
-          disabled={!canOperatorModify}
+          disabled={!canEdit}
           onClick={() => onOpenDocument?.(row, 'edit')}
         >
           แก้ไข
@@ -506,6 +506,11 @@ function RequestActions({ row, isOperator, onOpenDocument, onCancelRequest }) {
       >
         ดำเนินการ
       </Button>
+      {isAdmin ? (
+        <Button size="small" variant="contained" disabled={!canEdit} onClick={() => onOpenDocument?.(row, 'edit')}>
+          แก้ไข
+        </Button>
+      ) : null}
     </Stack>
   )
 }
@@ -1764,6 +1769,7 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
     titleText: option?.title ?? '',
     description: option?.description ?? '',
     mode: 'edit',
+    statusCode: detail.statusCode || detail.status || detail.statusLabel || row.statusCode || row.status || row.statusLabel || '',
     documentMetadata: getKwpDocumentMetadata(detail, row),
     requestId: detail.id ?? row.id,
     requestNo: detail.requestNo ?? row.requestNo,
@@ -4846,7 +4852,7 @@ function getFactoryColumns(onOpenMonitoringPoints) {
   ]
 }
 
-function getRequestColumns(onOpenDocument, isOperator = false, onCancelRequest) {
+function getRequestColumns(onOpenDocument, isOperator = false, onCancelRequest, isAdmin = false) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     {
@@ -4871,10 +4877,10 @@ function getRequestColumns(onOpenDocument, isOperator = false, onCancelRequest) 
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: isOperator ? 250 : 190,
+      width: isOperator ? 250 : isAdmin ? 280 : 190,
       sortable: false,
       filterable: false,
-      renderCell: (params) => <RequestActions row={params.row} isOperator={isOperator} onOpenDocument={onOpenDocument} onCancelRequest={onCancelRequest} />,
+      renderCell: (params) => <RequestActions row={params.row} isOperator={isOperator} isAdmin={isAdmin} onOpenDocument={onOpenDocument} onCancelRequest={onCancelRequest} />,
     },
   ]
 }
@@ -4920,6 +4926,7 @@ function KwpCancelRequestDialog({ request, submitting, error, onClose, onConfirm
 
 function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToken = '', currentUser = null }) {
   const isOperator = userType === 'operator'
+  const isAdmin = isKwpAdmin(roleCode, roleCodes)
   const canCreate = canCreateKwpRequest(userType, roleCode, roleCodes)
   const availableSubMenus = isOperator ? operatorSubMenus : officerSubMenus
   const [monitoringPointContext, setMonitoringPointContext] = useState(null)
@@ -5136,13 +5143,18 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
   }, [accessToken])
 
   const openRequestDocument = useCallback(async (row, mode) => {
-    if (isOperator && mode === 'edit') {
+    if (mode === 'edit') {
+      if (!canEditKwpRequest(row, { isOperator, isAdmin })) return
       setRequestsError('')
       setIsLoadingRequests(true)
 
       try {
         const detail = await fetchKwpSubmissionDetail(row)
-        openFormBottomSheet(await fetchKwpEditForm(detail, row, accessToken))
+        const editForm = await fetchKwpEditForm(detail, row, accessToken)
+        if (!canEditKwpRequest(editForm, { isOperator, isAdmin })) {
+          throw new Error('ไม่สามารถแก้ไขคำขอในสถานะปัจจุบันได้ กรุณาโหลดรายการใหม่')
+        }
+        openFormBottomSheet(editForm)
       } catch (requestError) {
         setRequestsError(requestError.message)
       } finally {
@@ -5199,7 +5211,7 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
         error: requestError.message,
       })
     }
-  }, [accessToken, fetchKwpSubmissionDetail, isOperator, openFormBottomSheet])
+  }, [accessToken, fetchKwpSubmissionDetail, isOperator, isAdmin, openFormBottomSheet])
 
   const requestKwpDocumentRevision = useCallback(async (officerNote) => {
     const requestId = requestDocument?.row?.id
@@ -5319,9 +5331,11 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
         openRequestDocument,
         isOperator,
         openCancelRequestDialog,
+        isAdmin,
       ),
-    [isOperator, openRequestDocument, openCancelRequestDialog],
+    [isOperator, isAdmin, openRequestDocument, openCancelRequestDialog],
   )
+  const sortedRequestRows = useMemo(() => sortKwpRequestRows(requestRows, isOperator), [requestRows, isOperator])
   const table = useMemo(
     () =>
       effectiveSubMenu === 'factories'
@@ -5335,7 +5349,7 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
         : {
             title: 'รายการคำขอ',
             columns: requestColumns,
-            rows: requestRows,
+            rows: sortedRequestRows,
             loading: isLoadingRequests,
             error: requestsError,
           },
@@ -5347,7 +5361,7 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
       isLoadingFactories,
       isLoadingRequests,
       requestColumns,
-      requestRows,
+      sortedRequestRows,
       requestsError,
     ],
   )
@@ -5510,7 +5524,7 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
         open={isFormSheetOpen}
         form={selectedForm}
         accessToken={accessToken}
-        canSubmit={selectedForm?.mode === 'edit' ? isOperator : canCreate}
+        canSubmit={selectedForm?.mode === 'edit' ? canEditKwpRequest(selectedForm, { isOperator, isAdmin }) : canCreate}
         onClose={closeFormBottomSheet}
         onExited={clearClosedFormBottomSheet}
         onSubmitted={handleFormSubmitted}
