@@ -2862,10 +2862,10 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
             showCellVerticalBorder
             showColumnVerticalBorder
             label={effectiveSubMenu === 'factories' ? 'โรงงานที่มีอยู่ในระบบ POMS' : 'รายการคำขอแก้ไขข้อมูลพื้นฐาน'}
-            pageSizeOptions={[10, 25, 50]}
+            pageSizeOptions={[25, 50, 100]}
             initialState={{
               pagination: {
-                paginationModel: { page: 0, pageSize: 10 },
+                paginationModel: { page: 0, pageSize: 25 },
               },
             }}
             localeText={dataGridLocaleText}
