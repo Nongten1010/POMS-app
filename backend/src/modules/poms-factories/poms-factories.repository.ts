@@ -1,3 +1,4 @@
+import { resolveEditRequestTargets } from './poms-edit-request-targets';
 import { contactSnapshot, contactsChanged } from './poms-factory-contacts';
 import type { PomsManagedStatusDTO } from './poms-status-management.types';
 import { readPomsManagedStatuses } from './poms-status-management.state';
@@ -48,6 +49,7 @@ import type {
   PomsFactoryEditRequestAction,
   PomsFactoryFormContactsDTO,
   PomsFactoryEditRequestDTO,
+  PomsFactoryEditRequestSummaryDTO,
   PomsFactoryEditRequestEventDTO,
   PomsFactoryEditRequestFormType,
   PomsFactoryEditRequestStatus,
@@ -129,6 +131,8 @@ interface FactoryFormContactRow {
 }
 
 interface EditRequestRow {
+  target_measurement_point_ids_json?: string | null;
+  province_name?: string | null;
   current_contacts_json?: string | null;
   proposed_contacts_json?: string | null;
   id: number | string;
@@ -182,6 +186,7 @@ interface PendingCountRow {
 }
 
 interface EditRequestPayload {
+  targetMeasurementPointIds?: number[];
   currentContacts?: PomsFactoryContactsSnapshot | null;
   proposedContacts?: PomsFactoryContactsSnapshot | null;
   currentFactory?: PomsFactoryDetailDTO;
@@ -315,6 +320,7 @@ export const pomsFactoriesRepository = {
               : null,
             current_factory_json: JSON.stringify(toProfile(current)),
             proposed_factory_json: JSON.stringify(payload.proposedFactory),
+            target_measurement_point_ids_json: serializeTargetIds(payload),
             current_measurement_points_json:
               payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
                 ? JSON.stringify(current.measurementPoints)
@@ -360,7 +366,7 @@ export const pomsFactoriesRepository = {
   async listEditRequests(
     query: ListPomsFactoryEditRequestsQuery,
     access: FactoryAccess,
-  ): Promise<PomsFactoryEditRequestDTO[]> {
+  ): Promise<PomsFactoryEditRequestSummaryDTO[]> {
     const builder = buildEditRequestsQuery(access);
     if (query.status) builder.where('req.status', query.status);
     if (query.factoryId) {
@@ -386,10 +392,31 @@ export const pomsFactoriesRepository = {
       });
     }
     const rows = (await builder
-      .distinct('req.*')
+      .distinct(
+        'req.id',
+        'req.request_no',
+        'req.eligible_factory_id',
+        'req.factory_id',
+        'req.factory_registration_no',
+        'req.factory_name',
+        'req.form_type',
+        'req.status',
+        'req.revision_no',
+        'req.is_open',
+        'req.submitted_by',
+        'req.submitted_at',
+        'req.created_at',
+        'req.updated_at',
+        'req.target_measurement_point_ids_json',
+        'req.current_measurement_points_json',
+        'req.proposed_measurement_points_json',
+        'req.current_contacts_json',
+        'req.proposed_contacts_json',
+        'ef.province_name',
+      )
       .orderBy('req.created_at', 'desc')
       .orderBy('req.id', 'desc')) as EditRequestRow[];
-    return hydrateEditRequests(rows, db);
+    return rows.map(toEditRequestSummary);
   },
 
   async findEditRequestById(
@@ -502,6 +529,7 @@ export const pomsFactoriesRepository = {
             : null,
           current_factory_json: JSON.stringify(toProfile(baseline ?? live)),
           proposed_factory_json: JSON.stringify(payload.proposedFactory),
+          target_measurement_point_ids_json: serializeTargetIds(payload),
           current_measurement_points_json:
             payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
               ? JSON.stringify((baseline ?? live).measurementPoints)
@@ -1669,6 +1697,42 @@ function displayFactoryRegistration(row: {
   );
 }
 
+function serializeTargetIds(payload: EditRequestPayload): string | null {
+  if (payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO) return '[]';
+  return payload.targetMeasurementPointIds
+    ? JSON.stringify(payload.targetMeasurementPointIds)
+    : null;
+}
+
+function toEditRequestSummary(row: EditRequestRow): PomsFactoryEditRequestSummaryDTO {
+  return {
+    id: Number(row.id),
+    requestNo: row.request_no,
+    eligibleFactoryId: Number(row.eligible_factory_id),
+    factoryId: row.factory_id,
+    factoryRegistrationNo: displayFactoryRegistration(row),
+    factoryName: row.factory_name,
+    provinceName: row.province_name ?? null,
+    formType: row.form_type,
+    status: row.status,
+    statusLabel: POMS_FACTORY_EDIT_REQUEST_STATUS_LABELS[row.status],
+    revisionNo: Number(row.revision_no),
+    isOpen: Boolean(row.is_open),
+    submittedBy: Number(row.submitted_by),
+    submittedAt: toIsoStringRequired(row.submitted_at),
+    createdAt: toIsoStringRequired(row.created_at),
+    updatedAt: toIsoStringRequired(row.updated_at),
+    ...resolveEditRequestTargets({
+      formType: row.form_type,
+      submittedIds: row.target_measurement_point_ids_json,
+      currentPoints: row.current_measurement_points_json,
+      proposedPoints: row.proposed_measurement_points_json,
+      currentContacts: row.current_contacts_json,
+      proposedContacts: row.proposed_contacts_json,
+    }),
+  };
+}
+
 function toEditRequestDTO(
   row: EditRequestRow,
   events: PomsFactoryEditRequestEventDTO[],
@@ -1963,6 +2027,7 @@ function buildEventSnapshot(
   if (payload.currentContacts && payload.proposedContacts)
     return {
       formType: payload.formType,
+      targetMeasurementPointIds: payload.targetMeasurementPointIds ?? null,
       proposedFactory: payload.proposedFactory,
       proposedMeasurementPoints: payload.proposedMeasurementPoints,
       currentContacts: payload.currentContacts,
@@ -1971,6 +2036,7 @@ function buildEventSnapshot(
   return payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
     ? {
         formType: payload.formType,
+        targetMeasurementPointIds: payload.targetMeasurementPointIds ?? null,
         proposedFactory: payload.proposedFactory,
         proposedMeasurementPoints: payload.proposedMeasurementPoints ?? [],
       }

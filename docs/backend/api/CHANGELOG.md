@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="poms-edit-request-list-summary"></a>
+
+## 2026-09-18 — รายการคำขอแก้ไขโรงงาน POMS คืนข้อมูลสรุปและจุดเป้าหมาย
+
+- **Affected canonical docs:** [List summary](./menus/master-data/factory-edit-requests.md#edit-request-list-summary)
+- **Impact:** `GET /api/v1/poms-factories/edit-requests` เปลี่ยนเป็น `PomsFactoryEditRequestSummary` เพิ่ม `provinceName`, `targetMeasurementPoints` และ `targetMeasurementPointsSource`; ตัด factory/measurement/contact snapshots, contact arrays, metadata เอกสาร, รายละเอียดเครื่องมือ, `events` และ field รายละเอียดอื่นที่ไม่อยู่ในตาราง contract ของ list ออก
+- **Migration:** รัน `0123_add_poms_edit_request_target_ids.ts` ก่อนเปิด backend เปลี่ยน frontend จาก `proposedMeasurementPoints[0]` เป็น `targetMeasurementPoints[]` และรองรับหลายจุด/รหัส null/สถานะไม่ทราบ ใช้ detail API เมื่อเปิดดูหรือดำเนินการ และ `/form` เมื่อแก้ไข ประสาน release กับ frontend ก่อน deploy backend เพราะ client เดิมอ่าน snapshot ใน list; อย่าใช้ commit ของ `/form` เป็นหลักฐานว่า client รองรับ list summary แล้ว
+- **Legacy:** ไม่เติม ID ที่ไม่มีหลักฐานย้อนหลัง คำขอเก่าอนุมานเฉพาะจุดที่มี snapshot ต่างกันและระบุ `SNAPSHOT_DIFF`; ถ้าระบุไม่ได้คืน `UNKNOWN` และ `[]` การอนุมานอาจไม่ครบจุดที่ส่งค่าเดิม
+- **Unchanged:** URL/query, permission/data scope, status/filter/sort, `{ success, data, meta.total }`, detail/form และ request body ของ create/resubmission คงเดิม
+- **Breaking change:** yes — ต้องย้าย client ก่อนใช้ response ใหม่ หลัง deploy ตรวจ production OpenAPI และ authenticated list/detail/form; ผลทดสอบใน repository ไม่ใช่หลักฐาน deploy
+
 <a id="kwp-measurement-attachment-types"></a>
 
 ## 2026-09-17 — ตรวจชนิดเอกสารแนบ กวภ.02/04 ให้ตรงกับชุดเอกสาร

@@ -178,6 +178,33 @@ describe('measurement-point approval with general factory information', () => {
     },
   );
 
+  it.each(['create', 'resubmit'] as const)(
+    'persists selected target IDs and revision audit on %s',
+    async (operation) => {
+      const harness = approvalHarness({ resubmit: operation === 'resubmit' });
+      Object.assign(harness.row, { target_measurement_point_ids_json: '[99999]' });
+      const ids = harness.current.measurementPoints.map((point) => point.connectedPointId);
+      const payload = {
+        formType: 'MEASUREMENT_POINTS' as const,
+        proposedFactory: harness.current,
+        proposedMeasurementPoints: harness.current.measurementPoints,
+        targetMeasurementPointIds: ids,
+      };
+      transaction.mockImplementationOnce(harness.runTransaction);
+      if (operation === 'create')
+        await pomsFactoriesRepository.createEditRequest(harness.current, payload, null, 42);
+      else await pomsFactoriesRepository.resubmitEditRequest(11, payload, null, 42);
+      expect(harness.row).toMatchObject({ target_measurement_point_ids_json: JSON.stringify(ids) });
+      const event = harness.committed.find(
+        (write) => write.table === 'poms_factory_edit_request_events',
+      );
+      expect(JSON.parse(String(event?.values.factory_snapshot_json))).toMatchObject({
+        targetMeasurementPointIds: ids,
+      });
+      expect(event?.values.action).toBe(operation === 'create' ? 'SUBMIT' : 'RESUBMIT');
+    },
+  );
+
   it('approves BASIC_INFO and exposes all seven updated fields through the live detail mapper', async () => {
     const harness = approvalHarness({ basicInfo: true, pointChanged: false });
     transaction.mockImplementationOnce(harness.runTransaction);

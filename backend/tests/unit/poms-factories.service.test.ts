@@ -47,6 +47,42 @@ describe('pomsFactoriesService edit-request workflow', () => {
     mockedRepository.reviewEditRequest.mockResolvedValue(editRequest('APPROVED'));
   });
 
+  it.each(['create', 'resubmit'] as const)(
+    'passes only submitted target IDs to persistence on %s',
+    async (operation) => {
+      const current = factoryDetail();
+      current.measurementPoints.push({
+        ...current.measurementPoints[0],
+        connectedPointId: 16,
+        systemType: 'WPMS',
+      });
+      mockedRepository.findFactoryDetail.mockResolvedValue(current);
+      mockedRepository.findEditRequestById.mockResolvedValue(
+        editRequest('REVISION_REQUESTED', { formType: 'MEASUREMENT_POINTS' }),
+      );
+      const input = {
+        formType: 'MEASUREMENT_POINTS' as const,
+        measurementPoints: [{ connectedPointId: 15 }],
+        notificationEmails: ['new@example.com'],
+      };
+      if (operation === 'create')
+        await pomsFactoriesService.createEditRequest(
+          'factory-001',
+          input,
+          42,
+          ownFactoryScope,
+          null,
+        );
+      else await pomsFactoriesService.resubmitEditRequest(11, input, 42, ownFactoryScope, null);
+      const payload =
+        operation === 'create'
+          ? mockedRepository.createEditRequest.mock.calls[0][1]
+          : mockedRepository.resubmitEditRequest.mock.calls[0][1];
+      expect(payload.targetMeasurementPointIds).toEqual([15]);
+      expect(payload.proposedMeasurementPoints).toHaveLength(2);
+    },
+  );
+
   it('captures before/after contacts for a contact-only request', async () => {
     mockedRepository.findFactoryFormContacts.mockResolvedValue({
       contactName: 'Old',

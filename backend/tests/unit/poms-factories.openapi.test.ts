@@ -39,6 +39,46 @@ function jsonResponseSchema(path: string, method: string, status: string): JsonO
 }
 
 describe('POMS factory master-data OpenAPI contract', () => {
+  it('separates list summaries from full detail and publishes target evidence semantics', () => {
+    const summary = asObject(schemas().PomsFactoryEditRequestSummary, 'summary');
+    const properties = asObject(summary.properties, 'summary properties');
+    expect(summary.additionalProperties).toBe(false);
+    expect(summary.required).toEqual(
+      expect.arrayContaining([
+        'provinceName',
+        'targetMeasurementPoints',
+        'targetMeasurementPointsSource',
+      ]),
+    );
+    for (const field of [
+      'currentFactory',
+      'proposedFactory',
+      'currentMeasurementPoints',
+      'proposedMeasurementPoints',
+      'currentContacts',
+      'proposedContacts',
+      'events',
+    ]) {
+      expect(properties).not.toHaveProperty(field);
+    }
+    const response = asObject(schemas().PomsFactoryEditRequestsResponse, 'list response');
+    expect(asObject(response.properties, 'list properties').data).toEqual({
+      type: 'array',
+      items: { $ref: '#/components/schemas/PomsFactoryEditRequestSummary' },
+    });
+    const detail = asObject(schemas().PomsFactoryEditRequestDetail, 'detail');
+    expect(asObject(detail.properties, 'detail properties')).toHaveProperty(
+      'proposedMeasurementPoints',
+    );
+    expect(asObject(detail.properties, 'detail properties')).toHaveProperty('events');
+    expect(asObject(properties.targetMeasurementPointsSource, 'source').enum).toEqual([
+      'SUBMITTED',
+      'SNAPSHOT_DIFF',
+      'UNKNOWN',
+      'NOT_APPLICABLE',
+    ]);
+  });
+
   it('publishes all factory read and edit-request workflow operations', () => {
     const operations = [
       ['/poms-factories', 'get'],

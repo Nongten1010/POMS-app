@@ -39,7 +39,14 @@ describe('POMS factory routes', () => {
     mockedService.getFactoryForm.mockResolvedValue(connectionForm());
     mockedService.createEditRequest.mockResolvedValue(editRequest('PENDING_REVIEW'));
     mockedService.listEditRequests.mockResolvedValue({
-      data: [editRequest('PENDING_REVIEW')],
+      data: [
+        {
+          ...editRequest('PENDING_REVIEW'),
+          provinceName: null,
+          targetMeasurementPoints: [],
+          targetMeasurementPointsSource: 'NOT_APPLICABLE',
+        },
+      ],
       meta: { total: 1 },
     });
     mockedService.getEditRequest.mockResolvedValue({
