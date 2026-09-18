@@ -413,7 +413,7 @@ const tableActionStackSx = {
 }
 
 const pomsBoxConnectionType = 'POMS Box'
-const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'Microsoft SQL', 'MySQL', pomsBoxConnectionType]
+const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'DCON', 'Microsoft SQL', 'MySQL', pomsBoxConnectionType]
 
 const baudRateOptions = ['2400', '4800', '9600', '14400', '19200', '38400']
 const parityOptions = ['Even', 'Odd', 'None']
@@ -585,7 +585,7 @@ function getDefaultConnectionForm(type) {
   if (type === pomsBoxConnectionType) {
     return {}
   }
-  if (type === 'Modbus RTU') {
+  if (type === 'Modbus RTU' || type === 'DCON') {
     return {
       comPort: '',
       slaveId: '',
@@ -3634,14 +3634,14 @@ function ConnectionFormFields({ connectionType, value, onChange }) {
     return null
   }
 
-  if (connectionType === 'Modbus RTU') {
+  if (connectionType === 'Modbus RTU' || connectionType === 'DCON') {
     return (
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextInputField label="COMPORT" value={value.comPort ?? value.comport ?? ''} onChange={(nextValue) => updateField('comPort', nextValue)} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <PositiveNumberField label="Slave ID" value={value.slaveId} onChange={(nextValue) => updateField('slaveId', nextValue)} />
+          <PositiveNumberField label={connectionType === 'DCON' ? 'device address' : 'Slave ID'} value={value.slaveId} onChange={(nextValue) => updateField('slaveId', nextValue)} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <OptionSelectField label="Baud Rate" value={value.baudRate} options={baudRateOptions} defaultOption="9600" onChange={(nextValue) => updateField('baudRate', nextValue)} />
@@ -4261,6 +4261,7 @@ const protocolCodeMap = {
   [pomsBoxConnectionType]: 'POMS_BOX',
   'Modbus RTU': 'MODBUS_RTU',
   'Modbus TCP': 'MODBUS_TCP',
+  DCON: 'DCON_ASCII',
   'Microsoft SQL': 'MSSQL',
   MySQL: 'MYSQL',
 }
@@ -4269,12 +4270,13 @@ const protocolLabelMap = {
   POMS_BOX: pomsBoxConnectionType,
   MODBUS_RTU: 'Modbus RTU',
   MODBUS_TCP: 'Modbus TCP',
+  DCON_ASCII: 'DCON',
   MSSQL: 'Microsoft SQL',
   MICROSOFT_SQL: 'Microsoft SQL',
   MYSQL: 'MySQL',
 }
 
-const allowedProtocolCodes = new Set(['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'])
+const allowedProtocolCodes = new Set(['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'DCON_ASCII', 'MSSQL', 'MYSQL'])
 
 function normalizeConnectionType(type) {
   return protocolLabelMap[type] ?? type ?? ''
@@ -4305,6 +4307,9 @@ function mapConnectionForms(forms = []) {
         ...getDefaultConnectionForm(type),
         ...values,
         comPort: getComPortValue(values),
+        ...(['Modbus RTU', 'DCON'].includes(type) ? {
+          parity: parityOptions.find((option) => option.toUpperCase() === String(values.parity).toUpperCase()) ?? values.parity ?? '',
+        } : {}),
         measureMin: values.measureMin ?? valueRange.min ?? '',
         measureMax: values.measureMax ?? valueRange.max ?? '',
         minuteTableName: values.minuteTableName ?? values.minute_table_name ?? values.minuteDataTableName ?? '',
@@ -4626,7 +4631,7 @@ function buildConnectionSettings(form) {
     return null
   }
 
-  if (type === 'Modbus RTU') {
+  if (type === 'Modbus RTU' || type === 'DCON') {
     return {
       comPort: toNumberOrStringOrNull(getComPortValue(values)),
       slaveId: toNumberOrNull(values.slaveId),
