@@ -307,15 +307,8 @@ function getFactorySystemText(row) {
     .join(', ')
 }
 
-function getMonitoringPointCode(point, index) {
-  if (point?.pointCode) {
-    return point.pointCode
-  }
-  if (point?.stationId) {
-    return point.stationId
-  }
-  const prefix = point?.systemType === 'WPMS' ? 'P' : 'S'
-  return `${prefix}${String(index + 1).padStart(4, '0')}`
+function getMonitoringPointCode(point) {
+  return point?.pointCode || '-'
 }
 
 function getLatestUpdatedAt(point) {
@@ -446,8 +439,6 @@ function normalizeFactoryDetail(row = {}) {
 function getPointIdentity(point = {}) {
   return {
     connectedPointId: point?.connectedPointId ?? null,
-    pointCode: point?.pointCode ?? point?.stationId ?? point?.code ?? '',
-    pointName: point?.pointName ?? point?.name ?? '',
     systemType: point?.systemType ?? point?.type ?? '',
   }
 }
@@ -455,25 +446,20 @@ function getPointIdentity(point = {}) {
 function findMatchingMeasurementPoint(point, candidates, systemType = '') {
   const identity = getPointIdentity(point)
   const expectedSystemType = identity.systemType || systemType
-  // IDs and codes identify points; names and array positions do not.
+  if (identity.connectedPointId == null) return null
+  // Only the live point ID identifies a point; codes may be null or change.
   const matches = candidates.filter((candidate) => {
     const candidateIdentity = getPointIdentity(candidate)
-    if (identity.connectedPointId != null) {
-      return candidateIdentity.connectedPointId != null
-        && String(candidateIdentity.connectedPointId) === String(identity.connectedPointId)
-    }
-    return Boolean(identity.pointCode && candidateIdentity.pointCode === identity.pointCode)
+    return candidateIdentity.connectedPointId != null
+      && String(candidateIdentity.connectedPointId) === String(identity.connectedPointId)
   })
-  const compatibleMatches = matches.filter((candidate) => {
+  if (matches.some((candidate) => {
     const candidateIdentity = getPointIdentity(candidate)
-    return (!identity.pointCode || !candidateIdentity.pointCode || identity.pointCode === candidateIdentity.pointCode)
-      && (!expectedSystemType || !candidateIdentity.systemType || expectedSystemType === candidateIdentity.systemType)
-  })
-  const matchedIds = new Set(compatibleMatches.map((candidate) => String(getPointIdentity(candidate).connectedPointId)))
-  if ((matches.length && !compatibleMatches.length) || matchedIds.size > 1) {
+    return expectedSystemType && candidateIdentity.systemType && expectedSystemType !== candidateIdentity.systemType
+  })) {
     throw new Error('ข้อมูลอ้างอิงจุดตรวจวัดไม่ตรงกัน กรุณาโหลดข้อมูลใหม่')
   }
-  return compatibleMatches[0] ?? null
+  return matches[0] ?? null
 }
 
 function getFactorySystemType(factory = {}, selectedPoint = null) {
@@ -490,7 +476,7 @@ function getFactorySystemType(factory = {}, selectedPoint = null) {
   return firstPoint?.systemType ?? 'CEMS'
 }
 
-function mergeFormMeasurementPointIds(formData = {}, factory = {}) {
+function mergeFormMeasurementPointDetails(formData = {}, factory = {}) {
   const detailPoints = [
     ...(Array.isArray(factory?.measurementPoints) ? factory.measurementPoints : []),
     ...(Array.isArray(factory?.proposedMeasurementPoints) ? factory.proposedMeasurementPoints : []),
@@ -503,6 +489,10 @@ function mergeFormMeasurementPointIds(formData = {}, factory = {}) {
   if (!Array.isArray(formData?.measurementPoints)) {
     return formData
   }
+  const ids = formData.measurementPoints.map((point) => point?.connectedPointId)
+  if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0) || new Set(ids).size !== ids.length) {
+    throw new Error('รหัสอ้างอิงจุดตรวจวัดจากแบบฟอร์มไม่ถูกต้อง กรุณาโหลดข้อมูลใหม่')
+  }
 
   return {
     ...formData,
@@ -514,7 +504,6 @@ function mergeFormMeasurementPointIds(formData = {}, factory = {}) {
 
       return {
         ...point,
-        connectedPointId: matchedIdentity.connectedPointId,
         systemType: point.systemType || formData.systemType || matchedIdentity.systemType,
         ...(hasPointOfficerEmails
           ? { officerNotificationEmails: matchedPoint.officerNotificationEmails }
@@ -536,7 +525,7 @@ function getFirstOwnValue(sources, key, fallback = null) {
 function normalizeFactoryFormData(formData = {}, factory = {}, extra = {}) {
   const selectedPoint = factory?.selectedMeasurementPoint ?? null
   const selectedSystemType = getFactorySystemType(factory, selectedPoint)
-  const mergedFormData = mergeFormMeasurementPointIds(formData, factory)
+  const mergedFormData = mergeFormMeasurementPointDetails(formData, factory)
   const formMeasurementPoints = Array.isArray(mergedFormData.measurementPoints) ? mergedFormData.measurementPoints : []
   const proposedFactory = factory?.raw?.proposedFactory ?? {}
   const currentFactory = factory?.raw?.currentFactory ?? {}
@@ -823,7 +812,7 @@ function mapMonitoringPointRows(factory) {
   return (factory?.measurementPoints ?? []).map((point, index) => ({
     id: point.connectedPointId ?? point.id ?? point.pointCode ?? point.stationId ?? `${factory.id}-point-${index}`,
     connectedPointId: point.connectedPointId ?? point.id ?? null,
-    pointCode: getMonitoringPointCode(point, index),
+    pointCode: getMonitoringPointCode(point),
     pointName: point.pointName ?? point.name ?? '-',
     systemType: point.systemType ?? '-',
     parameters: Array.isArray(point.parameters)
@@ -963,7 +952,7 @@ function createFactoryStatusRows(factory = {}) {
     return {
       id: pointId,
       connectedPointId: point.connectedPointId ?? point.id ?? null,
-      pointCode: getMonitoringPointCode(point, index),
+      pointCode: getMonitoringPointCode(point),
       pointName: point.pointName ?? point.name ?? '-',
       systemType: point.systemType ?? '-',
       status: getStatusManagementSelection(point),
@@ -2089,7 +2078,7 @@ function makeMasterDataInitialRequest(factory) {
 
   const firstPoint = factory?.selectedMeasurementPoint ?? (Array.isArray(factory?.measurementPoints) ? factory.measurementPoints[0] : null)
   const systemType = firstPoint?.systemType ?? 'CEMS'
-  const pointCode = firstPoint ? getMonitoringPointCode(firstPoint, 0) : ''
+  const pointCode = firstPoint?.pointCode ?? null
   const pointName = firstPoint?.pointName ?? firstPoint?.name ?? ''
   const connectedParameters = Array.isArray(firstPoint?.parameters) ? firstPoint.parameters : []
   const pointDetails = firstPoint?.details ?? {}
@@ -2115,7 +2104,7 @@ function makeMasterDataInitialRequest(factory) {
     notificationEmails: [''],
     measurementPoints: [
       {
-        connectedPointId: firstPoint?.connectedPointId ?? firstPoint?.id ?? null,
+        connectedPointId: firstPoint?.connectedPointId ?? null,
         officerNotificationEmails: Array.isArray(firstPoint?.officerNotificationEmails)
           ? firstPoint.officerNotificationEmails
           : [],
@@ -2166,7 +2155,7 @@ function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}
   const pointName = point.pointName ?? point.details?.pointName ?? initialPoint.pointName ?? ''
   const connectedPointId = initialPoint.connectedPointId
 
-  if (!connectedPointId) {
+  if (!Number.isSafeInteger(connectedPointId) || connectedPointId <= 0) {
     throw new Error('ไม่พบรหัสอ้างอิงจุดตรวจวัดสำหรับส่งคำขอแก้ไข')
   }
   if (initialRequest?.selectedMeasurementPoint
