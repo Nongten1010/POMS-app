@@ -334,11 +334,15 @@ Minimal response (`200 OK`):
 
 ### `GET /api/v1/poms-factories/:factoryId/form`
 
-คืน prefill โดยให้ข้อมูลโรงงานและจุดตรวจวัดมาจาก current/live POMS ใช้ชื่อและ shape ของ `data` ตรงกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) และไม่คืน wrapper `formDefaults`, workflow metadata, `factoryAddress`, `systemTypes`, `connectedPointId` หรือ `sourceMeasurementPointId`
+คืน prefill โดยให้ข้อมูลโรงงานและจุดตรวจวัดมาจาก current/live POMS ใช้ field ของ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) และเพิ่ม `measurementPoints[].connectedPointId` เพื่อระบุจุดตรวจวัดแต่ละรายการ โดยไม่คืน wrapper `formDefaults`, workflow metadata, `factoryAddress`, `systemTypes` หรือ `sourceMeasurementPointId`
 
 ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; `contactPersons` และ `notificationEmails` (รวม legacy `contactName`, `contactPhone`, `contactEmail`) ใช้ค่าที่อนุมัติบน active connected point ก่อน หากไม่มี override จึงใช้ source; `[]` ที่ล้างไว้ไม่ fallback. ส่วน `informationProviderName` และ `informationProviderPosition` จะ hydrate จาก `cems_wpms_connection_requests` ที่ผูกผ่าน `source_request_id` ของ active point ล่าสุดใน `systemType` ที่เลือก `officerNotificationEmails` ใช้ค่าของ active points ในระบบที่เลือกก่อน source request ตามหัวข้อ [อีเมลเจ้าหน้าที่](#เพิ่มแก้ไขอีเมลสำหรับแจ้งเตือนเจ้าหน้าที่); ถ้าไม่มี source request ให้ fallback เป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
 
 response prefill ยังคืนชื่อโรงงาน ที่อยู่ เลขทะเบียน และ field อื่นของ shared contract เพื่อแสดงข้อมูลประกอบเท่านั้น สำหรับ `BASIC_INFO` ให้เปิดแก้เฉพาะ [7 fields ที่อนุญาต](#shared-basic-info-fields) และสร้าง write payload จาก allowlist นี้ ห้ามส่ง response ทั้ง object กลับเป็น create/resubmission body; `remarks` ใน response ไม่ใช่ field ที่แก้ได้ของ `BASIC_INFO`
+
+ฟอร์มคืนทุกจุดใน `systemType` ที่เลือก เช่น โรงงานที่มี CEMS 21 จุดจะได้ `measurementPoints` ครบ 21 รายการ ให้แสดง `pointCode` คู่กับ `pointName` และเก็บ `connectedPointId` เป็นค่าที่เลือก ห้ามใช้ลำดับ array หรือชื่อจุดจับคู่ เพราะชื่ออาจซ้ำและ `pointCode` อาจเป็น `null` ได้ ทั้ง `BASIC_INFO`, `MEASUREMENT_POINTS` และกรณีไม่ส่ง `formType` คืน ID รายจุดเหมือนกัน
+
+เมื่อบันทึก `MEASUREMENT_POINTS` ให้ส่งเฉพาะจุดที่ต้องการแก้ใน `measurementPoints` โดยใช้ `connectedPointId` จากฟอร์ม เช่น `{"formType":"MEASUREMENT_POINTS","measurementPoints":[{"connectedPointId":15,"pointName":"ปล่อง A ที่แก้ไข"}]}` ไปยัง create/resubmission endpoint จุดที่ไม่ได้ส่งคงค่าเดิม; ไม่ส่ง response ทั้งก้อนเป็น write payload
 
 #### Request Fields
 
@@ -363,6 +367,9 @@ curl --request GET \
 | `factoryId`, `factoryName`, `address`, EIA/project, ชื่อพื้นที่, พิกัดโรงงาน | current/live factory profile | `null` สำหรับ field nullable |
 | `factoryRegistrationNo` | active `eligible_factories.factory_registration_no_old` เมื่อไม่ว่าง | เลขใหม่ `factory_registration_no_new`; ถ้า metadata ไม่มีค่าใช้เลขที่บันทึกใน POMS |
 | `measurementPoints[]` | active points ของ `systemType` ที่เลือก | ถ้าไม่มี active point ตอบ `404` และไม่เปิดฟอร์ม |
+| `measurementPoints[].connectedPointId` | `id` ของ active `cems_wpms_connected_measurement_points` | integer มากกว่า 0; คืนทุกจุดเสมอ ใช้ระบุจุดใน create/resubmission |
+| `measurementPoints[].pointCode` | รหัสจุดตรวจวัดปัจจุบัน | `null` ได้; ใช้แสดงผล ไม่ใช้แทน ID |
+| `measurementPoints[].pointName` | ชื่อจุดตรวจวัดปัจจุบัน | string; ชื่ออาจซ้ำกัน จึงใช้ `connectedPointId` จับคู่ |
 | `measurementPoints[].details.eligibleParameters` | รายการพารามิเตอร์ที่เข้าข่ายของจุด | `[]` |
 | `measurementPoints[].details.connectedParameters`, `requestedParameters` | พารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active `cems_wpms_connected_measurement_points.parameters_json` | `[]` |
 | `measurementPoints[].details.pendingParameters` | `eligibleParameters - connectedParameters` โดยเทียบชื่อพารามิเตอร์แบบ normalize ตัวพิมพ์/Unicode แต่คง label พร้อมหน่วยใน response | `[]` |
@@ -406,6 +413,7 @@ Minimal response (`200 OK`):
     "officerNotificationEmails": ["officer-alert@example.go.th"],
     "measurementPoints": [
       {
+        "connectedPointId": 15,
         "pointName": "ปล่อง A",
         "pointCode": "S2001",
         "pointType": "STACK",
@@ -647,7 +655,7 @@ field ที่ห้ามส่งในฟอร์มนี้ ได้แ�
 
 แก้เฉพาะอีเมลได้โดยส่งคู่กับ `connectedPointId` ไม่ต้องส่งชื่อหรือรายละเอียดจุดใหม่ รายชื่อเป็นการแทนที่ทั้งชุดของจุดที่เลือก หากต้องการเพิ่มอีเมลให้ส่งรายชื่อเดิมรวมกับรายการใหม่ จุดอื่นคงค่าเดิม และไม่แก้รายชื่อกลางจังหวัด/นิคม
 
-Frontend ใช้ `GET /poms-factories/:factoryId` อ่าน `data.measurementPoints[].officerNotificationEmails` ของจุดที่เลือก แล้วส่ง field นี้กลับใน point patch; ใช้ `connectedPointId` จาก detail เดียวกัน ส่วน `/form` ยังใช้ shared form shape และคืน `officerNotificationEmails` ที่ root เป็นรายชื่อรวมแบบไม่ซ้ำของจุดใน `systemType` ที่เลือก จึงไม่ควรนำรายชื่อรวมไปเขียนทับทุกจุดอัตโนมัติ
+Frontend ใช้ `GET /poms-factories/:factoryId` อ่าน `data.measurementPoints[].officerNotificationEmails` ของจุดที่เลือก แล้วส่ง field นี้กลับใน point patch; ใช้ `connectedPointId` จับคู่กับจุดจาก `/form` ส่วน `/form` ขยาย shared form shape ด้วย ID รายจุด และคืน `officerNotificationEmails` ที่ root เป็นรายชื่อรวมแบบไม่ซ้ำของจุดใน `systemType` ที่เลือก จึงไม่ควรนำรายชื่อรวมไปเขียนทับทุกจุดอัตโนมัติ
 
 ตัวอย่าง response ส่วนจุดตรวจวัดหลังอนุมัติ:
 
@@ -1014,6 +1022,7 @@ curl --request GET \
 | --- | --- | --- |
 | `data.systemType` | `CEMS` \| `WPMS` \| `null` | ระบบที่เลือก/อนุมานได้; `null` เมื่อไม่ได้จำกัดระบบ |
 | `data.measurementPoints` | array | จุดของระบบที่เลือก หรือทุกจุดเมื่อไม่ได้จำกัดระบบ; อย่างน้อย 1 จุด |
+| `data.measurementPoints[].connectedPointId` | integer | ID ของจุดจาก snapshot ที่ใช้สร้างฟอร์ม หรือ current/live เมื่อ fallback; ใช้จับคู่จุดและส่ง resubmission ตามกติกา factory form |
 | `data.measurementPoints[].systemType` | `CEMS` \| `WPMS` | คืนทุกจุดเมื่อ `data.systemType` เป็น `null`; กรณีระบบเดียวคงรูปแบบเดิม |
 
 field อื่นและ error envelope ใช้ [shared contract](../connection-requests/README.md#connection-request-form-prefill) เดิม; OpenAPI ใช้ `PomsFactoryEditRequestFormResponse` ที่ขยายจาก shared fields โดยไม่เปลี่ยน endpoint form อื่น
@@ -1039,6 +1048,7 @@ Minimal response (`200 OK`, ตัวอย่างคำขอที่คร�
     "informationProviderPosition": null,
     "measurementPoints": [
       {
+        "connectedPointId": 15,
         "systemType": "CEMS",
         "pointName": "ปล่อง A",
         "pointCode": "S2001",
@@ -1048,6 +1058,7 @@ Minimal response (`200 OK`, ตัวอย่างคำขอที่คร�
         "measurementInstruments": null
       },
       {
+        "connectedPointId": 16,
         "systemType": "WPMS",
         "pointName": "จุดระบายน้ำ A",
         "pointCode": "W2001",

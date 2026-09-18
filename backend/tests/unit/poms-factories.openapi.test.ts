@@ -373,7 +373,32 @@ describe('POMS factory master-data OpenAPI contract', () => {
   it('reuses canonical form fields with a mixed-system variant for edit requests', () => {
     const expectedResponse = { $ref: '#/components/schemas/ConnectionRequestFormResponse' };
     expect(jsonSuccessSchema('/cems-wpms-requests/{id}/form', 'get')).toEqual(expectedResponse);
-    expect(jsonSuccessSchema('/poms-factories/{factoryId}/form', 'get')).toEqual(expectedResponse);
+    expect(jsonSuccessSchema('/poms-factories/{factoryId}/form', 'get')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryFormResponse',
+    });
+    const factoryForm = asObject(schemas().PomsFactoryForm, 'factory form');
+    expect(factoryForm.example).toMatchObject({
+      requestType: 'NEW_CONNECTION',
+      measurementPoints: [expect.objectContaining({ connectedPointId: 15 })],
+    });
+    expect(
+      asObject(factoryForm.properties, 'factory form properties').measurementPoints,
+    ).toMatchObject({
+      minItems: 1,
+      items: { $ref: '#/components/schemas/PomsFactoryFormMeasurementPoint' },
+    });
+    for (const schemaName of [
+      'PomsFactoryFormMeasurementPoint',
+      'PomsFactoryEditRequestFormMeasurementPoint',
+    ]) {
+      const point = asObject(schemas()[schemaName], schemaName);
+      expect(point.required).toContain('connectedPointId');
+      expect(asObject(point.properties, 'point properties').connectedPointId).toMatchObject({
+        type: 'integer',
+        minimum: 1,
+        example: 15,
+      });
+    }
     expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}/form', 'get')).toEqual({
       $ref: '#/components/schemas/PomsFactoryEditRequestFormResponse',
     });

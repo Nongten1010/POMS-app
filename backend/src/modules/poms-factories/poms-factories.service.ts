@@ -13,7 +13,6 @@ import type { RegionalAccessDTO } from '../auth/regional-access';
 import { deriveHasEiaFromAssessment } from '../connection-requests/connection-request-eia';
 import {
   CONNECTION_REQUEST_TYPE,
-  type ConnectionRequestFormDTO,
   type ConnectionSystemType,
   type OperatorFactoryTableRowDTO,
   type RequestDocumentImageInput,
@@ -23,6 +22,7 @@ import type {
   ListPomsFactoryEditRequestsQuery,
   PomsFactoryDetailDTO,
   PomsFactoryFormContactsDTO,
+  PomsFactoryFormDTO,
   PomsFactoryEditRequestDetailDTO,
   PomsFactoryEditRequestFormDTO,
   PomsFactoryEditRequestDTO,
@@ -81,7 +81,7 @@ export const pomsFactoriesService = {
     viewScope: AccessScope,
     query: { formType?: PomsFactoryEditRequestDTO['formType']; systemType?: ConnectionSystemType },
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<ConnectionRequestFormDTO> {
+  ): Promise<PomsFactoryFormDTO> {
     const current = await this.getFactoryDetail(factoryId, actorUserId, viewScope, regionalAccess);
     const systemType = resolveFormSystemType(current.measurementPoints, query.systemType);
     const formContacts = await pomsFactoriesRepository.findFactoryFormContacts(
@@ -504,6 +504,7 @@ function toPomsConnectionRequestForm<T extends ConnectionSystemType | null>(
   const measurementPoints = points
     .filter((point) => systemType === null || point.systemType === systemType)
     .map((point) => ({
+      connectedPointId: point.connectedPointId,
       ...(systemType === null ? { systemType: point.systemType } : {}),
       pointName: point.pointName,
       pointCode: point.pointCode,
@@ -639,10 +640,10 @@ function emptyConnectionRequestForm<T extends ConnectionSystemType | null>(
 }
 
 function mergeFactoryProfileDocuments(
-  points: ConnectionRequestFormDTO['measurementPoints'],
+  points: PomsFactoryEditRequestFormDTO['measurementPoints'],
   factoryFrontPhotos: RequestDocumentImageInput[],
   factoryLogo: RequestDocumentImageInput | null,
-): ConnectionRequestFormDTO['measurementPoints'] {
+): PomsFactoryEditRequestFormDTO['measurementPoints'] {
   const withoutProfileDocuments = points.map((point) => ({
     ...point,
     documentsAndImages: (point.documentsAndImages ?? []).filter(

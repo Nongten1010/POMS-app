@@ -441,8 +441,84 @@ describe('pomsFactoriesService edit-request workflow', () => {
     expect(result).not.toHaveProperty('formDefaults');
     expect(result).not.toHaveProperty('factoryAddress');
     expect(result).not.toHaveProperty('systemTypes');
-    expect(result.measurementPoints[0]).not.toHaveProperty('connectedPointId');
+    expect(result.measurementPoints[0]).toHaveProperty('connectedPointId', 15);
     expect(result.measurementPoints[0]).not.toHaveProperty('sourceMeasurementPointId');
+  });
+
+  it('identifies all 21 CEMS points even with duplicate names and missing codes', async () => {
+    const detail = factoryDetail();
+    const cemsPoints = Array.from({ length: 21 }, (_, index) => ({
+      ...detail.measurementPoints[0],
+      connectedPointId: 100 + index * 3,
+      sourceMeasurementPointId: 200 + index,
+      pointName: 'ปล่องชื่อซ้ำ',
+      pointCode: index === 20 ? null : `S${index + 1}`,
+    }));
+    mockedRepository.findFactoryDetail.mockResolvedValue({
+      ...detail,
+      systemTypes: ['CEMS', 'WPMS'],
+      measurementPointCount: 22,
+      measurementPoints: [
+        ...cemsPoints,
+        { ...detail.measurementPoints[0], connectedPointId: 999, systemType: 'WPMS' },
+      ],
+    });
+
+    const result = await pomsFactoriesService.getFactoryForm(
+      'factory-001',
+      42,
+      ownFactoryScope,
+      { formType: 'MEASUREMENT_POINTS', systemType: 'CEMS' },
+      null,
+    );
+
+    expect(result.measurementPoints).toHaveLength(21);
+    expect(
+      result.measurementPoints.map(({ connectedPointId, pointName, pointCode }) => ({
+        connectedPointId,
+        pointName,
+        pointCode,
+      })),
+    ).toEqual(
+      cemsPoints.map(({ connectedPointId, pointName, pointCode }) => ({
+        connectedPointId,
+        pointName,
+        pointCode,
+      })),
+    );
+    expect(result.measurementPoints[20].connectedPointId).toBe(160);
+
+    await pomsFactoriesService.createEditRequest(
+      'factory-001',
+      {
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [
+          {
+            connectedPointId: result.measurementPoints[20].connectedPointId,
+            pointName: 'ปล่องที่แก้ไข',
+          },
+        ],
+      },
+      42,
+      ownFactoryScope,
+      null,
+    );
+    const proposed =
+      mockedRepository.createEditRequest.mock.calls[0][1].proposedMeasurementPoints ?? [];
+    expect(proposed).toHaveLength(22);
+    expect(proposed.find((point) => point.connectedPointId === 160)?.pointName).toBe(
+      'ปล่องที่แก้ไข',
+    );
+    expect(proposed.filter((point) => point.connectedPointId !== 160)).toEqual(
+      expect.arrayContaining(
+        cemsPoints.slice(0, 20).map((point) =>
+          expect.objectContaining({
+            connectedPointId: point.connectedPointId,
+            pointName: point.pointName,
+          }),
+        ),
+      ),
+    );
   });
 
   it('derives current parameter groups from the live connected parameters', async () => {
@@ -655,11 +731,13 @@ describe('pomsFactoriesService edit-request workflow', () => {
       expect(result.projectName).toBe('โครงการแก้ไข');
       expect(result.measurementPoints).toEqual([
         expect.objectContaining({
+          connectedPointId: 15,
           systemType: 'CEMS',
           pointCode: 'S0001',
           parameters: ['CO (ppm)'],
         }),
         expect.objectContaining({
+          connectedPointId: 16,
           systemType: 'WPMS',
           pointCode: 'W0001',
           parameters: ['BOD (mg/l)'],

@@ -5416,7 +5416,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get current/live POMS factory as connection-request form',
       operationId: 'getPomsFactoryForm',
       description:
-        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ข้อมูลโรงงาน/จุดตรวจวัดมาจาก current/live POMS และ active eligible metadata. สำหรับ measurementPoints[].details: eligibleParameters คงรายการพารามิเตอร์ที่เข้าข่าย, connectedParameters และ requestedParameters เป็นพารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active cems_wpms_connected_measurement_points.parameters_json และ pendingParameters = eligibleParameters - connectedParameters. contactPersons และ notificationEmails ใช้ approved overrides ของ active connected points ก่อน source; [] ที่ล้างแล้วไม่ fallback. informationProviderName และ informationProviderPosition hydrate จาก cems_wpms_connection_requests ที่ผูกผ่าน active point.source_request_id ล่าสุดของ systemType ที่เลือก โดย fallback เป็นค่าว่างเมื่อไม่มี source request. officerNotificationEmails รวมค่าของ active points ใน systemType ที่เลือกแบบไม่ซ้ำ โดยใช้ค่าที่อนุมัติแล้วก่อน source request; [] ที่บันทึกไว้ไม่ fallback. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity',
+        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form พร้อม measurementPoints[].connectedPointId สำหรับระบุจุดและส่งคำขอแก้ไข; ใช้ pointCode และ pointName แสดงผล โดยไม่ใช้ลำดับ array เป็น ID. ไม่คืน workflow metadata. ข้อมูลโรงงาน/จุดตรวจวัดมาจาก current/live POMS และ active eligible metadata. สำหรับ measurementPoints[].details: eligibleParameters คงรายการพารามิเตอร์ที่เข้าข่าย, connectedParameters และ requestedParameters เป็นพารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active cems_wpms_connected_measurement_points.parameters_json และ pendingParameters = eligibleParameters - connectedParameters. contactPersons และ notificationEmails ใช้ approved overrides ของ active connected points ก่อน source; [] ที่ล้างแล้วไม่ fallback. informationProviderName และ informationProviderPosition hydrate จาก cems_wpms_connection_requests ที่ผูกผ่าน active point.source_request_id ล่าสุดของ systemType ที่เลือก โดย fallback เป็นค่าว่างเมื่อไม่มี source request. officerNotificationEmails รวมค่าของ active points ใน systemType ที่เลือกแบบไม่ซ้ำ โดยใช้ค่าที่อนุมัติแล้วก่อน source request; [] ที่บันทึกไว้ไม่ fallback. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity',
       parameters: [
         factoryIdParameter,
         queryEnum(
@@ -5430,7 +5430,7 @@ const extraPaths: Record<string, OpenApiObject> = {
           'เลือกชนิดระบบ; optional เมื่อโรงงานมี active point เพียงชนิดเดียว',
         ),
       ],
-      successSchema: schemaRef('ConnectionRequestFormResponse'),
+      successSchema: schemaRef('PomsFactoryFormResponse'),
     }),
   },
   '/poms-factories/document-images': {
@@ -5551,7 +5551,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get proposed POMS edit-request form by ID',
       operationId: 'getPomsFactoryEditRequestForm',
       description:
-        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ทั้ง BASIC_INFO และ MEASUREMENT_POINTS overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. เปิดด้วย id ได้โดยไม่ต้องส่ง systemType. ต้องมี current/live POMS และจุดตรวจวัดสำหรับฟอร์มอย่างน้อยหนึ่งจุดเสมอ; หากไม่พบโรงงานที่มีจุดตรวจวัดในขอบเขตสิทธิ์ หรือ snapshot ที่ใช้สร้างฟอร์มว่าง ตอบ 404 NOT_FOUND. เมื่อ points มีระบบเดียวให้ใช้ระบบนั้น; MEASUREMENT_POINTS อนุมานจากจุดที่เปลี่ยนใน stored snapshots หรือ proposedContacts.systemType เมื่อไม่มีจุดเปลี่ยน. หากยังครอบคลุมหลายระบบคืน systemType: null และ measurementPoints ครบพร้อม systemType ของแต่ละจุด; BASIC_INFO ใช้ข้อมูลทั่วไปทั้งโรงงาน. query systemType เป็น optional filter สำหรับผู้เรียกเดิม และตอบ 400 เมื่อระบบที่เลือกไม่มีในชุดจุดตรวจวัด. ผู้ติดต่อและอีเมลใช้ proposedContacts เมื่อขอบเขตตรงกัน รวมถึง [] ที่ล้างไว้. fallback ใช้ source ล่าสุดของระบบที่เลือก หรือทั้งโรงงานสำหรับ BASIC_INFO; MEASUREMENT_POINTS ที่ไม่ระบุระบบชัดเจนไม่เลือก source และคืน provider เป็น null. Permission: factories:view พร้อม data scope เดิม',
+        'factoryRegistrationNo ใช้เลขทะเบียนเดิมจาก active eligible_factories ก่อนเลขใหม่เมื่อไม่มีเลขเดิม; factoryId คงเดิม. คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form พร้อม measurementPoints[].connectedPointId สำหรับระบุจุดและส่งคำขอแก้ไข; ใช้ pointCode และ pointName แสดงผล โดยไม่ใช้ลำดับ array เป็น ID. ไม่คืน workflow metadata. ทั้ง BASIC_INFO และ MEASUREMENT_POINTS overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. เปิดด้วย id ได้โดยไม่ต้องส่ง systemType. ต้องมี current/live POMS และจุดตรวจวัดสำหรับฟอร์มอย่างน้อยหนึ่งจุดเสมอ; หากไม่พบโรงงานที่มีจุดตรวจวัดในขอบเขตสิทธิ์ หรือ snapshot ที่ใช้สร้างฟอร์มว่าง ตอบ 404 NOT_FOUND. เมื่อ points มีระบบเดียวให้ใช้ระบบนั้น; MEASUREMENT_POINTS อนุมานจากจุดที่เปลี่ยนใน stored snapshots หรือ proposedContacts.systemType เมื่อไม่มีจุดเปลี่ยน. หากยังครอบคลุมหลายระบบคืน systemType: null และ measurementPoints ครบพร้อม systemType ของแต่ละจุด; BASIC_INFO ใช้ข้อมูลทั่วไปทั้งโรงงาน. query systemType เป็น optional filter สำหรับผู้เรียกเดิม และตอบ 400 เมื่อระบบที่เลือกไม่มีในชุดจุดตรวจวัด. ผู้ติดต่อและอีเมลใช้ proposedContacts เมื่อขอบเขตตรงกัน รวมถึง [] ที่ล้างไว้. fallback ใช้ source ล่าสุดของระบบที่เลือก หรือทั้งโรงงานสำหรับ BASIC_INFO; MEASUREMENT_POINTS ที่ไม่ระบุระบบชัดเจนไม่เลือก source และคืน provider เป็น null. Permission: factories:view พร้อม data scope เดิม',
       parameters: [
         idParameter,
         queryEnum(
@@ -6687,16 +6687,63 @@ function mergePathMaps(...maps: Record<string, OpenApiObject>[]): Record<string,
 
 const baseComponents = (baseDocument.components ?? {}) as OpenApiObject;
 const baseSchemas = (baseComponents.schemas as Record<string, OpenApiObject>) ?? {};
-// Reuse the canonical form fields while limiting mixed-system output to edit requests.
+// Extend shared form fields with POMS point identity; only edit requests allow mixed systems.
 const baseFormSchema = baseSchemas.ConnectionRequestForm;
 const baseFormProperties = baseFormSchema.properties as Record<string, OpenApiObject>;
 const baseFormPoints = baseFormProperties.measurementPoints;
 const baseMeasurementPoint = baseSchemas.MeasurementPoint;
+const baseFormExample = baseFormSchema.example as OpenApiObject;
+const pomsFormExample = {
+  ...baseFormExample,
+  requestType: 'NEW_CONNECTION',
+  measurementPoints: (baseFormExample.measurementPoints as OpenApiObject[]).map((point, index) => ({
+    ...point,
+    connectedPointId: 15 + index,
+  })),
+};
+const pomsFormMeasurementPoint: OpenApiObject = {
+  ...baseMeasurementPoint,
+  required: [...(baseMeasurementPoint.required as string[]), 'connectedPointId'],
+  properties: {
+    ...(baseMeasurementPoint.properties as OpenApiObject),
+    connectedPointId: {
+      type: 'integer',
+      minimum: 1,
+      readOnly: true,
+      example: 15,
+      description:
+        'ID ของจุดตรวจวัดใน current/live POMS; ใช้จับคู่รายการและส่งเป็น connectedPointId ในคำขอแก้ไข ห้ามใช้ลำดับ array, pointName หรือ pointCode แทน',
+    },
+  },
+};
 const editRequestFormSchemas: Record<string, OpenApiObject> = {
-  PomsFactoryEditRequestFormMeasurementPoint: {
-    ...baseMeasurementPoint,
+  PomsFactoryFormMeasurementPoint: pomsFormMeasurementPoint,
+  PomsFactoryForm: {
+    ...baseFormSchema,
+    description:
+      'ฟอร์ม current/live POMS ใช้ shared form fields พร้อม connectedPointId รายจุดสำหรับจับคู่และส่งคำขอแก้ไข',
+    example: pomsFormExample,
     properties: {
-      ...(baseMeasurementPoint.properties as OpenApiObject),
+      ...baseFormProperties,
+      measurementPoints: {
+        ...baseFormPoints,
+        minItems: 1,
+        items: schemaRef('PomsFactoryFormMeasurementPoint'),
+        description: 'จุดตรวจวัดทั้งหมดของระบบที่เลือก พร้อม connectedPointId รายจุด',
+      },
+    },
+  },
+  PomsFactoryFormResponse: {
+    ...baseSchemas.ConnectionRequestFormResponse,
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('PomsFactoryForm'),
+    },
+  },
+  PomsFactoryEditRequestFormMeasurementPoint: {
+    ...pomsFormMeasurementPoint,
+    properties: {
+      ...(pomsFormMeasurementPoint.properties as OpenApiObject),
       systemType: {
         type: 'string',
         enum: ['CEMS', 'WPMS'],
@@ -6706,6 +6753,7 @@ const editRequestFormSchemas: Record<string, OpenApiObject> = {
   },
   PomsFactoryEditRequestForm: {
     ...baseFormSchema,
+    example: pomsFormExample,
     description:
       'ฟอร์ม proposed values เปิดด้วย edit-request ID; ต้องมีจุดตรวจวัดอย่างน้อยหนึ่งจุดเสมอ และ systemType เป็น null เฉพาะเมื่อครอบคลุมหลายระบบ',
     properties: {

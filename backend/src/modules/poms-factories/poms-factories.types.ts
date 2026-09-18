@@ -10,13 +10,19 @@ import type {
 } from '../connection-requests/connection-requests.types';
 import type { MonitoringPointStatus } from '../monitoring-point-forms/monitoring-point-forms.types';
 
+export interface PomsFactoryFormDTO extends Omit<ConnectionRequestFormDTO, 'measurementPoints'> {
+  measurementPoints: (ConnectionRequestFormDTO['measurementPoints'][number] & {
+    connectedPointId: number;
+  })[];
+}
+
 /** An ID-based edit form may cover more than one monitoring system. */
 export interface PomsFactoryEditRequestFormDTO extends Omit<
-  ConnectionRequestFormDTO,
+  PomsFactoryFormDTO,
   'systemType' | 'measurementPoints'
 > {
   systemType: ConnectionSystemType | null;
-  measurementPoints: (ConnectionRequestFormDTO['measurementPoints'][number] & {
+  measurementPoints: (PomsFactoryFormDTO['measurementPoints'][number] & {
     systemType?: ConnectionSystemType;
   })[];
 }

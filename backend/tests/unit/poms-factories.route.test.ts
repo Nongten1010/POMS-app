@@ -133,7 +133,7 @@ describe('POMS factory routes', () => {
     expect(response.body.data).not.toHaveProperty('formDefaults');
     expect(response.body.data).not.toHaveProperty('factoryAddress');
     expect(response.body.data).not.toHaveProperty('systemTypes');
-    expect(response.body.data.measurementPoints[0]).not.toHaveProperty('connectedPointId');
+    expect(response.body.data.measurementPoints[0]).toHaveProperty('connectedPointId', 15);
     expect(mockedService.getFactoryForm).toHaveBeenCalledWith(
       'factory-001',
       42,
@@ -584,6 +584,7 @@ function connectionForm() {
     contactPhone: '0812345678',
     measurementPoints: [
       {
+        connectedPointId: 15,
         pointName: 'ปล่อง A',
         pointCode: 'S0001',
         pointType: 'STACK' as const,
