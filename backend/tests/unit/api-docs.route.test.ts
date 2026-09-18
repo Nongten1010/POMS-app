@@ -181,13 +181,20 @@ describe('API documentation routes', () => {
         }
       >
     >;
-    const expected = { $ref: '#/components/schemas/ConnectionRequestFormResponse' };
-
-    for (const path of ['/cems-wpms-requests/{id}/form', '/poms-factories/{factoryId}/form']) {
-      expect(paths[path].get.responses?.['200'].content?.['application/json'].schema).toEqual(
-        expected,
-      );
+    for (const [path, schema] of [
+      ['/cems-wpms-requests/{id}/form', 'ConnectionRequestFormResponse'],
+      ['/poms-factories/{factoryId}/form', 'PomsFactoryFormResponse'],
+    ]) {
+      expect(paths[path].get.responses?.['200'].content?.['application/json'].schema).toEqual({
+        $ref: `#/components/schemas/${schema}`,
+      });
     }
+    expect(response.body.components.schemas.PomsFactoryFormMeasurementPoint).toMatchObject({
+      required: expect.arrayContaining(['connectedPointId']),
+      properties: {
+        connectedPointId: { type: 'integer', minimum: 1 },
+      },
+    });
     expect(
       paths['/poms-factories/edit-requests/{id}/form'].get.responses?.['200'].content?.[
         'application/json'
