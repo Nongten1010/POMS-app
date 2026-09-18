@@ -459,7 +459,7 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function RequestActions({ row, isOperator, isAdmin = false, onOpenDocument, onCancelRequest }) {
+function RequestActions({ row, isOperator, isAdmin = false, canApprove = false, onOpenDocument, onCancelRequest }) {
   const rowStatuses = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
   const cannotProcess = rowStatuses.some((status) => (
     ['ผ่านการพิจารณา', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(status)
@@ -501,7 +501,7 @@ function RequestActions({ row, isOperator, isAdmin = false, onOpenDocument, onCa
       <Button
         size="small"
         variant="contained"
-        disabled={cannotProcess}
+        disabled={canApprove !== true || cannotProcess}
         onClick={() => onOpenDocument?.(row, 'review')}
       >
         ดำเนินการ
@@ -4852,7 +4852,7 @@ function getFactoryColumns(onOpenMonitoringPoints) {
   ]
 }
 
-function getRequestColumns(onOpenDocument, isOperator = false, onCancelRequest, isAdmin = false) {
+function getRequestColumns(onOpenDocument, isOperator = false, onCancelRequest, isAdmin = false, canApprove = false) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     {
@@ -4880,7 +4880,7 @@ function getRequestColumns(onOpenDocument, isOperator = false, onCancelRequest, 
       width: isOperator ? 250 : isAdmin ? 280 : 190,
       sortable: false,
       filterable: false,
-      renderCell: (params) => <RequestActions row={params.row} isOperator={isOperator} isAdmin={isAdmin} onOpenDocument={onOpenDocument} onCancelRequest={onCancelRequest} />,
+      renderCell: (params) => <RequestActions row={params.row} isOperator={isOperator} isAdmin={isAdmin} canApprove={canApprove} onOpenDocument={onOpenDocument} onCancelRequest={onCancelRequest} />,
     },
   ]
 }
@@ -4924,9 +4924,10 @@ function KwpCancelRequestDialog({ request, submitting, error, onClose, onConfirm
   )
 }
 
-function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToken = '', currentUser = null }) {
+function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToken = '', currentUser = null, permissions = {} }) {
   const isOperator = userType === 'operator'
   const isAdmin = isKwpAdmin(roleCode, roleCodes)
+  const canApprove = permissions?.kwp_forms?.approve === true
   const canCreate = canCreateKwpRequest(userType, roleCode, roleCodes)
   const availableSubMenus = isOperator ? operatorSubMenus : officerSubMenus
   const [monitoringPointContext, setMonitoringPointContext] = useState(null)
@@ -5143,6 +5144,7 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
   }, [accessToken])
 
   const openRequestDocument = useCallback(async (row, mode) => {
+    if (mode === 'review' && !canApprove) return
     if (mode === 'edit') {
       if (!canEditKwpRequest(row, { isOperator, isAdmin })) return
       setRequestsError('')
@@ -5211,9 +5213,10 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
         error: requestError.message,
       })
     }
-  }, [accessToken, fetchKwpSubmissionDetail, isOperator, isAdmin, openFormBottomSheet])
+  }, [accessToken, fetchKwpSubmissionDetail, isOperator, isAdmin, canApprove, openFormBottomSheet])
 
   const requestKwpDocumentRevision = useCallback(async (officerNote) => {
+    if (!canApprove) throw new Error('ไม่มีสิทธิ์ดำเนินการพิจารณาคำขอ')
     const requestId = requestDocument?.row?.id
 
     if (!requestId) {
@@ -5241,9 +5244,10 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
     await readKwpApiResponse(result, 'แจ้งแก้ไขแบบฟอร์มไม่สำเร็จ')
     setRequestDocument(null)
     loadRequestRows()
-  }, [accessToken, loadRequestRows, requestDocument?.row?.id])
+  }, [accessToken, canApprove, loadRequestRows, requestDocument?.row?.id])
 
   const approveKwpDocument = useCallback(async () => {
+    if (!canApprove) throw new Error('ไม่มีสิทธิ์ดำเนินการพิจารณาคำขอ')
     const requestId = requestDocument?.row?.id
 
     try {
@@ -5283,7 +5287,7 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
       }))
       throw requestError
     }
-  }, [accessToken, loadRequestRows, requestDocument?.row?.id])
+  }, [accessToken, canApprove, loadRequestRows, requestDocument?.row?.id])
 
   const closeMonitoringPointDialog = useCallback(() => {
     setMonitoringPointRows([])
@@ -5332,8 +5336,9 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
         isOperator,
         openCancelRequestDialog,
         isAdmin,
+        canApprove,
       ),
-    [isOperator, isAdmin, openRequestDocument, openCancelRequestDialog],
+    [isOperator, isAdmin, canApprove, openRequestDocument, openCancelRequestDialog],
   )
   const sortedRequestRows = useMemo(() => sortKwpRequestRows(requestRows, isOperator), [requestRows, isOperator])
   const table = useMemo(

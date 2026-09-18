@@ -141,7 +141,7 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
   const server = await createServer({ cacheDir, optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'kwp-test-exports', enforce: 'pre', transform(code, id) {
-      if (id.endsWith('/src/pages/KwpFormsPage.jsx')) return `${code}\nexport { Kwp01Form, Kwp02Form, Kwp03Form, RequestActions, KwpCancelRequestDialog, KwpLegacyAttachmentWarning, ParameterMultiSelect, fetchKwpEditForm, buildKwp01PreviewData, buildKwp02PreviewData, buildKwp03PreviewData, buildKwp01SubmissionPayload, buildKwp02SubmissionPayload, buildKwp03SubmissionPayload, buildKwpEditFormFromDetail, buildKwpRequestPreviewDataFromDetail, getKwpPreviewAttachmentGroups, FormSelectionMenu, MonitoringPointDialog, getFactoryColumns, isKwpFormOptionDisabledForPoint };`
+      if (id.endsWith('/src/pages/KwpFormsPage.jsx')) return `${code}\nexport { Kwp01Form, Kwp02Form, Kwp03Form, RequestActions, KwpCancelRequestDialog, KwpLegacyAttachmentWarning, ParameterMultiSelect, fetchKwpEditForm, buildKwp01PreviewData, buildKwp02PreviewData, buildKwp03PreviewData, buildKwp01SubmissionPayload, buildKwp02SubmissionPayload, buildKwp03SubmissionPayload, buildKwpEditFormFromDetail, buildKwpRequestPreviewDataFromDetail, getKwpPreviewAttachmentGroups, FormSelectionMenu, MonitoringPointDialog, getFactoryColumns, getRequestColumns, isKwpFormOptionDisabledForPoint };`
       if (id.endsWith('/src/utils/kwpFormPdf.js')) return `${code}\nexport { KwpPdfLayout };`
     } }],
   })
@@ -215,6 +215,45 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
           edit.props.onClick()
           assert.deepEqual(opened, [request, 'edit'])
         }
+      }
+    })
+
+    await t.test('process buttons remain visible but require boolean approval permission and an allowed status', () => {
+      for (const isAdmin of [false, true]) {
+        for (const canApprove of [undefined, null, false, 'true', 1, true]) {
+          for (const statusCode of ['SUBMITTED', 'REVISION_REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED']) {
+            const row = { id: 1, statusCode }
+            let opened
+            const columns = page.getRequestColumns((...args) => { opened = args }, false, undefined, isAdmin, canApprove)
+            const element = columns.find(({ field }) => field === 'actions').renderCell({ row })
+            const actions = element.type(element.props)
+            const buttons = findButtons(actions)
+            assert.deepEqual(buttons.map(({ props }) => props.children),
+              isAdmin ? ['เปิดดู', 'ดำเนินการ', 'แก้ไข'] : ['เปิดดู', 'ดำเนินการ'])
+            const process = buttons[1]
+            const disabled = canApprove !== true || ['APPROVED', 'REJECTED', 'CANCELLED'].includes(statusCode)
+            assert.equal(process.props.disabled, disabled)
+            if (!disabled) {
+              process.props.onClick()
+              assert.deepEqual(opened, [row, 'review'])
+            }
+            assert.equal(Boolean(buttons[0].props.disabled), false)
+            if (isAdmin) assert.equal(buttons[2].props.disabled, statusCode !== 'REVISION_REQUESTED')
+          }
+        }
+      }
+      const operator = page.RequestActions({ row: { statusCode: 'SUBMITTED' }, isOperator: true, canApprove: true })
+      assert.deepEqual(findButtons(operator).map(({ props }) => props.children), ['เปิดดู', 'แก้ไข', 'ยกเลิกคำขอ'])
+    })
+
+    await t.test('KWP approval permission is passed from authentication and guards review API actions', async () => {
+      const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8')
+      const pageSource = await readFile(new URL('../pages/KwpFormsPage.jsx', import.meta.url), 'utf8')
+      assert.match(appSource, /<KwpFormsPage\b[^>]*permissions=\{activePermissions\}/)
+      assert.match(pageSource, /const canApprove = permissions\?\.kwp_forms\?\.approve === true/)
+      assert.match(pageSource, /if \(mode === 'review' && !canApprove\) return/)
+      for (const action of ['requestKwpDocumentRevision', 'approveKwpDocument']) {
+        assert.match(pageSource, new RegExp(`const ${action} = useCallback\\(async \\([^)]*\\) => \\{\\s*if \\(!canApprove\\) throw new Error`))
       }
     })
 
