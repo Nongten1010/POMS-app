@@ -8,6 +8,7 @@
 
 ## Frontend Handoffs
 
+- [ตารางคำขอแก้ไขโรงงาน: ใช้ข้อมูลสรุปและจุดเป้าหมาย พร้อมรายการตรวจรับ](./frontend-handoffs/edit-request-list-summary/README.md)
 - [แก้ไขจุดตรวจวัด: เปิดแก้ข้อมูลทั่วไปโรงงาน พร้อม payload และรายการตรวจรับ](./frontend-handoffs/measurement-point-general-info/README.md)
 
 - [แก้ไขข้อมูลทั่วไปโรงงาน: 7 fields, payload และรายการตรวจรับของ frontend](./frontend-handoffs/factory-basic-info/README.md)

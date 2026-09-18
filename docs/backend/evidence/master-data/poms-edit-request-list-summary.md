@@ -1,6 +1,6 @@
 # ผลทดสอบข้อมูลสรุปรายการคำขอแก้ไขโรงงาน POMS
 
-เอกสารนี้บันทึกผลทดสอบในเครื่องสำหรับการปรับ `GET /api/v1/poms-factories/edit-requests` ไม่ใช่หลักฐานว่า deploy แล้ว Contract สำหรับ frontend อยู่ที่ [List summary และจุดเป้าหมาย](../../api/menus/master-data/factory-edit-requests.md#edit-request-list-summary)
+เอกสารนี้บันทึกผลทดสอบในเครื่องและหลักฐาน deployment สำหรับการปรับ `GET /api/v1/poms-factories/edit-requests` โดยแยกผลตรวจ production ไว้ด้านล่าง Contract สำหรับ frontend อยู่ที่ [List summary และจุดเป้าหมาย](../../api/menus/master-data/factory-edit-requests.md#edit-request-list-summary)
 
 ## ปัญหาและสาเหตุที่ยืนยัน
 
@@ -44,6 +44,15 @@ npm run typecheck
 
 ต้องรัน [migration 0123](../../../../backend/src/db/migrations/0123_add_poms_edit_request_target_ids.ts) ก่อนเปิด backend รุ่นนี้ และประสาน frontend ให้เลิกอ่าน snapshots จาก list ตาม [breaking-change migration](../../api/CHANGELOG.md#poms-edit-request-list-summary) การแก้ครั้งนี้ไม่แก้ `frontend/`
 
-ยังไม่ได้รัน migration กับ SQL Server จริงหรือ deploy production จึงยังไม่ยืนยันผล authenticated GET ของคำขอจริง หลัง release ต้องตรวจ OpenAPI ที่ production และ list/detail/form ด้วยบัญชีที่มีสิทธิ์ รายการเก่าที่อนุมานได้แสดง `SNAPSHOT_DIFF` ซึ่งอาจไม่ครอบคลุมจุดที่ส่งค่าเดิม; รายการที่หลักฐานไม่พอแสดง `UNKNOWN` โดยไม่แก้ข้อมูลเก่าจากการคาดเดา
+ผลทดสอบในเครื่องข้างต้นไม่ครอบคลุม SQL Server production ส่วน deployment ยืนยันแยกไว้ด้านล่าง ยังต้องตรวจ list/detail/form ด้วยบัญชีที่มีสิทธิ์เพื่อยืนยันผลของคำขอจริง รายการเก่าที่อนุมานได้แสดง `SNAPSHOT_DIFF` ซึ่งอาจไม่ครอบคลุมจุดที่ส่งค่าเดิม; รายการที่หลักฐานไม่พอแสดง `UNKNOWN` โดยไม่แก้ข้อมูลเก่าจากการคาดเดา
 
 Implementation: [target resolution](../../../../backend/src/modules/poms-factories/poms-edit-request-targets.ts), [repository](../../../../backend/src/modules/poms-factories/poms-factories.repository.ts), [regression tests](../../../../backend/tests/unit/poms-factories.list-summary.test.ts)
+
+## หลักฐาน production
+
+ตรวจ [Deploy POMS run 35368111474](https://github.com/Nongten1010/POMS-app/actions/runs/35368111474) ของ merge commit `47f6d59df35ef916a195a8a0f054a6a032c565db` ซึ่งเสร็จเมื่อ `2026-09-18T16:24:56Z`:
+
+- Build backend, Test backend, Run backend database migrations, Deploy backend service files และ Restart backend and verify health สำเร็จ
+- ขั้น build/deploy frontend ถูกข้าม จึงใช้ผลรอบนี้ยืนยัน frontend mapping ไม่ได้
+- อ่าน [OpenAPI production](https://d-poms.diw.go.th/api/v1/openapi.json) สำเร็จ และตรวจว่า list response อ้างถึง `PomsFactoryEditRequestSummary` พร้อม `provinceName`, `targetMeasurementPoints` และ `targetMeasurementPointsSource` ทั้งสี่ค่า ไม่มี snapshot/event fields ใน summary schema
+- ยังไม่ได้ตรวจ authenticated GET ของ list/detail/form หรือคำขอ `id: 48` จริง ผลนี้ยืนยัน deployment และ published schema เท่านั้น

@@ -6,6 +6,8 @@
 
 ตารางรายการคำขอใช้ [list summary และจุดเป้าหมาย](#edit-request-list-summary) จาก `GET /poms-factories/edit-requests`; แสดงประเภท/รหัสจุดจาก `targetMeasurementPoints[]` และเลิกอ่าน `proposedMeasurementPoints[0]` การเพิ่ม ID ใน `/form` เป็นคนละ contract กับ list summary นี้
 
+คู่มือปรับตารางและตรวจรับจาก handoff: [ข้อมูลสรุปรายการคำขอแก้ไขโรงงาน](../../../guides/frontend-handoffs/edit-request-list-summary/README.md) — รวมการแสดงหลายจุด คำขอเก่า และเงื่อนไขก่อนเปิดใช้
+
 คู่มือสำหรับทีม frontend: [แบบฟอร์มแก้ไขข้อมูลทั่วไปของโรงงาน](../../../guides/frontend-handoffs/factory-basic-info/README.md) — จุดที่ต้องปรับ ตัวอย่าง payload และรายการตรวจรับ
 
 เมนูนี้ใช้ข้อมูลโรงงาน current/live จาก active rows ใน `cems_wpms_connected_measurement_points` เพื่อแสดงรายชื่อโรงงานและจุดตรวจวัดในระบบ POMS ผู้ประกอบการส่งคำขอแก้ไขได้ 2 แบบฟอร์มคือ `BASIC_INFO` และ `MEASUREMENT_POINTS` แต่ข้อมูลจริงจะยังไม่เปลี่ยนจนกว่า admin จะพิจารณาอนุมัติ
@@ -881,7 +883,7 @@ Minimal response (`200 OK`, ตัวอย่างสมมติ):
 
 คืน current/proposed snapshot, ข้อมูลผู้ติดต่อ, อีเมลแจ้งเตือน, workflow events และ audit metadata ของคำขอเดียว
 
-`events[].actorName` คืนชื่อผู้ทำ action จาก `users.first_name` และ `users.last_name` ณ เวลาอ่าน โดย trim แต่ละส่วนแล้วเชื่อมส่วนที่มีค่าด้วยช่องว่างหนึ่งตัว ถ้ามีเพียงชื่อหรือนามสกุลให้ใช้ส่วนที่มีค่า ถ้าไม่มีชื่อทั้งสองส่วนหรือไม่พบผู้ใช้ให้คืน `null` โดยยังคง event และ `actorUserId` เดิม ชื่อนี้ไม่ใช่ snapshot และอาจเปลี่ยนตามข้อมูลผู้ใช้ กติกานี้ใช้กับทุก response ที่คืน edit-request events รวมถึง list, create, resubmission, review และ cancel
+`events[].actorName` คืนชื่อผู้ทำ action จาก `users.first_name` และ `users.last_name` ณ เวลาอ่าน โดย trim แต่ละส่วนแล้วเชื่อมส่วนที่มีค่าด้วยช่องว่างหนึ่งตัว ถ้ามีเพียงชื่อหรือนามสกุลให้ใช้ส่วนที่มีค่า ถ้าไม่มีชื่อทั้งสองส่วนหรือไม่พบผู้ใช้ให้คืน `null` โดยยังคง event และ `actorUserId` เดิม ชื่อนี้ไม่ใช่ snapshot และอาจเปลี่ยนตามข้อมูลผู้ใช้ กติกานี้ใช้กับทุก response ที่คืน edit-request events ได้แก่ detail, create, resubmission, review และ cancel ส่วน list summary ไม่คืน `events`
 
 `factoryRegistrationNo` เป็นเลขสำหรับแสดงผล โดยใช้เลขทะเบียนเดิมจาก active `eligible_factories.factory_registration_no_old` ก่อน ถ้าค่าเป็น `null` หรือว่างให้ใช้เลขทะเบียนใหม่ `factory_registration_no_new`; ถ้าไม่มี metadata ให้คงเลขที่บันทึกในคำขอ กติกาเดียวกันใช้กับ `currentFactory.factoryRegistrationNo` และ `proposedFactory.factoryRegistrationNo` รวมถึงคำขอเก่าที่เคยบันทึกเลขใหม่ ทั้งนี้ `factoryId` ไม่เปลี่ยน และไม่ได้เขียนทับ JSON snapshots หรือ events ในฐานข้อมูล ข้อมูลก่อน/หลังอื่นยังคงตาม snapshot เดิม
 
