@@ -445,11 +445,35 @@ function normalizeFactoryDetail(row = {}) {
 
 function getPointIdentity(point = {}) {
   return {
-    connectedPointId: point?.connectedPointId ?? point?.id ?? null,
+    connectedPointId: point?.connectedPointId ?? null,
     pointCode: point?.pointCode ?? point?.stationId ?? point?.code ?? '',
     pointName: point?.pointName ?? point?.name ?? '',
     systemType: point?.systemType ?? point?.type ?? '',
   }
+}
+
+function findMatchingMeasurementPoint(point, candidates, systemType = '') {
+  const identity = getPointIdentity(point)
+  const expectedSystemType = identity.systemType || systemType
+  // IDs and codes identify points; names and array positions do not.
+  const matches = candidates.filter((candidate) => {
+    const candidateIdentity = getPointIdentity(candidate)
+    if (identity.connectedPointId != null) {
+      return candidateIdentity.connectedPointId != null
+        && String(candidateIdentity.connectedPointId) === String(identity.connectedPointId)
+    }
+    return Boolean(identity.pointCode && candidateIdentity.pointCode === identity.pointCode)
+  })
+  const compatibleMatches = matches.filter((candidate) => {
+    const candidateIdentity = getPointIdentity(candidate)
+    return (!identity.pointCode || !candidateIdentity.pointCode || identity.pointCode === candidateIdentity.pointCode)
+      && (!expectedSystemType || !candidateIdentity.systemType || expectedSystemType === candidateIdentity.systemType)
+  })
+  const matchedIds = new Set(compatibleMatches.map((candidate) => String(getPointIdentity(candidate).connectedPointId)))
+  if ((matches.length && !compatibleMatches.length) || matchedIds.size > 1) {
+    throw new Error('ข้อมูลอ้างอิงจุดตรวจวัดไม่ตรงกัน กรุณาโหลดข้อมูลใหม่')
+  }
+  return compatibleMatches[0] ?? null
 }
 
 function getFactorySystemType(factory = {}, selectedPoint = null) {
@@ -482,23 +506,16 @@ function mergeFormMeasurementPointIds(formData = {}, factory = {}) {
 
   return {
     ...formData,
-    measurementPoints: formData.measurementPoints.map((point, index) => {
-      const pointIdentity = getPointIdentity(point)
-      const matchedPoint = detailPoints.find((candidate) => {
-        const candidateIdentity = getPointIdentity(candidate)
-        return (
-          (pointIdentity.pointCode && candidateIdentity.pointCode === pointIdentity.pointCode)
-          || (pointIdentity.pointName && candidateIdentity.pointName === pointIdentity.pointName && candidateIdentity.systemType === pointIdentity.systemType)
-          || index === detailPoints.indexOf(candidate)
-        )
-      })
+    measurementPoints: formData.measurementPoints.map((point) => {
+      const matchedPoint = findMatchingMeasurementPoint(point, detailPoints, formData.systemType)
       const matchedIdentity = getPointIdentity(matchedPoint)
       const hasPointOfficerEmails = matchedPoint
         && Object.prototype.hasOwnProperty.call(matchedPoint, 'officerNotificationEmails')
 
       return {
         ...point,
-        connectedPointId: point.connectedPointId ?? matchedIdentity.connectedPointId,
+        connectedPointId: matchedIdentity.connectedPointId,
+        systemType: point.systemType || formData.systemType || matchedIdentity.systemType,
         ...(hasPointOfficerEmails
           ? { officerNotificationEmails: matchedPoint.officerNotificationEmails }
           : {}),
@@ -520,31 +537,23 @@ function normalizeFactoryFormData(formData = {}, factory = {}, extra = {}) {
   const selectedPoint = factory?.selectedMeasurementPoint ?? null
   const selectedSystemType = getFactorySystemType(factory, selectedPoint)
   const mergedFormData = mergeFormMeasurementPointIds(formData, factory)
-  const selectedIdentity = getPointIdentity(selectedPoint)
   const formMeasurementPoints = Array.isArray(mergedFormData.measurementPoints) ? mergedFormData.measurementPoints : []
   const proposedFactory = factory?.raw?.proposedFactory ?? {}
   const currentFactory = factory?.raw?.currentFactory ?? {}
   const editableFactorySources = [mergedFormData, proposedFactory, factory, currentFactory]
   const factoryFrontPhotos = getFirstOwnValue(editableFactorySources, 'factoryFrontPhotos', [])
   const factoryLogo = getFirstOwnValue(editableFactorySources, 'factoryLogo', null)
-  const selectedMeasurementPoints = selectedPoint
-    ? [
-        formMeasurementPoints.find((point) => {
-          const pointIdentity = getPointIdentity(point)
-          return (
-            (selectedIdentity.connectedPointId && pointIdentity.connectedPointId === selectedIdentity.connectedPointId)
-            || (selectedIdentity.pointCode && pointIdentity.pointCode === selectedIdentity.pointCode)
-            || (selectedIdentity.pointName && pointIdentity.pointName === selectedIdentity.pointName && pointIdentity.systemType === selectedIdentity.systemType)
-          )
-        }) ?? {
-          ...selectedPoint,
-          pointCode: selectedIdentity.pointCode,
-          pointName: selectedIdentity.pointName,
-          systemType: selectedIdentity.systemType,
-          connectedPointId: selectedIdentity.connectedPointId,
-        },
-      ]
-    : formMeasurementPoints
+  const matchedSelectedPoint = selectedPoint
+    ? findMatchingMeasurementPoint(selectedPoint, formMeasurementPoints, selectedSystemType)
+    : null
+  if (selectedPoint && !matchedSelectedPoint) {
+    throw new Error('ไม่พบข้อมูลแบบฟอร์มของจุดตรวจวัดที่เลือก กรุณาโหลดข้อมูลใหม่')
+  }
+  const selectedMeasurementPoints = selectedPoint ? [matchedSelectedPoint] : formMeasurementPoints
+  if (extra.__formType === 'MEASUREMENT_POINTS'
+    && (!selectedMeasurementPoints.length || selectedMeasurementPoints.some((point) => !point.connectedPointId))) {
+    throw new Error('ไม่พบรหัสอ้างอิงจุดตรวจวัดสำหรับส่งคำขอแก้ไข กรุณาโหลดข้อมูลใหม่')
+  }
 
   return {
     ...factory,
@@ -2159,6 +2168,10 @@ function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}
 
   if (!connectedPointId) {
     throw new Error('ไม่พบรหัสอ้างอิงจุดตรวจวัดสำหรับส่งคำขอแก้ไข')
+  }
+  if (initialRequest?.selectedMeasurementPoint
+    && !findMatchingMeasurementPoint(initialRequest.selectedMeasurementPoint, [initialPoint], initialRequest.systemType)) {
+    throw new Error('ข้อมูลอ้างอิงจุดตรวจวัดไม่ตรงกับจุดที่เลือก กรุณาโหลดข้อมูลใหม่')
   }
 
   const finalFactoryDocuments = getFinalFactoryDocuments(initialRequest, context)
