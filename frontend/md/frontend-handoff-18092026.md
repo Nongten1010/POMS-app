@@ -9,7 +9,7 @@
 | ตัวเลือก DCON ใน dialog ตั้งค่าอุปกรณ์ (เนื้อหาเดิม) | แก้แล้ว ตามที่ผู้ใช้แจ้ง | เก็บไว้เป็นประวัติ ไม่ต้องแก้ซ้ำ |
 | API รายการคำขอแก้ไขข้อมูลพื้นฐานแบบข้อมูลสรุป (เพิ่มใหม่) | รอ backend รองรับ | ให้แก้เฉพาะงานใหม่ในหัวข้อถัดไป |
 
-สถานะงานเดิมเป็นการบันทึกตามคำสั่งผู้ใช้ ไม่ใช่ผลตรวจ deployment หรือทดสอบอุปกรณ์จริงเพิ่มเติมในรอบนี้
+สถานะงาน DCON มีผลตรวจโค้ดและ deployment ประกอบตามหัวข้องานเดิมด้านล่าง แต่ยังไม่ได้ทดสอบการบันทึกผ่าน API จริงหรืออุปกรณ์จริงเพิ่มเติมในรอบนี้
 
 ## งานใหม่: ข้อมูลสรุปตารางรายการคำขอแก้ไขข้อมูลพื้นฐาน
 
@@ -104,6 +104,14 @@
 ## งานเดิม: DCON (แก้แล้ว ไม่ต้องแก้ซ้ำ)
 
 เนื้อหาต่อไปนี้คงไว้เป็นประวัติของงานที่แก้แล้ว ไม่ใช่งานค้างในรอบนี้ เอกสาร API ที่เกี่ยวข้อง: [การตั้งค่าอุปกรณ์](../../docs/backend/api/menus/connection-requests/device-configs.md) และ [จุดตรวจวัดที่เชื่อมต่อแล้ว](../../docs/backend/api/shared/connected-measurement-points/README.md)
+
+### ผลตรวจการรองรับ DCON
+
+- Backend ใน commit `50d1d1d` มี validator, การบันทึก/คืน config, form prefill, migration และ OpenAPI source สำหรับ `DCON_ASCII` แล้ว ดู [สัญญา DCON และ implementation](../../docs/backend/api/menus/connection-requests/device-configs.md#dcon-device-address)
+- ตรวจ `npm run typecheck` ผ่าน และชุดทดสอบ backend ที่เกี่ยวข้อง 8 suites ผ่าน 295 tests ครอบคลุม validator, service, routes ของคำขอและจุดที่เชื่อมต่อแล้ว, integration config, migration และ OpenAPI
+- [Deployment ของ backend DCON](https://github.com/Nongten1010/POMS-app/actions/runs/35354260055) สำเร็จ รวมขั้นตอน database migrations และ backend health check; ระบบเป้าหมายอื่นต้องรัน migration `0122_allow_dcon_ascii_device_protocol` ก่อนใช้งาน
+- ตรวจ [OpenAPI บน production](https://d-poms.diw.go.th/api/v1/openapi.json) พบ `DCON_ASCII` ใน `DeviceConnectionConfig`, `StructuredDeviceConnectionDevice` และ `IntegrationDeviceConfig`
+- ยังต้องตรวจการบันทึก/โหลดกลับผ่าน API จริงและการรับค่าจากอุปกรณ์จริง การรองรับ config นี้ไม่ได้เพิ่ม driver DCON
 
 ### สิ่งที่เปลี่ยนใน Frontend
 
