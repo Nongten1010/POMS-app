@@ -223,6 +223,44 @@ describe('create measurement-point request route', () => {
     );
   });
 
+  it.each([false, true])('accepts DCON config with structured wrapper = %s', async (structured) => {
+    const dcon = {
+      stationId: 'S0001',
+      deviceCode: 'DCON001',
+      protocol: 'DCON_ASCII',
+      settings: { comPort: 'COM3', slaveId: 7, quantity: null, valueRange: { min: 0, max: null } },
+      channels: [],
+    };
+    const payload = structured
+      ? {
+          config: {
+            stationId: 'S0001',
+            device: [
+              dcon,
+              { deviceCode: 'RTU001', protocol: 'MODBUS_RTU', settings: { slaveId: 1 } },
+            ],
+            channels: [],
+          },
+        }
+      : dcon;
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send(payload);
+    expect(response.status).toBe(201);
+    const expected = expect.objectContaining({ protocol: 'DCON_ASCII', settings: dcon.settings });
+    expect(
+      structured ? mockedService.createDeviceConfigs : mockedService.createDeviceConfig,
+    ).toHaveBeenCalledWith(
+      17,
+      structured
+        ? { configs: [expected, expect.objectContaining({ protocol: 'MODBUS_RTU' })] }
+        : expected,
+      42,
+      { scope: 'OWN_FACTORY' },
+    );
+  });
+
   it('accepts request-bound database config payloads with nullable fields and table names', async () => {
     const response = await request(createApp())
       .post('/api/v1/cems-wpms-requests/17/device-configs')

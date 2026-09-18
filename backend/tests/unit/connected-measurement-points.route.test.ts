@@ -576,6 +576,46 @@ describe('connected measurement points route', () => {
     });
   });
 
+  it.each([false, true])('accepts DCON config with structured wrapper = %s', async (structured) => {
+    const dcon = {
+      stationId: 'S0001',
+      deviceCode: 'DCON001',
+      protocol: 'DCON_ASCII',
+      settings: { comPort: 'COM3', slaveId: 7, quantity: null, valueRange: { min: 0, max: null } },
+      channels: [],
+    };
+    const payload = structured
+      ? {
+          config: {
+            stationId: 'S0001',
+            device: [
+              dcon,
+              { deviceCode: 'RTU001', protocol: 'MODBUS_RTU', settings: { slaveId: 1 } },
+            ],
+            channels: [],
+          },
+        }
+      : dcon;
+    const response = await request(createApp())
+      .post('/api/v1/connected-measurement-points/S0001/device-configs')
+      .set('Authorization', `Bearer ${editAccessToken()}`)
+      .send(payload);
+    expect(response.status).toBe(201);
+    const expected = expect.objectContaining({ protocol: 'DCON_ASCII', settings: dcon.settings });
+    expect(
+      structured
+        ? mockedConnectionRequestsService.saveCurrentDeviceConfigs
+        : mockedConnectionRequestsService.saveCurrentDeviceConfig,
+    ).toHaveBeenCalledWith(
+      'S0001',
+      structured
+        ? { configs: [expected, expect.objectContaining({ protocol: 'MODBUS_RTU' })] }
+        : expected,
+      42,
+      { scope: 'ALL' },
+    );
+  });
+
   it('exposes and saves current device configs for a selected connected measurement point', async () => {
     const app = createApp();
 

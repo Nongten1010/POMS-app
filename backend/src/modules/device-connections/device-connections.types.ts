@@ -4,6 +4,7 @@ import type { RegionalAccessDTO } from '../auth/regional-access';
 export const DEVICE_CONNECTION_PROTOCOL = {
   POMS_BOX: 'POMS_BOX',
   MODBUS_RTU: 'MODBUS_RTU',
+  DCON_ASCII: 'DCON_ASCII',
   MODBUS_TCP: 'MODBUS_TCP',
   MSSQL: 'MSSQL',
   MYSQL: 'MYSQL',
@@ -124,6 +125,11 @@ export interface CreateModbusRtuConnectionConfigInput extends BaseDeviceConnecti
   settings: DeviceConnectionSettingsInput;
 }
 
+export interface CreateDconAsciiConnectionConfigInput extends BaseDeviceConnectionConfigInput {
+  protocol: typeof DEVICE_CONNECTION_PROTOCOL.DCON_ASCII;
+  settings: DeviceConnectionSettingsInput;
+}
+
 export interface CreatePomsBoxConnectionConfigInput extends BaseDeviceConnectionConfigInput {
   protocol: typeof DEVICE_CONNECTION_PROTOCOL.POMS_BOX;
   settings: DeviceConnectionSettingsInput;
@@ -147,6 +153,7 @@ export interface CreateMysqlConnectionConfigInput extends BaseDeviceConnectionCo
 export type CreateDeviceConnectionConfigInput =
   | CreatePomsBoxConnectionConfigInput
   | CreateModbusRtuConnectionConfigInput
+  | CreateDconAsciiConnectionConfigInput
   | CreateModbusTcpConnectionConfigInput
   | CreateMssqlConnectionConfigInput
   | CreateMysqlConnectionConfigInput;

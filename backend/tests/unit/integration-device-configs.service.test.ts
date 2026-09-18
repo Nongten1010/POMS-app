@@ -19,6 +19,8 @@ import { integrationDeviceConfigsService } from '../../src/modules/integrations/
 const mockedRepository = jest.mocked(integrationDeviceConfigsRepository);
 const mockedDeviceConnectionsService = jest.mocked(deviceConnectionsService);
 
+const serialProtocols = ['MODBUS_RTU', 'DCON_ASCII'] as const;
+
 describe('integrationDeviceConfigsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -50,7 +52,7 @@ describe('integrationDeviceConfigsService', () => {
     });
   });
 
-  it('returns separated device, parameter, and schedule config for a station', async () => {
+  it.each(serialProtocols)('returns %s integration config', async (protocol) => {
     mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([
       {
         id: 1,
@@ -99,7 +101,7 @@ describe('integrationDeviceConfigsService', () => {
         requestId: null,
         stationId: 'S0002',
         deviceCode: 'S0002/02',
-        protocol: 'MODBUS_RTU',
+        protocol,
         settings: {
           comPort: 1,
           slaveId: 1,
@@ -156,7 +158,7 @@ describe('integrationDeviceConfigsService', () => {
         },
         {
           deviceCode: 'S0002/02',
-          protocol: 'MODBUS_RTU',
+          protocol,
           hostIp: null,
           port: null,
           slaveId: 1,

@@ -5,6 +5,78 @@ import {
 } from '../../src/modules/device-connections/device-connections.validator';
 
 describe('device connection validators', () => {
+  it.each([3, 'COM3', null])('preserves DCON serial settings with comPort %s', (comPort) => {
+    const settings = {
+      comPort,
+      slaveId: 7,
+      baudRate: 9600,
+      parity: 'NONE',
+      stopBits: 1,
+      dataBits: 8,
+      quantity: null,
+      valueRange: { min: 0, max: null },
+    };
+    const result = createDeviceConnectionConfigSchema.parse({
+      stationId: 'S2001',
+      protocol: 'DCON_ASCII',
+      settings,
+      channels: [],
+    });
+    expect(result.protocol).toBe('DCON_ASCII');
+    expect(result.settings).toEqual(settings);
+    expect(result.settings).not.toHaveProperty('deviceAddress');
+  });
+
+  it.each(['DCON', 'dcon_ascii'])('rejects noncanonical DCON protocol %s', (protocol) => {
+    expect(
+      createDeviceConnectionConfigSchema.safeParse({ stationId: 'S2001', protocol }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an invalid DCON slaveId using the existing serial validation', () => {
+    expect(
+      createDeviceConnectionConfigSchema.safeParse({
+        stationId: 'S2001',
+        protocol: 'DCON_ASCII',
+        settings: { slaveId: '7' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('preserves mixed DCON and Modbus devices, channels and schedules in the form wrapper', () => {
+    const schedule = {
+      selectedParameters: ['CO (ppm)'],
+      startAt: '2026-09-18 12:00:00',
+      endAt: '2026-09-18 13:00:00',
+      status: 'Maintenance',
+    };
+    const result = createDeviceConnectionConfigRequestSchema.parse({
+      config: {
+        stationId: 'S2001',
+        device: [
+          {
+            deviceCode: 'DCON001',
+            protocol: 'DCON_ASCII',
+            settings: { slaveId: null, valueRange: null },
+          },
+          { deviceCode: 'RTU001', protocol: 'MODBUS_RTU', settings: { slaveId: 1 } },
+        ],
+        channels: [{ deviceCode: 'DCON001', dataType: 'CO (ppm)', addressId: 2, offset: 0 }],
+        statusManagement: { schedules: [schedule] },
+      },
+    });
+    expect(result).toMatchObject({
+      configs: [
+        {
+          protocol: 'DCON_ASCII',
+          settings: { slaveId: null, valueRange: null },
+          channels: [{ addressId: 2, offset: 0 }],
+          statusManagement: { schedules: [schedule] },
+        },
+        { protocol: 'MODBUS_RTU', settings: { slaveId: 1 }, channels: [] },
+      ],
+    });
+  });
   it('accepts a POMS Box config with nullable settings and No Discharge status', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'S1128',
@@ -630,7 +702,7 @@ describe('device connection validators', () => {
     });
   });
 
-  it.each(['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'] as const)(
+  it.each(['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'] as const)(
     'accepts empty settings and channels for %s',
     (protocol) => {
       const result = createDeviceConnectionConfigSchema.safeParse({

@@ -99,3 +99,12 @@ Backend เก็บ `valueFormat`/`encoding` เป็น nullable string แ�
 ## POMS Box
 
 `POMS Box` ใช้ `protocol: POMS_BOX` และไม่ต้องกรอก transport/database settings; frontend ส่ง `settings: null` ได้ และ backend normalize เป็น `{}` ก่อนบันทึก ส่วน `deviceCode` และ `channels` ยังใช้ contract เดียวกับอุปกรณ์ชนิดอื่น
+
+## DCON
+
+- เพิ่มตัวเลือก `DCON` โดยส่ง `protocol: "DCON_ASCII"` และใช้ช่องตั้งค่าเหมือน Modbus RTU
+- เปลี่ยน label `Slave ID` เป็น `device address` เฉพาะ DCON แต่ส่ง `settings.slaveId` เดิม ไม่เพิ่ม `deviceAddress`
+- เมื่อโหลดกลับใช้ `connectionForms[].type: "DCON"`, `protocol: "DCON_ASCII"` และ `values.slaveId`; raw config คง protocol และ settings เดิม
+- รองรับทั้งคำขอและจุดที่เชื่อมต่อแล้ว รวมถึงหลาย protocol ใน `config.device[]`
+- รายละเอียด field, payload, response และ migration ดู [DCON contract](../../../api/menus/connection-requests/device-configs.md#dcon-device-address)
+- การรองรับ config ไม่ได้เพิ่ม driver อ่าน DCON จริง และไม่ได้เปลี่ยน payload ของปุ่มทดสอบข้อมูลหรือยืนยันเชื่อมต่อ

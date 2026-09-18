@@ -257,6 +257,12 @@ function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInpu
 }
 
 function describeEndpoint(input: TestDeviceConnectionInput): string {
+  if (input.protocol === DEVICE_CONNECTION_PROTOCOL.DCON_ASCII) {
+    const comPort = settingToText(input.settings.comPort);
+    const port = /^COM/i.test(comPort) ? comPort : `COM${comPort}`;
+    return `${port}:device-address-${settingToText(input.settings.slaveId)}`;
+  }
+
   if (input.protocol === DEVICE_CONNECTION_PROTOCOL.POMS_BOX) {
     return `POMS_BOX:${settingToText(input.deviceCode ?? input.stationId)}`;
   }

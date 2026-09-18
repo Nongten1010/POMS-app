@@ -215,6 +215,13 @@ const deviceConnectionConfigSchema = z.discriminatedUnion('protocol', [
     .strict(),
   baseDeviceConnectionSchema
     .extend({
+      protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.DCON_ASCII),
+      settings: modbusRtuSettingsSchema,
+      channels: configChannelsSchema,
+    })
+    .strict(),
+  baseDeviceConnectionSchema
+    .extend({
       protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP),
       settings: modbusTcpSettingsSchema,
       channels: configChannelsSchema,

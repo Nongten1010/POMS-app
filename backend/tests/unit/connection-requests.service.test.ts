@@ -96,6 +96,9 @@ const mockedParameterValuesService = jest.mocked(parameterValuesService);
 const mockedEligibleFactoriesService = jest.mocked(eligibleFactoriesService);
 const mockedLogger = jest.mocked(logger);
 
+const serialProtocols = ['MODBUS_RTU', 'DCON_ASCII'] as const;
+const currentProtocols = ['MODBUS_TCP', 'DCON_ASCII'] as const;
+
 describe('connectionRequestsService', () => {
   const actorUserId = 42;
   const now = new Date('2026-05-27T10:00:00.000Z');
@@ -2711,7 +2714,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('returns device config form detail mapped to frontend field names', async () => {
+  it.each(serialProtocols)('maps %s config to form fields', async (protocol) => {
     const request = requestDto({
       createdBy: actorUserId,
       measurementPoints: [
@@ -2734,7 +2737,7 @@ describe('connectionRequestsService', () => {
         requestId: 1,
         stationId: 'STACK-A',
         deviceCode: 'STACK-A/RTU-01',
-        protocol: 'MODBUS_RTU',
+        protocol,
         settings: {
           comPort: 1,
           slaveId: 1,
@@ -2798,7 +2801,7 @@ describe('connectionRequestsService', () => {
       connectionForms: [
         {
           configId: 10,
-          type: 'Modbus RTU',
+          type: protocol === 'DCON_ASCII' ? 'DCON' : 'Modbus RTU',
           deviceCode: 'STACK-A/RTU-01',
           values: {
             comport: '1',
@@ -2851,7 +2854,7 @@ describe('connectionRequestsService', () => {
     expect(result.rawConfigs.statusManagement).toEqual(result.statusManagement);
     expect(result.rawConfigs.device[0]).toMatchObject({
       deviceCode: 'STACK-A/RTU-01',
-      protocol: 'MODBUS_RTU',
+      protocol,
       settings: {
         comPort: 1,
         slaveId: 1,
@@ -3380,7 +3383,7 @@ describe('connectionRequestsService', () => {
     },
   );
 
-  it('returns current device config form detail from active settings for selected station', async () => {
+  it.each(currentProtocols)('returns current %s form', async (protocol) => {
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
       currentFactoryMeasurementPoint({
         sourceMeasurementPointId: 1,
@@ -3410,6 +3413,14 @@ describe('connectionRequestsService', () => {
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
       deviceConnectionConfig({
         id: 20,
+        protocol,
+        settings: {
+          slaveId: 7,
+          comPort: 'COM3',
+          parity: 'NONE',
+          quantity: null,
+          valueRange: { min: 0, max: null },
+        },
         stationId: 'STACK-A',
         deviceCode: 'STACK-A/TCP-01',
         channels: [{ addressId: 40001, dataType: 'NOx', offset: 0 }],
@@ -3434,13 +3445,32 @@ describe('connectionRequestsService', () => {
     expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
       stationId: 'STACK-A',
     });
+    if (protocol === 'DCON_ASCII') {
+      expect(result.connectionForms[0]).toMatchObject({
+        type: 'DCON',
+        protocol,
+        values: {
+          slaveId: '7',
+          comport: 'COM3',
+          parity: 'None',
+          quantity: '',
+          measureMin: '0',
+          measureMax: '',
+        },
+      });
+      expect(result.rawConfigs.device[0].settings).toMatchObject({
+        slaveId: 7,
+        quantity: null,
+        valueRange: { min: 0, max: null },
+      });
+    }
     expect(result).toMatchObject({
       requestId: 1,
       stationId: 'STACK-A',
       connectionForms: [{ configId: 20, deviceCode: 'STACK-A/TCP-01' }],
       rawConfigs: {
         stationId: 'STACK-A',
-        device: [{ deviceCode: 'STACK-A/TCP-01', protocol: 'MODBUS_TCP' }],
+        device: [{ deviceCode: 'STACK-A/TCP-01', protocol }],
       },
     });
   });

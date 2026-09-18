@@ -31,7 +31,7 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | --- | --- | --- | --- | --- |
 | `stationId` | string | Yes | No | รหัสหรือชื่อจุดตรวจวัด ต้องตรงกับจุดใน request หรือ `:stationId` ใน path |
 | `deviceCode` | string | No | Yes | รหัสอุปกรณ์; ใช้จับคู่ `device` กับ `channels` เมื่อส่ง form payload |
-| `protocol` | `POMS_BOX` \| `MODBUS_RTU` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | Yes | No | discriminator ของ config แต่ละอุปกรณ์ |
+| `protocol` | `POMS_BOX` \| `MODBUS_RTU` \| `DCON_ASCII` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | Yes | No | discriminator ของ config แต่ละอุปกรณ์ |
 | `settings` | object | No | Yes | ถ้าไม่ส่งหรือส่ง `null` backend normalize เป็น `{}`; field ภายในเป็น optional และส่ง `null` ได้ |
 | `channels` | array | No | Yes | ถ้าไม่ส่งหรือส่ง `null` backend normalize เป็น `[]` |
 | `statusManagement` | object | No | Yes | ถ้าไม่ส่ง, ส่ง `null` หรือส่งข้อมูลไม่ครบ backend เก็บเป็น `null` |
@@ -54,12 +54,78 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | `settings.valueRange.min` | number | No | Yes | ค่าต่ำสุด |
 | `settings.valueRange.max` | number | No | Yes | ค่าสูงสุด |
 
-### Modbus Settings
+### Modbus และ DCON Settings
 
 | Protocol | Optional nullable fields in `settings` |
 | --- | --- |
 | `MODBUS_RTU` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
+| `DCON_ASCII` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
 | `MODBUS_TCP` | `hostIp`, `slaveId`, `port`, `valueRange` |
+
+### DCON: device address
+
+ตัวเลือกในหน้าจอคือ `DCON` แต่ request/response ใช้ `protocol: "DCON_ASCII"` เท่านั้น ไม่รับ `"DCON"` เป็น protocol ใช้ settings และกติกาเดียวกับ Modbus RTU โดยเปลี่ยนเฉพาะ label `Slave ID` เป็น `device address` ส่วน key ยังคงเป็น `settings.slaveId` (ตัว I ใหญ่) ไม่เพิ่ม `deviceAddress` และไม่เปลี่ยน `channels[].addressId`
+
+| Field | Type | Required | Nullable | Description |
+| --- | --- | --- | --- | --- |
+| `settings.comPort` | number หรือ string | No | Yes | เช่น `3` หรือ `"COM3"` |
+| `settings.slaveId` | number | No | Yes | device address ของ DCON |
+| `settings.baudRate` | number | No | Yes | Baud rate |
+| `settings.parity` | string | No | Yes | frontend ส่ง `EVEN`, `ODD`, `NONE`; backend รับ string เช่นเดียวกับ Modbus RTU |
+| `settings.stopBits` | number | No | Yes | Stop bits |
+| `settings.dataBits` | number | No | Yes | Data bits |
+| `settings.quantity` | number | No | Yes | Quantity |
+| `settings.valueRange` | object | No | Yes | ช่วงค่าระดับอุปกรณ์; ว่างทั้งคู่ส่ง `null` ได้ |
+| `settings.valueRange.min` / `settings.valueRange.max` | number | No | Yes | คงค่า `0` และ `null` ตามที่ส่ง |
+
+ตัวอย่าง POST แบบอุปกรณ์เดียวใช้ได้กับทั้งสอง endpoint ด้านบน:
+
+```json
+{
+  "stationId": "S2001",
+  "deviceCode": "DCON001",
+  "protocol": "DCON_ASCII",
+  "settings": {
+    "comPort": "COM3",
+    "slaveId": 7,
+    "baudRate": 9600,
+    "parity": "NONE",
+    "stopBits": 1,
+    "dataBits": 8,
+    "quantity": 2,
+    "valueRange": { "min": 0, "max": null }
+  },
+  "channels": [],
+  "statusManagement": { "schedules": [] }
+}
+```
+
+batch `configs[]` และ wrapper `config.device[]` รองรับ DCON ร่วมกับ protocol อื่นในชุดเดียวกัน ใช้การจับคู่ channels และ schedules เดิม ตัวอย่างว่างข้างต้นใช้แสดงเฉพาะ settings; การแก้ config ปัจจุบันต้องส่งอุปกรณ์/channels/schedules ที่ต้องการรักษาไว้ครบตามกติกาแทนที่ชุดข้อมูล
+
+GET ทั้งสอง endpoint คืน `connectionForms[].type: "DCON"`, `connectionForms[].protocol: "DCON_ASCII"` และ `values.slaveId` เป็น string สำหรับเติมช่อง device address โดย serial fields ใช้ชื่อเดิม เช่น `comport`, `baudRate`, `measureMin`, `measureMax`; ค่า `null` เป็น `""` ในฟอร์ม ส่วน `rawConfigs.device[].settings` คง `null` และ `0` จริงไว้ ตัวอย่างบางส่วนของ response:
+
+```json
+{
+  "connectionForms": [
+    {
+      "type": "DCON",
+      "protocol": "DCON_ASCII",
+      "values": { "comport": "COM3", "slaveId": "7", "measureMin": "0", "measureMax": "" }
+    }
+  ],
+  "rawConfigs": {
+    "device": [
+      {
+        "deviceCode": "DCON001",
+        "protocol": "DCON_ASCII",
+        "settings": { "comPort": "COM3", "slaveId": 7, "valueRange": { "min": 0, "max": null } }
+      }
+    ]
+  }
+}
+```
+
+ต้องรัน migration `0122_allow_dcon_ascii_device_protocol` ก่อนใช้งานเพื่อให้ฐานข้อมูลรับ protocol ใหม่ การ rollback จะปฏิเสธเมื่อยังมี config `DCON_ASCII` อยู่ การรองรับนี้ครอบคลุมการเก็บ/คืน config ไม่ได้เพิ่ม driver อ่านอุปกรณ์จริง; connection test แบบ mock ยังคงเป็น `MOCK` ส่วนปุ่มทดสอบข้อมูลและการยืนยันเชื่อมต่อใช้ flow เดิม
 
 ### POMS Box Settings
 
@@ -633,6 +699,9 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - Validator/service tests: [`device-connections.validator.test.ts`](../../../../../backend/tests/unit/device-connections.validator.test.ts), [`device-connections.service.test.ts`](../../../../../backend/tests/unit/device-connections.service.test.ts), [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts)
 - Migration test: [`device-connection-protocol-migration.test.ts`](../../../../../backend/tests/unit/device-connection-protocol-migration.test.ts)
 - Route tests: [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`connection-requests.create.route.test.ts`](../../../../../backend/tests/unit/connection-requests.create.route.test.ts)
+
+- DCON migration: [`0122_allow_dcon_ascii_device_protocol.ts`](../../../../../backend/src/db/migrations/0122_allow_dcon_ascii_device_protocol.ts)
+- DCON OpenAPI tests: [`dcon-device-config.openapi.test.ts`](../../../../../backend/tests/unit/dcon-device-config.openapi.test.ts)
 
 ## พารามิเตอร์หลังอนุมัติคำขอแก้ไขจุดตรวจวัด
 

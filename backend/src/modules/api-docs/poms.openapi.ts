@@ -375,7 +375,7 @@ const kwpDateOrHourSchema = {
   nullable: true,
   description: 'วันที่จริงรูปแบบ YYYY-MM-DD หรือ local hour YYYY-MM-DDTHH:00:00',
 };
-const protocolValues = ['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'];
+const protocolValues = ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'];
 const pomsFactoryEditRequestStatusValues = [
   'PENDING_REVIEW',
   'REVISION_REQUESTED',
@@ -4180,7 +4180,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
       protocol: { type: 'string', enum: protocolValues },
       hostIp: { type: 'string', nullable: true },
       port: { type: 'number', nullable: true },
-      slaveId: { type: 'number', nullable: true },
+      slaveId: {
+        type: 'number',
+        nullable: true,
+        description: 'Slave ID สำหรับ Modbus หรือ device address สำหรับ DCON_ASCII',
+      },
       comPort: { type: 'number', nullable: true },
       baudRate: { type: 'number', nullable: true },
       parity: { type: 'string', nullable: true },

@@ -106,6 +106,20 @@ describe('deviceConnectionsService', () => {
     );
   });
 
+  it.each([3, 'COM3'])('describes DCON address in mock mode for port %s', async (comPort) => {
+    const result = await deviceConnectionsService.testConnection({
+      stationId: 'S2001',
+      protocol: 'DCON_ASCII',
+      settings: { comPort, slaveId: 7 },
+      channels: [],
+    });
+    expect(result).toMatchObject({
+      mode: 'MOCK',
+      protocol: 'DCON_ASCII',
+      details: { endpoint: 'COM3:device-address-7' },
+    });
+  });
+
   it('returns a successful mock connection result', async () => {
     const result = await deviceConnectionsService.testConnection(modbusTcpPayload);
 

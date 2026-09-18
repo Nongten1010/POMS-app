@@ -2327,6 +2327,7 @@ function getDeviceCode(
 function protocolToConnectionType(protocol: string): DeviceConfigFormConnectionDTO['type'] {
   if (protocol === 'POMS_BOX') return 'POMS Box';
   if (protocol === 'MODBUS_RTU') return 'Modbus RTU';
+  if (protocol === 'DCON_ASCII') return 'DCON';
   if (protocol === 'MODBUS_TCP') return 'Modbus TCP';
   if (protocol === 'MSSQL') return 'Microsoft SQL';
   return 'MySQL';
@@ -2338,7 +2339,7 @@ function settingsToFormValues(
 ): Record<string, string> {
   if (protocol === 'POMS_BOX') return {};
 
-  if (protocol === 'MODBUS_RTU') {
+  if (protocol === 'MODBUS_RTU' || protocol === 'DCON_ASCII') {
     const range = readRange(settings.valueRange);
     return {
       comport: valueToString(settings.comPort),

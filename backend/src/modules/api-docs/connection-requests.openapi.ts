@@ -38,6 +38,29 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
     data: {
       type: 'object',
       properties: {
+        connectionForms: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', example: 'DCON' },
+              protocol: { type: 'string', example: 'DCON_ASCII' },
+              values: {
+                type: 'object',
+                additionalProperties: { type: 'string' },
+                description:
+                  'DCON ใช้ comport, slaveId, baudRate, parity, stopBits, dataBits, quantity, measureMin, measureMax เช่นเดียวกับ Modbus RTU; null แสดงเป็นสตริงว่าง',
+                example: { comport: 'COM3', slaveId: '7', measureMin: '0', measureMax: '' },
+              },
+            },
+          },
+        },
+        rawConfigs: {
+          type: 'object',
+          additionalProperties: true,
+          description:
+            'config ที่บันทึกจริง; DCON คง protocol DCON_ASCII และ settings.slaveId รวมถึงค่า null และ 0',
+        },
         parameterOptions: {
           type: 'array',
           items: { type: 'string' },
@@ -700,6 +723,23 @@ const deviceConnectionExample = {
   },
   channels: [{ dataType: 'CO (ppm)', addressId: 1, testMode: true }],
   statusManagement: null,
+};
+const dconConnectionExample = {
+  stationId: 'S2001',
+  deviceCode: 'DCON001',
+  protocol: 'DCON_ASCII',
+  settings: {
+    comPort: 'COM3',
+    slaveId: 7,
+    baudRate: 9600,
+    parity: 'NONE',
+    stopBits: 1,
+    dataBits: 8,
+    quantity: 2,
+    valueRange: { min: 0, max: 200 },
+  },
+  channels: [],
+  statusManagement: { schedules: [] },
 };
 const annualDeviceConnectionExample = {
   ...deviceConnectionExample,
@@ -1923,12 +1963,18 @@ const componentSchemas: Record<string, OpenApiObject> = {
     },
   },
   ModbusRtuSettings: {
+    description:
+      'Serial settings ใช้ร่วมกันระหว่าง MODBUS_RTU และ DCON_ASCII; สำหรับ DCON แสดง slaveId เป็น device address',
     type: 'object',
     nullable: true,
     additionalProperties: true,
     properties: {
       comPort: { oneOf: [{ type: 'number' }, { type: 'string' }], nullable: true },
-      slaveId: { type: 'number', nullable: true },
+      slaveId: {
+        type: 'number',
+        nullable: true,
+        description: 'Slave ID ของ Modbus หรือ device address ของ DCON; ใช้ key slaveId เดิม',
+      },
       baudRate: { type: 'number', nullable: true },
       parity: { type: 'string', nullable: true },
       stopBits: { type: 'number', nullable: true },
@@ -2071,7 +2117,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       deviceCode: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       protocol: {
         type: 'string',
-        enum: ['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
+        enum: ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
       },
       settings: {
         oneOf: [
@@ -2082,6 +2128,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         ],
         nullable: true,
         default: {},
+        description: 'DCON_ASCII ใช้ ModbusRtuSettings; device address ใช้ settings.slaveId',
       },
       channels: {
         type: 'array',
@@ -2102,7 +2149,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       deviceCode: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       protocol: {
         type: 'string',
-        enum: ['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
+        enum: ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
       },
       settings: {
         type: 'object',
@@ -2152,6 +2199,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
     },
   },
   DeviceConnectionConfigRequest: {
+    description:
+      'DCON แสดง label device address แต่ส่ง settings.slaveId; protocol ต้องเป็น DCON_ASCII และใช้ settings เช่นเดียวกับ MODBUS_RTU',
     oneOf: [
       schemaRef('DeviceConnectionConfig'),
       {
@@ -2194,7 +2243,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
           },
           protocol: {
             type: 'string',
-            enum: ['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
+            enum: ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
           },
           stationId: { type: 'string' },
           message: { type: 'string', example: 'Mock connection succeeded' },
@@ -2477,7 +2526,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านแบบตั้งค่าอุปกรณ์ในคำขอ',
       operationId: 'getConnectionRequestDeviceConfigs',
       description:
-        'Permission: cems_wpms_requests:view. ถ้าไม่ส่ง stationId backend ใช้จุดแรกในคำขอ',
+        'Permission: cems_wpms_requests:view. ถ้าไม่ส่ง stationId backend ใช้จุดแรกในคำขอ; DCON คืน connectionForms[].type = DCON, protocol = DCON_ASCII, values.slaveId และ rawConfigs.device[].settings เดิม',
       parameters: [
         idPathParameter,
         stringQuery('stationId', 'เลือกจุดตรวจวัด; optional และยาวไม่เกิน 64', false, 64),
@@ -2493,7 +2542,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
-        deviceConnectionExample,
+        dconConnectionExample,
       ),
       successStatus: '201',
       successDescription: 'บันทึก config แล้ว',
@@ -2885,7 +2934,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       parameters: [stationIdPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
-        deviceConnectionExample,
+        dconConnectionExample,
       ),
       successStatus: '201',
       extraResponses: {
