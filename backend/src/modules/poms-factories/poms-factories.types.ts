@@ -207,6 +207,32 @@ export interface PomsFactoryEditRequestEventDTO {
   createdAt: string;
 }
 
+export type PomsEditRequestTargetPoint = Pick<
+  PomsMeasurementPointDTO,
+  'connectedPointId' | 'systemType' | 'pointCode' | 'pointName'
+>;
+
+export interface PomsFactoryEditRequestSummaryDTO {
+  id: number;
+  requestNo: string;
+  eligibleFactoryId: number;
+  factoryId: string;
+  factoryRegistrationNo: string;
+  factoryName: string;
+  provinceName: string | null;
+  formType: PomsFactoryEditRequestFormType;
+  status: PomsFactoryEditRequestStatus;
+  statusLabel: string;
+  revisionNo: number;
+  isOpen: boolean;
+  submittedBy: number;
+  submittedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  targetMeasurementPoints: PomsEditRequestTargetPoint[];
+  targetMeasurementPointsSource: 'SUBMITTED' | 'SNAPSHOT_DIFF' | 'UNKNOWN' | 'NOT_APPLICABLE';
+}
+
 export interface PomsFactoryEditRequestDTO {
   currentContacts?: PomsFactoryContactsSnapshot | null;
   proposedContacts?: PomsFactoryContactsSnapshot | null;

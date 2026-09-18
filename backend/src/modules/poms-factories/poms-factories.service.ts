@@ -20,6 +20,7 @@ import {
 import type {
   CreateAnyPomsFactoryEditRequestInput,
   ListPomsFactoryEditRequestsQuery,
+  PomsFactoryEditRequestSummaryDTO,
   PomsFactoryDetailDTO,
   PomsFactoryFormContactsDTO,
   PomsFactoryFormDTO,
@@ -133,6 +134,7 @@ export const pomsFactoriesService = {
           formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
           proposedFactory,
           proposedMeasurementPoints: proposed,
+          targetMeasurementPointIds: input.measurementPoints.map((point) => point.connectedPointId),
           ...contacts,
         },
         input.note ?? null,
@@ -162,7 +164,7 @@ export const pomsFactoriesService = {
     actorUserId: number,
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<{ data: PomsFactoryEditRequestDTO[]; meta: { total: number } }> {
+  ): Promise<{ data: PomsFactoryEditRequestSummaryDTO[]; meta: { total: number } }> {
     const data = await pomsFactoriesRepository.listEditRequests(query, {
       actorUserId,
       scope: viewScope,
@@ -358,6 +360,7 @@ export const pomsFactoriesService = {
           ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
           proposedFactory,
           proposedMeasurementPoints: proposed,
+          targetMeasurementPointIds: input.measurementPoints.map((point) => point.connectedPointId),
           ...contacts,
         },
         input.note ?? null,

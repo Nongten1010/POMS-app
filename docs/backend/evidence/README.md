@@ -40,6 +40,8 @@
 
 ## Master data
 
+- [ผลทดสอบข้อมูลสรุปรายการคำขอแก้ไขโรงงาน POMS](./master-data/poms-edit-request-list-summary.md)
+- [ผลตรวจ API คำขอแก้ไขโรงงาน POMS บน production](./master-data/poms-edit-requests-production-verification.md)
 - [ซ่อมพารามิเตอร์ P0260 ตามคำขอที่อนุมัติแล้ว](./master-data/p0260-approved-parameter-repair.md)
 - [POMS factory form คืนข้อมูลผู้ติดต่อและอีเมลแจ้งเตือน](./master-data/poms-factory-form-contact-prefill.tdd.md)
 - [POMS factory form คืนกลุ่มพารามิเตอร์ current/live](./master-data/poms-factory-form-current-parameters.tdd.md)

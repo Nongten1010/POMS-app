@@ -4,6 +4,8 @@
 
 ## Frontend Quick Start
 
+ตารางรายการคำขอใช้ [list summary และจุดเป้าหมาย](#edit-request-list-summary) จาก `GET /poms-factories/edit-requests`; แสดงประเภท/รหัสจุดจาก `targetMeasurementPoints[]` และเลิกอ่าน `proposedMeasurementPoints[0]` การเพิ่ม ID ใน `/form` เป็นคนละ contract กับ list summary นี้
+
 คู่มือสำหรับทีม frontend: [แบบฟอร์มแก้ไขข้อมูลทั่วไปของโรงงาน](../../../guides/frontend-handoffs/factory-basic-info/README.md) — จุดที่ต้องปรับ ตัวอย่าง payload และรายการตรวจรับ
 
 เมนูนี้ใช้ข้อมูลโรงงาน current/live จาก active rows ใน `cems_wpms_connected_measurement_points` เพื่อแสดงรายชื่อโรงงานและจุดตรวจวัดในระบบ POMS ผู้ประกอบการส่งคำขอแก้ไขได้ 2 แบบฟอร์มคือ `BASIC_INFO` และ `MEASUREMENT_POINTS` แต่ข้อมูลจริงจะยังไม่เปลี่ยนจนกว่า admin จะพิจารณาอนุมัติ
@@ -47,6 +49,11 @@
 - ไม่อยู่ใน scope ของ capability นี้: การแก้ `pointCode`, `pointType`, `systemType`, `parameters`, device configuration, identity/audit fields, ตาราง `factories` และโค้ด frontend
 
 ```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/poms-factories/edit-requests?status=PENDING_REVIEW' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json'
+
 curl --request GET \
   --url '<BASE_URL>/api/v1/poms-factories' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
@@ -769,9 +776,15 @@ Minimal response (`201 Created`):
 }
 ```
 
+<a id="edit-request-list-summary"></a>
+
 ### `GET /api/v1/poms-factories/edit-requests`
 
-คืนรายการคำขอที่อยู่ใน `factories:view` data scope ของผู้เรียก เรียงใหม่ก่อน โดยสมาชิกใน `data[]` ใช้ workflow snapshot contract หลัก; ข้อมูลผู้ติดต่อและอีเมลแจ้งเตือนโหลดเพิ่มเฉพาะ [edit-request detail](#get-apiv1poms-factoriesedit-requestsid)
+คืนข้อมูลสรุปหนึ่งแถวต่อคำขอที่อยู่ใน `factories:view` data scope ของผู้เรียก เรียง `createdAt` แล้ว `id` จากใหม่ไปเก่า ไม่มี pagination และ `meta.total` นับแถวที่ผ่าน filter แล้ว
+
+List ไม่คืน `currentFactory`, `proposedFactory`, `currentMeasurementPoints`, `proposedMeasurementPoints`, `currentContacts`, `proposedContacts`, contact arrays, รายละเอียดเครื่องมือ, metadata เอกสาร หรือ `events` เมื่อเปิดดู/ดำเนินการให้เรียก [edit-request detail](#get-apiv1poms-factoriesedit-requestsid) ซึ่งยังคืนข้อมูลครบ ส่วนแก้ไขใช้ `/edit-requests/:id/form` เดิม ไม่ต้องเรียก detail ทีละแถวเพื่อเติมตาราง
+
+การตัด fields เดิมเป็น breaking response change ดู [ขั้นตอนย้าย client](../../CHANGELOG.md#poms-edit-request-list-summary) ต้องปรับ frontend และประสาน release ก่อนใช้ backend รุ่นนี้บน production
 
 #### Request Fields
 
@@ -781,32 +794,83 @@ Minimal response (`201 Created`):
 | `factoryId` | query    | string | no       | trim แล้ว 1–64 ตัวอักษร; รับ identifier ที่ระบบ resolve ได้                       |
 | `search`    | query    | string | no       | trim แล้ว 1–255 ตัวอักษร; ค้น `requestNo`, `factoryId`, เลขทะเบียน หรือชื่อโรงงาน |
 
-Minimal request JSON:
+#### Success Response Fields
+
+ทุก field ด้านล่างคืนเสมอ; nullable ระบุเฉพาะ field ที่เป็น `null` ได้
+
+| Field | Type | ความหมาย |
+| --- | --- | --- |
+| `success` | boolean | `true` |
+| `data` | object[] | หนึ่งรายการต่อคำขอ ไม่แยกแถวตามจำนวนจุด |
+| `data[].id` | integer | ID สำหรับ detail, form, review, cancel และ resubmission |
+| `data[].requestNo` | string | เลขที่คำขอ |
+| `data[].eligibleFactoryId` | integer | ID โรงงานเข้าข่าย |
+| `data[].factoryId` | string | identifier โรงงานที่เก็บในคำขอ; ไม่ใช้เลขทะเบียนเดิมจาก `factoryRegistrationNo` แทน |
+| `data[].factoryRegistrationNo` | string | เลขทะเบียนสำหรับแสดงตามกติกาเดิม: เลขเดิมจาก eligible ก่อนเลขใหม่ |
+| `data[].factoryName` | string | ชื่อโรงงานที่เก็บกับคำขอ |
+| `data[].provinceName` | string หรือ null | จังหวัดจาก active eligible metadata ปัจจุบัน |
+| `data[].formType` | `BASIC_INFO` หรือ `MEASUREMENT_POINTS` | ประเภทแบบฟอร์ม |
+| `data[].status`, `data[].statusLabel` | string | สถานะและข้อความตาม [workflow](#status-and-decisions) |
+| `data[].revisionNo` | integer | รอบการแก้ไข เริ่ม `0` |
+| `data[].isOpen` | boolean | คำขอยังอยู่ใน workflow ที่เปิดอยู่หรือไม่ |
+| `data[].submittedBy` | integer | ID ผู้ส่งรอบล่าสุด |
+| `data[].submittedAt` | ISO 8601 string | วันเวลาส่งรอบล่าสุด; client แปลงเขตเวลาและปี พ.ศ. เพื่อแสดงเอง |
+| `data[].createdAt`, `data[].updatedAt` | ISO 8601 string | เวลาสร้าง/เปลี่ยนคำขอ |
+| `data[].targetMeasurementPoints` | object[] | จุดเป้าหมายตามหลักฐานข้างล่าง; เก็บหลายจุดครบ ไม่เลือกจุดแรกของโรงงาน |
+| `data[].targetMeasurementPoints[].connectedPointId` | integer > 0 | ID จุดที่ใช้จับคู่ ห้ามใช้ชื่อ รหัส หรือ index แทน |
+| `data[].targetMeasurementPoints[].systemType` | `CEMS` หรือ `WPMS` | ระบบของจุดนั้น |
+| `data[].targetMeasurementPoints[].pointCode` | string หรือ null | รหัสจุดเพื่อแสดงผล; รองรับรหัสว่าง/ซ้ำ |
+| `data[].targetMeasurementPoints[].pointName` | string | ชื่อจุดจาก proposed snapshot ของรอบล่าสุด |
+| `data[].targetMeasurementPointsSource` | enum | `SUBMITTED`, `SNAPSHOT_DIFF`, `UNKNOWN`, `NOT_APPLICABLE` |
+| `meta.total` | integer >= 0 | จำนวนรายการหลังกรอง |
+
+#### หลักฐานจุดเป้าหมาย
+
+- `SUBMITTED`: มี ID ที่บันทึกจาก `measurementPoints[].connectedPointId` ใน create/resubmission ล่าสุด คืนตามลำดับที่ส่ง รวมจุดที่ส่งค่าเดิมหรือใช้เลือกขอบเขตเพื่อแก้ข้อมูลติดต่อ; ยังใช้กติกาเดิมที่คำขอต้องมีข้อมูลเปลี่ยนอย่างน้อยหนึ่งส่วน
+- `SNAPSHOT_DIFF`: คำขอเก่าไม่มี ID ที่บันทึกโดยตรง จึงเทียบ before/after ด้วย ID เฉพาะข้อมูลจุดที่แก้ได้ ไม่ใช้ตำแหน่ง array, `updatedAt` หรือสถานะบริหาร การอนุมานนี้อาจไม่ครบจุดที่ส่งค่าเดิม และไม่ใช่หลักฐาน payload เดิม
+- การเปลี่ยนรายชื่ออีเมลระดับระบบที่กระจายไปทุกจุด หรือรูปหน้าโรงงาน/โลโก้ ไม่ใช้เป็นหลักฐานเลือกจุด; หากข้อมูลผู้ติดต่อก่อน–หลังต่างกัน จะไม่ใช้ความต่างอีเมลรายจุดเพื่ออนุมาน
+- `UNKNOWN`: ไม่มีความต่างที่ระบุได้ หรือ ID/snapshot ไม่สมบูรณ์ คืน `[]`; frontend แสดงว่าไม่ทราบจุดเป้าหมาย ห้ามเติมจุดแรกแทน และไม่อนุมานจาก `systemType` อย่างเดียว
+- `NOT_APPLICABLE`: `BASIC_INFO` คืน `[]` เสมอ; คอลัมน์ประเภท/รหัสจุดแสดง `-`
+- การสร้างและส่งแก้ไขยังใช้ request body เดิม Backend บันทึก IDs ภายในพร้อม snapshot และ audit event ใน transaction เดียวกัน การส่งแก้ไขแทนที่เป้าหมายด้วย IDs รอบล่าสุดโดยไม่แก้ประวัติ event เก่า
+
+Minimal request JSON (ไม่มี body):
 
 ```json
 {}
 ```
 
-Minimal response (`200 OK`):
+Minimal response (`200 OK`, ตัวอย่างสมมติ):
 
 ```json
 {
   "success": true,
   "data": [
     {
-      "id": 11,
-      "requestNo": "base-00001/2569",
-      "revisionNo": 0,
-      "isOpen": true,
+      "id": 48,
+      "requestNo": "point-00024/2569",
       "eligibleFactoryId": 7,
       "factoryId": "factory-001",
-      "factoryName": "บริษัท ตัวอย่าง จำกัด",
-      "formType": "BASIC_INFO",
+      "factoryRegistrationNo": "old-001",
+      "factoryName": "โรงงานตัวอย่าง",
+      "provinceName": "กรุงเทพมหานคร",
+      "formType": "MEASUREMENT_POINTS",
       "status": "PENDING_REVIEW",
       "statusLabel": "รอพิจารณา",
+      "revisionNo": 0,
+      "isOpen": true,
       "submittedBy": 42,
-      "createdAt": "2026-08-24T02:00:00.000Z",
-      "updatedAt": "2026-08-24T02:00:00.000Z"
+      "submittedAt": "2026-09-18T00:00:00.000Z",
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "updatedAt": "2026-09-18T00:00:00.000Z",
+      "targetMeasurementPoints": [
+        {
+          "connectedPointId": 10021,
+          "systemType": "CEMS",
+          "pointCode": "S0915",
+          "pointName": "Unit 4500 (Waste Gas)"
+        }
+      ],
+      "targetMeasurementPointsSource": "SUBMITTED"
     }
   ],
   "meta": { "total": 1 }
@@ -1327,6 +1391,8 @@ State transitions:
 - [นิยามโรงงาน current/live และโรงงานที่เข้าข่าย](../eligible-factories/README.md)
 
 ## Backend Maintainer Map
+
+List summary ใช้ [ตัวระบุจุดเป้าหมาย](../../../../../backend/src/modules/poms-factories/poms-edit-request-targets.ts), migration `0123_add_poms_edit_request_target_ids.ts` และ [หลักฐานทดสอบ list summary](../../../evidence/master-data/poms-edit-request-list-summary.md) ต้องรัน migration ก่อนเปิด backend รุ่นนี้; ไม่ backfill IDs เดิมด้วยการเดาจาก snapshot
 
 การอ่าน contact snapshot ภายใน transaction ต้องผูก `WITH (UPDLOCK)` กับชื่อ/alias ของตารางทั้ง connected points และ source requests ก่อน `JOIN ... ON`. ห้ามใช้ Knex MSSQL `.forUpdate()` กับ query นี้ เพราะจะสร้าง hint หลังเงื่อนไข `ON` ทำให้ SQL Server ปฏิเสธคำสั่งและคำขอตอบ 500. ตรวจ SQL ที่ compile จริงด้วย [contact lock regression tests](../../../../../backend/tests/unit/poms-factories.profile-lock.repository.test.ts) ควบคู่กับ transaction mocks; การแก้ lock ไม่เปลี่ยน API payload หรือ contact comparison contract
 
