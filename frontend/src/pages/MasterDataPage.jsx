@@ -18,6 +18,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
   Table,
   TableBody,
@@ -352,23 +353,6 @@ function getFirstNonBlankValue(...values) {
   return values.find((value) => value !== null && value !== undefined && String(value).trim() !== '')
 }
 
-function findRequestFactory(row, factories) {
-  const requestIdentifiers = new Set([
-    row.factoryId,
-    row.factoryRegistrationNo,
-  ].filter(Boolean).map(String))
-
-  return factories.find((factory) => (
-    (row.eligibleFactoryId && String(factory.eligibleFactoryId) === String(row.eligibleFactoryId))
-    || [
-      factory.factoryId,
-      factory.factoryRegistrationNo,
-      factory.newRegistrationNo,
-      factory.oldRegistrationNo,
-    ].filter(Boolean).some((identifier) => requestIdentifiers.has(String(identifier)))
-  ))
-}
-
 function mapEditRequestEventsToStatusHistory(events = []) {
   return events.filter(Boolean).map((event, index) => ({
     id: event.id ?? `edit-request-event-${index}`,
@@ -386,14 +370,35 @@ function mapEditRequestEventsToStatusHistory(events = []) {
   }))
 }
 
-function mapEditRequestRows(rows, factories = []) {
+function getEditRequestTargetSummary(row) {
+  const source = row.formType === 'BASIC_INFO' ? 'NOT_APPLICABLE' : row.targetMeasurementPointsSource
+  const hasTargets = ['SUBMITTED', 'SNAPSHOT_DIFF'].includes(source)
+  const points = hasTargets && Array.isArray(row.targetMeasurementPoints) ? row.targetMeasurementPoints : []
+  const validContract = ['SUBMITTED', 'SNAPSHOT_DIFF', 'UNKNOWN', 'NOT_APPLICABLE'].includes(source)
+    && (source === 'NOT_APPLICABLE' || Array.isArray(row.targetMeasurementPoints))
+  const note = !validContract ? 'ข้อมูลสรุปไม่ครบ'
+    : source === 'SNAPSHOT_DIFF' ? 'อนุมานจากข้อมูลก่อน/หลัง'
+      : source === 'UNKNOWN' ? 'ไม่ทราบจุดเป้าหมาย' : ''
+  const description = !validContract
+    ? 'API ไม่ได้ส่งข้อมูลสรุปจุดเป้าหมายตามรูปแบบที่รองรับ กรุณาตรวจสอบรุ่น API'
+    : source === 'SNAPSHOT_DIFF'
+      ? 'อนุมานจากข้อมูลก่อน/หลัง อาจไม่ครบจุดที่ผู้ใช้เลือกในคำขอเดิม'
+      : note
+  return {
+    targetMeasurementPoints: points,
+    targetMeasurementPointsSource: source ?? null,
+    targetSummaryNote: note,
+    targetSummaryDescription: description,
+  }
+}
+
+function mapEditRequestRows(rows) {
   return rows.map((row, index) => {
     const formType = row.formType ?? 'BASIC_INFO'
     const form = getRequestFormLabel(formType)
-    const proposedPoint = Array.isArray(row.proposedMeasurementPoints) ? row.proposedMeasurementPoints[0] : null
-    const currentPoint = Array.isArray(row.currentMeasurementPoints) ? row.currentMeasurementPoints[0] : null
-    const point = proposedPoint ?? currentPoint
-    const matchedFactory = findRequestFactory(row, factories)
+    const targetSummary = getEditRequestTargetSummary({ ...row, formType })
+    const pointText = (field) => targetSummary.targetMeasurementPoints
+      .map((point) => getFirstNonBlankValue(point[field]) ?? '-').join('\n') || '-'
 
     return {
       id: row.id ?? `edit-request-${index}`,
@@ -402,25 +407,19 @@ function mapEditRequestRows(rows, factories = []) {
       requestType: form,
       form,
       formType,
-      systemType: formType === 'BASIC_INFO' ? '-' : point?.systemType ?? '-',
-      pointCode: formType === 'BASIC_INFO' ? '-' : point?.pointCode ?? '-',
-      pointName: formType === 'BASIC_INFO' ? '-' : point?.pointName ?? '-',
-      submittedDate: formatFactoryEditRequestDate(row.submittedAt ?? row.createdAt),
+      ...targetSummary,
+      systemType: pointText('systemType'),
+      pointCode: pointText('pointCode'),
+      pointName: pointText('pointName'),
+      submittedDate: formatFactoryEditRequestDate(row.submittedAt),
       reviewedDate: row.reviewedAt ?? '-',
       statusCode: row.status ?? '',
       status: getFactoryEditRequestStatusLabel(row.status, row.statusLabel),
       statusLabel: row.statusLabel ?? '',
       ...getMasterDataFactoryRegistrationFields(row),
+      factoryId: row.factoryId ?? '',
       factoryName: row.factoryName ?? '',
-      province: getFirstNonBlankValue(
-        row.provinceName,
-        row.province,
-        row.proposedFactory?.provinceName,
-        row.proposedFactory?.province,
-        row.currentFactory?.provinceName,
-        row.currentFactory?.province,
-        matchedFactory?.province,
-      ) ?? '-',
+      province: getFirstNonBlankValue(row.provinceName) ?? '-',
       requestNote: row.requestNote ?? null,
       revisionReason: row.revisionReason ?? null,
       officerNote: row.officerNote ?? null,
@@ -430,6 +429,61 @@ function mapEditRequestRows(rows, factories = []) {
       raw: row,
     }
   })
+}
+
+function mapEditRequestDetail(request, detail) {
+  // Detail has full snapshots but may omit the list-only target summary fields.
+  const merged = {
+    ...request.raw,
+    targetMeasurementPoints: request.targetMeasurementPoints,
+    targetMeasurementPointsSource: request.targetMeasurementPointsSource,
+    ...detail,
+  }
+  const mapped = mapEditRequestRows([merged])[0]
+  return { ...mapped, raw: detail }
+}
+
+function getEditRequestFormQuery(request) {
+  const systems = [...new Set((request.targetMeasurementPoints ?? []).map((point) => point.systemType))]
+  const query = new URLSearchParams()
+  if (request.formType === 'MEASUREMENT_POINTS' && systems.length === 1 && ['CEMS', 'WPMS'].includes(systems[0])) {
+    query.set('systemType', systems[0])
+  }
+  return query.toString()
+}
+
+function getRequestRowHeight({ model }) {
+  return Math.max(52, Math.max(1, model.targetMeasurementPoints?.length ?? 0) * 28 + 16 + (model.targetSummaryNote ? 24 : 0))
+}
+
+function RequestTargetCell({ row, field }) {
+  const points = row.targetMeasurementPoints
+  return (
+    <Stack sx={{ width: '100%', py: 1 }}>
+      {points.length ? points.map((point) => (
+        <Typography
+          key={point.connectedPointId}
+          variant="body2"
+          noWrap
+          title={String(getFirstNonBlankValue(point[field]) ?? '-')}
+          sx={{ height: 28, lineHeight: '28px' }}
+        >
+          {getFirstNonBlankValue(point[field]) ?? '-'}
+        </Typography>
+      )) : <Typography variant="body2" sx={{ height: 28, lineHeight: '28px' }}>-</Typography>}
+      {row.targetSummaryNote ? (
+        <Box sx={{ height: 24 }}>
+          {field === 'pointCode' ? (
+            <Tooltip title={row.targetSummaryDescription}>
+              <Typography variant="caption" component="div" noWrap sx={{ lineHeight: '24px', color: 'text.secondary' }}>
+                {row.targetSummaryNote}
+              </Typography>
+            </Tooltip>
+          ) : null}
+        </Box>
+      ) : null}
+    </Stack>
+  )
 }
 
 function normalizeFactoryDetail(row = {}) {
@@ -742,8 +796,9 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, is
     { field: 'province', headerName: 'จังหวัด', width: 130 },
     { field: 'requestNo', headerName: 'เลขที่คำขอ', width: 150 },
     { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
-    { field: 'systemType', headerName: 'ประเภทจุดตรวจวัด', width: 150 },
-    { field: 'pointCode', headerName: 'รหัสจุดตรวจวัด', width: 170 },
+    { field: 'systemType', headerName: 'ประเภทจุดตรวจวัด', width: 150, renderCell: ({ row }) => <RequestTargetCell row={row} field="systemType" /> },
+    { field: 'pointCode', headerName: 'รหัสจุดตรวจวัด', width: 210, renderCell: ({ row }) => <RequestTargetCell row={row} field="pointCode" /> },
+    { field: 'pointName', headerName: 'ชื่อจุดตรวจวัด', width: 240, renderCell: ({ row }) => <RequestTargetCell row={row} field="pointName" /> },
     { field: 'form', headerName: 'แบบฟอร์ม', width: 150 },
     {
       field: 'status',
@@ -2313,14 +2368,14 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
         },
       })
       const response = await readMasterDataResponse(result, 'โหลดรายการคำขอไม่สำเร็จ')
-      setRequestRows(mapEditRequestRows(response?.data ?? [], factoryRows))
+      setRequestRows(mapEditRequestRows(response?.data ?? []))
     } catch (error) {
       setTableError(error instanceof Error ? error.message : 'โหลดรายการคำขอไม่สำเร็จ')
       setRequestRows([])
     } finally {
       setLoadingRequests(false)
     }
-  }, [accessToken, factoryRows, canViewRequests])
+  }, [accessToken, canViewRequests])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -2408,11 +2463,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
       return request
     }
 
-    const query = new URLSearchParams()
-    if (request?.systemType && request.systemType !== '-') {
-      query.set('systemType', request.systemType)
-    }
-    const queryText = query.toString()
+    const queryText = getEditRequestFormQuery(request)
     const result = await fetch(
       `${pomsFactoriesApiBaseUrl}/edit-requests/${encodeURIComponent(requestId)}/form${queryText ? `?${queryText}` : ''}`,
       {
@@ -2444,12 +2495,8 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
       },
     })
     const response = await readMasterDataResponse(result, 'โหลดรายละเอียดคำขอไม่สำเร็จ')
-    const mapped = mapEditRequestRows([response?.data ?? {}], factoryRows)[0]
-    return {
-      ...mapped,
-      raw: response?.data,
-    }
-  }, [accessToken, factoryRows])
+    return mapEditRequestDetail(request, response?.data ?? {})
+  }, [accessToken])
 
   const handleOpenFactory = useCallback(async (factory) => {
     setActionLoading(true)
@@ -2858,6 +2905,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
           <DataGrid
             rows={effectiveSubMenu === 'factories' ? rows : requestRows}
             columns={effectiveSubMenu === 'factories' ? columns : pageRequestColumns}
+            getRowHeight={effectiveSubMenu === 'requests' ? getRequestRowHeight : undefined}
             loading={effectiveSubMenu === 'factories' ? loadingFactories || actionLoading : loadingRequests || actionLoading}
             disableRowSelectionOnClick
             showToolbar
