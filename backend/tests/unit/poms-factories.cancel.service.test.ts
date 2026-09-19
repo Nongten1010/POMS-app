@@ -46,11 +46,11 @@ describe('pomsFactoriesService.cancelEditRequest', () => {
       pomsFactoriesService.cancelEditRequest(11, actorUserId, editScope, null),
     ).resolves.toBe(cancelled);
 
-    expect(mockedRepository.findEditRequestById).toHaveBeenCalledWith(11, {
-      actorUserId,
-      scope: editScope,
-      regionalAccess: null,
-    });
+    expect(mockedRepository.findEditRequestById).toHaveBeenCalledWith(
+      11,
+      { actorUserId, scope: editScope, regionalAccess: null },
+      'REQUEST',
+    );
     expect(mockedRepository.cancelEditRequest).toHaveBeenCalledWith(11, actorUserId, {
       scope: editScope,
       regionalAccess: null,

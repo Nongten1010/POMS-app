@@ -422,9 +422,34 @@ export const pomsFactoriesRepository = {
   async findEditRequestById(
     id: number,
     access: FactoryAccess,
+    pointScope: 'ALL' | 'REQUEST' = 'ALL',
   ): Promise<PomsFactoryEditRequestDTO | null> {
     const row = await buildEditRequestsQuery(access).where('req.id', id).select('req.*').first();
-    return row ? hydrateEditRequest(row, db) : null;
+    if (!row) return null;
+    const request = await hydrateEditRequest(row, db);
+    if (
+      pointScope === 'ALL' ||
+      request.formType !== POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+    )
+      return request;
+
+    // Resolve before detail enrichment changes parameter groups. Keep persisted snapshots intact.
+    const targetIds = new Set(
+      resolveEditRequestRowTargets(row).targetMeasurementPoints.map(
+        (point) => point.connectedPointId,
+      ),
+    );
+    return {
+      ...request,
+      currentMeasurementPoints:
+        request.currentMeasurementPoints?.filter((point) =>
+          targetIds.has(point.connectedPointId),
+        ) ?? null,
+      proposedMeasurementPoints:
+        request.proposedMeasurementPoints?.filter((point) =>
+          targetIds.has(point.connectedPointId),
+        ) ?? null,
+    };
   },
 
   async cancelEditRequest(
@@ -1722,15 +1747,19 @@ function toEditRequestSummary(row: EditRequestRow): PomsFactoryEditRequestSummar
     submittedAt: toIsoStringRequired(row.submitted_at),
     createdAt: toIsoStringRequired(row.created_at),
     updatedAt: toIsoStringRequired(row.updated_at),
-    ...resolveEditRequestTargets({
-      formType: row.form_type,
-      submittedIds: row.target_measurement_point_ids_json,
-      currentPoints: row.current_measurement_points_json,
-      proposedPoints: row.proposed_measurement_points_json,
-      currentContacts: row.current_contacts_json,
-      proposedContacts: row.proposed_contacts_json,
-    }),
+    ...resolveEditRequestRowTargets(row),
   };
+}
+
+function resolveEditRequestRowTargets(row: EditRequestRow) {
+  return resolveEditRequestTargets({
+    formType: row.form_type,
+    submittedIds: row.target_measurement_point_ids_json,
+    currentPoints: row.current_measurement_points_json,
+    proposedPoints: row.proposed_measurement_points_json,
+    currentContacts: row.current_contacts_json,
+    proposedContacts: row.proposed_contacts_json,
+  });
 }
 
 function toEditRequestDTO(

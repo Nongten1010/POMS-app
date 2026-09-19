@@ -39,6 +39,25 @@ function jsonResponseSchema(path: string, method: string, status: string): JsonO
 }
 
 describe('POMS factory master-data OpenAPI contract', () => {
+  it('documents request-scoped detail snapshots and the unknown legacy target case', () => {
+    const detail = asObject(schemas().PomsFactoryEditRequestDetail, 'detail');
+    const properties = asObject(detail.properties, 'detail properties');
+    for (const field of ['currentMeasurementPoints', 'proposedMeasurementPoints']) {
+      const points = asObject(properties[field], field);
+      expect(points).toMatchObject({
+        type: 'array',
+        nullable: true,
+        items: { $ref: '#/components/schemas/PomsMeasurementPoint' },
+      });
+      expect(points.description).toEqual(expect.stringContaining('connectedPointId'));
+      expect(points.description).toEqual(expect.stringContaining('UNKNOWN'));
+    }
+    const description = String(operation('/poms-factories/edit-requests/{id}', 'get').description);
+    expect(description).toContain('SUBMITTED');
+    expect(description).toContain('SNAPSHOT_DIFF');
+    expect(description).toContain('UNKNOWN');
+  });
+
   it('separates list summaries from full detail and publishes target evidence semantics', () => {
     const summary = asObject(schemas().PomsFactoryEditRequestSummary, 'summary');
     const properties = asObject(summary.properties, 'summary properties');
