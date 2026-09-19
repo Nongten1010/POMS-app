@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { db } from '../../src/config/database';
 import { pomsFactoriesRepository } from '../../src/modules/poms-factories/poms-factories.repository';
+import { pomsFactoriesService } from '../../src/modules/poms-factories/poms-factories.service';
 
-type Query = { toSQL(): { sql: string; bindings: unknown[] } };
+type Query = { toSQL(): { sql: string; bindings: unknown[]; method: string } };
 
 afterEach(() => {
   jest.restoreAllMocks();
@@ -57,7 +58,8 @@ function mockRows(rows: object[]) {
     run: async () => {
       const compiled = query.toSQL();
       queries.push(compiled);
-      return compiled.sql.includes('[poms_factory_edit_request_events]') ? [] : rows;
+      if (compiled.sql.includes('[poms_factory_edit_request_events]')) return [];
+      return compiled.method === 'first' ? rows[0] : rows;
     },
   })) as never);
   return queries;
@@ -255,5 +257,152 @@ describe('POMS edit-request list summary', () => {
       { actorUserId: 42, scope: 'ALL' },
     );
     expect(result.targetMeasurementPointsSource).toBe('UNKNOWN');
+  });
+});
+
+describe('POMS edit-request detail selected points', () => {
+  function mockDetail(row: object) {
+    jest.spyOn(pomsFactoriesRepository, 'findFactoryFormContacts').mockResolvedValue(null);
+    return mockRows([row]);
+  }
+
+  it.each(['WPMS', 'CEMS'])(
+    'omits an unrequested %s point from both before/after snapshots for request 48',
+    async (systemType) => {
+      const row = requestRow();
+      const current = JSON.parse(row.current_measurement_points_json);
+      const proposed = JSON.parse(row.proposed_measurement_points_json);
+      current[0].systemType = proposed[0].systemType = systemType;
+      mockDetail({
+        ...row,
+        current_measurement_points_json: JSON.stringify(current),
+        proposed_measurement_points_json: JSON.stringify(proposed),
+        target_measurement_point_ids_json: '[10021]',
+      });
+
+      const result = await pomsFactoriesService.getEditRequest(48, 42, 'ALL', null);
+
+      expect(result.id).toBe(48);
+      expect(result.currentMeasurementPoints).toEqual([
+        expect.objectContaining({
+          connectedPointId: 10021,
+          systemType: 'CEMS',
+          pointCode: 'S0915',
+        }),
+      ]);
+      expect(result.proposedMeasurementPoints).toEqual([
+        expect.objectContaining({ connectedPointId: 10021, pointName: 'Edited stack' }),
+      ]);
+      // Other consumers still need the complete stored snapshots.
+      const stored = await pomsFactoriesRepository.findEditRequestById(48, {
+        actorUserId: 42,
+        scope: 'ALL',
+      });
+      expect(stored?.currentMeasurementPoints).toHaveLength(2);
+      expect(stored?.proposedMeasurementPoints).toHaveLength(2);
+    },
+  );
+
+  it.each(['PENDING_REVIEW', 'APPROVED', 'REJECTED'])(
+    'infers only the changed legacy point by ID in status %s even after reordering',
+    async (status) => {
+      const row = requestRow();
+      mockDetail({
+        ...row,
+        status,
+        proposed_measurement_points_json: JSON.stringify(
+          JSON.parse(row.proposed_measurement_points_json).reverse(),
+        ),
+        target_measurement_point_ids_json: null,
+      });
+      const result = await pomsFactoriesService.getEditRequest(48, 42, 'ALL', null);
+      expect(result.currentMeasurementPoints?.map((point) => point.connectedPointId)).toEqual([
+        10021,
+      ]);
+      expect(result.proposedMeasurementPoints?.map((point) => point.connectedPointId)).toEqual([
+        10021,
+      ]);
+    },
+  );
+
+  it('keeps explicitly selected unchanged points for a contact-only edit', async () => {
+    const row = requestRow();
+    mockDetail({
+      ...row,
+      proposed_measurement_points_json: row.current_measurement_points_json,
+      target_measurement_point_ids_json: '[10021]',
+      current_contacts_json: JSON.stringify({
+        systemType: 'CEMS',
+        contactPersons: [],
+        notificationEmails: [],
+        officerNotificationEmails: [],
+      }),
+      proposed_contacts_json: JSON.stringify({
+        systemType: 'CEMS',
+        contactPersons: [],
+        notificationEmails: ['new@example.com'],
+        officerNotificationEmails: [],
+      }),
+    });
+    const result = await pomsFactoriesService.getEditRequest(48, 42, 'ALL', null);
+    expect(result.currentMeasurementPoints?.map((point) => point.connectedPointId)).toEqual([
+      10021,
+    ]);
+    expect(result.proposedMeasurementPoints?.map((point) => point.connectedPointId)).toEqual([
+      10021,
+    ]);
+    expect(result.notificationEmails).toEqual(['new@example.com']);
+  });
+
+  it('keeps all explicitly selected points across systems', async () => {
+    mockDetail({ ...requestRow(), target_measurement_point_ids_json: '[10021,10024]' });
+    const result = await pomsFactoriesService.getEditRequest(48, 42, 'ALL', null);
+    expect(result.currentMeasurementPoints?.map((point) => point.connectedPointId)).toEqual([
+      10024, 10021,
+    ]);
+    expect(result.proposedMeasurementPoints?.map((point) => point.connectedPointId)).toEqual([
+      10024, 10021,
+    ]);
+  });
+
+  it.each([null, '[]', '[99999]', 'invalid'])(
+    'does not present all points as selected when target evidence is unknown (%s)',
+    async (ids) => {
+      const row = requestRow();
+      mockDetail({
+        ...row,
+        target_measurement_point_ids_json: ids,
+        proposed_measurement_points_json: row.current_measurement_points_json,
+      });
+      const result = await pomsFactoriesService.getEditRequest(48, 42, 'ALL', null);
+      expect(result.currentMeasurementPoints).toEqual([]);
+      expect(result.proposedMeasurementPoints).toEqual([]);
+    },
+  );
+
+  it('preserves null measurement snapshots for BASIC_INFO', async () => {
+    mockDetail({
+      ...requestRow(),
+      form_type: 'BASIC_INFO',
+      current_measurement_points_json: null,
+      proposed_measurement_points_json: null,
+    });
+    const result = await pomsFactoriesService.getEditRequest(48, 42, 'ALL', null);
+    expect(result.currentMeasurementPoints).toBeNull();
+    expect(result.proposedMeasurementPoints).toBeNull();
+  });
+
+  it('preserves data scope and returns 404 before reading contacts for inaccessible requests', async () => {
+    const contacts = jest
+      .spyOn(pomsFactoriesRepository, 'findFactoryFormContacts')
+      .mockResolvedValue(null);
+    const queries = mockRows([]);
+    await expect(
+      pomsFactoriesService.getEditRequest(48, 42, 'OWN_FACTORY', null),
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(contacts).not.toHaveBeenCalled();
+    expect(queries).toHaveLength(1);
+    expect(queries[0].bindings).toEqual(expect.arrayContaining([42, 48]));
+    expect(queries[0].sql).toContain('[req].[id] = ?');
   });
 });

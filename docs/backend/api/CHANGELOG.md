@@ -1,5 +1,15 @@
 # API Breaking Changes
 
+<a id="poms-edit-request-detail-points"></a>
+
+## 2026-09-19 — รายละเอียดคำขอแก้ไขโรงงาน POMS คืนเฉพาะจุดที่ทำคำขอ
+
+- **Affected canonical docs:** [รายละเอียดคำขอและจุดเป้าหมาย](./menus/master-data/factory-edit-requests.md#edit-request-detail-points)
+- **Impact:** `GET /api/v1/poms-factories/edit-requests/:id` กรอง `currentMeasurementPoints` และ `proposedMeasurementPoints` ของ `MEASUREMENT_POINTS` ตาม `connectedPointId` เป้าหมายเดียวกับ list แทนการคืนทุกจุดใน snapshot; ใช้ IDs ที่บันทึกจากการส่งรอบล่าสุดก่อน และเทียบ stored snapshots สำหรับคำขอเก่า เมื่อไม่มีหลักฐานเป้าหมายคืน `[]` สำหรับ snapshot ที่มีอยู่ และคง `null` เมื่อไม่มี snapshot
+- **Migration:** client แสดงก่อน/หลังจาก arrays ที่ได้รับและจับคู่ด้วย `connectedPointId` รองรับ `[]`/`null`; ใช้ `targetMeasurementPointsSource` จาก list เมื่อต้องแสดงข้อจำกัดของหลักฐานคำขอเก่า หากต้องการทุกจุดปัจจุบันให้เรียก `GET /api/v1/poms-factories/:factoryId` ไม่มี migration/backfill เพิ่มเติมจาก migration `0123` ของ list summary
+- **Unchanged:** URL, request, permission/data scope, status/error envelope, snapshot/events ที่จัดเก็บ, `/form` และ response ของ create/resubmission/review/cancel คงเดิม
+- **Breaking change:** yes — arrays ของ GET detail มีเฉพาะจุดเป้าหมาย หลัง deploy ต้องตรวจ production OpenAPI และ authenticated GET ของคำขอ 48; ผลทดสอบในเครื่องไม่ใช่หลักฐาน deploy
+
 <a id="poms-edit-request-list-summary"></a>
 
 ## 2026-09-18 — รายการคำขอแก้ไขโรงงาน POMS คืนข้อมูลสรุปและจุดเป้าหมาย

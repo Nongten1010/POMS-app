@@ -879,9 +879,34 @@ Minimal response (`200 OK`, ตัวอย่างสมมติ):
 }
 ```
 
+<a id="edit-request-detail-points"></a>
+
 ### `GET /api/v1/poms-factories/edit-requests/:id`
 
 คืน current/proposed snapshot, ข้อมูลผู้ติดต่อ, อีเมลแจ้งเตือน, workflow events และ audit metadata ของคำขอเดียว
+
+สำหรับ `MEASUREMENT_POINTS` ทั้ง `currentMeasurementPoints` และ `proposedMeasurementPoints` คืนเฉพาะ `connectedPointId` ที่ทำคำขอ โดยใช้ [กติกาจุดเป้าหมายเดียวกับ list](#edit-request-list-summary): ใช้ IDs ที่บันทึกจากการส่งคำขอรอบล่าสุด (`SUBMITTED`) ก่อน รวมจุดที่เลือกแต่ค่าไม่เปลี่ยน; คำขอเก่าที่ไม่มี IDs ใช้ความต่างของ stored snapshots (`SNAPSHOT_DIFF`) ก่อนคำนวณกลุ่มพารามิเตอร์สำหรับแสดงผล ไม่กรองด้วย `systemType` เพียงอย่างเดียว และไม่ถือว่าจุดแรกคือจุดที่เลือก
+
+แต่ละ array คงลำดับใน snapshot ของตัวเอง จับคู่ก่อน/หลังด้วย `connectedPointId` ไม่ใช้ index หากหลักฐานไม่พอหรือ IDs ไม่ถูกต้อง (`UNKNOWN` ตาม list) คืน `[]` สำหรับ snapshot ที่มีอยู่ โดยไม่ส่งทุกจุดแทน; field ที่ไม่มี snapshot ยังคง `null` การอนุมานคำขอเก่าอาจระบุจุดที่ส่งค่าเดิมไม่ได้ ไม่ backfill ข้อมูลที่ไม่มีหลักฐาน `BASIC_INFO` คงพฤติกรรมเดิม
+
+ตัวอย่างคำขอ `48` ที่เลือก `10021 / CEMS / S0915` แม้ snapshot มี `10024 / WPMS / P0155` ด้วย ผลลัพธ์ส่วนจุดตรวจวัดจะเป็นดังนี้ (ย่อเฉพาะฟิลด์ระบุจุด):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 48,
+    "currentMeasurementPoints": [
+      { "connectedPointId": 10021, "systemType": "CEMS", "pointCode": "S0915" }
+    ],
+    "proposedMeasurementPoints": [
+      { "connectedPointId": 10021, "systemType": "CEMS", "pointCode": "S0915" }
+    ]
+  }
+}
+```
+
+การกรองเป็นการแสดงผลของ GET detail เท่านั้น ไม่แก้ snapshot หรือ events ที่เก็บในฐานข้อมูล ฟอร์ม `/form` และ response ของ create/resubmission/review/cancel ใช้ contract เดิม หากต้องการทุกจุดของโรงงานปัจจุบันให้ใช้ `GET /api/v1/poms-factories/:factoryId` ดู [ผลกระทบและขั้นตอนปรับ client](../../CHANGELOG.md#poms-edit-request-detail-points)
 
 `events[].actorName` คืนชื่อผู้ทำ action จาก `users.first_name` และ `users.last_name` ณ เวลาอ่าน โดย trim แต่ละส่วนแล้วเชื่อมส่วนที่มีค่าด้วยช่องว่างหนึ่งตัว ถ้ามีเพียงชื่อหรือนามสกุลให้ใช้ส่วนที่มีค่า ถ้าไม่มีชื่อทั้งสองส่วนหรือไม่พบผู้ใช้ให้คืน `null` โดยยังคง event และ `actorUserId` เดิม ชื่อนี้ไม่ใช่ snapshot และอาจเปลี่ยนตามข้อมูลผู้ใช้ กติกานี้ใช้กับทุก response ที่คืน edit-request events ได้แก่ detail, create, resubmission, review และ cancel ส่วน list summary ไม่คืน `events`
 
@@ -929,8 +954,8 @@ Minimal request JSON:
 | `data.proposedContacts` | object \| null | yes | snapshot ผู้ติดต่อและอีเมลที่เสนอ; `null` เมื่อไม่มีหลักฐาน snapshot |
 | `data.currentFactory`        | object                                                                | no       | snapshot ก่อนส่งคำขอรอบล่าสุด                                                    |
 | `data.proposedFactory`       | object                                                                | no       | snapshot ที่เสนอแก้ไขรอบล่าสุด                                                   |
-| `data.currentMeasurementPoints`  | object[]                                                           | yes      | snapshot จุดตรวจวัดก่อนแก้; กลุ่มพารามิเตอร์ current derive จาก `parameters`; เป็น `null` สำหรับ `BASIC_INFO` |
-| `data.proposedMeasurementPoints` | object[]                                                           | yes      | snapshot จุดตรวจวัดที่เสนอ โดยคง `details.*Parameters` ตามคำขอ; เป็น `null` สำหรับ `BASIC_INFO` |
+| `data.currentMeasurementPoints`  | object[]                                                           | yes      | snapshot ก่อนแก้เฉพาะจุดเป้าหมาย; กลุ่มพารามิเตอร์ current derive จาก `parameters`; `[]` เมื่อมี snapshot แต่ระบุเป้าหมายไม่ได้; `null` เมื่อไม่มี snapshot / `BASIC_INFO` |
+| `data.proposedMeasurementPoints` | object[]                                                           | yes      | snapshot ที่เสนอเฉพาะจุดเป้าหมาย โดยคง `details.*Parameters`; `[]` เมื่อมี snapshot แต่ระบุเป้าหมายไม่ได้; `null` เมื่อไม่มี snapshot / `BASIC_INFO` |
 | `data.contactPersons`            | object[]                                                           | no       | `proposedContacts.contactPersons`; คำขอเก่า fallback live/source หรือ `[]` |
 | `data.informationProviderName` | string | yes | ชื่อผู้ให้ข้อมูลหรือผู้รับมอบอำนาจจาก source connection request; `null` เมื่อไม่มีข้อมูล |
 | `data.informationProviderPosition` | string | yes | ตำแหน่งจาก source row เดียวกับชื่อ; `null` เมื่อไม่มีข้อมูล |

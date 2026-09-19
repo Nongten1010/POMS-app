@@ -179,11 +179,11 @@ export const pomsFactoriesService = {
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PomsFactoryEditRequestDetailDTO> {
-    const request = await pomsFactoriesRepository.findEditRequestById(id, {
-      actorUserId,
-      scope: viewScope,
-      regionalAccess,
-    });
+    const request = await pomsFactoriesRepository.findEditRequestById(
+      id,
+      { actorUserId, scope: viewScope, regionalAccess },
+      'REQUEST',
+    );
     if (!request) throw new NotFoundError('POMS factory edit request not found');
     // BASIC_INFO is factory-wide; null means an ambiguous measurement-point request.
     const systemType = request.proposedContacts
