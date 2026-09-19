@@ -22,7 +22,7 @@ test('master-data detail comparison and PDF cover every target without inventing
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
-          return `${code}\nexport { mapEditRequestToPdfRequest, getChangedMeasurementPointFieldNames, getMissingPointSnapshotMessage, RequestComparisonContent, RequestMonitoringPointPreview };`
+          return `${code}\nexport { mapEditRequestRows, mapEditRequestDetail, mapEditRequestToPdfRequest, getChangedMeasurementPointFieldNames, getMissingPointSnapshotMessage, RequestComparisonContent, RequestMonitoringPointPreview };`
         }
         if (id.endsWith('/src/utils/connectionRequestPdf.js')) return `${code}\nexport { getPdfRenderRequests };`
       },
@@ -32,7 +32,7 @@ test('master-data detail comparison and PDF cover every target without inventing
     await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
     globalThis.window = { location: { hostname: 'localhost' } }
     const {
-      mapEditRequestToPdfRequest, getChangedMeasurementPointFieldNames, getMissingPointSnapshotMessage,
+      mapEditRequestRows, mapEditRequestDetail, mapEditRequestToPdfRequest, getChangedMeasurementPointFieldNames, getMissingPointSnapshotMessage,
       RequestComparisonContent, RequestMonitoringPointPreview,
     } = await server.ssrLoadModule('/src/pages/MasterDataPage.jsx')
     const { createConnectionRequestPdf, getPdfRenderRequests } = await server.ssrLoadModule('/src/utils/connectionRequestPdf.js')
@@ -54,6 +54,26 @@ test('master-data detail comparison and PDF cover every target without inventing
       proposedMeasurementPoints: [{ ...cems, details: { ...cems.details, stackHeight: 12 } }, wpms],
     }
     const request = { formType: 'MEASUREMENT_POINTS', requestNo: raw.requestNo, raw }
+
+    await t.test('inferred targets omit the info panel and redundant identity heading but retain comparison highlights', () => {
+      const summary = mapEditRequestRows([{
+        ...raw, targetMeasurementPoints: [cems], targetMeasurementPointsSource: 'SNAPSHOT_DIFF',
+      }])[0]
+      const detail = mapEditRequestDetail(summary, {
+        ...raw, currentMeasurementPoints: [cems], proposedMeasurementPoints: [raw.proposedMeasurementPoints[0]],
+      })
+      const html = renderToStaticMarkup(createElement(RequestComparisonContent, { request: detail, variant: 'after' }))
+      assert.ok(!html.includes('อนุมานจากข้อมูลก่อน/หลัง'))
+      assert.ok(!html.includes('CEMS / S0915 / Air target'))
+      assert.equal(detail.targetMeasurementPointsSource, 'SNAPSHOT_DIFF')
+      assert.deepEqual(getChangedMeasurementPointFieldNames(detail.raw, 10021), ['stackHeight'])
+      const preview = RequestMonitoringPointPreview({
+        request: detail, factory: {}, measurementPoints: [raw.proposedMeasurementPoints[0]],
+        highlightedFieldNames: getChangedMeasurementPointFieldNames(detail.raw, 10021), variant: 'after',
+      })
+      const form = preview.props.children.find((child) => child?.props?.initialRequest)
+      assert.ok(form.props.highlightedFieldNames.includes('stackHeight'))
+    })
 
     await t.test('selected ID scopes orange highlights and contact/email data to the same point', () => {
       assert.deepEqual(getChangedMeasurementPointFieldNames(raw, 10021), ['stackHeight'])

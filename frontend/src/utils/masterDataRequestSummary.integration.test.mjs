@@ -89,9 +89,17 @@ test('master-data request summaries keep target identities separate from full de
     await t.test('all sources and absent contract fail closed without guessing a point', () => {
       const inferred = map({ targetMeasurementPointsSource: 'SNAPSHOT_DIFF' })
       assert.equal(inferred.pointCode, 'S0915')
-      assert.equal(inferred.targetSummaryNote, 'อนุมานจากข้อมูลก่อน/หลัง')
-      assert.match(inferred.targetSummaryDescription, /อาจไม่ครบ/)
-      assert.equal(getRequestRowHeight({ model: inferred }), 68)
+      assert.equal(inferred.targetMeasurementPointsSource, 'SNAPSHOT_DIFF')
+      assert.equal(inferred.targetSummaryNote, '')
+      assert.equal(inferred.targetSummaryDescription, '')
+      assert.equal(getRequestRowHeight({ model: inferred }), 52)
+      for (const field of ['systemType', 'pointCode', 'pointName']) {
+        const cell = RequestTargetCell({ row: inferred, field })
+        assert.equal(cell.props.sx.height, '100%')
+        assert.equal(cell.props.sx.justifyContent, 'center')
+        const markup = renderToStaticMarkup(cell)
+        assert.ok(!markup.includes('อนุมานจากข้อมูลก่อน/หลัง'))
+      }
       for (const source of ['UNKNOWN', undefined, 'UNSUPPORTED']) {
         const row = map({
           targetMeasurementPointsSource: source,

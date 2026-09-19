@@ -377,13 +377,10 @@ function getEditRequestTargetSummary(row) {
   const validContract = ['SUBMITTED', 'SNAPSHOT_DIFF', 'UNKNOWN', 'NOT_APPLICABLE'].includes(source)
     && (source === 'NOT_APPLICABLE' || Array.isArray(row.targetMeasurementPoints))
   const note = !validContract ? 'ข้อมูลสรุปไม่ครบ'
-    : source === 'SNAPSHOT_DIFF' ? 'อนุมานจากข้อมูลก่อน/หลัง'
-      : source === 'UNKNOWN' ? 'ไม่ทราบจุดเป้าหมาย' : ''
+    : source === 'UNKNOWN' ? 'ไม่ทราบจุดเป้าหมาย' : ''
   const description = !validContract
     ? 'API ไม่ได้ส่งข้อมูลสรุปจุดเป้าหมายตามรูปแบบที่รองรับ กรุณาตรวจสอบรุ่น API'
-    : source === 'SNAPSHOT_DIFF'
-      ? 'อนุมานจากข้อมูลก่อน/หลัง อาจไม่ครบจุดที่ผู้ใช้เลือกในคำขอเดิม'
-      : note
+    : note
   return {
     targetMeasurementPoints: points,
     targetMeasurementPointsSource: source ?? null,
@@ -459,7 +456,7 @@ function getRequestRowHeight({ model }) {
 function RequestTargetCell({ row, field }) {
   const points = row.targetMeasurementPoints
   return (
-    <Stack sx={{ width: '100%', py: 1 }}>
+    <Stack sx={{ width: '100%', height: '100%', boxSizing: 'border-box', justifyContent: 'center', py: 1 }}>
       {points.length ? points.map((point) => (
         <Typography
           key={point.connectedPointId}
@@ -1912,7 +1909,6 @@ function RequestMeasurementPointComparison({ request, factory, variant }) {
           })}
         </Tabs>
       ) : null}
-      {selected ? <Typography variant="subtitle2">{(selected.after ?? selected.before).systemType ?? '-'} / {(selected.after ?? selected.before).pointCode || '-'} / {(selected.after ?? selected.before).pointName || '-'}</Typography> : null}
       {!point ? (
         <Alert severity="info">{missingMessage || 'ไม่พบ snapshot ของจุดตรวจวัดนี้ในข้อมูลด้านที่เลือก จึงไม่สามารถแสดงแบบฟอร์มหรือเปรียบเทียบได้'}</Alert>
       ) : (
