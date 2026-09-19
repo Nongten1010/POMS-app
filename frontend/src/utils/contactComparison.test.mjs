@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getContactComparison, getMeasurementPointComparisonPair } from './contactComparison.mjs'
+import { getContactComparison, getMeasurementPointComparisonPair, getMeasurementPointComparisonPairs } from './contactComparison.mjs'
 
 const person = { name: 'ผู้ติดต่อเดิม', phone: '0812345678', position: 'วิศวกร', email: null }
 const snapshot = (overrides = {}) => ({
@@ -157,4 +157,52 @@ test('a snapshot for a different system is not used as contact comparison eviden
   raw.currentContacts.systemType = null
   raw.proposedContacts.systemType = null
   assert.equal(getContactComparison(raw).unavailableFields.length, 0)
+})
+
+test('all detail targets pair by live ID despite order, duplicate labels, and missing sides', () => {
+  const point = (connectedPointId) => ({ connectedPointId, pointCode: null, pointName: 'Same name' })
+  const raw = {
+    currentMeasurementPoints: [point(3), point(1), point(2)],
+    proposedMeasurementPoints: [point('2'), point(1), point(4)],
+  }
+  const pairs = getMeasurementPointComparisonPairs(raw)
+  assert.deepEqual(pairs.map((pair) => pair.connectedPointId), ['2', '1', '4', '3'])
+  assert.equal(pairs[0].before.connectedPointId, 2)
+  assert.equal(pairs[0].after.connectedPointId, '2')
+  assert.equal(pairs[2].before, undefined)
+  assert.equal(pairs[3].after, undefined)
+  assert.equal(getMeasurementPointComparisonPair(raw, 1).before.connectedPointId, 1)
+  assert.deepEqual(getMeasurementPointComparisonPair(raw, 999), { before: undefined, after: undefined })
+  for (const value of [null, [], undefined]) {
+    assert.deepEqual(getMeasurementPointComparisonPairs({ currentMeasurementPoints: value, proposedMeasurementPoints: value }), [])
+  }
+})
+
+test('invalid or duplicate IDs never fall back to name/code or position', () => {
+  const point = { pointCode: 'S0001', pointName: 'Same name' }
+  const raw = {
+    currentMeasurementPoints: [{ ...point, connectedPointId: 1 }],
+    proposedMeasurementPoints: [
+      point, null, ...[0, -1, '', 1.5, true].map((connectedPointId) => ({ ...point, connectedPointId })),
+      { ...point, connectedPointId: 1 }, { ...point, connectedPointId: '1' }, { ...point, connectedPointId: 1 },
+    ],
+  }
+  assert.deepEqual(getMeasurementPointComparisonPairs(raw), [])
+  assert.deepEqual(getMeasurementPointComparisonPair(raw), { before: undefined, after: undefined })
+})
+
+test('selected point changes both contact system context and point-specific email comparison', () => {
+  const cems = { connectedPointId: 1, systemType: 'CEMS', officerNotificationEmails: ['air@example.com'] }
+  const wpms = { connectedPointId: 2, systemType: 'WPMS', officerNotificationEmails: ['water@example.com'] }
+  const raw = {
+    currentMeasurementPoints: [cems, wpms],
+    proposedMeasurementPoints: [{ ...wpms, officerNotificationEmails: [] }, cems],
+    currentContacts: snapshot(), proposedContacts: snapshot(),
+  }
+  assert.deepEqual(getContactComparison(raw, 'after', 1).unavailableFields, [])
+  assert.deepEqual(getContactComparison(raw, 'after', 1).highlightedFieldNames, [])
+  assert.deepEqual(getContactComparison(raw, 'before', 2).values.officerNotificationEmails, ['water@example.com'])
+  assert.deepEqual(getContactComparison(raw, 'after', 2).values.officerNotificationEmails, [])
+  assert.deepEqual(getContactComparison(raw, 'after', 2).highlightedFieldNames, ['officerNotificationEmails'])
+  assert.deepEqual(getContactComparison(raw, 'after', 2).unavailableFields, ['contactPersons', 'notificationEmails'])
 })

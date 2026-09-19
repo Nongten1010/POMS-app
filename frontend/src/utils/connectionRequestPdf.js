@@ -2101,11 +2101,37 @@ async function renderCems(layout, request, context, options = {}) {
   await renderCemsDocumentSections(layout, context.documentsAndImages)
 }
 
+function getPdfRenderRequests(request, options = {}) {
+  if (options.contentMode !== 'measurement-point') return [request]
+  const points = Array.isArray(request.measurementPoints) ? request.measurementPoints : []
+  if (!points.length) throw new Error('ไม่มีข้อมูลจุดตรวจวัดที่เสนอแก้ไขสำหรับสร้าง PDF')
+  return points.map((point) => {
+    const systemType = point.systemType ?? point.details?.monitoringPointKind ?? request.systemType ?? request.type
+    if (!['CEMS', 'WPMS'].includes(systemType)) throw new Error('ไม่พบประเภทจุดตรวจวัดสำหรับสร้าง PDF')
+    const contacts = request.proposedContacts
+    const useContacts = contacts && (contacts.systemType == null || contacts.systemType === systemType)
+    return {
+      ...request,
+      ...(contacts ? {
+        contactPersons: useContacts ? contacts.contactPersons : [],
+        notificationEmails: useContacts ? contacts.notificationEmails : [],
+        officerNotificationEmails: useContacts ? contacts.officerNotificationEmails : [],
+      } : {}),
+      ...(Array.isArray(point.officerNotificationEmails) ? { officerNotificationEmails: point.officerNotificationEmails } : {}),
+      type: systemType,
+      systemType,
+      monitoringPointCode: point.pointCode ?? null,
+      measurementPoints: [point],
+    }
+  })
+}
+
 export async function createConnectionRequestPdf(request, options = {}) {
   if (!request) {
     throw new Error('ไม่พบข้อมูลสำหรับสร้าง PDF')
   }
 
+  const renderRequests = getPdfRenderRequests(request, options)
   const pdfDoc = await PDFDocument.create()
   pdfDoc.registerFontkit(fontkit)
   const [regularFontBytes, boldFontBytes] = await Promise.all([
@@ -2117,19 +2143,22 @@ export async function createConnectionRequestPdf(request, options = {}) {
     bold: await pdfDoc.embedFont(boldFontBytes),
   }
   const layout = new PdfLayout(pdfDoc, fonts)
-  const context = {
-    ...getRequestContext(request, options),
-    signatureDate: options.showRequestMetaHeader
-      ? displayValue(request?.submittedDate || formatRequestSubmittedDate(request?.submittedAt))
-      : undefined,
-  }
+  for (const [index, pointRequest] of renderRequests.entries()) {
+    if (index > 0) layout.addPage()
+    const context = {
+      ...getRequestContext(pointRequest, options),
+      signatureDate: options.showRequestMetaHeader
+        ? displayValue(request?.submittedDate || formatRequestSubmittedDate(request?.submittedAt))
+        : undefined,
+    }
 
-  if (options.contentMode === 'factory-general-info') {
-    await renderFactoryGeneralInfo(layout, request, context)
-  } else if (context.isWpms) {
-    await renderWpms(layout, request, context, options)
-  } else {
-    await renderCems(layout, request, context, options)
+    if (options.contentMode === 'factory-general-info') {
+      await renderFactoryGeneralInfo(layout, pointRequest, context)
+    } else if (context.isWpms) {
+      await renderWpms(layout, pointRequest, context, options)
+    } else {
+      await renderCems(layout, pointRequest, context, options)
+    }
   }
 
   if (options.showRequestMetaHeader) {

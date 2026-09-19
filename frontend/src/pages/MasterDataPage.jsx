@@ -35,7 +35,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestDocumentDialog, RequestFormBottomSheet } from './ConnectionRequestPage'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
-import { getContactComparison, getMeasurementPointComparisonPair } from '../utils/contactComparison.mjs'
+import { getContactComparison, getMeasurementPointComparisonPair, getMeasurementPointComparisonPairs } from '../utils/contactComparison.mjs'
 import {
   FACTORY_BASIC_INFO_EIA_OPTIONS,
   buildFactoryBasicInfoPayload,
@@ -1750,10 +1750,11 @@ function mapEditRequestToPdfRequest(request = {}) {
   const factorySnapshot = raw.proposedFactory ?? raw.currentFactory ?? {}
   const measurementPoints = Array.isArray(raw.proposedMeasurementPoints)
     ? raw.proposedMeasurementPoints
-    : Array.isArray(raw.currentMeasurementPoints)
+    : request.formType !== 'MEASUREMENT_POINTS' && Array.isArray(raw.currentMeasurementPoints)
       ? raw.currentMeasurementPoints
       : []
-  const systemType = measurementPoints[0]?.systemType ?? raw.systemType ?? request.systemType
+  const systems = [...new Set(measurementPoints.map((point) => point.systemType))]
+  const systemType = systems.length === 1 ? systems[0] : null
   const factory = normalizeFactoryDetail({
     ...factorySnapshot,
     ...getMasterDataFactoryRegistrationFields(raw, factorySnapshot),
@@ -1773,9 +1774,10 @@ function mapEditRequestToPdfRequest(request = {}) {
   }
 }
 
-function getChangedMeasurementPointFieldNames(raw = {}) {
+function getChangedMeasurementPointFieldNames(raw = {}, connectedPointId) {
   const changedFields = new Set()
-  const pointPair = getMeasurementPointComparisonPair(raw)
+  const pointPair = getMeasurementPointComparisonPair(raw, connectedPointId)
+  if (!pointPair.before || !pointPair.after) return []
   const beforePoint = pointPair.before ?? {}
   const afterPoint = pointPair.after ?? {}
   ;['pointCode', 'pointName'].forEach((field) => {
@@ -1838,7 +1840,7 @@ function getChangedMeasurementPointFieldNames(raw = {}) {
 function RequestMonitoringPointPreview({ request, factory, measurementPoints, highlightedFieldNames, variant }) {
   const raw = request?.raw ?? request
   const firstPoint = Array.isArray(measurementPoints) ? measurementPoints[0] : null
-  const contactComparison = getContactComparison(raw, variant)
+  const contactComparison = getContactComparison(raw, variant, firstPoint?.connectedPointId)
   const contactLabels = {
     contactPersons: 'ผู้ติดต่อประสานงาน',
     notificationEmails: 'อีเมลแจ้งเตือนโรงงาน',
@@ -1884,6 +1886,51 @@ function RequestMonitoringPointPreview({ request, factory, measurementPoints, hi
   )
 }
 
+function getMissingPointSnapshotMessage(raw, variant = 'after') {
+  const snapshot = variant === 'before' ? raw?.currentMeasurementPoints : raw?.proposedMeasurementPoints
+  const label = variant === 'before' ? 'ก่อนแก้ไข' : 'ที่เสนอแก้ไข'
+  if (!Array.isArray(snapshot)) return `ไม่มี snapshot ข้อมูลจุดตรวจวัด${label}ของคำขอนี้`
+  if (!snapshot.length) return `ไม่มีข้อมูลจุดตรวจวัด${label}ที่ระบุจุดเป้าหมายได้จากหลักฐานของคำขอนี้`
+  return ''
+}
+
+function RequestMeasurementPointComparison({ request, factory, variant }) {
+  const [selectedId, setSelectedId] = useState(null)
+  const raw = request.raw ?? request
+  const pairs = getMeasurementPointComparisonPairs(raw)
+  const selected = pairs.find((pair) => pair.connectedPointId === selectedId) ?? pairs[0]
+  const point = selected?.[variant]
+  const missingMessage = getMissingPointSnapshotMessage(raw, variant)
+  return (
+    <Stack spacing={2}>
+      {request.targetSummaryDescription ? <Alert severity="info">{request.targetSummaryDescription}</Alert> : null}
+      {pairs.length > 1 ? (
+        <Tabs value={selected.connectedPointId} onChange={(_, value) => setSelectedId(value)} variant="scrollable" scrollButtons="auto" aria-label="จุดตรวจวัดในคำขอ">
+          {pairs.map((pair) => {
+            const item = pair.after ?? pair.before
+            return <Tab key={pair.connectedPointId} value={pair.connectedPointId} label={item.pointCode || '-'} title={`${item.systemType ?? '-'} / ${item.pointName ?? '-'} / ID ${pair.connectedPointId}`} />
+          })}
+        </Tabs>
+      ) : null}
+      {selected ? <Typography variant="subtitle2">{(selected.after ?? selected.before).systemType ?? '-'} / {(selected.after ?? selected.before).pointCode || '-'} / {(selected.after ?? selected.before).pointName || '-'}</Typography> : null}
+      {!point ? (
+        <Alert severity="info">{missingMessage || 'ไม่พบ snapshot ของจุดตรวจวัดนี้ในข้อมูลด้านที่เลือก จึงไม่สามารถแสดงแบบฟอร์มหรือเปรียบเทียบได้'}</Alert>
+      ) : (
+        <>
+          {!selected.before || !selected.after ? <Alert severity="info">ข้อมูลก่อนและหลังแก้ไขของจุดตรวจวัดนี้ไม่ครบ จึงไม่ระบุช่องที่เปลี่ยนแปลง</Alert> : null}
+          <RequestMonitoringPointPreview
+            request={request}
+            factory={factory}
+            measurementPoints={[point]}
+            highlightedFieldNames={getChangedMeasurementPointFieldNames(raw, selected.connectedPointId)}
+            variant={variant}
+          />
+        </>
+      )}
+    </Stack>
+  )
+}
+
 function RequestComparisonContent({ request, variant = 'after' }) {
   if (!request) return null
 
@@ -1899,17 +1946,11 @@ function RequestComparisonContent({ request, variant = 'after' }) {
     ),
     factoryName: (variant === 'before' ? raw?.currentFactory?.factoryName : raw?.proposedFactory?.factoryName) ?? baseFactory?.factoryName,
   })
-  const pointPair = getMeasurementPointComparisonPair(raw)
-  const selectedPoint = pointPair[variant]
-  const measurementPoints = selectedPoint ? [selectedPoint] : []
-  const isPointForm = request?.form === 'แก้ไขข้อมูลจุดตรวจวัด'
-  const highlightedFieldNames = isPointForm
-    ? getChangedMeasurementPointFieldNames(raw)
-    : getChangedFactoryGeneralInfoFieldNames(raw)
+  const isPointForm = request?.formType === 'MEASUREMENT_POINTS' || request?.form === 'แก้ไขข้อมูลจุดตรวจวัด'
 
   return isPointForm
-    ? <RequestMonitoringPointPreview request={request} factory={factory} measurementPoints={measurementPoints} highlightedFieldNames={highlightedFieldNames} variant={variant} />
-    : <RequestGeneralInfoPreview factory={factory} highlightedFieldNames={highlightedFieldNames} />
+    ? <RequestMeasurementPointComparison key={`${raw.id}-${raw.updatedAt ?? ''}`} request={request} factory={factory} variant={variant} />
+    : <RequestGeneralInfoPreview factory={factory} highlightedFieldNames={getChangedFactoryGeneralInfoFieldNames(raw)} />
 }
 
 function RequestViewBottomSheet({
@@ -2053,9 +2094,11 @@ function RequestPdfPreviewDialog({
     ? `${request.requestId ?? request.id ?? ''}-${request.formType ?? ''}-${request.raw?.updatedAt ?? ''}`
     : ''
   const [previewState, setPreviewState] = useState({ key: '', url: '', error: '' })
-  const previewUrl = previewState.key === previewKey ? previewState.url : ''
-  const previewError = previewState.key === previewKey ? previewState.error : ''
-  const previewLoading = Boolean(open && request && previewKey && previewState.key !== previewKey)
+  const missingSnapshotMessage = request?.formType === 'MEASUREMENT_POINTS'
+    ? getMissingPointSnapshotMessage(request.raw ?? request) : ''
+  const previewUrl = !missingSnapshotMessage && previewState.key === previewKey ? previewState.url : ''
+  const previewError = missingSnapshotMessage || (previewState.key === previewKey ? previewState.error : '')
+  const previewLoading = Boolean(open && request && !missingSnapshotMessage && previewKey && previewState.key !== previewKey)
   const documentRequest = useMemo(
     () => request ? mapEditRequestToPdfRequest(request) : request,
     [request],
@@ -2069,7 +2112,7 @@ function RequestPdfPreviewDialog({
   ].some((status) => ['APPROVED', 'อนุมัติ', 'อนุมัติแล้ว', 'ผ่านการพิจารณา'].includes(status))
 
   useEffect(() => {
-    if (!open || !request) {
+    if (!open || !request || missingSnapshotMessage) {
       return undefined
     }
 
@@ -2109,7 +2152,7 @@ function RequestPdfPreviewDialog({
         URL.revokeObjectURL(nextUrl)
       }
     }
-  }, [documentRequest, isApproved, open, previewKey, request, showRequestMetaHeader])
+  }, [documentRequest, isApproved, missingSnapshotMessage, open, previewKey, request, showRequestMetaHeader])
 
   return (
     <RequestDocumentDialog
@@ -2117,6 +2160,7 @@ function RequestPdfPreviewDialog({
       request={documentRequest}
       title={title || `${request?.form ?? 'รายละเอียดคำขอ'}${request?.requestNo ? ` - ${request.requestNo}` : ''}`}
       onClose={onClose}
+      contentHeader={request?.targetSummaryDescription ? <Alert severity="info" sx={{ mb: 2 }}>{request.targetSummaryDescription}</Alert> : null}
       pdfPreviewUrl={previewUrl}
       pdfPreviewLoading={previewLoading}
       pdfPreviewError={previewError}

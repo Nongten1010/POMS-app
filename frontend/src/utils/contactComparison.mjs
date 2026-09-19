@@ -11,15 +11,36 @@ const contactValue = (contact, field) => field === 'email'
   ? normalizedEmail(contact?.[field])
   : normalizedText(contact?.[field])
 
-export function getMeasurementPointComparisonPair(raw = {}) {
+function pointIdentity(value) {
+  if (!['string', 'number'].includes(typeof value) || String(value).trim() === '') return null
+  const id = Number(value)
+  return Number.isSafeInteger(id) && id > 0 ? String(id) : null
+}
+
+export function getMeasurementPointComparisonPairs(raw = {}) {
   raw ??= {}
   const before = Array.isArray(raw.currentMeasurementPoints) ? raw.currentMeasurementPoints : []
   const after = Array.isArray(raw.proposedMeasurementPoints) ? raw.proposedMeasurementPoints : []
-  const selected = after[0] ?? before[0]
-  const findSelected = (points) => selected?.connectedPointId != null
-    ? points.find((point) => String(point.connectedPointId) === String(selected.connectedPointId))
-    : points[0]
-  return { before: findSelected(before), after: findSelected(after) }
+  const index = (points) => {
+    const result = new Map()
+    for (const point of points) {
+      const id = pointIdentity(point?.connectedPointId)
+      if (id) result.set(id, result.has(id) ? null : point)
+    }
+    return result
+  }
+  const beforeById = index(before)
+  const afterById = index(after)
+  return [...new Set([...afterById.keys(), ...beforeById.keys()])]
+    .filter((id) => beforeById.get(id) !== null && afterById.get(id) !== null)
+    .map((id) => ({ connectedPointId: id, before: beforeById.get(id), after: afterById.get(id) }))
+}
+
+export function getMeasurementPointComparisonPair(raw = {}, connectedPointId) {
+  const pairs = getMeasurementPointComparisonPairs(raw)
+  const selected = connectedPointId == null ? pairs[0]
+    : pairs.find((pair) => pair.connectedPointId === pointIdentity(connectedPointId))
+  return { before: selected?.before, after: selected?.after }
 }
 
 function getContactFieldChanges(before, after, variant) {
@@ -55,9 +76,9 @@ function getContactFieldChanges(before, after, variant) {
   })
 }
 
-export function getContactComparison(raw = {}, variant = 'after') {
+export function getContactComparison(raw = {}, variant = 'after', connectedPointId) {
   raw ??= {}
-  const points = getMeasurementPointComparisonPair(raw)
+  const points = getMeasurementPointComparisonPair(raw, connectedPointId)
   const systemType = points.after?.systemType ?? points.before?.systemType
   const snapshotFor = (side) => {
     const snapshot = side === 'before' ? raw.currentContacts : raw.proposedContacts
