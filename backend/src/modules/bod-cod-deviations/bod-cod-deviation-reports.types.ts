@@ -37,6 +37,9 @@ export interface BodCodDeviationAccess {
   publicBaseUrl?: string;
   publicPath?: string;
   roles?: string[];
+  viewScope?: string | PermissionScopeDetails | null;
+  editScope?: string | PermissionScopeDetails | null;
+  approveScope?: string | PermissionScopeDetails | null;
 }
 
 export interface ListBodCodDeviationReportsQuery {
@@ -164,6 +167,7 @@ export interface BodCodConnectedMeasurementPointDTO {
 
 export interface BodCodDeviationReportTableRowDTO {
   id: number;
+  reportSequenceNo: number | null;
   reportNo: string;
   reportRound: string;
   reportRoundNo: number;
@@ -259,6 +263,7 @@ export interface BodCodWorkflowFieldsDTO {
 
 export interface CreatedBodCodDeviationReportDTO extends BodCodWorkflowFieldsDTO {
   id: number;
+  reportSequenceNo: number | null;
   reportNo: string;
   statusCode: BodCodDeviationReportStatus;
 }

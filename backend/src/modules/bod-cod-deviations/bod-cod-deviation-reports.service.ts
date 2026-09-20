@@ -45,6 +45,13 @@ export const bodCodDeviationReportsService = {
     return bodCodDeviationReportsRepository.createReport(input, access);
   },
 
+  cancelReport(
+    id: number,
+    access: BodCodDeviationAccess,
+  ): Promise<CreatedBodCodDeviationReportDTO> {
+    return bodCodDeviationReportsRepository.cancelReport(id, access);
+  },
+
   resubmitReport(
     id: number,
     input: ResubmitBodCodDeviationReportDTO,
@@ -56,12 +63,7 @@ export const bodCodDeviationReportsService = {
   changeWorkflowStatus(
     id: number,
     input: ChangeBodCodWorkflowStatusDTO,
-    access: {
-      actorUserId: number;
-      scope: BodCodDeviationAccess['scope'];
-      regionalAccess?: RegionalAccessDTO | null;
-      roles?: string[];
-    },
+    access: BodCodDeviationAccess,
   ): Promise<CreatedBodCodDeviationReportDTO> {
     return bodCodDeviationReportsRepository.changeWorkflowStatus(id, input, access);
   },
@@ -69,12 +71,7 @@ export const bodCodDeviationReportsService = {
   upsertResultNotice(
     id: number,
     input: UpsertBodCodResultNoticeDTO,
-    access: {
-      actorUserId: number;
-      scope: BodCodDeviationAccess['scope'];
-      regionalAccess?: RegionalAccessDTO | null;
-      roles?: string[];
-    },
+    access: BodCodDeviationAccess,
   ): Promise<UpsertedBodCodResultNoticeResponseDTO> {
     return bodCodDeviationReportsRepository.upsertResultNotice(id, input, access);
   },

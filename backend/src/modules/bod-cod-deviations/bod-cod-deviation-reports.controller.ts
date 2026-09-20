@@ -77,6 +77,8 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.getReportById(id, {
         actorUserId,
         scope: getScopeDetails(req, 'bod_cod_errors:view'),
+        editScope: getBodCodWriteDataScope(req),
+        approveScope: getBodCodActionDataScope(req, 'approve'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
         publicBaseUrl: getPublicBaseUrl(req),
         publicPath: env.UPLOAD_PUBLIC_PATH,
@@ -95,6 +97,7 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.createReport(payload, {
         actorUserId,
         scope: getBodCodWriteDataScope(req),
+        viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
       });
@@ -102,6 +105,32 @@ export const bodCodDeviationReportsController = {
         .status(StatusCodes.CREATED)
         .location(`${env.API_PREFIX}/bod-cod-deviation-reports/${data.id}`)
         .json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async cancelReport(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = bodCodDeviationReportIdParamsSchema.parse(req.params);
+      if (
+        req.body !== undefined &&
+        (req.body === null ||
+          typeof req.body !== 'object' ||
+          Array.isArray(req.body) ||
+          Object.keys(req.body).length > 0)
+      ) {
+        throw new BadRequestError('Cancellation does not accept a request body');
+      }
+      const data = await bodCodDeviationReportsService.cancelReport(id, {
+        actorUserId,
+        scope: getBodCodWriteDataScope(req),
+        viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
+        roles: req.user?.roles ?? [],
+        regionalAccess: req.user?.regionalAccess ?? undefined,
+      });
+      res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
     }
@@ -115,6 +144,7 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.resubmitReport(id, payload, {
         actorUserId,
         scope: getBodCodWriteDataScope(req),
+        viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
       });
@@ -131,7 +161,8 @@ export const bodCodDeviationReportsController = {
       const payload = changeBodCodWorkflowStatusSchema.parse(req.body);
       const data = await bodCodDeviationReportsService.changeWorkflowStatus(id, payload, {
         actorUserId,
-        scope: getScopeDetails(req, 'bod_cod_errors:approve'),
+        scope: getBodCodActionDataScope(req, 'approve'),
+        viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
         roles: req.user?.roles ?? [],
       });
@@ -148,7 +179,8 @@ export const bodCodDeviationReportsController = {
       const payload = upsertBodCodResultNoticeSchema.parse(req.body);
       const data = await bodCodDeviationReportsService.upsertResultNotice(id, payload, {
         actorUserId,
-        scope: getScopeDetails(req, 'bod_cod_errors:approve'),
+        scope: getBodCodActionDataScope(req, 'approve'),
+        viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
         roles: req.user?.roles ?? [],
       });
@@ -166,7 +198,13 @@ function requireActorUserId(req: Request): number {
 }
 
 function getBodCodWriteDataScope(req: Request) {
-  return getScopeDetails(req, 'bod_cod_errors:edit');
+  return getBodCodActionDataScope(req, 'edit');
+}
+
+function getBodCodActionDataScope(req: Request, action: 'edit' | 'approve') {
+  const scope = getScopeDetails(req, `bod_cod_errors:${action}`);
+  // Binary grants carry no data scope: keep the view scope instead of widening access.
+  return scope?.scope === null ? getScopeDetails(req, 'bod_cod_errors:view') : scope;
 }
 
 function getPublicBaseUrl(req: Request): string {

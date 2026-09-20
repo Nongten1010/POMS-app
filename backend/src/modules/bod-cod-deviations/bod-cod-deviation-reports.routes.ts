@@ -31,6 +31,7 @@ bodCodDeviationReportsRoutes.use(authenticate);
 
 bodCodDeviationReportsRoutes.post(
   '/attachments',
+  authorize('bod_cod_errors:view'),
   authorize('bod_cod_errors:edit'),
   bodCodAttachmentUpload.single('file'),
   bodCodDeviationReportsController.uploadAttachment,
@@ -40,23 +41,33 @@ bodCodDeviationReportsRoutes.get(
   authorize('bod_cod_errors:view'),
   bodCodDeviationReportsController.listFactories,
 );
+bodCodDeviationReportsRoutes.post(
+  '/:id/cancel',
+  authorize('bod_cod_errors:view'),
+  authorize('bod_cod_errors:edit'),
+  bodCodDeviationReportsController.cancelReport,
+);
 bodCodDeviationReportsRoutes.put(
   '/:id/resubmission',
+  authorize('bod_cod_errors:view'),
   authorize('bod_cod_errors:edit'),
   bodCodDeviationReportsController.resubmitReport,
 );
 bodCodDeviationReportsRoutes.post(
   '/:id/workflow-actions',
+  authorize('bod_cod_errors:view'),
   authorize('bod_cod_errors:approve'),
   bodCodDeviationReportsController.changeWorkflowStatus,
 );
 bodCodDeviationReportsRoutes.post(
   '/:id/result-notice',
+  authorize('bod_cod_errors:view'),
   authorize('bod_cod_errors:approve'),
   bodCodDeviationReportsController.upsertResultNotice,
 );
 bodCodDeviationReportsRoutes.put(
   '/:id/result-notice',
+  authorize('bod_cod_errors:view'),
   authorize('bod_cod_errors:approve'),
   bodCodDeviationReportsController.upsertResultNotice,
 );
@@ -67,6 +78,7 @@ bodCodDeviationReportsRoutes.get(
 );
 bodCodDeviationReportsRoutes.post(
   '/',
+  authorize('bod_cod_errors:view'),
   authorize('bod_cod_errors:edit'),
   bodCodDeviationReportsController.createReport,
 );
