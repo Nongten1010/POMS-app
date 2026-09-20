@@ -22,7 +22,7 @@ curl --request POST \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
   --data '{
-    "reportRoundNo": 1,
+    "reportRoundNo": 2,
     "reportYear": 2569,
     "factoryId": "FID-001",
     "factoryName": "บริษัท ตัวอย่าง จำกัด",
@@ -45,18 +45,71 @@ curl --request POST \
   }'
 ```
 
+## กติกาการทำงาน
+
+### กติกาการยื่นรายงานและเลขครั้งรายปี
+
+- สร้างรายงานใหม่ได้เฉพาะผู้ประกอบการ (`factory_operator`, scope `OWN_FACTORY`) หรือผู้มี role `admin` และต้องมี `bod_cod_errors:view` ร่วมกับ `bod_cod_errors:edit`; ข้อมูลต้องอยู่ภายใต้ scope ทั้งสองสิทธิ์
+- `reportRoundNo` คือครึ่งปี `1` (ม.ค.-มิ.ย.) หรือ `2` (ก.ค.-ธ.ค.) และ `reportYear` คือปี พ.ศ. ปัจจุบันตาม `Asia/Bangkok`; backend ตรวจเวลาหลังรอ lock ก่อนบันทึก ไม่รับการสร้างย้อนหลังหรือข้ามรอบ
+- ต้องระบุ `connectedMeasurementPointId` หรือ `pointCode` ที่ระบุจุดปัจจุบันได้เพียงจุดเดียว จุดต้องเป็นของโรงงานที่เลือกและมีพารามิเตอร์ที่รายงาน หากส่งทั้งสอง field ต้องตรงกัน
+- จุดเดียวกัน + พารามิเตอร์เดียวกัน + ปีเดียวกันมีคำขอค้างได้หนึ่งฉบับ โดย `APPROVED`, `REJECTED`, `CANCELLED` เป็นสถานะสิ้นสุด; `REVISION_REQUESTED` ยังเป็นคำขอค้าง การตรวจและสร้างทำภายใน transaction ที่ serialize การยื่นของจุดเดียวกัน
+- `reportSequenceNo` เป็น integer บวกที่ server จัดสรรและคืนใน list/detail และ response ของ create/resubmission/workflow/result-notice/cancel; ไม่รับ field นี้ใน request นับแยกจุด + BOD/COD + ปี และนับต่อข้ามครึ่งปี
+- อนุมัติสำเร็จแล้วครั้งถัดไปเพิ่มหนึ่ง; ยกเลิก/ไม่อนุมัติแล้วคำขอใหม่ใช้เลขครั้งเดิม; resubmit คงเลขครั้ง ปี รอบ และ `reportNo` ของคำขอเดิม และแก้ไขงานค้างข้ามครึ่งปีได้
+- รายงานเก่าก่อน migration `0124` คืน `reportSequenceNo: null` เพราะไม่มีหลักฐานเลขครั้งเดิม ไม่เติมเลขย้อนหลัง; การจัดสรรใหม่ใช้จำนวนรายงาน `APPROVED` เดิมเป็นฐาน ร่วมกับเลขครั้งสูงสุดที่อนุมัติแล้ว ไม่แก้ `reportNo` เก่า
+- `reportRound` เป็นข้อความรอบเดิมเพื่อความเข้ากันได้; client ต้องใช้ `reportSequenceNo` คู่กับ `reportYear` สำหรับช่องครั้งที่ และแสดง `-` เมื่อเป็น null รวมถึง preview ที่ยังไม่บันทึก
+
+### สิทธิ์การพิจารณา
+
+ทุก mutation ต้องมี `view` ร่วมกับ `edit` หรือ `approve` ตามงาน และผ่าน data scope ทั้งสองสิทธิ์; หาก action เป็น binary grant (`scope: null`) ให้ใช้ scope ของ `view` โดยไม่ขยายพื้นที่ การพิจารณาใช้ role + สถานะ + current step ร่วมกัน:
+
+| ขั้น | Role ที่ใช้ได้ |
+| --- | --- |
+| `INSPECTOR` | `monitoring_kpm`, `monitoring_5_centers`, `admin` |
+| `RESULT_NOTICE` รวมบันทึกแบบแจ้งผล | `monitoring_kpm`, `admin` |
+| `REVIEWER` | `kpm_director` |
+| `APPROVER` | `center_director`, `kwp_director` |
+
+`admin` เพียงอย่างเดียวไม่ให้สิทธิ์ทบทวน/อนุมัติสุดท้าย; detail คืน `allowedActions` ตามสิทธิ์และ scope ของงานนั้นจริง
+
+### ยกเลิกคำขอ
+
+`POST /api/v1/bod-cod-deviation-reports/:id/cancel` ไม่รับ request body (`id` เป็น positive integer) ใช้ Bearer token และ `bod_cod_errors:view` + `bod_cod_errors:edit`
+
+เฉพาะผู้ประกอบการเจ้าของโรงงาน (`factory_operator`, scope `OWN_FACTORY`) ยกเลิกได้ทุกสถานะยกเว้น `APPROVED`/`CANCELLED` รวมถึง `REJECTED`; ตรวจสถานะซ้ำหลัง lock ร่วมกับ workflow/resubmit/result-notice และบันทึก event `CANCEL` ใน transaction เดียวกัน ไม่ลบรายงานหรือประวัติเดิม
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 9,
+    "reportNo": "E-02-0001/2569",
+    "reportSequenceNo": 1,
+    "statusCode": "CANCELLED",
+    "approvalTrack": "REGIONAL",
+    "currentStep": null,
+    "steps": [],
+    "allowedActions": []
+  }
+}
+```
+
+สำเร็จตอบ `200`; `steps` คืนประวัติขั้นตอนจริงโดยไม่มี current step; ยกเลิกซ้ำหรือคำขออนุมัติแล้วตอบ `409 CONFLICT` โดยไม่เพิ่มประวัติซ้ำ ฝั่ง frontend ต้องเชื่อม dialog กับ route นี้ก่อนใช้งานยกเลิกได้ครบ flow
+
+กรณีสร้างผิดรอบหรือมีคำขอค้างตอบ `409 CONFLICT` พร้อม `error.details.reason` เป็น `REPORT_PERIOD_CLOSED` หรือ `PENDING_REPORT_EXISTS`; จุดไม่ถูกต้อง/พารามิเตอร์ไม่มีในจุดตอบ `400 BAD_REQUEST`; role ไม่ตรงตอบ `403 FORBIDDEN` และรายงานนอก scope ตอบ `404 NOT_FOUND`
+
 ## Endpoint Summary
 
 | งาน | Method | Path | Auth | Permission |
 | --- | --- | --- | --- | --- |
-| Upload เอกสาร | `POST` | `/api/v1/bod-cod-deviation-reports/attachments` | Bearer | `bod_cod_errors:edit` |
+| Upload เอกสาร | `POST` | `/api/v1/bod-cod-deviation-reports/attachments` | Bearer | `bod_cod_errors:view` + `bod_cod_errors:edit` |
 | รายการโรงงานและรอบรายงาน | `GET` | `/api/v1/bod-cod-deviation-reports/factories` | Bearer | `bod_cod_errors:view` |
 | รายการรายงาน | `GET` | `/api/v1/bod-cod-deviation-reports` | Bearer | `bod_cod_errors:view` |
 | รายละเอียดรายงาน | `GET` | `/api/v1/bod-cod-deviation-reports/:id` | Bearer | `bod_cod_errors:view` |
-| สร้างและส่งรายงาน | `POST` | `/api/v1/bod-cod-deviation-reports` | Bearer | `bod_cod_errors:edit` |
-| ส่งรายงานที่แก้ไข | `PUT` | `/api/v1/bod-cod-deviation-reports/:id/resubmission` | Bearer | `bod_cod_errors:edit` |
-| ดำเนินการ workflow | `POST` | `/api/v1/bod-cod-deviation-reports/:id/workflow-actions` | Bearer | `bod_cod_errors:approve` |
-| สร้างหรือแก้ไขแบบแจ้งผล | `POST`, `PUT` | `/api/v1/bod-cod-deviation-reports/:id/result-notice` | Bearer | `bod_cod_errors:approve` |
+| สร้างและส่งรายงาน | `POST` | `/api/v1/bod-cod-deviation-reports` | Bearer | `bod_cod_errors:view` + `bod_cod_errors:edit` |
+| ส่งรายงานที่แก้ไข | `PUT` | `/api/v1/bod-cod-deviation-reports/:id/resubmission` | Bearer | `bod_cod_errors:view` + `bod_cod_errors:edit` |
+| ยกเลิกคำขอ | `POST` | `/api/v1/bod-cod-deviation-reports/:id/cancel` | Bearer | `bod_cod_errors:view` + `bod_cod_errors:edit` |
+| ดำเนินการ workflow | `POST` | `/api/v1/bod-cod-deviation-reports/:id/workflow-actions` | Bearer | `bod_cod_errors:view` + `bod_cod_errors:approve` |
+| สร้างหรือแก้ไขแบบแจ้งผล | `POST`, `PUT` | `/api/v1/bod-cod-deviation-reports/:id/result-notice` | Bearer | `bod_cod_errors:view` + `bod_cod_errors:approve` |
 
 ## เลขที่รายงาน `reportNo`
 
@@ -176,7 +229,7 @@ curl --request POST \
 | `parameterCode` | string | No | `BOD` หรือ `COD` |
 | `factoryId` | string | No | trim แล้ว 1-64 ตัวอักษร |
 
-Response เป็น `{ success, data[], meta: { total } }`; แต่ละรายการมี identity ของรายงาน/โรงงาน/จุดตรวจวัด, `selectedParameterCode`, `selectedParameterLabel` ซึ่งรวมหน่วย `mg/l`, `approvalTrack`, สถานะ, วันเวลา, `measurementCount` และ `statusHistory[]`
+Response เป็น `{ success, data[], meta: { total } }`; แต่ละรายการมี `reportSequenceNo` (integer บวก หรือ null สำหรับรายงานก่อน migration) และ identity ของรายงาน/โรงงาน/จุดตรวจวัด, `selectedParameterCode`, `selectedParameterLabel` ซึ่งรวมหน่วย `mg/l`, `approvalTrack`, สถานะ, วันเวลา, `measurementCount` และ `statusHistory[]`
 
 ```json
 {
@@ -185,6 +238,7 @@ Response เป็น `{ success, data[], meta: { total } }`; แต่ละร
     {
       "id": 9,
       "reportNo": "E-02-0001/2569",
+      "reportSequenceNo": 3,
       "reportRound": "ครั้งที่ 1",
       "reportRoundNo": 1,
       "reportYear": 2569,
@@ -210,8 +264,8 @@ Response เป็น `{ success, data[], meta: { total } }`; แต่ละร
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
-| `reportRoundNo` | integer | Yes | `1` หรือ `2` |
-| `reportYear` | integer | Yes | พ.ศ. `2500`-`2700`; ใช้เป็นปีใน `reportNo` |
+| `reportRoundNo` | integer | Yes | `1` หรือ `2`; create ต้องเป็นครึ่งปีปัจจุบันตามเวลาไทย; resubmit คงรอบเดิม |
+| `reportYear` | integer | Yes | พ.ศ. `2500`-`2700`; create ต้องเป็นปีปัจจุบันตามเวลาไทย; resubmit คงปีเดิม |
 | `factoryId` | string \| null | No | สูงสุด 64 ตัวอักษร |
 | `factoryName` | string | Yes | 1-500 ตัวอักษร |
 | `factoryRegistrationNo` | string | Yes | 1-80 ตัวอักษร |
@@ -264,6 +318,7 @@ Create สำเร็จตอบ `201 Created`, ส่ง `Location: /api/v1/b
   "data": {
     "id": 9,
     "reportNo": "E-02-0001/2569",
+    "reportSequenceNo": 1,
     "statusCode": "SUBMITTED",
     "approvalTrack": "REGIONAL",
     "currentStep": {
@@ -293,6 +348,7 @@ Resubmit ทำได้เฉพาะผู้ประกอบการเ�
   "data": {
     "id": 9,
     "reportNo": "E-02-0001/2569",
+    "reportSequenceNo": 1,
     "reportRoundNo": 1,
     "reportYear": 2569,
     "selectedParameterCode": "BOD",
@@ -377,7 +433,7 @@ Response `200 OK` เป็น workflow response และเพิ่ม `resul
 
 `approvalTrack` เป็น `CENTRAL` หรือ `REGIONAL`; steps ใช้ role `INSPECTOR`, `RESULT_NOTICE`, `REVIEWER`, `APPROVER` และ step status `PENDING`, `WAITING`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED`
 
-`allowedActions` อาจมี `CANCEL`, `APPROVE`, `REQUEST_REVISION`, `REJECT` ตามผู้ใช้ สถานะ และ current step แต่ route ยกเลิกรายงานยังไม่เป็นส่วนหนึ่งของ contract ปัจจุบัน
+`allowedActions` อาจมี `CANCEL`, `APPROVE`, `REQUEST_REVISION`, `REJECT` ตามผู้ใช้ สิทธิ์ data scope สถานะ และ current step; ใช้ route `/cancel` สำหรับ `CANCEL`
 
 ## Errors
 
@@ -417,6 +473,9 @@ Error envelope:
 | Validators | [`bod-cod-deviation-reports.validator.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-reports.validator.ts) |
 | Public types | [`bod-cod-deviation-reports.types.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-reports.types.ts) |
 | Repository | [`bod-cod-deviation-reports.repository.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository.ts) |
+| Submission policy | [`bod-cod-report-submission-policy.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-report-submission-policy.ts) |
+| Annual sequence migration | [`0124_add_bod_cod_annual_report_sequence.ts`](../../../../../backend/src/db/migrations/0124_add_bod_cod_annual_report_sequence.ts) |
+| Regression tests | [`bod-cod-report-submission-policy.test.ts`](../../../../../backend/tests/unit/bod-cod-report-submission-policy.test.ts), [`bod-cod-cancellation.repository.test.ts`](../../../../../backend/tests/unit/bod-cod-cancellation.repository.test.ts) |
 | Numbering | [`bod-cod-deviation-report-number.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-report-number.ts), [`bod-cod-deviation-report-numbering.repository.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-report-numbering.repository.ts) |
 | Tests | [`bod-cod-deviation-reports.route.test.ts`](../../../../../backend/tests/unit/bod-cod-deviation-reports.route.test.ts), [`bod-cod-deviation-reports.repository.test.ts`](../../../../../backend/tests/unit/bod-cod-deviation-reports.repository.test.ts), [`bod-cod-deviation-report-number.test.ts`](../../../../../backend/tests/unit/bod-cod-deviation-report-number.test.ts), [`bod-cod-deviation-report-numbering.repository.test.ts`](../../../../../backend/tests/unit/bod-cod-deviation-report-numbering.repository.test.ts) |
 | Evidence | [เลขรายงาน BOD/COD แยกตามภาคและปี](../../../evidence/bod-cod-deviation-reports/request-numbering.tdd.md) |

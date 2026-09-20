@@ -1,5 +1,15 @@
 # API Breaking Changes
 
+<a id="bod-cod-annual-submission-policy"></a>
+
+## 2026-09-20 — รอบยื่นรายงาน BOD/COD เลขครั้งรายปีและสิทธิ์พิจารณา
+
+- **Affected canonical docs:** [รายงาน BOD/COD](./menus/bod-cod-deviation-reports/README.md)
+- **Impact:** สร้างรายงานเฉพาะปี/ครึ่งปีปัจจุบันตามเวลาไทยและไม่มีคำขอค้างในจุด+พารามิเตอร์+ปีเดียวกัน ต้องระบุจุดที่มีพารามิเตอร์จริง ทุก mutation ต้องมี view ร่วมกับ edit/approve และผ่าน scope ทั้งสอง; เจ้าหน้าที่ทั่วไปสร้างไม่ได้ Admin เพียง role เดียวทบทวน/อนุมัติสุดท้ายไม่ได้ และแบบแจ้งผลจำกัด monitoring_kpm/admin
+- **Migration:** รัน migration `0124_add_bod_cod_annual_report_sequence.ts` ก่อนเปิด backend รุ่นใหม่; client ส่งจุดที่ได้จาก factories API และโหลดปี/ครึ่งปีใหม่เมื่อ 409 `REPORT_PERIOD_CLOSED` โหลดคำขอเดิมเมื่อ `PENDING_REPORT_EXISTS`; ใช้ `reportSequenceNo` กับปีสำหรับครั้งที่ โดยรองรับ null ของข้อมูลเก่า และใช้ `POST /:id/cancel` สำหรับยกเลิก ไม่ส่งเลขครั้งเอง ไม่เปลี่ยน reportRoundNo เป็นเลขครั้ง
+- **Legacy:** ไม่ backfill เลขครั้งรายงานเก่าและไม่แก้ reportNo; การจัดสรรใหม่ใช้จำนวน APPROVED เดิมและเลขครั้งสูงสุดที่อนุมัติแล้วเป็นฐาน คำขอเดิม resubmit ข้ามครึ่งปีได้โดยคง identity เดิม
+- **Breaking change:** yes — validation/role/permission เข้มขึ้น; ก่อน deploy ประสาน frontend เชื่อม cancel API และตรวจ client ที่เคยให้ monitoring_5_centers บันทึกแบบแจ้งผล หลัง deploy ต้องตรวจ production OpenAPI และ flow บน SQL Server
+
 <a id="poms-edit-request-detail-points"></a>
 
 ## 2026-09-19 — รายละเอียดคำขอแก้ไขโรงงาน POMS คืนเฉพาะจุดที่ทำคำขอ

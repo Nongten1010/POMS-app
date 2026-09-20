@@ -554,7 +554,7 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('covers all 146 canonical registry endpoints plus 9 annual testing variants', () => {
+  it('covers all 147 canonical registry endpoints plus 9 annual testing variants', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const documentedOperations: string[] = [];
@@ -568,13 +568,13 @@ describe('POMS OpenAPI contract', () => {
     }
 
     const registryOperations = readEndpointRegistryOperations();
-    expect(registryOperations).toHaveLength(146);
+    expect(registryOperations).toHaveLength(147);
     expect(documentedOperations.sort()).toEqual(
       [...registryOperations, ...annualTestingVariants].sort(),
     );
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 146,
-      operationCount: 155,
+      canonicalOperationCount: 147,
+      operationCount: 156,
       tagCount: 13,
     });
   });
@@ -596,7 +596,7 @@ describe('POMS OpenAPI contract', () => {
       }
     }
 
-    expect(writeOperations).toHaveLength(59);
+    expect(writeOperations).toHaveLength(60);
     expect(
       writeOperations.filter(([, , operation]) => isRequestBody(operation.requestBody)),
     ).toHaveLength(57);
@@ -1784,6 +1784,35 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
+  it('publishes the server-owned annual sequence and explicit cancellation contract', () => {
+    const document = asObject(pomsOpenApiDocument, 'document');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const report = asObject(schemas.BodCodReportData, 'report');
+    expect(report.required).toContain('reportSequenceNo');
+    expect(asObject(report.properties, 'properties').reportSequenceNo).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+      nullable: true,
+    });
+    expect(
+      asObject(asObject(schemas.BodCodReportRequest, 'request').properties, 'properties'),
+    ).not.toHaveProperty('reportSequenceNo');
+    const paths = asObject(document.paths, 'paths');
+    const cancel = asObject(
+      asObject(paths['/bod-cod-deviation-reports/{id}/cancel'], 'cancel').post,
+      'post',
+    );
+    expect(cancel.requestBody).toBeUndefined();
+    const responses = asObject(cancel.responses, 'responses');
+    expect(responses).toHaveProperty('409');
+    expect(JSON.stringify(cancel)).toContain('bod_cod_errors:edit');
+    expect(JSON.stringify(cancel)).toContain('bod_cod_errors:view');
+    expect(JSON.stringify(responses['200'])).toContain('CANCELLED');
+    const create = asObject(asObject(paths['/bod-cod-deviation-reports'], 'create').post, 'post');
+    expect(create.description).toContain('Asia/Bangkok');
+    expect(JSON.stringify(create.responses)).toContain('PENDING_REPORT_EXISTS');
+  });
+
   it('documents the current E- prefix for every BOD/COD report response', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const components = asObject(document.components, 'components');
@@ -1802,6 +1831,7 @@ describe('POMS OpenAPI contract', () => {
       ['/bod-cod-deviation-reports/{id}', 'get', 'BodCodReportResponse'],
       ['/bod-cod-deviation-reports/{id}/resubmission', 'put', 'BodCodReportResponse'],
       ['/bod-cod-deviation-reports/{id}/workflow-actions', 'post', 'BodCodReportResponse'],
+      ['/bod-cod-deviation-reports/{id}/cancel', 'post', 'BodCodReportResponse'],
       ['/bod-cod-deviation-reports/{id}/result-notice', 'post', 'BodCodReportResponse'],
       ['/bod-cod-deviation-reports/{id}/result-notice', 'put', 'BodCodReportResponse'],
     ];

@@ -6,7 +6,12 @@ import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../shared/errors/AppError';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import { buildPublicFileUrl } from '../kwp-form-submissions/kwp-form-attachments.service';
@@ -45,7 +50,16 @@ import type {
   UpsertedBodCodResultNoticeResponseDTO,
 } from './bod-cod-deviation-reports.types';
 
-type BodCodApprovalEventAction = BodCodWorkflowAction | 'RESUBMIT_REVISION';
+import {
+  assertBodCodCreator,
+  assertCurrentBodCodPeriod,
+  currentBodCodPeriod,
+  isBodCodOperator,
+  nextBodCodReportSequence,
+  type BodCodAnnualReport,
+} from './bod-cod-report-submission-policy';
+
+type BodCodApprovalEventAction = BodCodWorkflowAction | 'RESUBMIT_REVISION' | 'CANCEL';
 type BodCodWorkflowNextStepRole = BodCodApprovalRoleCode | null;
 
 interface FactoryTableRow {
@@ -78,6 +92,7 @@ interface FactoryTableRow {
 interface ReportTableRow {
   id: number | string;
   report_no: string;
+  report_sequence_no: number | string | null;
   report_round: number | string;
   report_year: number | string;
   factory_id: number | string | null;
@@ -257,25 +272,38 @@ export const bodCodDeviationReportsRepository = {
     access: CreateBodCodDeviationReportAccess,
   ): Promise<CreatedBodCodDeviationReportDTO> {
     return db.transaction(async (trx) => {
-      const now = new Date();
-      const numberingContext = await resolveBodCodCreateNumberingContext(input, access, trx);
+      assertBodCodCreator(access);
+      const point = await resolveSubmissionPoint(input, access, trx);
+      const reportSequenceNo = await reserveAnnualSequence(input, point, trx);
+      const numberingContext = await resolveBodCodCreateNumberingContext(
+        {
+          ...input,
+          factoryId: point.factory_fid ?? point.factory_id,
+          factoryRegistrationNo: point.factory_registration_no,
+        },
+        access,
+        trx,
+      );
       const approvalTrack = approvalTrackForProvince(numberingContext.provinceName);
       const numbering = await reserveBodCodDeviationReportNumber(
         trx,
         numberingContext.regionCode,
         input.reportYear,
       );
+      const now = new Date();
+      assertCurrentBodCodPeriod(input, now);
       const inserted = await trx('bod_cod_deviation_reports')
         .insert({
           report_no: numbering.reportNo,
+          report_sequence_no: reportSequenceNo,
           report_round: input.reportRoundNo,
           report_year: input.reportYear,
           numbering_region_code: numbering.regionCode,
           numbering_sequence: numbering.sequence,
           factory_id: numberingContext.factoryInternalId,
-          connected_measurement_point_id: input.connectedMeasurementPointId ?? null,
-          point_code: input.pointCode ?? null,
-          point_name: input.pointName ?? null,
+          connected_measurement_point_id: Number(point.connected_point_id),
+          point_code: point.point_code,
+          point_name: point.point_name,
           factory_name: input.factoryName,
           factory_registration_no: input.factoryRegistrationNo,
           business_activity: input.businessActivity ?? null,
@@ -364,6 +392,7 @@ export const bodCodDeviationReportsRepository = {
       return {
         id: reportId,
         reportNo: numbering.reportNo,
+        reportSequenceNo,
         statusCode: 'SUBMITTED',
         approvalTrack,
         currentStep,
@@ -430,6 +459,7 @@ export const bodCodDeviationReportsRepository = {
       return {
         id,
         reportNo: report.report_no,
+        reportSequenceNo: toNumberOrNull(report.report_sequence_no),
         statusCode: 'REVISED_PENDING_REVIEW',
         approvalTrack,
         currentStep,
@@ -440,6 +470,46 @@ export const bodCodDeviationReportsRepository = {
           access.scope,
           access.roles ?? [],
         ),
+      };
+    });
+  },
+
+  async cancelReport(
+    id: number,
+    access: BodCodDeviationAccess,
+  ): Promise<CreatedBodCodDeviationReportDTO> {
+    if (!isBodCodOperator(access)) {
+      throw new ForbiddenError('Only own-factory operators can cancel BOD/COD reports');
+    }
+    return db.transaction(async (trx) => {
+      await lockBodCodReport(id, trx);
+      const report = await buildEditableReportQuery(id, access, trx).first();
+      if (!report) throw new NotFoundError('BOD/COD deviation report not found');
+      if (report.status === 'APPROVED' || report.status === 'CANCELLED') {
+        throw new ConflictError('BOD/COD report cannot be cancelled', {
+          currentStatus: report.status,
+        });
+      }
+      const now = new Date();
+      await trx('bod_cod_deviation_reports').where('id', id).update({
+        status: 'CANCELLED',
+        updated_by: access.actorUserId,
+        updated_at: now,
+      });
+      await trx('bod_cod_approval_steps')
+        .where('report_id', id)
+        .whereNull('deleted_at')
+        .update({ is_current: false, updated_at: now });
+      await insertApprovalEvent(id, 'CANCEL', access.actorUserId, null, now, trx);
+      return {
+        id,
+        reportNo: report.report_no,
+        reportSequenceNo: toNumberOrNull(report.report_sequence_no),
+        statusCode: 'CANCELLED',
+        approvalTrack: report.approval_track,
+        currentStep: null,
+        steps: await listApprovalSteps(id, trx),
+        allowedActions: [],
       };
     });
   },
@@ -495,6 +565,7 @@ export const bodCodDeviationReportsRepository = {
       return {
         id,
         reportNo: report.report_no,
+        reportSequenceNo: toNumberOrNull(report.report_sequence_no),
         statusCode: nextState.reportStatus,
         approvalTrack: report.approval_track,
         currentStep,
@@ -524,6 +595,7 @@ export const bodCodDeviationReportsRepository = {
       return {
         id,
         reportNo: report.report_no,
+        reportSequenceNo: toNumberOrNull(report.report_sequence_no),
         statusCode: report.status,
         approvalTrack: report.approval_track,
         currentStep,
@@ -553,7 +625,7 @@ export const bodCodDeviationReportsRepository = {
       listStatusHistoryForReports([report], access.scope),
       getResultNotice(id),
     ]);
-    return toReportDetailDTO(
+    const detail = toReportDetailDTO(
       report,
       measurements,
       attachments,
@@ -563,8 +635,101 @@ export const bodCodDeviationReportsRepository = {
       access.scope,
       access.roles ?? [],
     );
+    // Viewing a report alone must never advertise authority to mutate it.
+    const actionScope = isBodCodOperator({ ...access, scope: access.editScope })
+      ? access.editScope
+      : access.approveScope;
+    if (actionScope === undefined) {
+      detail.allowedActions = [];
+    } else {
+      const writable = await buildEditableReportQuery(id, {
+        ...access,
+        scope: actionScope,
+        viewScope: access.scope,
+      }).first();
+      detail.allowedActions = writable
+        ? allowedActionsFor(report.status, detail.currentStep, actionScope, access.roles ?? [])
+        : [];
+    }
+    return detail;
   },
 };
+
+async function lockBodCodReport(id: number, trx: Knex.Transaction): Promise<void> {
+  // All report mutations take this same SQL Server update lock before inspecting status.
+  await trx.raw('SELECT id FROM bod_cod_deviation_reports WITH (UPDLOCK, HOLDLOCK) WHERE id = ?', [
+    id,
+  ]);
+}
+
+async function resolveSubmissionPoint(
+  input: CreateBodCodDeviationReportDTO,
+  access: BodCodDeviationAccess,
+  trx: Knex.Transaction,
+): Promise<FactoryTableRow> {
+  if (!input.connectedMeasurementPointId && !input.pointCode) {
+    throw new BadRequestError('A connected measurement point id or code is required');
+  }
+  const readPoint = () => {
+    const query = buildFactoryQuery(access, trx).where(
+      'cp.factory_registration_no',
+      input.factoryRegistrationNo,
+    );
+    if (input.connectedMeasurementPointId) query.where('cp.id', input.connectedMeasurementPointId);
+    if (input.pointCode) query.where('cp.point_code', input.pointCode);
+    return query;
+  };
+  const rows = await readPoint();
+  if (new Set(rows.map((row) => Number(row.connected_point_id))).size !== 1) {
+    throw new BadRequestError('Connected measurement point is unavailable or ambiguous');
+  }
+  const id = Number(rows[0]!.connected_point_id);
+  // Serialize all creates for this point, including requests using its code instead of id.
+  await trx.raw(
+    'SELECT id FROM cems_wpms_connected_measurement_points WITH (UPDLOCK, HOLDLOCK) WHERE id = ?',
+    [id],
+  );
+  const point = (await readPoint()).find((row) => Number(row.connected_point_id) === id);
+  if (!point || !parseParameters(point.parameters_json).includes(input.selectedParameterCode)) {
+    throw new BadRequestError('Selected parameter is unavailable at this connected point');
+  }
+  if (
+    input.factoryId &&
+    ![
+      point.factory_id,
+      point.factory_fid,
+      point.factory_code,
+      String(point.poms_factory_id),
+    ].includes(input.factoryId)
+  ) {
+    throw new BadRequestError('Factory and connected measurement point do not match');
+  }
+  return point;
+}
+
+async function reserveAnnualSequence(
+  input: CreateBodCodDeviationReportDTO,
+  point: FactoryTableRow,
+  trx: Knex.Transaction,
+): Promise<number> {
+  const reports = await trx<BodCodAnnualReport>('bod_cod_deviation_reports')
+    .whereNull('deleted_at')
+    .where('report_year', input.reportYear)
+    .where('selected_parameter_code', input.selectedParameterCode)
+    .where((builder) => {
+      builder.where('connected_measurement_point_id', point.connected_point_id);
+      if (point.point_code) {
+        builder.orWhere((legacy) =>
+          legacy
+            .whereNull('connected_measurement_point_id')
+            .where('point_code', point.point_code)
+            .where('factory_registration_no', point.factory_registration_no),
+        );
+      }
+    })
+    .select('id', 'status', 'report_sequence_no');
+  return nextBodCodReportSequence(reports);
+}
 
 export function buildBodCodDeviationFactoryQueryForTests(access: BodCodDeviationAccess) {
   return buildFactoryQuery(access);
@@ -661,8 +826,9 @@ export function buildBodCodResubmissionWorkflowResetQueriesForTests(reportId: nu
 
 function buildFactoryQuery(
   access: BodCodDeviationAccess,
+  connection: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]> {
-  const builder = db<FactoryTableRow>(
+  const builder = connection<FactoryTableRow>(
     factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
   )
     .leftJoin('factories as f', function joinPomsFactory() {
@@ -745,6 +911,11 @@ function buildFactoryQuery(
   applyFactoryAccessFilter(builder, access);
   applyLocationScopeFilter(builder, access.scope);
   applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
+  if (access.viewScope !== undefined) {
+    applyReportAccessFilter(builder, { ...access, scope: access.viewScope });
+    applyLocationScopeFilter(builder, access.viewScope);
+    applyRegionalAccessFilter(builder, access.viewScope, access.regionalAccess);
+  }
 
   return builder as unknown as Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]>;
 }
@@ -784,6 +955,7 @@ function buildReportQuery(
     .select(
       'r.id',
       'r.report_no',
+      'r.report_sequence_no',
       'r.report_round',
       'r.report_year',
       'r.factory_id',
@@ -824,6 +996,11 @@ function buildReportQuery(
   applyReportAccessFilter(builder, access);
   applyLocationScopeFilter(builder, access.scope);
   applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
+  if (access.viewScope !== undefined) {
+    applyReportAccessFilter(builder, { ...access, scope: access.viewScope });
+    applyLocationScopeFilter(builder, access.viewScope);
+    applyRegionalAccessFilter(builder, access.viewScope, access.regionalAccess);
+  }
 
   return builder as unknown as Knex.QueryBuilder<ReportTableRow, ReportTableRow[]>;
 }
@@ -860,10 +1037,11 @@ async function assertCanResubmitReport(
   access: CreateBodCodDeviationReportAccess,
   trx: Knex.Transaction,
 ): Promise<EditableReportRow> {
-  if (scopeValue(access.scope) !== 'OWN_FACTORY') {
+  if (!isBodCodOperator(access)) {
     throw new ForbiddenError('Only own-factory operators can resubmit BOD/COD reports');
   }
 
+  await lockBodCodReport(id, trx);
   const row = await buildEditableReportQuery(id, access, trx).first();
   if (!row) throw new NotFoundError('BOD/COD deviation report not found');
   if (row.status !== 'REVISION_REQUESTED') {
@@ -888,6 +1066,7 @@ async function assertCanChangeWorkflowStatus(
   access: BodCodDeviationAccess,
   trx: Knex.Transaction,
 ): Promise<EditableReportRow> {
+  await lockBodCodReport(id, trx);
   const row = await buildEditableReportQuery(id, access, trx).first();
   if (!row) throw new NotFoundError('BOD/COD deviation report not found');
 
@@ -921,10 +1100,16 @@ async function assertCanUpsertResultNotice(
   access: BodCodDeviationAccess,
   trx: Knex.Transaction,
 ): Promise<EditableReportRow> {
-  if (scopeValue(access.scope) === 'OWN_FACTORY') {
-    throw new ForbiddenError('Only officers can save BOD/COD result notices');
+  if (
+    scopeValue(access.scope) === 'OWN_FACTORY' ||
+    !(access.roles ?? []).some((role) => ['monitoring_kpm', 'admin'].includes(role))
+  ) {
+    throw new ForbiddenError(
+      'Only monitoring_kpm or admin officers can save BOD/COD result notices',
+    );
   }
 
+  await lockBodCodReport(id, trx);
   const row = await buildEditableReportQuery(id, access, trx).first();
   if (!row) throw new NotFoundError('BOD/COD deviation report not found');
 
@@ -995,6 +1180,7 @@ function buildEditableReportQuery(
     .select(
       'r.id',
       'r.report_no',
+      'r.report_sequence_no',
       'r.report_round',
       'r.report_year',
       'r.factory_id',
@@ -1034,6 +1220,11 @@ function buildEditableReportQuery(
   applyReportAccessFilter(builder, access);
   applyLocationScopeFilter(builder, access.scope);
   applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
+  if (access.viewScope !== undefined) {
+    applyReportAccessFilter(builder, { ...access, scope: access.viewScope });
+    applyLocationScopeFilter(builder, access.viewScope);
+    applyRegionalAccessFilter(builder, access.viewScope, access.regionalAccess);
+  }
 
   return builder as unknown as Knex.QueryBuilder<EditableReportRow, EditableReportRow[]>;
 }
@@ -1746,6 +1937,7 @@ function toReportDTO(
   return {
     id: Number(row.id),
     reportNo: row.report_no,
+    reportSequenceNo: toNumberOrNull(row.report_sequence_no),
     reportRound: reportRoundLabel(reportRoundNo),
     reportRoundNo,
     reportYear: Number(row.report_year),
@@ -1889,16 +2081,27 @@ function allowedActionsFor(
   scope: BodCodDeviationAccess['scope'],
   roles: string[] = [],
 ): BodCodAllowedAction[] {
-  if (status === 'APPROVED' || status === 'REJECTED' || status === 'CANCELLED') return [];
-  if (scopeValue(scope) === 'OWN_FACTORY') return ['CANCEL'];
+  if (status === 'APPROVED' || status === 'CANCELLED') return [];
+  if (isBodCodOperator({ actorUserId: 0, scope, roles })) return ['CANCEL'];
+  if (status === 'REJECTED' || scopeValue(scope) === 'OWN_FACTORY') return [];
   if (currentStep?.status !== 'PENDING') return [];
+  const expectedRoles: Partial<Record<BodCodDeviationReportStatus, BodCodApprovalRoleCode>> = {
+    SUBMITTED: 'INSPECTOR',
+    REVISED_PENDING_REVIEW: 'INSPECTOR',
+    WAITING_RESULT_NOTICE: 'RESULT_NOTICE',
+    WAITING_REVIEW: 'REVIEWER',
+    WAITING_APPROVAL: 'APPROVER',
+  };
+  if (currentStep.roleCode !== expectedRoles[status]) return [];
   return canActOnCurrentStep(currentStep, roles) ? ['APPROVE', 'REQUEST_REVISION', 'REJECT'] : [];
 }
 
 function canActOnCurrentStep(currentStep: BodCodWorkflowStepDTO, roles: string[]): boolean {
-  if (roles.includes('admin')) return true;
-  if (currentStep.roleCode === 'INSPECTOR' || currentStep.roleCode === 'RESULT_NOTICE') {
-    return roles.some((role) => ['monitoring_kpm', 'monitoring_5_centers'].includes(role));
+  if (currentStep.roleCode === 'INSPECTOR') {
+    return roles.some((role) => ['monitoring_kpm', 'monitoring_5_centers', 'admin'].includes(role));
+  }
+  if (currentStep.roleCode === 'RESULT_NOTICE') {
+    return roles.some((role) => ['monitoring_kpm', 'admin'].includes(role));
   }
   if (currentStep.roleCode === 'REVIEWER') {
     return roles.includes('kpm_director');
@@ -1925,7 +2128,7 @@ function reportSlotKeysForReport(report: LatestReportRow): string[] {
 }
 
 function currentBuddhistYear(): number {
-  return new Date().getFullYear() + 543;
+  return currentBodCodPeriod().reportYear;
 }
 
 function parseParameters(value: string): string[] {
@@ -2055,6 +2258,7 @@ function eventStatus(action: BodCodApprovalEventAction): BodCodDeviationReportSt
   if (action === 'REQUEST_REVISION') return 'REVISION_REQUESTED';
   if (action === 'RESUBMIT_REVISION') return 'SUBMITTED';
   if (action === 'REJECT') return 'REJECTED';
+  if (action === 'CANCEL') return 'CANCELLED';
   return 'APPROVED';
 }
 

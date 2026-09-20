@@ -9,6 +9,7 @@ jest.mock('../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.servic
     listReports: jest.fn(),
     createReport: jest.fn(),
     resubmitReport: jest.fn(),
+    cancelReport: jest.fn(),
     upsertResultNotice: jest.fn(),
     changeWorkflowStatus: jest.fn(),
     getReportById: jest.fn(),
@@ -40,6 +41,62 @@ const mockedService = jest.mocked(bodCodDeviationReportsService);
 const expectedPublicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://d-poms.diw.go.th';
 
 describe('BOD/COD deviation report routes', () => {
+  it('cancels using the explicit route and both access scopes', async () => {
+    mockedService.cancelReport.mockResolvedValueOnce({
+      id: 9,
+      reportNo: 'E-02-0001/2569',
+      reportSequenceNo: 1,
+      statusCode: 'CANCELLED',
+      approvalTrack: 'REGIONAL',
+      currentStep: null,
+      steps: [],
+      allowedActions: [],
+    });
+    const response = await request(createApp())
+      .post('/api/v1/bod-cod-deviation-reports/9/cancel')
+      .set('Authorization', `Bearer ${operatorToken()}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ statusCode: 'CANCELLED', reportSequenceNo: 1 });
+    expect(mockedService.cancelReport).toHaveBeenCalledWith(9, {
+      actorUserId: 42,
+      scope: { scope: 'OWN_FACTORY' },
+      viewScope: { scope: 'OWN_FACTORY' },
+      roles: ['factory_operator'],
+      regionalAccess: undefined,
+    });
+  });
+
+  it('rejects cancel bodies and invalid ids without calling the service', async () => {
+    for (const [id, body] of [
+      ['9', { action: 'CANCEL' }],
+      ['0', {}],
+    ] as const) {
+      const response = await request(createApp())
+        .post(`/api/v1/bod-cod-deviation-reports/${id}/cancel`)
+        .set('Authorization', `Bearer ${operatorToken()}`)
+        .send(body);
+      expect(response.status).toBe(400);
+    }
+    expect(mockedService.cancelReport).not.toHaveBeenCalled();
+  });
+
+  it.each(['view', 'edit'])(
+    'requires %s as well as the other cancellation permission',
+    async (missing) => {
+      const token = signAccessToken({
+        sub: '42',
+        userType: 'operator',
+        roles: ['factory_operator'],
+        scopes: { [`bod_cod_errors:${missing === 'view' ? 'edit' : 'view'}`]: 'OWN_FACTORY' },
+      });
+      const response = await request(createApp())
+        .post('/api/v1/bod-cod-deviation-reports/9/cancel')
+        .set('Authorization', `Bearer ${token}`);
+      expect(response.status).toBe(403);
+      expect(mockedService.cancelReport).not.toHaveBeenCalled();
+    },
+  );
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockedService.listFactories.mockResolvedValue({
@@ -106,6 +163,7 @@ describe('BOD/COD deviation report routes', () => {
       data: [
         {
           id: 5,
+          reportSequenceNo: 1,
           reportNo: 'BODCOD-2569-0005',
           reportRound: 'ครั้งที่ 2',
           reportRoundNo: 2,
@@ -150,6 +208,7 @@ describe('BOD/COD deviation report routes', () => {
     });
     mockedService.createReport.mockResolvedValue({
       id: 9,
+      reportSequenceNo: 1,
       reportNo: 'E-04-0009/2569',
       statusCode: 'SUBMITTED',
       approvalTrack: 'REGIONAL',
@@ -187,6 +246,7 @@ describe('BOD/COD deviation report routes', () => {
     });
     mockedService.resubmitReport.mockResolvedValue({
       id: 9,
+      reportSequenceNo: 1,
       reportNo: 'BODCOD-2569-0009',
       statusCode: 'REVISED_PENDING_REVIEW',
       approvalTrack: 'REGIONAL',
@@ -228,6 +288,7 @@ describe('BOD/COD deviation report routes', () => {
     });
     mockedService.upsertResultNotice.mockResolvedValue({
       id: 9,
+      reportSequenceNo: 1,
       reportNo: 'BODCOD-2569-0009',
       statusCode: 'WAITING_RESULT_NOTICE',
       approvalTrack: 'REGIONAL',
@@ -276,6 +337,7 @@ describe('BOD/COD deviation report routes', () => {
     });
     mockedService.changeWorkflowStatus.mockResolvedValue({
       id: 9,
+      reportSequenceNo: 1,
       reportNo: 'BODCOD-2569-0009',
       statusCode: 'WAITING_RESULT_NOTICE',
       approvalTrack: 'REGIONAL',
@@ -317,6 +379,7 @@ describe('BOD/COD deviation report routes', () => {
     });
     mockedService.getReportById.mockResolvedValue({
       id: 9,
+      reportSequenceNo: 1,
       reportNo: 'BODCOD-2569-0009',
       reportRound: 'ครั้งที่ 1',
       reportRoundNo: 1,
@@ -572,6 +635,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.createReport).toHaveBeenCalledWith(createReportPayload(), {
       actorUserId: 42,
       scope: { scope: 'OWN_FACTORY' },
+      viewScope: { scope: 'OWN_FACTORY' },
       roles: ['factory_operator'],
       regionalAccess: undefined,
     });
@@ -579,6 +643,7 @@ describe('BOD/COD deviation report routes', () => {
       success: true,
       data: expect.objectContaining({
         id: 9,
+        reportSequenceNo: 1,
         reportNo: 'E-04-0009/2569',
         statusCode: 'SUBMITTED',
         approvalTrack: 'REGIONAL',
@@ -602,6 +667,8 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.getReportById).toHaveBeenCalledWith(9, {
       actorUserId: 42,
       scope: { scope: 'OWN_FACTORY' },
+      editScope: { scope: 'OWN_FACTORY' },
+      approveScope: undefined,
       regionalAccess: undefined,
       publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
@@ -609,6 +676,7 @@ describe('BOD/COD deviation report routes', () => {
     });
     expect(response.body.data).toMatchObject({
       id: 9,
+      reportSequenceNo: 1,
       reportNo: 'BODCOD-2569-0009',
       selectedParameterLabel: 'BOD (mg/l)',
       measurements: [
@@ -648,6 +716,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.resubmitReport).toHaveBeenCalledWith(9, payload, {
       actorUserId: 42,
       scope: { scope: 'OWN_FACTORY' },
+      viewScope: { scope: 'OWN_FACTORY' },
       roles: ['factory_operator'],
       regionalAccess: undefined,
     });
@@ -665,11 +734,12 @@ describe('BOD/COD deviation report routes', () => {
 
   it('uses the own-factory view data scope when resubmitting with a binary edit grant', async () => {
     mockedService.resubmitReport.mockImplementationOnce(async (_id, _payload, access) => {
-      if (access.scope !== 'OWN_FACTORY') {
+      if (typeof access.scope !== 'object' || access.scope?.scope !== 'OWN_FACTORY') {
         throw new ForbiddenError('Only own-factory operators can resubmit BOD/COD reports');
       }
       return {
         id: 9,
+        reportSequenceNo: 1,
         reportNo: 'BODCOD-2569-0009',
         statusCode: 'REVISED_PENDING_REVIEW',
         approvalTrack: 'REGIONAL',
@@ -696,10 +766,11 @@ describe('BOD/COD deviation report routes', () => {
       .set('Authorization', `Bearer ${operatorBinaryEditToken()}`)
       .send(payload);
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
     expect(mockedService.resubmitReport).toHaveBeenCalledWith(9, payload, {
       actorUserId: 42,
-      scope: { scope: null },
+      scope: { scope: 'OWN_FACTORY' },
+      viewScope: { scope: 'OWN_FACTORY' },
       roles: ['factory_operator'],
       regionalAccess: undefined,
     });
@@ -726,6 +797,7 @@ describe('BOD/COD deviation report routes', () => {
       {
         actorUserId: 77,
         scope: { scope: 'ALL' },
+        viewScope: { scope: 'ALL' },
         regionalAccess: { regions: ['ภาคเหนือ'] },
         roles: ['monitoring_kpm'],
       },
@@ -755,6 +827,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
       scope: { scope: 'ALL' },
+      viewScope: { scope: 'ALL' },
       regionalAccess: { regions: ['ภาคเหนือ'] },
       roles: ['monitoring_kpm'],
     });
@@ -790,6 +863,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
       scope: { scope: 'ALL' },
+      viewScope: { scope: 'ALL' },
       regionalAccess: { regions: ['ภาคเหนือ'] },
       roles: ['monitoring_kpm'],
     });
@@ -819,6 +893,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
       scope: { scope: 'ALL' },
+      viewScope: { scope: 'ALL' },
       regionalAccess: { regions: ['ภาคเหนือ'] },
       roles: ['monitoring_kpm'],
     });
@@ -842,7 +917,7 @@ describe('BOD/COD deviation report routes', () => {
     });
   });
 
-  it('passes profile regionalAccess into BOD/COD create access for base IN_REGION edit scope', async () => {
+  it('passes both scopes and regionalAccess for admin creation', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -854,7 +929,8 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.createReport).toHaveBeenCalledWith(createReportPayload(), {
       actorUserId: 77,
       scope: { scope: 'IN_REGION' },
-      roles: ['monitoring_5_centers'],
+      viewScope: { scope: 'IN_REGION' },
+      roles: ['admin'],
       regionalAccess: { regions: ['ภาคเหนือ'] },
     });
   });
@@ -880,6 +956,7 @@ describe('BOD/COD deviation report routes', () => {
       {
         actorUserId: 77,
         scope: { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
+        viewScope: { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
         regionalAccess: { regions: ['ภาคเหนือ'] },
         roles: ['monitoring_5_centers'],
       },
@@ -1031,12 +1108,14 @@ function regionalBodEditorTokenWithoutExplicitRegion(): string {
   return signAccessToken({
     sub: '77',
     userType: 'officer',
-    roles: ['monitoring_5_centers'],
+    roles: ['admin'],
     scopes: {
       'bod_cod_errors:edit': 'IN_REGION',
+      'bod_cod_errors:view': 'IN_REGION',
     },
     scopeDetails: {
       'bod_cod_errors:edit': { scope: 'IN_REGION' },
+      'bod_cod_errors:view': { scope: 'IN_REGION' },
     },
     regionalAccess: { regions: ['ภาคเหนือ'] },
   });

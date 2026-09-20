@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), {
@@ -17,6 +17,11 @@ const mockedDb = db as unknown as {
 describe('BOD/COD deviation report create numbering', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-20T00:00:00Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('creates a report with a server-derived regional number and minimal snapshots', async () => {
@@ -26,6 +31,7 @@ describe('BOD/COD deviation report create numbering', () => {
     const result = await bodCodDeviationReportsRepository.createReport(createPayload(), {
       actorUserId: 42,
       scope: 'ALL',
+      roles: ['admin'],
     });
 
     expect(result).toMatchObject({
@@ -46,6 +52,98 @@ describe('BOD/COD deviation report create numbering', () => {
     );
   });
 
+  it('blocks pending reports before allocating a document number or inserting', async () => {
+    const h = createReportHarness(undefined, {
+      reports: [{ id: 8, status: 'REVISION_REQUESTED', report_sequence_no: 2 }],
+    });
+    mockedDb.transaction.mockImplementationOnce(h.runTransaction);
+    await expect(
+      bodCodDeviationReportsRepository.createReport(createPayload(), {
+        actorUserId: 42,
+        scope: 'ALL',
+        roles: ['admin'],
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(h.reportInsert).not.toHaveBeenCalled();
+    expect(h.raw).toHaveBeenCalledTimes(1); // Point lock, no regional counter reservation.
+  });
+
+  it('reuses a rejected sequence while assigning a fresh document number', async () => {
+    const h = createReportHarness(undefined, {
+      reports: [
+        { id: 1, status: 'APPROVED', report_sequence_no: 1 },
+        { id: 2, status: 'REJECTED', report_sequence_no: 2 },
+      ],
+    });
+    mockedDb.transaction.mockImplementationOnce(h.runTransaction);
+    const result = await bodCodDeviationReportsRepository.createReport(createPayload(), {
+      actorUserId: 42,
+      scope: 'ALL',
+      roles: ['admin'],
+    });
+    expect(result.reportSequenceNo).toBe(2);
+    expect(h.reportInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        report_sequence_no: 2,
+        report_round: 2,
+        connected_measurement_point_id: 12,
+      }),
+    );
+  });
+
+  it('rejects a parameter no longer available after acquiring the point lock', async () => {
+    const h = createReportHarness(undefined, { parameters: '["COD"]' });
+    mockedDb.transaction.mockImplementationOnce(h.runTransaction);
+    await expect(
+      bodCodDeviationReportsRepository.createReport(createPayload(), {
+        actorUserId: 42,
+        scope: 'ALL',
+        roles: ['admin'],
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(h.reportInsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects an inaccessible point and mismatched factory identity', async () => {
+    const h = createReportHarness(undefined, { missingPoint: true });
+    mockedDb.transaction.mockImplementationOnce(h.runTransaction);
+    await expect(
+      bodCodDeviationReportsRepository.createReport(createPayload(), {
+        actorUserId: 42,
+        scope: 'ALL',
+        roles: ['admin'],
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(h.reportInsert).not.toHaveBeenCalled();
+    const h2 = createReportHarness();
+    mockedDb.transaction.mockImplementationOnce(h2.runTransaction);
+    await expect(
+      bodCodDeviationReportsRepository.createReport(
+        { ...createPayload(), factoryId: 'OTHER' },
+        { actorUserId: 42, scope: 'ALL', roles: ['admin'] },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(h2.reportInsert).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the calendar after waiting for the document-number lock', async () => {
+    const h = createReportHarness();
+    h.raw
+      .mockImplementationOnce(async () => undefined)
+      .mockImplementationOnce(async () => {
+        jest.setSystemTime(new Date('2026-12-31T17:00:00Z'));
+      });
+    mockedDb.transaction.mockImplementationOnce(h.runTransaction);
+    await expect(
+      bodCodDeviationReportsRepository.createReport(createPayload(), {
+        actorUserId: 42,
+        scope: 'ALL',
+        roles: ['admin'],
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(h.reportInsert).not.toHaveBeenCalled();
+  });
+
   it('derives the central approval track from the authoritative factory province', async () => {
     const harness = createReportHarness({
       factory_internal_id: 11,
@@ -62,6 +160,7 @@ describe('BOD/COD deviation report create numbering', () => {
       {
         actorUserId: 42,
         scope: 'ALL',
+        roles: ['admin'],
       },
     );
 
@@ -92,6 +191,7 @@ function createReportHarness(
     province_name: 'ราชบุรี',
     region_name: 'ภาคตะวันตก',
   },
+  options: { reports?: unknown[]; parameters?: string; missingPoint?: boolean } = {},
 ) {
   const raw = jest.fn(async () => undefined);
   const reportInsert = jest.fn();
@@ -161,7 +261,16 @@ function createReportHarness(
   const queues = new Map<string, unknown[]>([
     ['factories as f', [factoryBuilder]],
     ['bod_cod_deviation_report_sequences', [sequenceSelectBuilder, sequenceUpdateBuilder]],
-    ['bod_cod_deviation_reports', [reportBuilder]],
+    ['bod_cod_deviation_reports', [thenableBuilder(options.reports ?? []), reportBuilder]],
+    [
+      'cems_wpms_connected_measurement_points as cp',
+      [
+        thenableBuilder(options.missingPoint ? [] : [pointRow()]),
+        thenableBuilder([
+          { ...pointRow(), parameters_json: options.parameters ?? pointRow().parameters_json },
+        ]),
+      ],
+    ],
     ['bod_cod_deviation_measurements', [{ insert: measurementInsert }]],
     ['bod_cod_approval_steps', [{ insert: approvalStepInsert }, thenableBuilder(approvalSteps)]],
   ]);
@@ -180,6 +289,7 @@ function createReportHarness(
 
   return {
     reportInsert,
+    raw,
     runTransaction: async (callback: (transaction: typeof trx) => Promise<unknown>) => {
       const result = await callback(trx);
       expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
@@ -195,12 +305,13 @@ function thenableBuilder(value: unknown) {
       const predicate: Record<string, unknown> = {};
       const returnPredicate = jest.fn(() => predicate);
       Object.assign(predicate, { orWhere: returnPredicate, where: returnPredicate });
-      argument(predicate);
+      argument(Object.assign(predicate, { leftJoin: returnPredicate }));
     }
     return chain;
   });
   Object.assign(chain, {
     leftJoin: returnChain,
+    modify: returnChain,
     select: returnChain,
     first: returnChain,
     where: returnChain,
@@ -236,7 +347,8 @@ function whereUpdateBuilder(
 
 function createPayload(): CreateBodCodDeviationReportDTO {
   return {
-    reportRoundNo: 1,
+    reportRoundNo: 2,
+    connectedMeasurementPointId: 12,
     reportYear: 2569,
     factoryId: 'FID-001',
     factoryName: 'บริษัท ทดสอบ จำกัด',
@@ -253,5 +365,19 @@ function createPayload(): CreateBodCodDeviationReportDTO {
       },
     ],
     attachments: [],
+  };
+}
+
+function pointRow() {
+  return {
+    connected_point_id: 12,
+    factory_id: 'FID-001',
+    factory_fid: 'FID-001',
+    factory_code: 'REG-001',
+    poms_factory_id: 9,
+    factory_registration_no: 'REG-001',
+    parameters_json: '["BOD","COD"]',
+    point_code: 'WEMS-001',
+    point_name: 'Point A',
   };
 }

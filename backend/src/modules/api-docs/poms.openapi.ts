@@ -3231,10 +3231,29 @@ const componentSchemas: Record<string, OpenApiObject> = {
   BodCodReportData: {
     type: 'object',
     additionalProperties: true,
-    required: ['id', 'reportNo'],
+    required: ['id', 'reportNo', 'reportSequenceNo'],
     properties: {
       id: { type: 'integer', minimum: 1 },
       reportNo: schemaRef('BodCodReportNo'),
+      reportSequenceNo: {
+        type: 'integer',
+        minimum: 1,
+        nullable: true,
+        example: 3,
+        description:
+          'ครั้งที่รายปี แยกจุดตรวจวัด + BOD/COD + ปี นับต่อข้ามครึ่งปี; server จัดสรร เพิ่มหลัง APPROVED ใช้เลขเดิมหลัง REJECTED/CANCELLED และ resubmit ไม่เพิ่ม; รายงานก่อน migration 0124 คืน null ไม่เติมย้อนหลัง การจัดสรรใหม่ใช้จำนวน APPROVED เดิมเป็นฐานร่วมกับเลขครั้งสูงสุดที่อนุมัติแล้ว',
+      },
+      reportRoundNo: { type: 'integer', enum: [1, 2], description: 'ครึ่งปี ไม่ใช่เลขครั้งรายปี' },
+      reportYear: { type: 'integer', minimum: 2500, maximum: 2700 },
+      statusCode: { type: 'string', enum: [...BOD_COD_DEVIATION_REPORT_STATUSES] },
+      allowedActions: {
+        type: 'array',
+        items: { type: 'string', enum: ['CANCEL', 'APPROVE', 'REQUEST_REVISION', 'REJECT'] },
+        description:
+          'ตรวจ role, permission, data scope, สถานะและ current step; REJECTED ยังคืน CANCEL ให้เจ้าของโรงงานได้',
+      },
+      reporterName: nullableStringSchema(255),
+      submittedAt: { type: 'string', format: 'date-time', nullable: true },
     },
   },
   BodCodReportResponse: {
@@ -5885,9 +5904,28 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'BOD/COD Deviation Reports',
       summary: 'Create BOD/COD deviation report',
       operationId: 'createBodCodReport',
+      description:
+        'ต้องมี bod_cod_errors:view + edit และผ่านทั้งสอง data scope (binary action scope null ใช้ view scope); เฉพาะ factory_operator scope OWN_FACTORY หรือ role admin. ระบุ connectedMeasurementPointId หรือ pointCode ที่ชี้จุดของโรงงานได้เพียงจุดเดียวและมี selectedParameterCode; ถ้าส่งทั้งสองต้องตรงกัน. ปี พ.ศ./ครึ่งปีต้องเป็นปัจจุบันตาม Asia/Bangkok ตรวจหลัง lock ก่อนบันทึก. จุด+พารามิเตอร์+ปีมีคำขอค้างได้หนึ่งรายการ (APPROVED/REJECTED/CANCELLED เป็นสถานะสิ้นสุด); serialize การสร้างพร้อมกัน. 409 CONFLICT details.reason REPORT_PERIOD_CLOSED หรือ PENDING_REPORT_EXISTS; จุด/พารามิเตอร์ไม่ถูกต้อง 400 BAD_REQUEST, role ไม่ตรง 403 FORBIDDEN. ไม่รับ reportSequenceNo ใน request และไม่แก้ reportNo เก่า',
       requestBody: jsonRequestBody(schemaRef('BodCodReportRequest'), bodCodReportExample),
       successStatus: '201',
       successSchema: schemaRef('BodCodReportResponse'),
+      extraResponses: {
+        '409': errorResponse(
+          'รอบปิด มีคำขอค้าง หรือเลขรายงานเต็ม; details.reason ระบุ REPORT_PERIOD_CLOSED/PENDING_REPORT_EXISTS ตามกรณี',
+          {
+            success: false,
+            error: {
+              code: 'CONFLICT',
+              message: 'A BOD/COD report is still pending for this point, parameter and year',
+              details: {
+                reason: 'PENDING_REPORT_EXISTS',
+                reportId: 9,
+                currentStatus: 'REVISION_REQUESTED',
+              },
+            },
+          },
+        ),
+      },
     }),
   },
   '/bod-cod-deviation-reports/{id}': {
@@ -5904,12 +5942,65 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'BOD/COD Deviation Reports',
       summary: 'Resubmit BOD/COD deviation report',
       operationId: 'resubmitBodCodReport',
+      description:
+        'ต้องมี view + edit และผ่านทั้งสอง data scope; เฉพาะ factory_operator scope OWN_FACTORY และ REVISION_REQUESTED. คง identity, reportNo และ reportSequenceNo; ใช้ปี/ครึ่งปีเดิมได้แม้ข้ามรอบ ตรวจสถานะซ้ำภายใต้ lock ร่วมกับการยกเลิก/พิจารณา',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodReportResubmissionRequest'), {
         ...bodCodReportExample,
         revisionNote: 'แก้ไขตามคำขอ',
       }),
       successSchema: schemaRef('BodCodReportResponse'),
+      extraResponses: {
+        '409': errorResponse('สถานะ/ขั้นตอน/identity ไม่อนุญาต ให้โหลดรายละเอียดล่าสุด', {
+          success: false,
+          error: {
+            code: 'CONFLICT',
+            message: 'BOD/COD workflow action is not allowed for current status',
+          },
+        }),
+      },
+    }),
+  },
+  '/bod-cod-deviation-reports/{id}/cancel': {
+    post: securedOperation({
+      tag: 'BOD/COD Deviation Reports',
+      summary: 'Cancel BOD/COD deviation report',
+      operationId: 'cancelBodCodReport',
+      parameters: [idParameter],
+      description:
+        'ไม่รับ request body; ต้องมี bod_cod_errors:view + edit และผ่านทั้งสอง data scope. เฉพาะ factory_operator scope OWN_FACTORY ของโรงงานนั้น. ยกเลิกได้ทุกสถานะรวม REJECTED ยกเว้น APPROVED/CANCELLED (409 CONFLICT). role ไม่ตรง 403 FORBIDDEN; นอก scope/ไม่พบ 404 NOT_FOUND. ตรวจซ้ำภายใต้ transaction lock ร่วมกับ workflow/resubmit/result-notice บันทึก event CANCEL และเลิก current step ไม่ลบข้อมูล. ยกเลิกซ้ำไม่เพิ่ม event. คืน reportSequenceNo เดิม (legacy null), statusCode CANCELLED, currentStep null, steps จริง และ allowedActions []',
+      successSchema: schemaRef('BodCodReportResponse'),
+      extraResponses: {
+        '200': {
+          description: 'ยกเลิกสำเร็จ',
+          content: {
+            'application/json': {
+              schema: schemaRef('BodCodReportResponse'),
+              example: {
+                success: true,
+                data: {
+                  id: 9,
+                  reportNo: 'E-02-0001/2569',
+                  reportSequenceNo: 1,
+                  statusCode: 'CANCELLED',
+                  approvalTrack: 'REGIONAL',
+                  currentStep: null,
+                  steps: [],
+                  allowedActions: [],
+                },
+              },
+            },
+          },
+        },
+        '409': errorResponse('อนุมัติแล้วหรือยกเลิกแล้ว; ไม่เพิ่ม event ซ้ำ', {
+          success: false,
+          error: {
+            code: 'CONFLICT',
+            message: 'BOD/COD report cannot be cancelled',
+            details: { currentStatus: 'APPROVED' },
+          },
+        }),
+      },
     }),
   },
   '/bod-cod-deviation-reports/{id}/workflow-actions': {
@@ -5917,12 +6008,23 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'BOD/COD Deviation Reports',
       summary: 'Change BOD/COD workflow status',
       operationId: 'changeBodCodWorkflowStatus',
+      description:
+        'ต้องมี view + approve และผ่านทั้งสอง data scope พร้อม current step PENDING. INSPECTOR: monitoring_kpm/monitoring_5_centers/admin; RESULT_NOTICE: monitoring_kpm/admin; REVIEWER: kpm_director; APPROVER: center_director/kwp_director. admin เพียงอย่างเดียวข้ามขั้นทบทวน/อนุมัติไม่ได้. ตรวจสถานะภายใต้ lock ร่วมกับ cancel/resubmit',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodWorkflowActionRequest'), {
         action: 'REQUEST_REVISION',
         revisionReason: 'กรุณาแนบข้อมูลห้องปฏิบัติการให้ครบ',
       }),
       successSchema: schemaRef('BodCodReportResponse'),
+      extraResponses: {
+        '409': errorResponse('สถานะ/ขั้นตอน/identity ไม่อนุญาต ให้โหลดรายละเอียดล่าสุด', {
+          success: false,
+          error: {
+            code: 'CONFLICT',
+            message: 'BOD/COD workflow action is not allowed for current status',
+          },
+        }),
+      },
     }),
   },
   '/bod-cod-deviation-reports/{id}/result-notice': {
@@ -5930,6 +6032,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'BOD/COD Deviation Reports',
       summary: 'Create BOD/COD result notice',
       operationId: 'createBodCodResultNotice',
+      description:
+        'ต้องมี view + approve และผ่านทั้งสอง data scope; เฉพาะ monitoring_kpm/admin ที่ไม่ใช่ OWN_FACTORY และ WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodResultNoticeRequest'), {
         reportCorrectness: 'ถูกต้องครบถ้วน',
@@ -5939,11 +6043,22 @@ const extraPaths: Record<string, OpenApiObject> = {
         inspectorPosition: 'นักวิชาการสิ่งแวดล้อม',
       }),
       successSchema: schemaRef('BodCodReportResponse'),
+      extraResponses: {
+        '409': errorResponse('สถานะ/ขั้นตอน/identity ไม่อนุญาต ให้โหลดรายละเอียดล่าสุด', {
+          success: false,
+          error: {
+            code: 'CONFLICT',
+            message: 'BOD/COD workflow action is not allowed for current status',
+          },
+        }),
+      },
     }),
     put: securedOperation({
       tag: 'BOD/COD Deviation Reports',
       summary: 'Update BOD/COD result notice',
       operationId: 'updateBodCodResultNotice',
+      description:
+        'ต้องมี view + approve และผ่านทั้งสอง data scope; เฉพาะ monitoring_kpm/admin ที่ไม่ใช่ OWN_FACTORY และ WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodResultNoticeRequest'), {
         reportCorrectness: 'ไม่ถูกต้องครบถ้วน',
@@ -5954,6 +6069,15 @@ const extraPaths: Record<string, OpenApiObject> = {
         inspectorPosition: 'นักวิชาการสิ่งแวดล้อม',
       }),
       successSchema: schemaRef('BodCodReportResponse'),
+      extraResponses: {
+        '409': errorResponse('สถานะ/ขั้นตอน/identity ไม่อนุญาต ให้โหลดรายละเอียดล่าสุด', {
+          success: false,
+          error: {
+            code: 'CONFLICT',
+            message: 'BOD/COD workflow action is not allowed for current status',
+          },
+        }),
+      },
     }),
   },
   '/kwp-form-reports/factories': {
@@ -6678,11 +6802,12 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
     if (
       path.endsWith('/attachments') ||
       path === '/bod-cod-deviation-reports' ||
-      path.endsWith('/resubmission')
+      path.endsWith('/resubmission') ||
+      path.endsWith('/cancel')
     ) {
-      return { permissions: ['bod_cod_errors:edit'], mode: 'any' };
+      return { permissions: ['bod_cod_errors:view', 'bod_cod_errors:edit'], mode: 'all' };
     }
-    return { permissions: ['bod_cod_errors:approve'], mode: 'any' };
+    return { permissions: ['bod_cod_errors:view', 'bod_cod_errors:approve'], mode: 'all' };
   }
 
   if (path.startsWith('/kwp-form-reports')) {
