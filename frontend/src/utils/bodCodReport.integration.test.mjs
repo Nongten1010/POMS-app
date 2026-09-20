@@ -15,7 +15,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
     cacheDir, optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'bod-cod-test-exports', enforce: 'pre', transform(code, id) {
-      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, buildBodCodReportPayload, officerSubMenus };`
+      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus };`
       if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, BodCodPdfLayout };`
     } }],
   })
@@ -47,6 +47,31 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
       assert.equal(draft.roundNo, 2)
       assert.equal(draft.reportSequenceNo, undefined)
       assert.deepEqual(page.officerSubMenus.map((tab) => tab.value), ['factories', 'reports', 'statistics'])
+    })
+    await t.test('new reports prefill the login name, leave position blank and preserve manually edited values in payload', async () => {
+      for (const role of ['ผู้ประกอบการ', 'เจ้าหน้าที่']) {
+        const user = { name: '  ผู้ใช้งาน ทดสอบ  ', position: 'ตำแหน่งบัญชี', role }
+        const draft = page.makeDraftReport({ factoryId: 'F1' }, { id: 10, parameters: 'COD' }, 2, user)
+        assert.equal(draft.reporterName, 'ผู้ใช้งาน ทดสอบ')
+        assert.equal(draft.reporterPosition, '')
+        assert.equal(page.getBodCodFormValues(draft).reporterName, 'ผู้ใช้งาน ทดสอบ')
+        const prefilledPayload = await page.buildBodCodReportPayload(draft, 'test')
+        assert.equal(prefilledPayload.reporterName, 'ผู้ใช้งาน ทดสอบ')
+        const editedPayload = await page.buildBodCodReportPayload({ ...draft, reporterName: 'ชื่อที่แก้ไข ทดสอบ' }, 'test')
+        assert.equal(editedPayload.reporterName, 'ชื่อที่แก้ไข ทดสอบ')
+      }
+      for (const user of [null, undefined, {}, { name: '   ' }]) {
+        assert.equal(page.makeDraftReport({}, { id: 10, parameters: 'COD' }, 2, user).reporterName, '')
+      }
+    })
+    await t.test('existing reports keep their saved name and position, including deliberately empty names', () => {
+      for (const reporterName of ['ผู้รายงานเดิม ทดสอบ', '']) {
+        const detail = page.mapBodCodReportDetail({ ...fixture, reporterName })
+        const editable = page.makeEditableReport(detail)
+        assert.equal(editable.reporterName, reporterName)
+        assert.equal(page.getBodCodFormValues(editable).reporterName, reporterName)
+        assert.equal(editable.reporterPosition, fixture.reporterPosition)
+      }
     })
     await t.test('operator cancel stays visible/enabled for rejected but disabled for approved', () => {
       for (const statusCode of ['REJECTED', 'APPROVED']) {

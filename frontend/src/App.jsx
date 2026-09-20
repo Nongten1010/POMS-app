@@ -297,7 +297,7 @@ function App() {
         ) : visibleSelectedMenu === 'forms' ? (
           <KwpFormsPage userType={userType} roleCode={roleCode} roleCodes={roleCodes} accessToken={accessToken} currentUser={currentUser} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'bod-cod-report' ? (
-          <BodCodReportPage userType={userType} accessToken={accessToken} roleCode={roleCode} roleCodes={roleCodes} permissions={activePermissions} />
+          <BodCodReportPage userType={userType} accessToken={accessToken} roleCode={roleCode} roleCodes={roleCodes} currentUser={currentUser} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'notifications' ? (
           <NotificationPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'statistics' ? (

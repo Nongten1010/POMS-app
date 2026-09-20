@@ -1999,7 +1999,7 @@ function getDefaultBodCodParameter(parameters = '') {
   return ''
 }
 
-function makeDraftReport(factory, point, roundNo) {
+function makeDraftReport(factory, point, roundNo, currentUser = null) {
   const reportRound = getBodCodPeriodLabel(roundNo)
   const parameter = getDefaultBodCodParameter(point.parameters)
 
@@ -2034,7 +2034,7 @@ function makeDraftReport(factory, point, roundNo) {
     deviceModel: '',
     serialNo: '',
     parameter,
-    reporterName: '',
+    reporterName: String(currentUser?.name ?? '').trim(),
     reporterPosition: '',
     measurementRows: [],
     attachmentFiles: {
@@ -2680,7 +2680,7 @@ const dataGridSx = {
   },
 }
 
-function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', roleCodes = [], permissions }) {
+function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', roleCodes = [], currentUser = null, permissions }) {
   const isOfficer = userType === 'officer'
   const actionContext = useMemo(() => ({ userType, roleCode, roleCodes, permissions }), [userType, roleCode, roleCodes, permissions])
   const pageActions = getBodCodActions({}, actionContext)
@@ -3103,7 +3103,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
         onOpenReport={(factory, point, reportRound) => {
           if (!pageActions.create || Number(reportRound) !== getBodCodPeriod().roundNo) return
           setFormError('')
-          setReportForm(makeDraftReport(factory, point, reportRound))
+          setReportForm(makeDraftReport(factory, point, reportRound, currentUser))
           setMonitoringPointFactory(null)
         }}
       />
