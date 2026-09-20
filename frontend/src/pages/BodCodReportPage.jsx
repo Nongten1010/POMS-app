@@ -2506,10 +2506,10 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview, validationErr
 
             <SectionPaper title="ผู้รายงานผลการทดสอบ">
               <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <TextField label="ชื่อ-นามสกุล" size="small" value={form.reporterName} onChange={(event) => updateForm('reporterName', event.target.value)} fullWidth />
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <TextField label="ตำแหน่ง" size="small" value={form.reporterPosition} onChange={(event) => updateForm('reporterPosition', event.target.value)} fullWidth />
                 </Grid>
               </Grid>
