@@ -51,7 +51,7 @@ curl --request POST \
 
 - สร้างรายงานใหม่ได้เฉพาะผู้ประกอบการ (`factory_operator`, scope `OWN_FACTORY`) หรือผู้มี role `admin` และต้องมี `bod_cod_errors:view` ร่วมกับ `bod_cod_errors:edit`; ข้อมูลต้องอยู่ภายใต้ scope ทั้งสองสิทธิ์
 - `reportRoundNo` คือครึ่งปี `1` (ม.ค.-มิ.ย.) หรือ `2` (ก.ค.-ธ.ค.) และ `reportYear` คือปี พ.ศ. ปัจจุบันตาม `Asia/Bangkok`; backend ตรวจเวลาหลังรอ lock ก่อนบันทึก ไม่รับการสร้างย้อนหลังหรือข้ามรอบ
-- ต้องระบุ `connectedMeasurementPointId` หรือ `pointCode` ที่ระบุจุดปัจจุบันได้เพียงจุดเดียว จุดต้องเป็นของโรงงานที่เลือกและมีพารามิเตอร์ที่รายงาน หากส่งทั้งสอง field ต้องตรงกัน
+- ต้องระบุ `connectedMeasurementPointId` หรือ `pointCode` ที่ระบุจุดปัจจุบันได้เพียงจุดเดียว จุดต้องเป็นของโรงงานที่เลือกและมีพารามิเตอร์ที่รายงาน หากส่งทั้งสอง field ต้องตรงกัน; รองรับพารามิเตอร์จุดที่เก็บเป็น code (`BOD`/`COD`) หรือชื่อรวมหน่วย (`BOD (mg/l)`/`COD (mg/l)`) โดย request ยังคงส่ง code
 - จุดเดียวกัน + พารามิเตอร์เดียวกัน + ปีเดียวกันมีคำขอค้างได้หนึ่งฉบับ โดย `APPROVED`, `REJECTED`, `CANCELLED` เป็นสถานะสิ้นสุด; `REVISION_REQUESTED` ยังเป็นคำขอค้าง การตรวจและสร้างทำภายใน transaction ที่ serialize การยื่นของจุดเดียวกัน
 - `reportSequenceNo` เป็น integer บวกที่ server จัดสรรและคืนใน list/detail และ response ของ create/resubmission/workflow/result-notice/cancel; ไม่รับ field นี้ใน request นับแยกจุด + BOD/COD + ปี และนับต่อข้ามครึ่งปี
 - อนุมัติสำเร็จแล้วครั้งถัดไปเพิ่มหนึ่ง; ยกเลิก/ไม่อนุมัติแล้วคำขอใหม่ใช้เลขครั้งเดิม; resubmit คงเลขครั้ง ปี รอบ และ `reportNo` ของคำขอเดิม และแก้ไขงานค้างข้ามครึ่งปีได้

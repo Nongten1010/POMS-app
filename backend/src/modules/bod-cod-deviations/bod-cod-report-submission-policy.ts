@@ -71,3 +71,10 @@ export function nextBodCodReportSequence(reports: BodCodAnnualReport[]): number 
   if (next > 2_147_483_647) throw new ConflictError('BOD/COD annual sequence exhausted');
   return next;
 }
+
+export function supportsBodCodParameter(parameters: string[], code: 'BOD' | 'COD'): boolean {
+  return parameters.some((parameter) => {
+    const match = parameter.trim().match(/^(BOD|COD)(?:\s*\(mg\s*\/\s*l\))?$/i);
+    return match?.[1].toUpperCase() === code;
+  });
+}

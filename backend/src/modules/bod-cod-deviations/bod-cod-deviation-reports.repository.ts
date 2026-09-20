@@ -56,6 +56,7 @@ import {
   currentBodCodPeriod,
   isBodCodOperator,
   nextBodCodReportSequence,
+  supportsBodCodParameter,
   type BodCodAnnualReport,
 } from './bod-cod-report-submission-policy';
 
@@ -690,7 +691,7 @@ async function resolveSubmissionPoint(
     [id],
   );
   const point = (await readPoint()).find((row) => Number(row.connected_point_id) === id);
-  if (!point || !parseParameters(point.parameters_json).includes(input.selectedParameterCode)) {
+  if (!point || !supportsBodCodParameter(parseParameters(point.parameters_json), input.selectedParameterCode)) {
     throw new BadRequestError('Selected parameter is unavailable at this connected point');
   }
   if (

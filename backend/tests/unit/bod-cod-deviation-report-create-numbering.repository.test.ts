@@ -52,6 +52,15 @@ describe('BOD/COD deviation report create numbering', () => {
     );
   });
 
+  it('accepts canonical connected-point parameter labels including mg/l units', async () => {
+    const h = createReportHarness(undefined, { parameters: '["BOD (mg/l)","COD (mg/l)"]' });
+    mockedDb.transaction.mockImplementationOnce(h.runTransaction);
+    const result = await bodCodDeviationReportsRepository.createReport(createPayload(), {
+      actorUserId: 42, scope: 'ALL', roles: ['admin'],
+    });
+    expect(result.statusCode).toBe('SUBMITTED');
+  });
+
   it('blocks pending reports before allocating a document number or inserting', async () => {
     const h = createReportHarness(undefined, {
       reports: [{ id: 8, status: 'REVISION_REQUESTED', report_sequence_no: 2 }],

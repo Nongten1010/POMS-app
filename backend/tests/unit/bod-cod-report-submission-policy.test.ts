@@ -4,6 +4,7 @@ import {
   assertCurrentBodCodPeriod,
   currentBodCodPeriod,
   nextBodCodReportSequence,
+  supportsBodCodParameter,
   type BodCodAnnualReport,
 } from '../../src/modules/bod-cod-deviations/bod-cod-report-submission-policy';
 import { buildBodCodAllowedActionsForTests } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository';
@@ -13,6 +14,13 @@ import type {
 } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.types';
 
 describe('BOD/COD submission policy', () => {
+  it('recognizes bare codes and mg/l labels without accepting another unit or parameter', () => {
+    expect(supportsBodCodParameter(['BOD'], 'BOD')).toBe(true);
+    expect(supportsBodCodParameter(['BOD (mg/l)'], 'BOD')).toBe(true);
+    expect(supportsBodCodParameter([' COD (mg/L) '], 'COD')).toBe(true);
+    expect(supportsBodCodParameter(['BOD (ppm)', 'COD (mg/l)'], 'BOD')).toBe(false);
+  });
+
   it.each([
     ['2026-06-30T16:59:59.999Z', 2569, 1],
     ['2026-06-30T17:00:00.000Z', 2569, 2],
