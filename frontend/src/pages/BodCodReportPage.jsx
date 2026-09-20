@@ -42,6 +42,7 @@ import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import locationOptions from '../option/locationOptions.json'
 import { createBodCodReportPdf, createBodCodResultNoticePdf } from '../utils/bodCodReportPdf'
+import { getBodCodActions, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodSubmissionError } from '../utils/bodCodReportRules'
 
 dayjs.locale('th')
 
@@ -66,135 +67,12 @@ const operatorSubMenus = [
 ]
 
 const officerSubMenus = [
+  { value: 'factories', label: 'รายชื่อโรงงาน' },
   { value: 'reports', label: 'รายการส่งแบบรายงาน' },
   { value: 'statistics', label: 'สถิติข้อมูล' },
 ]
 
-const mockBodCodReportRows = [
-  {
-    id: 'mock-bod-cod-report-1',
-    factoryName: 'บริษัท ตัวอย่างอุตสาหกรรม จำกัด',
-    factoryRegistration: '10120000325542',
-    province: 'นนทบุรี',
-    monitoringPointCode: 'W1001',
-    monitoringPointName: 'จุดระบายน้ำทิ้งหลัก',
-    reportRound: 'ครั้งที่ 1',
-    roundNo: '1',
-    year: '2569',
-    reportNo: 'BODCOD-2569-001',
-    submittedDate: '12/08/2569',
-    reviewedDate: '-',
-    status: 'รอพิจารณา',
-    statusCode: 'SUBMITTED',
-    statusLabel: 'รอพิจารณา',
-    statusHistory: [],
-    revisionNote: '',
-  },
-  {
-    id: 'mock-bod-cod-report-2',
-    factoryName: 'บริษัท โรงงานน้ำดี จำกัด',
-    factoryRegistration: '10740000125491',
-    province: 'สมุทรสาคร',
-    monitoringPointCode: 'W1002',
-    monitoringPointName: 'จุดระบายน้ำทิ้งหลังระบบบำบัด',
-    reportRound: 'ครั้งที่ 1',
-    roundNo: '1',
-    year: '2569',
-    reportNo: 'BODCOD-2569-002',
-    submittedDate: '15/08/2569',
-    reviewedDate: '18/08/2569',
-    status: 'ผ่านการพิจารณา',
-    statusCode: 'APPROVED',
-    statusLabel: 'ผ่านการพิจารณา',
-    statusHistory: [],
-    revisionNote: '',
-  },
-  {
-    id: 'mock-bod-cod-report-3',
-    factoryName: 'บริษัท ตัวอย่างปรับปรุง จำกัด',
-    factoryRegistration: '72070000725412',
-    province: 'ระยอง',
-    monitoringPointCode: 'W1003',
-    monitoringPointName: 'จุดตรวจวัดน้ำเสียรวม',
-    reportRound: 'ครั้งที่ 2',
-    roundNo: '2',
-    year: '2569',
-    reportNo: 'BODCOD-2569-003',
-    submittedDate: '19/08/2569',
-    reviewedDate: '-',
-    status: 'รอโรงงานแก้ไข',
-    statusCode: 'REVISION_REQUESTED',
-    statusLabel: 'รอโรงงานแก้ไข',
-    statusHistory: [],
-    revisionNote: 'กรุณาแนบเอกสารผลวิเคราะห์เพิ่มเติม',
-  },
-]
-
-const mockOfficerBodCodReportRows = [
-  {
-    id: 'mock-officer-bod-cod-report-1',
-    factoryName: 'บริษัท ตัวอย่างอุตสาหกรรม จำกัด',
-    factoryRegistration: '10120000325542',
-    province: 'นนทบุรี',
-    monitoringPointCode: 'W1001',
-    monitoringPointName: 'จุดระบายน้ำทิ้งหลัก',
-    reportRound: 'ครั้งที่ 1',
-    roundNo: '1',
-    year: '2569',
-    reportNo: 'BODCOD-2569-101',
-    submittedDate: '12/08/2569',
-    reviewedDate: '-',
-    status: 'รอพิจารณา',
-    statusCode: 'SUBMITTED',
-    statusLabel: 'รอพิจารณา',
-    statusHistory: [],
-    revisionNote: '',
-  },
-  {
-    id: 'mock-officer-bod-cod-report-2',
-    factoryName: 'บริษัท โรงงานน้ำดี จำกัด',
-    factoryRegistration: '10740000125491',
-    province: 'สมุทรสาคร',
-    monitoringPointCode: 'W1002',
-    monitoringPointName: 'จุดระบายน้ำทิ้งหลังระบบบำบัด',
-    reportRound: 'ครั้งที่ 1',
-    roundNo: '1',
-    year: '2569',
-    reportNo: 'BODCOD-2569-102',
-    submittedDate: '15/08/2569',
-    reviewedDate: '-',
-    status: 'กรอกแบบแจ้งผล',
-    statusCode: 'WAITING_RESULT_NOTICE',
-    statusLabel: 'กรอกแบบแจ้งผล',
-    statusHistory: [],
-    revisionNote: '',
-  },
-  {
-    id: 'mock-officer-bod-cod-report-3',
-    factoryName: 'บริษัท ตัวอย่างปรับปรุง จำกัด',
-    factoryRegistration: '72070000725412',
-    province: 'ระยอง',
-    monitoringPointCode: 'W1003',
-    monitoringPointName: 'จุดตรวจวัดน้ำเสียรวม',
-    reportRound: 'ครั้งที่ 2',
-    roundNo: '2',
-    year: '2569',
-    reportNo: 'BODCOD-2569-103',
-    submittedDate: '19/08/2569',
-    reviewedDate: '-',
-    status: 'รออนุมัติ',
-    statusCode: 'WAITING_APPROVAL',
-    statusLabel: 'รออนุมัติ',
-    statusHistory: [],
-    revisionNote: '',
-  },
-]
-
-const currentDate = new Date()
-const currentMonth = currentDate.getMonth() + 1
-const currentBuddhistYear = currentDate.getFullYear() + 543
-const isFirstRoundPeriod = currentMonth >= 1 && currentMonth <= 6
-const isSecondRoundPeriod = currentMonth >= 7 && currentMonth <= 12
+const currentBuddhistYear = getBodCodPeriod().year
 
 const tableActionStackSx = {
   alignItems: 'center',
@@ -464,7 +342,7 @@ function mapBodCodReportRow(row = {}, index = 0, options = {}) {
     regionCode: row.regionCode ?? row.regionName ?? row.region ?? '',
     monitoringPointCode: row.monitoringPointCode ?? row.pointCode ?? '',
     monitoringPointName: row.monitoringPointName ?? row.pointName ?? '',
-    reportRound: row.reportRound ?? (reportRoundNo ? `ครั้งที่ ${reportRoundNo}` : ''),
+    reportRound: getBodCodPeriodLabel(reportRoundNo),
     roundNo: String(reportRoundNo ?? '').trim(),
     year: row.year ?? row.reportYear ?? currentBuddhistYear,
     reportNo: row.reportNo ?? '-',
@@ -514,7 +392,7 @@ function mapBodCodReportDetail(detail = {}, row = {}, options = {}) {
     measurements,
     attachments: Array.isArray(detail.attachments) ? detail.attachments : [],
     statusHistory: normalizeBodCodStatusHistory(detail).length ? normalizeBodCodStatusHistory(detail) : mappedRow.statusHistory,
-    allowedActions: detail.allowedActions ?? row.allowedActions ?? [],
+    allowedActions: detail.allowedActions ?? row.allowedActions,
     currentStep: detail.currentStep ?? row.currentStep ?? null,
     steps: detail.steps ?? row.steps ?? [],
     resultNotice: detail.resultNotice ?? row.resultNotice ?? null,
@@ -998,7 +876,7 @@ function BodCodPaperDocument({ report }) {
   const rowsForPaper = report.measurementRows?.length
     ? report.measurementRows
     : [{ id: 'empty-1' }]
-  const roundNo = report.roundNo ?? report.reportRound?.replace('ครั้งที่ ', '') ?? ''
+  const sequenceLabel = getBodCodSequenceLabel(report)
   const selectedParameters = Array.isArray(report.parameter) ? report.parameter : [report.parameter].filter(Boolean)
   const attachmentFiles = getBodCodAttachmentFiles(report)
   const attachmentSections = [
@@ -1031,7 +909,7 @@ function BodCodPaperDocument({ report }) {
               และเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม
             </Typography>
             <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-              ครั้งที่ <PaperLine minWidth={70}>{roundNo}</PaperLine>/ปี<PaperLine minWidth={90}>{report.year}</PaperLine>
+              ครั้งที่ <PaperLine minWidth={160}>{sequenceLabel}</PaperLine>
             </Typography>
           </Box>
 
@@ -1183,7 +1061,9 @@ function ReportPreviewDialog({
   onSubmit,
   onRequestRevision,
   onApprove,
+  actionContext,
 }) {
+  const actions = getBodCodActions(report ?? {}, actionContext)
   const [statusHistoryAnchorEl, setStatusHistoryAnchorEl] = useState(null)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
@@ -1484,10 +1364,10 @@ function ReportPreviewDialog({
                 <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
                   ยกเลิก
                 </Button>
-                <Button variant="outlined" color="warning" disabled={submitting || !report} onClick={() => setRevisionDialogOpen(true)}>
+                <Button variant="outlined" color="warning" disabled={submitting || !report || !actions.requestRevision} onClick={() => setRevisionDialogOpen(true)}>
                   แจ้งแก้ไข
                 </Button>
-                <Button variant="contained" disabled={submitting || !report} onClick={() => onApprove?.(report)}>
+                <Button variant="contained" disabled={submitting || !report || !actions.approve} onClick={() => onApprove?.(report)}>
                   {submitting
                     ? isWaitingApproval
                       ? 'กำลังอนุมัติ'
@@ -1495,15 +1375,6 @@ function ReportPreviewDialog({
                     : isWaitingApproval
                       ? 'อนุมัติ'
                       : 'ผ่านการพิจารณา'}
-                </Button>
-              </>
-            ) : mode === 'cancel' ? (
-              <>
-                <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
-                  ปิด
-                </Button>
-                <Button variant="contained" color="error">
-                  ยืนยันการยกเลิก
                 </Button>
               </>
             ) : mode === 'submit' ? (
@@ -1677,7 +1548,7 @@ function ResultNoticePaperDocument({ report }) {
         <Box>
           <Box>
             สำหรับโรงงาน : <PaperLine minWidth={245}>{report.factoryName}</PaperLine>
-            การรายงานครั้งที่ <PaperLine minWidth={245}>{report.reportRound}</PaperLine>
+            การรายงานครั้งที่ <PaperLine minWidth={245}>{getBodCodSequenceLabel(report)}</PaperLine>
           </Box>
           <Box>
             ทะเบียนโรงงานเลขที่ : <PaperLine minWidth={215}>{report.factoryRegistration}</PaperLine>
@@ -2025,8 +1896,9 @@ function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, s
   )
 }
 
-function MonitoringPointDialog({ factory, open, onClose, onOpenReport }) {
+function MonitoringPointDialog({ factory, open, onClose, onOpenReport, canCreate = false }) {
   const rows = Array.isArray(factory?.measurementPoints) ? factory.measurementPoints : []
+  const period = getBodCodPeriod()
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
@@ -2056,8 +1928,8 @@ function MonitoringPointDialog({ factory, open, onClose, onOpenReport }) {
                   'ชื่อจุดตรวจวัด',
                   'ประเภทจุดตรวจวัด',
                   'พารามิเตอร์',
-                  `ครั้ง 1/${currentBuddhistYear}`,
-                  `ครั้ง 2/${currentBuddhistYear}`,
+                  `ม.ค.-มิ.ย. ${period.year}`,
+                  `ก.ค.-ธ.ค. ${period.year}`,
                   'จัดการ',
                 ].map((column) => (
                   <TableCell key={column} sx={{ fontWeight: 700, bgcolor: '#f8fafc' }}>
@@ -2071,8 +1943,8 @@ function MonitoringPointDialog({ factory, open, onClose, onOpenReport }) {
                 const canReportParameter = hasBodCodParameter(row.parameters)
                 const round1Status = canReportParameter ? row.round1Status : '-'
                 const round2Status = canReportParameter ? row.round2Status : '-'
-                const canReportRound1 = canReportParameter && isFirstRoundPeriod
-                const canReportRound2 = canReportParameter && isSecondRoundPeriod
+                const canReportRound1 = canCreate && canReportParameter && period.roundNo === 1
+                const canReportRound2 = canCreate && canReportParameter && period.roundNo === 2
 
                 return (
                   <TableRow key={row.id}>
@@ -2088,17 +1960,17 @@ function MonitoringPointDialog({ factory, open, onClose, onOpenReport }) {
                           size="small"
                           variant="outlined"
                           disabled={!canReportRound1}
-                          onClick={() => onOpenReport?.(factory, row, 'ครั้งที่ 1')}
+                          onClick={() => onOpenReport?.(factory, row, 1)}
                         >
-                          รายงานครั้งที่ 1/{currentBuddhistYear}
+                          ม.ค.-มิ.ย.
                         </Button>
                         <Button
                           size="small"
                           variant="outlined"
                           disabled={!canReportRound2}
-                          onClick={() => onOpenReport?.(factory, row, 'ครั้งที่ 2')}
+                          onClick={() => onOpenReport?.(factory, row, 2)}
                         >
-                          รายงานครั้งที่ 2/{currentBuddhistYear}
+                          ก.ค.-ธ.ค.
                         </Button>
                       </Stack>
                     </TableCell>
@@ -2127,8 +1999,8 @@ function getDefaultBodCodParameter(parameters = '') {
   return ''
 }
 
-function makeDraftReport(factory, point, reportRound) {
-  const roundNo = reportRound === 'ครั้งที่ 1' ? '1' : '2'
+function makeDraftReport(factory, point, roundNo) {
+  const reportRound = getBodCodPeriodLabel(roundNo)
   const parameter = getDefaultBodCodParameter(point.parameters)
 
   return {
@@ -2146,7 +2018,7 @@ function makeDraftReport(factory, point, reportRound) {
     pointName: point.name,
     reportRound,
     roundNo,
-    year: currentBuddhistYear,
+    year: getBodCodPeriod().year,
     reportNo: '-',
     submittedDate: '-',
     reviewedDate: '-',
@@ -2364,7 +2236,7 @@ function AttachmentFileInput({ label, files, onChange }) {
   )
 }
 
-function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
+function BodCodReportFormSheet({ open, report, onClose, onPreview, validationError = '', validating = false }) {
   const [form, setForm] = useState(() => getBodCodFormValues(report))
   const [measurementResult, setMeasurementResult] = useState(() => getBodCodMeasurementResult(report))
   const [attachmentFiles, setAttachmentFiles] = useState(() => getBodCodAttachmentFiles(report))
@@ -2386,6 +2258,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
     setAttachmentFiles((current) => ({ ...current, [field]: value }))
   }
   const handlePreview = () => {
+    if (validating) return
     const hasMeasurementResult = Object.values(measurementResult).some((value) => String(value ?? '').trim())
 
     onPreview?.({
@@ -2459,6 +2332,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
               </Paper>
             ) : null}
             <SectionPaper title="ข้อมูลทั่วไป">
+              {validationError && <Alert severity="error">{validationError}</Alert>}
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 6 }}>
                   <ReadOnlyField label="ชื่อบริษัท" value={report.factoryName} />
@@ -2473,7 +2347,10 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
                   <ReadOnlyField label="สถานที่ตั้ง" value={report.factoryAddress} multiline />
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <ReadOnlyField label="ครั้งที่" value={report.roundNo} />
+                  <ReadOnlyField label="รอบรายงาน" value={getBodCodPeriodLabel(report.roundNo)} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <ReadOnlyField label="ครั้งที่รายงาน" value={getBodCodSequenceLabel(report)} />
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
                   <ReadOnlyField label="ปี" value={String(report.year)} />
@@ -2653,7 +2530,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
           <Button variant="outlined" color="inherit" onClick={onClose}>
             ยกเลิก
           </Button>
-          <Button variant="contained" onClick={handlePreview}>
+          <Button variant="contained" disabled={validating} onClick={handlePreview}>
             {isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกแบบฟอร์ม'}
           </Button>
         </Stack>
@@ -2673,28 +2550,12 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function ReportActions({ row, mode, roleCode = '', onOpenReport, onOpenResultNotice }) {
-  const statusValues = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
-  const hasStatus = (statuses) => statusValues.some((status) => statuses.includes(status))
-  const canEdit = mode === 'operator' && hasStatus(['รอโรงงานแก้ไข', 'REVISION_REQUESTED'])
-  const canReviewPending = hasStatus([
-    'รอพิจารณา',
-    'แก้ไขแล้ว/รอพิจารณา',
-    'SUBMITTED',
-    'REVISED_PENDING_REVIEW',
-  ])
-  const canReviewWaiting = roleCode === 'kpm_director' && hasStatus(['รอทบทวน', 'WAITING_REVIEW'])
-  const canApproveWaiting = ['center_director', 'kwp_director'].includes(roleCode) && hasStatus(['รออนุมัติ', 'WAITING_APPROVAL'])
-  const canProcess = mode === 'officer' && (canReviewPending || canReviewWaiting || canApproveWaiting)
-  const canOpenResultNotice = hasStatus(['ผ่านการพิจารณา', 'APPROVED'])
-    || (mode === 'officer' && hasStatus(['รอทบทวน', 'รออนุมัติ', 'WAITING_REVIEW', 'WAITING_APPROVAL']))
-  const canFillResultNotice = mode === 'officer'
-    && ['monitoring_kpm', 'admin'].includes(roleCode)
-    && row.statusCode === 'WAITING_RESULT_NOTICE'
-
+function ReportActions({ row, mode, actionContext, onOpenReport, onOpenResultNotice }) {
+  const actions = getBodCodActions(row, actionContext)
+  const { edit: canEdit, process: canProcess, viewNotice: canOpenResultNotice, fillNotice: canFillResultNotice } = actions
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-      <Button size="small" variant="outlined" onClick={() => onOpenReport?.(row, 'view')}>
+      <Button size="small" variant="outlined" disabled={!actions.view} onClick={() => onOpenReport?.(row, 'view')}>
         แบบรายงานผล
       </Button>
       <Button size="small" variant="outlined" disabled={!canOpenResultNotice} onClick={() => onOpenResultNotice?.(row)}>
@@ -2705,8 +2566,8 @@ function ReportActions({ row, mode, roleCode = '', onOpenReport, onOpenResultNot
           <Button size="small" variant="contained" disabled={!canEdit} onClick={() => onOpenReport?.(row, 'edit')}>
             แก้ไข
           </Button>
-          <Button size="small" variant="outlined" color="error" disabled={!canEdit} onClick={() => onOpenReport?.(row, 'cancel')}>
-            ยกเลิก
+          <Button size="small" variant="outlined" color="error" disabled={!actions.cancel} onClick={() => onOpenReport?.(row, 'cancel')}>
+            ยกเลิกคำขอ
           </Button>
         </>
       ) : (
@@ -2744,7 +2605,7 @@ function getFactoryColumns(onOpenMonitoringPoints) {
   ]
 }
 
-function getReportColumns(mode, roleCode, onOpenReport, onOpenResultNotice) {
+function getReportColumns(mode, actionContext, onOpenReport, onOpenResultNotice) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 260 },
     { field: 'factoryRegistration', headerName: 'เลขทะเบียนโรงงาน', width: 190 },
@@ -2752,6 +2613,7 @@ function getReportColumns(mode, roleCode, onOpenReport, onOpenResultNotice) {
     { field: 'monitoringPointCode', headerName: 'รหัสจุดตรวจวัด', width: 130 },
     { field: 'monitoringPointName', headerName: 'ชื่อจุดตรวจวัด', width: 190 },
     { field: 'reportRound', headerName: 'รอบรายงาน', width: 140 },
+    { field: 'reportSequenceNo', headerName: 'ครั้งที่รายงาน', width: 140, valueGetter: (_, row) => getBodCodSequenceLabel(row) },
     { field: 'year', headerName: 'ปี พ.ศ.', width: 120 },
     { field: 'reportNo', headerName: 'เลขที่รายงาน', width: 170 },
     { field: 'submittedDate', headerName: 'วันที่ยื่นรายงาน', width: 160 },
@@ -2772,7 +2634,7 @@ function getReportColumns(mode, roleCode, onOpenReport, onOpenResultNotice) {
         <ReportActions
           row={params.row}
           mode={mode}
-          roleCode={roleCode}
+          actionContext={actionContext}
           onOpenReport={onOpenReport}
           onOpenResultNotice={onOpenResultNotice}
         />
@@ -2818,8 +2680,12 @@ const dataGridSx = {
   },
 }
 
-function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
+function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', roleCodes = [], permissions }) {
   const isOfficer = userType === 'officer'
+  const actionContext = useMemo(() => ({ userType, roleCode, roleCodes, permissions }), [userType, roleCode, roleCodes, permissions])
+  const pageActions = getBodCodActions({}, actionContext)
+  const [cancelReport, setCancelReport] = useState(null)
+  const [cancelError, setCancelError] = useState('')
   const availableSubMenus = isOfficer ? officerSubMenus : operatorSubMenus
   const [factoryTableRows, setFactoryTableRows] = useState([])
   const [reportTableRows, setReportTableRows] = useState([])
@@ -2830,6 +2696,8 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
   const [selectedSubMenu, setSelectedSubMenu] = useState(() => (isOfficer ? 'reports' : 'factories'))
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [reportForm, setReportForm] = useState(null)
+  const [formError, setFormError] = useState('')
+  const [formValidating, setFormValidating] = useState(false)
   const [previewReport, setPreviewReport] = useState(null)
   const [previewMode, setPreviewMode] = useState('view')
   const [resultNoticeReport, setResultNoticeReport] = useState(null)
@@ -2867,9 +2735,8 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
     })
     const response = await readBodCodApiResponse(result, 'โหลดรายการรายงานไม่สำเร็จ')
 
-    return Array.isArray(response?.data)
-      ? response.data.map((row, index) => mapBodCodReportRow(row, index, { isOperatorView: !isOfficer }))
-      : []
+    if (!Array.isArray(response?.data)) throw new Error('รูปแบบข้อมูลรายการรายงานไม่ถูกต้อง')
+    return response.data.map((row, index) => mapBodCodReportRow(row, index, { isOperatorView: !isOfficer }))
   }, [accessToken, isOfficer])
   const fetchReportDetail = useCallback(async (row) => {
     if (!accessToken) {
@@ -2900,15 +2767,15 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
     return rows
   }, [fetchReportRows])
   const reloadCurrentTable = useCallback(async () => {
-    if (isOfficer || effectiveSubMenu !== 'factories') {
+    if (effectiveSubMenu !== 'factories') {
       await loadReportRows()
       return
     }
 
     await loadFactoryRows()
-  }, [effectiveSubMenu, isOfficer, loadFactoryRows, loadReportRows])
+  }, [effectiveSubMenu, loadFactoryRows, loadReportRows])
   useEffect(() => {
-    if (isOfficer || effectiveSubMenu !== 'factories') {
+    if (effectiveSubMenu !== 'factories') {
       return
     }
 
@@ -2933,7 +2800,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
     return () => controller.abort()
   }, [effectiveSubMenu, fetchFactoryRows, isOfficer])
   useEffect(() => {
-    if (!isOfficer && effectiveSubMenu === 'factories') {
+    if (effectiveSubMenu === 'factories') {
       return
     }
 
@@ -2959,11 +2826,20 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
   }, [effectiveSubMenu, fetchReportRows, isOfficer])
   const factoryColumns = useMemo(() => getFactoryColumns(setMonitoringPointFactory), [])
   const reportColumns = useMemo(
-    () => getReportColumns(isOfficer ? 'officer' : 'operator', roleCode, (row, mode) => {
+    () => getReportColumns(isOfficer ? 'officer' : 'operator', actionContext, (row, mode) => {
       setTableError('')
       fetchReportDetail(row)
         .then((detail) => {
+          const actions = getBodCodActions(detail, actionContext)
+          const action = ({ review: 'process', edit: 'edit', cancel: 'cancel' })[mode] ?? 'view'
+          if (!actions[action]) throw new Error('สิทธิ์หรือสถานะปัจจุบันไม่อนุญาตให้ดำเนินการ')
+          if (mode === 'cancel') {
+            setCancelError('')
+            setCancelReport(detail)
+            return
+          }
           if (!isOfficer && mode === 'edit') {
+            setFormError('')
             setReportForm(makeEditableReport(detail))
             return
           }
@@ -2979,6 +2855,8 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
       setResultNoticeSubmitError('')
       fetchReportDetail(row)
         .then((detail) => {
+          const actions = getBodCodActions(detail, actionContext)
+          if (!(mode === 'edit' ? actions.fillNotice : actions.viewNotice)) throw new Error('สิทธิ์หรือสถานะปัจจุบันไม่อนุญาตให้ดำเนินการ')
           setResultNoticeMode(mode)
           setResultNoticeReport(detail)
         })
@@ -2986,10 +2864,14 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
           setTableError(error instanceof Error ? error.message : 'โหลดรายละเอียดรายงานไม่สำเร็จ')
         })
     }),
-    [fetchReportDetail, isOfficer, roleCode],
+    [fetchReportDetail, isOfficer, actionContext],
   )
   const confirmResultNotice = async (report, noticeForm) => {
     if (!report) return
+    if (!getBodCodActions(report, actionContext).fillNotice) {
+      setResultNoticeSubmitError('สิทธิ์หรือสถานะปัจจุบันไม่อนุญาตให้บันทึกแบบแจ้งผล')
+      return
+    }
 
     if (!accessToken) {
       setResultNoticeSubmitError('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อบันทึกแบบแจ้งผล')
@@ -3031,6 +2913,11 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
 
     try {
       const isEditMode = previewMode === 'edit' || report?.mode === 'edit'
+      const actions = getBodCodActions(report, actionContext)
+      if (!(isEditMode ? actions.edit : actions.create)) throw new Error('ไม่มีสิทธิ์ส่งแบบฟอร์ม')
+      const currentReports = await fetchReportRows()
+      const submissionError = getBodCodSubmissionError(report, currentReports)
+      if (submissionError) throw new Error(submissionError)
       const payload = await buildBodCodReportPayload(report, accessToken)
       const result = await fetch(
         isEditMode
@@ -3057,6 +2944,9 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
     }
   }
   const submitWorkflowAction = async (report, action, officerNote = '') => {
+    const actions = getBodCodActions(report, actionContext)
+    const allowed = action === 'REQUEST_REVISION' ? actions.requestRevision : actions.approve || actions.fillNotice
+    if (!allowed) throw new Error('สิทธิ์หรือสถานะปัจจุบันไม่อนุญาตให้ดำเนินการ')
     if (!accessToken) {
       throw new Error('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อดำเนินการ')
     }
@@ -3119,7 +3009,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
 
     return {
       title: isOfficer ? 'รายการส่งแบบรายงาน' : 'ประวัติการรายงาน',
-      rows: reportTableRows.length ? reportTableRows : isOfficer ? mockOfficerBodCodReportRows : mockBodCodReportRows,
+      rows: reportTableRows,
       columns: reportColumns,
     }
   }, [effectiveSubMenu, factoryColumns, factoryTableRows, isOfficer, reportColumns, reportTableRows])
@@ -3193,10 +3083,10 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
               showCellVerticalBorder
               showColumnVerticalBorder
               label={table.title}
-              pageSizeOptions={[10, 25, 50]}
+              pageSizeOptions={[25, 50, 100]}
               initialState={{
                 pagination: {
-                  paginationModel: { page: 0, pageSize: 10 },
+                  paginationModel: { page: 0, pageSize: 25 },
                 },
               }}
               localeText={dataGridLocaleText}
@@ -3208,22 +3098,52 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
       <MonitoringPointDialog
         open={Boolean(monitoringPointFactory)}
         factory={monitoringPointFactory}
+        canCreate={pageActions.create}
         onClose={() => setMonitoringPointFactory(null)}
         onOpenReport={(factory, point, reportRound) => {
+          if (!pageActions.create || Number(reportRound) !== getBodCodPeriod().roundNo) return
+          setFormError('')
           setReportForm(makeDraftReport(factory, point, reportRound))
           setMonitoringPointFactory(null)
         }}
       />
+      <Dialog open={Boolean(cancelReport)} onClose={() => setCancelReport(null)} fullWidth maxWidth="xs">
+        <DialogTitle>ยืนยันการยกเลิกคำขอ</DialogTitle>
+        <DialogContent dividers>
+          <Typography>ยืนยันยกเลิกคำขอเลขที่ {cancelReport?.reportNo} หรือไม่?</Typography>
+          {cancelError && <Alert severity="warning" sx={{ mt: 2 }}>{cancelError}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCancelReport(null)}>กลับ</Button>
+          <Button color="error" variant="contained" onClick={() => {
+            setCancelError('ยังไม่สามารถยกเลิกได้ เนื่องจาก API ยังไม่มีช่องทางยกเลิกคำขอ กรุณาติดต่อผู้ดูแลระบบ')
+          }}>ยืนยันยกเลิกคำขอ</Button>
+        </DialogActions>
+      </Dialog>
       <BodCodReportFormSheet
         key={reportForm?.id ?? 'bod-cod-report-form'}
         open={Boolean(reportForm)}
         report={reportForm}
-        onClose={() => setReportForm(null)}
-        onPreview={(report) => {
-          setPreviewMode(report?.mode === 'edit' ? 'edit' : 'submit')
-          setPreviewSubmitError('')
-          setPreviewReport(report)
-          setReportForm(null)
+        validationError={formError}
+        validating={formValidating}
+        onClose={() => { if (!formValidating) setReportForm(null) }}
+        onPreview={async (report) => {
+          if (formValidating) return
+          setFormValidating(true)
+          setFormError('')
+          try {
+            const rows = await fetchReportRows()
+            const error = getBodCodSubmissionError(report, rows)
+            if (error) throw new Error(error)
+            setPreviewMode(report?.mode === 'edit' ? 'edit' : 'submit')
+            setPreviewSubmitError('')
+            setPreviewReport(report)
+            setReportForm(null)
+          } catch (error) {
+            setFormError(error instanceof Error ? error.message : 'ตรวจสอบคำขอเดิมไม่สำเร็จ')
+          } finally {
+            setFormValidating(false)
+          }
         }}
       />
       <ReportPreviewDialog
@@ -3240,6 +3160,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
         onSubmit={submitPreviewReport}
         onRequestRevision={requestReportRevision}
         onApprove={approveReport}
+        actionContext={actionContext}
       />
       <ResultNoticeDialog
         key={resultNoticeReport ? `${resultNoticeReport.id}-${resultNoticeMode}-${resultNoticeReport.resultNotice?.updatedAt ?? 'new'}` : 'result-notice-dialog'}

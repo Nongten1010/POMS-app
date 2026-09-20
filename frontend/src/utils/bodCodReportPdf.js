@@ -2,6 +2,7 @@ import fontkit from '@pdf-lib/fontkit'
 import { PDFDocument, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
+import { formatBodCodDate, getBodCodSequenceLabel, getBodCodStatus } from './bodCodReportRules'
 
 const colors = {
   black: rgb(0, 0, 0),
@@ -46,7 +47,7 @@ function getRequestNo(data = {}) {
 }
 
 function getSubmittedDate(data = {}) {
-  return displayText(
+  return formatBodCodDate(
     data.submittedDate
       ?? data.submittedAt
       ?? data.requestDate
@@ -346,22 +347,23 @@ class BodCodPdfLayout {
   }
 }
 
-function drawHeader(layout, report = {}) {
+function drawDocumentMetadata(layout, report = {}, y = layout.y) {
   const x = layout.margin.left
   const right = layout.width - layout.margin.right
-  const requestNo = getRequestNo(report)
+  const requestNo = getRequestNo(report) || '-'
   const submittedDate = getSubmittedDate(report)
-
-  if (requestNo) {
-    layout.drawText(`เลขที่ ${requestNo}`, x, layout.y, { size: textSizes.body })
+  const size = textSizes.body
+  const numberText = `เลขที่ ${requestNo}`
+  layout.drawText(numberText, x, y, { size })
+  if (getBodCodStatus(report) === 'APPROVED') {
+    layout.drawText('ผ่านการพิจารณา', x + layout.textWidth(numberText, size) + 8, y, { size, bold: true })
   }
+  const dateText = `วันที่ยื่นคำขอ ${submittedDate}`
+  layout.drawText(dateText, right - layout.textWidth(dateText, size), y, { size })
+}
 
-  if (submittedDate) {
-    const submittedDateText = `วันที่ยื่นคำขอ ${submittedDate}`
-    layout.drawText(submittedDateText, right - layout.textWidth(submittedDateText, textSizes.body), layout.y, {
-      size: textSizes.body,
-    })
-  }
+function drawHeader(layout, report = {}) {
+  drawDocumentMetadata(layout, report)
 
   layout.y -= 38
   layout.drawCentered('แบบรายงานผลการตรวจสอบความคลาดเคลื่อนของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ', layout.y, {
@@ -375,7 +377,7 @@ function drawHeader(layout, report = {}) {
   })
   layout.y -= 24
 
-  const roundText = `ครั้งที่ ${displayText(report.roundNo ?? String(report.reportRound ?? '').replace('ครั้งที่ ', ''), '........')}/ปี ${displayText(report.year ?? report.reportYear, '........')}`
+  const roundText = `ครั้งที่ ${getBodCodSequenceLabel(report)}`
   layout.drawCentered(roundText, layout.y, { size: textSizes.title, bold: true })
   layout.y -= 28
 }
@@ -413,6 +415,8 @@ function drawCheck(layout, x, y, checked) {
 }
 
 function isCentralRegionReportValue(report = {}) {
+  if (report.approvalTrack === 'CENTRAL') return true
+  if (report.approvalTrack === 'REGIONAL') return false
   return String(report.regionName ?? report.regionCode ?? report.region ?? '').trim() === 'ภาคกลาง'
 }
 
@@ -451,7 +455,7 @@ function drawInlineDottedValue(layout, label, value, x, y, endX, options = {}) {
 function drawNoticeCheckboxText(layout, x, y, checked, text, options = {}) {
   drawCheck(layout, x, y - 1, checked)
   const textX = x + 18
-  const size = options.size ?? textSizes.body
+  const size = options.size ?? textSizes.table
   return layout.drawText(text, textX, y, {
     size,
     bold: options.bold,
@@ -461,6 +465,7 @@ function drawNoticeCheckboxText(layout, x, y, checked, text, options = {}) {
 }
 
 function drawResultNoticeBody(layout, report = {}) {
+  drawDocumentMetadata(layout, report, layout.height - 22)
   const isCentral = isCentralRegionReportValue(report)
   const notice = getResultNoticeValues(report)
   const boxX = 32
@@ -495,13 +500,13 @@ function drawResultNoticeBody(layout, report = {}) {
     y -= 20
     layout.drawCentered('สำหรับตรวจวัด', y, { size: textSizes.body, bold: true })
   }
-  y -= isCentral ? 34 : 48
+  y -= isCentral ? 18 : 48
 
   drawInlineDottedValue(layout, 'สำหรับโรงงาน :', report.factoryName, x, y, midX - 4, { boldLabel: true })
-  drawInlineDottedValue(layout, 'การรายงานครั้งที่', report.reportRound, midX + 4, y, right, { boldLabel: true })
+  drawInlineDottedValue(layout, 'การรายงานครั้งที่', getBodCodSequenceLabel(report), midX + 4, y, right, { boldLabel: true })
   y -= 18
   drawInlineDottedValue(layout, 'ทะเบียนโรงงานเลขที่ :', report.factoryRegistration ?? report.factoryRegistrationNo, x, y, midX - 4, { boldLabel: true })
-  drawInlineDottedValue(layout, 'อ้างอิงรายงานวันที่ :', report.submittedDate, midX + 4, y, right, { boldLabel: true })
+  drawInlineDottedValue(layout, 'อ้างอิงรายงานวันที่ :', getSubmittedDate(report), midX + 4, y, right, { boldLabel: true })
   y -= 24
 
   const checkedParameterText = notice.checkedParameters.join(', ')
@@ -572,7 +577,7 @@ function drawResultNoticeBody(layout, report = {}) {
     'ไม่เป็นตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม พ.ศ. 2550',
     { maxWidth: right - x - 40 },
   )
-  y -= Math.max(48, height + 16)
+  y -= Math.max(isCentral ? 40 : 48, height + (isCentral ? 8 : 16))
 
   layout.drawText('หมายเหตุ', x, y, { size: titleSize, bold: true })
   layout.drawText(': ในกรณีที่การบันทึกข้อมูลในแบบรายงานไม่ถูกต้องและหรือค่าความคลาดเคลื่อนไม่เป็นไปตามประกาศฯ', x + 52, y, {
@@ -587,18 +592,18 @@ function drawResultNoticeBody(layout, report = {}) {
 
   const signatureTop = isCentral ? 330 : 258
   if (isCentral) {
-    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', notice.inspectorName, notice.inspectorPosition)
+    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', notice.inspectorName, notice.inspectorPosition, report.resultNotice?.updatedAt ?? report.resultNotice?.createdAt)
     drawResultNoticeSignature(layout, x + 300, signatureTop, 'ผู้ทบทวน', '', 'ผอ.กฝม.')
     drawResultNoticeSignature(layout, x + 186, signatureTop - 102, 'ผู้อนุมัติ', '', 'ผอ.กวภ.')
   } else {
-    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', notice.inspectorName, notice.inspectorPosition)
+    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', notice.inspectorName, notice.inspectorPosition, report.resultNotice?.updatedAt ?? report.resultNotice?.createdAt)
     drawResultNoticeSignature(layout, x + 300, signatureTop, 'ผู้อนุมัติ', '', 'ผอ.ศวภ.')
   }
 
   drawResultNoticeContact(layout, isCentral, x, right, 114)
 }
 
-function drawResultNoticeSignature(layout, x, y, role, name = '', position = '') {
+function drawResultNoticeSignature(layout, x, y, role, name = '', position = '', date) {
   const width = 160
   const centerX = x + (width / 2)
   const size = textSizes.body
@@ -619,7 +624,7 @@ function drawResultNoticeSignature(layout, x, y, role, name = '', position = '')
   }
   const roleWidth = layout.textWidth(role, size, true)
   layout.drawText(role, centerX - (roleWidth / 2), y - 64, { size, bold: true })
-  const dateText = '......../........../..........'
+  const dateText = formatBodCodDate(date)
   const dateWidth = layout.textWidth(dateText, size)
   layout.drawText(dateText, centerX - (dateWidth / 2), y - 84, { size })
 }
@@ -827,6 +832,7 @@ function drawSignature(layout, report = {}) {
 
   drawSignatureLabel('ผู้รายงานผลการทดสอบ', signatureTopY)
   drawSignatureLine(signatureTopY - 4)
+  layout.drawText(displayValue(report.reporterName), lineStartX + 2, signatureTopY, { size: labelSize, maxWidth: lineEndX - lineStartX - 4 })
   const parenthesisY = signatureTopY - 23
   layout.drawText('(', lineStartX - 8, parenthesisY, { size: labelSize })
   drawSignatureLine(parenthesisY - 4)
@@ -847,6 +853,7 @@ function drawSignature(layout, report = {}) {
   const dateY = signatureTopY - 67
   drawSignatureLabel('ลงวันที่', dateY)
   drawSignatureLine(dateY - 4)
+  layout.drawText(getSubmittedDate(report), lineStartX + 2, dateY, { size: labelSize })
   layout.y = dateY - 24
 }
 
