@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { ConflictError } from '../../shared/errors/AppError';
 import { parseRegionalAccessJson, serializeRegionalAccess } from '../auth/regional-access';
 import type {
   CreateLocalAccountInput,
@@ -164,9 +165,9 @@ export const usersRepository = {
     externalId: string,
     excludeUserId?: number,
   ): Promise<{ id: number } | undefined> {
+    // uq_users_provider reserves identities even after soft deletion.
     const query = db('users')
       .where({ identity_provider: identityProvider, external_id: externalId })
-      .whereNull('deleted_at')
       .select('id')
       .first();
     if (excludeUserId !== undefined) query.whereNot('id', excludeUserId);
@@ -282,7 +283,7 @@ export const usersRepository = {
   },
 
   async create(input: CreateManagedUserInput, actorUserId: number): Promise<ManagedUserDetailDTO> {
-    return db.transaction(async (trx) => {
+    const transaction = db.transaction(async (trx) => {
       const roleRows = await this.findRolesByCodes(input.roleCodes, trx);
       const externalId = input.externalId ?? input.username;
       const [{ id }] = await trx('users')
@@ -310,13 +311,14 @@ export const usersRepository = {
       if (!created) throw new Error('Created user could not be loaded');
       return created;
     });
+    return transaction.catch(rethrowIdentityConflict);
   },
 
   async createLocalAccount(
     input: CreateLocalAccountRepositoryInput,
     actorUserId: number,
   ): Promise<ManagedUserDetailDTO> {
-    return db.transaction(async (trx) => {
+    const transaction = db.transaction(async (trx) => {
       const roleRows = await this.findRolesByCodes(input.roleCodes, trx);
       const [{ id }] = await trx('users')
         .insert({
@@ -353,6 +355,7 @@ export const usersRepository = {
       if (!created) throw new Error('Created local account could not be loaded');
       return created;
     });
+    return transaction.catch(rethrowIdentityConflict);
   },
 
   async update(
@@ -360,7 +363,7 @@ export const usersRepository = {
     input: UpdateManagedUserRepositoryInput,
     actorUserId: number,
   ): Promise<ManagedUserDetailDTO> {
-    return db.transaction(async (trx) => {
+    const transaction = db.transaction(async (trx) => {
       const userPatch: Record<string, unknown> = {
         updated_at: trx.raw('SYSDATETIME()'),
         updated_by: actorUserId,
@@ -403,6 +406,7 @@ export const usersRepository = {
       if (!updated) throw new Error('Updated user could not be loaded');
       return updated;
     });
+    return transaction.catch(rethrowIdentityConflict);
   },
 
   async softDelete(userId: number, actorUserId: number): Promise<void> {
@@ -427,6 +431,35 @@ export const usersRepository = {
     });
   },
 };
+
+function rethrowIdentityConflict(error: unknown): never {
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      number?: unknown;
+      message?: unknown;
+      originalError?: {
+        number?: unknown;
+        message?: unknown;
+        info?: { number?: unknown; message?: unknown };
+      };
+    };
+    const number =
+      candidate.number ?? candidate.originalError?.number ?? candidate.originalError?.info?.number;
+    const message =
+      candidate.originalError?.info?.message ??
+      candidate.originalError?.message ??
+      candidate.message;
+    if (
+      (number === 2601 || number === 2627) &&
+      typeof message === 'string' &&
+      /(?:index|constraint) 'uq_users_provider'/i.test(message)
+    ) {
+      // The transaction has already rolled back; never expose the SQL or key value.
+      throw new ConflictError('External ID already exists');
+    }
+  }
+  throw error;
+}
 
 function buildManagedUsersBaseQuery(query: ListManagedUsersQuery): Knex.QueryBuilder {
   const builder = db('users')

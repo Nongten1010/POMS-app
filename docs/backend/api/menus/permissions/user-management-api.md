@@ -299,6 +299,7 @@ Validation and limitation notes:
 
 - Permission: `users:edit` **หรือ** `permissions:manage`
 - ใช้สร้างบัญชี POMS local ที่ login ด้วย `username`/`password`
+- `username` ต้องไม่ซ้ำภายใน provider `local` รวมบัญชีที่ถูก soft-delete แล้ว; ชื่อเดิมยังถูกสงวนไว้ ตอบ `409 CONFLICT` และให้ใช้ชื่อใหม่ ไม่คืนชีพหรือเปลี่ยนรหัสผ่าน/สิทธิ์ของบัญชีเดิม
 - Request body: บังคับ; รับ nested shape ของหน้า Permission Management (แนะนำ) และ legacy flat shape; ห้ามผสมสอง shape และไม่รับ field นอก schema
 
 #### Shape A: nested page payload (แนะนำ)
@@ -677,6 +678,7 @@ curl --request DELETE \
 - สำเร็จตอบ `204 No Content` โดยไม่มี response body
 - user ลบตัวเองไม่ได้; ตอบ `403 FORBIDDEN`
 - backend ทำ soft delete โดยตั้งบัญชี inactive และไม่คืนผู้ใช้นั้นในรายการปกติ
+- การ soft-delete ไม่คืนชื่อบัญชีให้ใช้ซ้ำ; การสร้างหรือเปลี่ยน identity ให้ตรงบัญชีที่ลบแล้วตอบ `409 CONFLICT`
 
 ### Authentication, authorization, and error behavior
 
@@ -688,7 +690,21 @@ curl --request DELETE \
 | `403` | `FORBIDDEN` | token ผ่านแต่ไม่มี permission ตาม route guard | route บางตัวเปิดด้วย `users:view` หรือ `permissions:manage`; `GET/PUT /:id/permissions` ต้องมี `permissions:manage` เสมอ |
 | `404` | `NOT_FOUND` | ไม่พบ user ตาม `:id` หรือ resource ถูกลบแล้ว | ใช้กับ `GET`, `PATCH`, `DELETE`, `GET/PUT permissions` |
 | `400` | `BAD_REQUEST` / validation error | payload หรือ query ไม่ผ่าน schema | duplicate permission code และ scope/location ผิดรูปแบบอยู่ในกลุ่มนี้ |
-| `409` | `CONFLICT` | identity ซ้ำ เช่น `username` หรือ account key ซ้ำ | พบได้ตอนสร้าง/แก้บางกรณี |
+| `409` | `CONFLICT` | `username`/account key ซ้ำภายใน identity provider เดียวกัน รวมบัญชีที่ soft-delete | `POST /users`, `POST /users/local-accounts`, `PATCH /users/:id`; รวมกรณีคำขอบันทึกชนกัน |
+
+ตัวอย่าง identity ซ้ำ (`409 Conflict`):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "CONFLICT",
+    "message": "External ID already exists"
+  }
+}
+```
+
+คำขอที่ชนกันไม่บันทึกข้อมูลบางส่วนและไม่แก้บัญชีเดิม; response ไม่เปิดเผย SQL, index, ID หรือสถานะของบัญชีที่ครองชื่ออยู่ การแก้บัญชีโดยคง identity ของบัญชีตัวเองยังทำได้ตามสิทธิ์เดิม
 
 ตัวอย่าง validation error:
 
@@ -724,3 +740,5 @@ Route-specific notes:
 - Service: [backend/src/modules/users/users.service.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.service.ts:1)
 - Types: [backend/src/modules/users/users.types.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.types.ts:1)
 - Runtime OpenAPI: [backend/src/modules/api-docs/poms.openapi.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/api-docs/poms.openapi.ts:1)
+- Identity conflict regression: [users.identity-conflicts.test.ts](../../../../../backend/tests/unit/users.identity-conflicts.test.ts)
+- Identity conflict OpenAPI: [users.openapi.test.ts](../../../../../backend/tests/unit/users.openapi.test.ts)
