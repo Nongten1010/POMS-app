@@ -403,8 +403,11 @@ const loginExample = {
   password: examplePasswordPlaceholder,
 };
 
-const userIdentityConflictDescription =
-  'username/account key ต้องไม่ซ้ำภายใน identity provider เดียวกัน รวมบัญชีที่ soft-delete แล้ว; ตอบ 409 CONFLICT ทั้งเมื่อตรวจพบก่อนบันทึกและเมื่อบันทึกชนกัน ไม่คืนชีพหรือแก้ไขบัญชีเดิม ให้ใช้ username ใหม่';
+const localUsernameDescription =
+  'username ของ provider local ต้องไม่ซ้ำกับบัญชีที่ยังไม่ถูก soft-delete รวมบัญชี inactive/suspended; ใช้ชื่อเดิมซ้ำได้หลังบัญชีเดิมถูก soft-delete แล้วเท่านั้น';
+const userIdentityConflictDescription = `${localUsernameDescription}; provider อื่นยังสงวน account key รวมบัญชีที่ soft-delete แล้ว; ตอบ 409 CONFLICT ทั้งเมื่อตรวจพบก่อนบันทึกและเมื่อบันทึกชนกัน โดยไม่แก้ไขบัญชีที่ครองชื่ออยู่`;
+const localAccountCreatedDescription =
+  'สร้างบัญชี local สำเร็จและได้ user ID ใหม่ แม้ใช้ username ของบัญชีที่ soft-delete แล้ว; ใช้ password, profile, role และ permissions จากคำขอใหม่ตาม validation และ role defaults ปัจจุบัน ไม่คืนชีพหรือรับรหัสผ่าน สิทธิ์ หรือประวัติจากบัญชีเดิม';
 const userIdentityConflictResponse = errorResponse(userIdentityConflictDescription, {
   success: false,
   error: { code: 'CONFLICT', message: 'External ID already exists' },
@@ -1488,7 +1491,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
     required: ['fullName', 'username', 'password', 'roles'],
     properties: {
       fullName: { type: 'string', minLength: 1, maxLength: 255 },
-      username: { type: 'string', minLength: 3, maxLength: 64 },
+      username: {
+        type: 'string',
+        minLength: 3,
+        maxLength: 64,
+        description: localUsernameDescription,
+      },
       password: { type: 'string', minLength: 8, maxLength: 128 },
       department: { type: 'string', minLength: 1, maxLength: 255 },
       lineNameTh: { type: 'string', minLength: 1, maxLength: 128 },
@@ -1539,7 +1547,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
         required: ['fullName', 'username', 'password', 'roleCodes'],
         properties: {
           fullName: { type: 'string', minLength: 1, maxLength: 255 },
-          username: { type: 'string', minLength: 3, maxLength: 64 },
+          username: {
+            type: 'string',
+            minLength: 3,
+            maxLength: 64,
+            description: localUsernameDescription,
+          },
           password: { type: 'string', minLength: 8, maxLength: 128 },
           department: { type: 'string', maxLength: 255 },
           lineNameTh: { type: 'string', maxLength: 128 },
@@ -1636,7 +1649,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     required: ['username', 'firstName', 'lastName', 'roleCodes'],
     properties: {
-      username: { type: 'string', minLength: 3, maxLength: 64 },
+      username: {
+        type: 'string',
+        minLength: 3,
+        maxLength: 64,
+        description: localUsernameDescription,
+      },
       externalId: { type: 'string', minLength: 1, maxLength: 32 },
       userType: { type: 'string', enum: ['officer', 'admin'], default: 'officer' },
       prenameTh: { type: 'string', maxLength: 16, nullable: true },
@@ -1667,7 +1685,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
           accountType: { type: 'string', enum: ['poms', 'api'] },
           identityProvider: { type: 'string', minLength: 1, maxLength: 32 },
           fullName: { type: 'string', minLength: 1, maxLength: 255 },
-          username: { type: 'string', minLength: 3, maxLength: 64 },
+          username: {
+            type: 'string',
+            minLength: 3,
+            maxLength: 64,
+            description: localUsernameDescription,
+          },
           password: { type: 'string', minLength: 8, maxLength: 128, nullable: true },
           department: { type: 'string', maxLength: 255, nullable: true },
           lineNameTh: { type: 'string', maxLength: 128, nullable: true },
@@ -1714,7 +1737,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     minProperties: 1,
     properties: {
-      username: { type: 'string', minLength: 3, maxLength: 64 },
+      username: {
+        type: 'string',
+        minLength: 3,
+        maxLength: 64,
+        description: localUsernameDescription,
+      },
       externalId: { type: 'string', minLength: 1, maxLength: 32 },
       userType: { type: 'string', enum: ['officer', 'admin'] },
       prenameTh: { type: 'string', minLength: 1, maxLength: 16, nullable: true },
@@ -5116,9 +5144,10 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Create managed user',
       operationId: 'createManagedUser',
-      description: userIdentityConflictDescription,
+      description: `${userIdentityConflictDescription}; สร้างบัญชี local ด้วย user ID ใหม่ ไม่คืนชีพหรือรับสิทธิ์/ประวัติของบัญชีเดิม; endpoint นี้ไม่รับ password`,
       requestBody: jsonRequestBody(schemaRef('CreateManagedUserRequest'), createManagedUserExample),
       successStatus: '201',
+      successDescription: 'สร้างบัญชี local ด้วย user ID ใหม่จากข้อมูลในคำขอ',
       successSchema: schemaRef('SuccessEnvelope'),
       extraResponses: { '409': userIdentityConflictResponse },
     }),
@@ -5128,12 +5157,13 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Create local POMS account',
       operationId: 'createLocalAccount',
-      description: userIdentityConflictDescription,
+      description: `${userIdentityConflictDescription}; ${localAccountCreatedDescription}`,
       requestBody: jsonRequestBody(
         schemaRef('CreateLocalAccountRequest'),
         createLocalAccountExample,
       ),
       successStatus: '201',
+      successDescription: localAccountCreatedDescription,
       successSchema: schemaRef('SuccessEnvelope'),
       extraResponses: { '409': userIdentityConflictResponse },
     }),
@@ -5150,7 +5180,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Update managed user',
       operationId: 'updateUser',
-      description: userIdentityConflictDescription,
+      description: `${userIdentityConflictDescription}; PATCH บัญชี local เปลี่ยน username ไปใช้ชื่อของบัญชีที่ soft-delete แล้วได้ โดยคง user ID ของบัญชีที่กำลังแก้ไขและไม่รับสิทธิ์/ประวัติจากบัญชีที่ลบแล้ว; provider อื่นเปลี่ยน identity ไม่ได้`,
       parameters: [userIdParameter],
       requestBody: jsonRequestBody(schemaRef('UpdateManagedUserRequest'), updateManagedUserExample),
       extraResponses: { '409': userIdentityConflictResponse },
@@ -5159,6 +5189,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Soft delete managed user',
       operationId: 'deleteUser',
+      description:
+        'soft-delete บัญชีโดยเก็บข้อมูลและประวัติเดิมไว้; provider local ใช้ username ซ้ำเพื่อสร้างบัญชีใหม่หรือเปลี่ยนชื่อบัญชีอื่นได้หลังลบสำเร็จ การตั้ง inactive/suspended อย่างเดียวไม่คืนชื่อ; provider อื่นยังสงวน account key หลังลบ',
       parameters: [userIdParameter],
       successStatus: '204',
       successDescription: 'ลบผู้ใช้สำเร็จ',
