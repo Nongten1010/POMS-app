@@ -639,7 +639,7 @@ function PermissionManagementPage({ accessToken = '' }) {
       sortable: false,
       filterable: false,
       renderCell: (params) => (
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', height: '100%' }}>
           <Tooltip title="Edit">
             <IconButton aria-label={`แก้ไข ${params.row.username}`} size="small" onClick={() => openEditDialog(params.row)}>
               <EditIcon fontSize="small" />
