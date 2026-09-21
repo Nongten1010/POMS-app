@@ -171,6 +171,21 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         assert.equal(button.includes('disabled=""'), statusCode === 'APPROVED')
       }
     })
+    await t.test('regional inspector result-notice button follows the latest API actions', () => {
+      const row = {
+        statusCode: 'WAITING_RESULT_NOTICE',
+        currentStep: { roleCode: 'RESULT_NOTICE', status: 'PENDING', isCurrent: true },
+      }
+      for (const allowed of [true, false]) {
+        const html = renderToStaticMarkup(createElement(page.ReportActions, {
+          row: { ...row, allowedActions: allowed ? ['APPROVE'] : [] }, mode: 'officer',
+          actionContext: { userType: 'officer', roleCode: 'monitoring_5_centers', permissions },
+        }))
+        const button = html.match(/<button[^>]*>กรอกแบบแจ้งผล(?:<[^>]+>)*<\/button>/)?.[0]
+        assert.ok(button)
+        assert.equal(button.includes('disabled=""'), !allowed)
+      }
+    })
     await t.test('PDF metadata has bold final approval only and real Thai dates', () => {
       const output = []
       const layout = { margin: { left: 32, right: 32 }, width: 595, y: 800,

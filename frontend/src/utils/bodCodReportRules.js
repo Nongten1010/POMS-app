@@ -91,7 +91,7 @@ export function getBodCodActions(row = {}, { userType, roleCode, roleCodes = [],
       && ['SUBMITTED', 'REVISED_PENDING_REVIEW'].includes(status) && atStep('INSPECTOR'))
     || (roles.has('kpm_director') && status === 'WAITING_REVIEW' && atStep('REVIEWER'))
     || (hasRole(['center_director', 'kwp_director']) && status === 'WAITING_APPROVAL' && atStep('APPROVER'))
-  const noticeStage = hasRole(['monitoring_kpm', 'admin']) && status === 'WAITING_RESULT_NOTICE' && atStep('RESULT_NOTICE')
+  const noticeStage = hasRole(['monitoring_kpm', 'monitoring_5_centers', 'admin']) && status === 'WAITING_RESULT_NOTICE' && atStep('RESULT_NOTICE')
   return {
     view,
     create: edit && (operator || (officer && roles.has('admin'))),

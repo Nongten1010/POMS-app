@@ -94,7 +94,7 @@ test('annual sequence is never inferred from period or row count; dates never fa
 test('authoritative current step, role and allowedActions must all agree', () => {
   const stages = [
     ['SUBMITTED', 'INSPECTOR', ['monitoring_kpm', 'monitoring_5_centers', 'admin'], 'approve'],
-    ['WAITING_RESULT_NOTICE', 'RESULT_NOTICE', ['monitoring_kpm', 'admin'], 'fillNotice'],
+    ['WAITING_RESULT_NOTICE', 'RESULT_NOTICE', ['monitoring_kpm', 'monitoring_5_centers', 'admin'], 'fillNotice'],
     ['WAITING_REVIEW', 'REVIEWER', ['kpm_director'], 'approve'],
     ['WAITING_APPROVAL', 'APPROVER', ['center_director', 'kwp_director'], 'approve'],
   ]
@@ -113,6 +113,33 @@ test('authoritative current step, role and allowedActions must all agree', () =>
   assert.equal(getBodCodActions({ statusCode: 'REJECTED', allowedActions: [] }, operator).cancel, false)
   assert.equal(getBodCodActions({ statusCode: 'REJECTED', allowedActions: ['CANCEL'] }, operator).cancel, true)
   assert.equal(getBodCodActions({}, { ...operator, roleCode: 'other' }).create, false)
+})
+
+test('regional inspectors can fill result notices only with existing permission and API grants', () => {
+  const row = {
+    statusCode: 'WAITING_RESULT_NOTICE',
+    currentStep: { roleCode: 'RESULT_NOTICE', status: 'PENDING', isCurrent: true },
+    allowedActions: ['APPROVE'],
+  }
+  const context = { ...officer, roleCode: 'monitoring_5_centers' }
+  assert.equal(getBodCodActions(row, context).fillNotice, true)
+  for (const field of ['view', 'approve']) {
+    for (const value of [false, undefined, 'true']) {
+      assert.equal(getBodCodActions(row, {
+        ...context, permissions: { bod_cod_errors: { ...permissions.bod_cod_errors, [field]: value } },
+      }).fillNotice, false)
+    }
+  }
+  for (const allowedActions of [[], ['REQUEST_REVISION'], ['REJECT']]) {
+    assert.equal(getBodCodActions({ ...row, allowedActions }, context).fillNotice, false)
+  }
+  for (const statusCode of ['SUBMITTED', 'WAITING_REVIEW', 'WAITING_APPROVAL', 'APPROVED', 'CANCELLED']) {
+    assert.equal(getBodCodActions({ ...row, statusCode }, context).fillNotice, false)
+  }
+  assert.equal(getBodCodActions(row, { ...context, userType: 'operator' }).fillNotice, false)
+  assert.equal(getBodCodActions({
+    ...row, statusCode: 'WAITING_APPROVAL', currentStep: { ...row.currentStep, roleCode: 'APPROVER' },
+  }, context).approve, false)
 })
 
 test('resubmission keeps its original identity across half-years and years without treating itself as a new report', () => {
