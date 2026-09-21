@@ -171,7 +171,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         assert.equal(button.includes('disabled=""'), statusCode === 'APPROVED')
       }
     })
-    await t.test('regional inspector result-notice button follows the latest API actions', () => {
+    await t.test('regional inspector result-notice button allows testing server authorization', () => {
       const row = {
         statusCode: 'WAITING_RESULT_NOTICE',
         currentStep: { roleCode: 'RESULT_NOTICE', status: 'PENDING', isCurrent: true },
@@ -183,7 +183,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         }))
         const button = html.match(/<button[^>]*>กรอกแบบแจ้งผล(?:<[^>]+>)*<\/button>/)?.[0]
         assert.ok(button)
-        assert.equal(button.includes('disabled=""'), !allowed)
+        assert.equal(button.includes('disabled=""'), false)
       }
     })
     await t.test('PDF metadata has bold final approval only and real Thai dates', () => {

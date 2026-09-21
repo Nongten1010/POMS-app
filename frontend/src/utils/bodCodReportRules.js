@@ -101,7 +101,8 @@ export function getBodCodActions(row = {}, { userType, roleCode, roleCodes = [],
     approve: approve && officer && processStage && serverAllows('APPROVE'),
     requestRevision: approve && officer && processStage && serverAllows('REQUEST_REVISION'),
     viewNotice: view && (status === 'APPROVED' || (officer && ['WAITING_REVIEW', 'WAITING_APPROVAL'].includes(status))),
-    fillNotice: approve && officer && noticeStage && serverAllows('APPROVE'),
+    // Let regional inspectors submit notices for server-side authorization even if allowedActions omits APPROVE.
+    fillNotice: approve && officer && noticeStage && (roles.has('monitoring_5_centers') || serverAllows('APPROVE')),
   }
 }
 

@@ -115,11 +115,11 @@ test('authoritative current step, role and allowedActions must all agree', () =>
   assert.equal(getBodCodActions({}, { ...operator, roleCode: 'other' }).create, false)
 })
 
-test('regional inspectors can fill result notices only with existing permission and API grants', () => {
+test('regional inspectors can submit result notices for server authorization while retaining local guards', () => {
   const row = {
     statusCode: 'WAITING_RESULT_NOTICE',
     currentStep: { roleCode: 'RESULT_NOTICE', status: 'PENDING', isCurrent: true },
-    allowedActions: ['APPROVE'],
+    allowedActions: [],
   }
   const context = { ...officer, roleCode: 'monitoring_5_centers' }
   assert.equal(getBodCodActions(row, context).fillNotice, true)
@@ -131,7 +131,13 @@ test('regional inspectors can fill result notices only with existing permission 
     }
   }
   for (const allowedActions of [[], ['REQUEST_REVISION'], ['REJECT']]) {
-    assert.equal(getBodCodActions({ ...row, allowedActions }, context).fillNotice, false)
+    assert.equal(getBodCodActions({ ...row, allowedActions }, context).fillNotice, true)
+  }
+  for (const currentStep of [null, { ...row.currentStep, isCurrent: false }, { ...row.currentStep, status: 'APPROVED' }, { ...row.currentStep, roleCode: 'INSPECTOR' }]) {
+    assert.equal(getBodCodActions({ ...row, currentStep }, context).fillNotice, false)
+  }
+  for (const roleCode of ['monitoring_kpm', 'admin', 'other']) {
+    assert.equal(getBodCodActions(row, { ...context, roleCode }).fillNotice, false)
   }
   for (const statusCode of ['SUBMITTED', 'WAITING_REVIEW', 'WAITING_APPROVAL', 'APPROVED', 'CANCELLED']) {
     assert.equal(getBodCodActions({ ...row, statusCode }, context).fillNotice, false)
