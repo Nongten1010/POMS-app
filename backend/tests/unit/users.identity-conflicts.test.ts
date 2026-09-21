@@ -26,10 +26,11 @@ interface IdentityRow {
   identity_provider: string;
   external_id: string;
   deleted_at: string | null;
+  is_active: boolean;
 }
 
-// Execute identity predicates against rows, including the soft-deleted row that
-// still owns its key in uq_users_provider. Never connect to a real database.
+// Execute identity predicates against historical and current rows.
+// Never connect to a real database.
 function identityQuery(rows: IdentityRow[]) {
   let matches = [...rows];
   const query = {
@@ -65,6 +66,7 @@ const existing: IdentityRow = {
   identity_provider: 'local',
   external_id: 'deleted_officer',
   deleted_at: '2026-09-21T00:00:00Z',
+  is_active: false,
 };
 const conflictBody = {
   success: false,
@@ -116,11 +118,11 @@ describe('managed user identity conflicts', () => {
     jest.restoreAllMocks();
   });
 
-  it.each([null, existing.deleted_at])(
-    'returns 409 for an existing key (deleted_at=%s)',
-    async (deletedAt) => {
+  it.each([true, false])(
+    'returns 409 for a non-deleted identity even when is_active=%s',
+    async (isActive) => {
       mockDatabase.mockImplementation(() =>
-        identityQuery([{ ...existing, deleted_at: deletedAt }]),
+        identityQuery([{ ...existing, deleted_at: null, is_active: isActive }]),
       );
       const response = await request(app())
         .post('/api/v1/users/local-accounts')
@@ -134,19 +136,49 @@ describe('managed user identity conflicts', () => {
     },
   );
 
-  it('keeps the provider boundary and excludes only the user being edited', async () => {
+  it('creates a fresh local account when only deleted identities share the username', async () => {
+    mockDatabase.mockImplementation(() => identityQuery([existing, { ...existing, id: 15 }]));
+    mockTransaction.mockResolvedValue({ id: 22, username: existing.external_id });
+    const response = await request(app())
+      .post('/api/v1/users/local-accounts')
+      .set('Authorization', `Bearer ${token()}`)
+      .send(payload());
+
+    expect(response.status).toBe(201);
+    expect(response.headers.location).toBe('/api/v1/users/22');
+    expect(response.body.data.id).toBe(22);
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('finds the non-deleted identity after older deleted rows', async () => {
+    mockDatabase.mockImplementation(() =>
+      identityQuery([existing, { ...existing, id: 22, deleted_at: null, is_active: true }]),
+    );
     await expect(usersRepository.findByExternalId('local', existing.external_id)).resolves.toEqual({
-      id: 14,
+      id: 22,
     });
     await expect(
-      usersRepository.findByExternalId('local', existing.external_id, 14),
+      usersRepository.findByExternalId('local', existing.external_id, 22),
     ).resolves.toBeUndefined();
     await expect(
       usersRepository.findByExternalId('diw', existing.external_id),
     ).resolves.toBeUndefined();
   });
 
-  it('rejects a soft-deleted identity through the managed-user creation endpoint', async () => {
+  it('keeps soft-deleted nonlocal identities reserved', async () => {
+    mockDatabase.mockImplementation(() =>
+      identityQuery([{ ...existing, identity_provider: 'diw' }]),
+    );
+    await expect(usersRepository.findByExternalId('diw', existing.external_id)).resolves.toEqual({
+      id: 14,
+    });
+    await expect(
+      usersRepository.findByExternalId('local', existing.external_id),
+    ).resolves.toBeUndefined();
+  });
+
+  it('allows reusing a deleted local identity through managed-user creation', async () => {
+    mockTransaction.mockResolvedValue({ id: 22, username: existing.external_id });
     const response = await request(app())
       .post('/api/v1/users')
       .set('Authorization', `Bearer ${token()}`)
@@ -158,12 +190,12 @@ describe('managed user identity conflicts', () => {
         isActive: true,
         roleCodes: ['monitoring_kpm'],
       });
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual(conflictBody);
-    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(response.body.data.id).toBe(22);
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects renaming an account to a soft-deleted identity before updating it', async () => {
+  it('allows renaming a local account to a deleted local identity', async () => {
     jest.spyOn(usersRepository, 'findById').mockResolvedValue({
       id: 22,
       identityProvider: 'local',
@@ -171,13 +203,14 @@ describe('managed user identity conflicts', () => {
       externalId: 'current_officer',
       roleCodes: ['monitoring_kpm'],
     } as never);
+    mockTransaction.mockResolvedValue({ id: 22, username: existing.external_id });
     const response = await request(app())
       .patch('/api/v1/users/22')
       .set('Authorization', `Bearer ${token()}`)
       .send({ username: existing.external_id });
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual(conflictBody);
-    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(response.body.data.id).toBe(22);
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
   });
 
   it.each([

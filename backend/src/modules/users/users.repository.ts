@@ -165,11 +165,13 @@ export const usersRepository = {
     externalId: string,
     excludeUserId?: number,
   ): Promise<{ id: number } | undefined> {
-    // uq_users_provider reserves identities even after soft deletion.
+    // Local usernames are reusable only after deletion; suspended accounts still own them.
+    // External identities remain reserved even when their accounts are deleted.
     const query = db('users')
       .where({ identity_provider: identityProvider, external_id: externalId })
       .select('id')
       .first();
+    if (identityProvider === 'local') query.whereNull('deleted_at');
     if (excludeUserId !== undefined) query.whereNot('id', excludeUserId);
     return query;
   },

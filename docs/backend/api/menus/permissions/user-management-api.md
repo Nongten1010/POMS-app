@@ -299,7 +299,8 @@ Validation and limitation notes:
 
 - Permission: `users:edit` **หรือ** `permissions:manage`
 - ใช้สร้างบัญชี POMS local ที่ login ด้วย `username`/`password`
-- `username` ต้องไม่ซ้ำภายใน provider `local` รวมบัญชีที่ถูก soft-delete แล้ว; ชื่อเดิมยังถูกสงวนไว้ ตอบ `409 CONFLICT` และให้ใช้ชื่อใหม่ ไม่คืนชีพหรือเปลี่ยนรหัสผ่าน/สิทธิ์ของบัญชีเดิม
+- `username` ต้องไม่ซ้ำกับบัญชีใน provider `local` ที่ยังไม่ถูก soft-delete รวมบัญชี inactive/suspended; ถ้าบัญชีเดิมถูก soft-delete แล้ว สามารถใช้ชื่อเดิมสร้างบัญชีใหม่ได้
+- บัญชีที่สร้างใหม่ได้ user ID ใหม่ ใช้ password, profile, role และ permissions จากคำขอใหม่ตาม validation และ role defaults ปัจจุบัน ไม่คืนชีพหรือรับรหัสผ่าน สิทธิ์ หรือประวัติจากบัญชีเดิม ข้อมูลและประวัติของบัญชีเดิมยังผูกกับ user ID เดิม
 - Request body: บังคับ; รับ nested shape ของหน้า Permission Management (แนะนำ) และ legacy flat shape; ห้ามผสมสอง shape และไม่รับ field นอก schema
 
 #### Shape A: nested page payload (แนะนำ)
@@ -308,7 +309,7 @@ Validation and limitation notes:
 | --- | --- | --- | --- |
 | `user` | object | yes | ข้อมูลบัญชี local |
 | `user.fullName` | string | yes | trim แล้ว `1-255` |
-| `user.username` | string | yes | trim แล้ว `3-64`; ต้องไม่ซ้ำ |
+| `user.username` | string | yes | trim แล้ว `3-64`; ไม่ซ้ำกับบัญชี local ที่ยังไม่ถูก soft-delete |
 | `user.password` | string | yes | `8-128`; backend hash ก่อนเก็บ |
 | `user.department`, `user.lineNameTh`, `user.levelNameTh` | string | no | ค่าว่างถูก normalize เป็นไม่ส่ง |
 | `user.roleCodes` | array<string> | yes | ต้องมี role code 1 ค่า |
@@ -344,7 +345,7 @@ Request fields:
 | Field | Type | Required | Nullable | Default / Rules |
 | --- | --- | --- | --- | --- |
 | `fullName` | string | yes | no | trim แล้ว `1-255` ตัวอักษร |
-| `username` | string | yes | no | trim แล้ว `3-64`; ต้องไม่ซ้ำ |
+| `username` | string | yes | no | trim แล้ว `3-64`; ไม่ซ้ำกับบัญชี local ที่ยังไม่ถูก soft-delete |
 | `password` | string | yes | no | `8-128` ตัวอักษร; backend hash ก่อนเก็บ |
 | `department` | string | no | no | trim แล้ว `1-255`; ค่าว่างถูกถือว่าไม่ส่ง |
 | `lineNameTh` | string | no | no | trim แล้ว `1-128` |
@@ -404,6 +405,8 @@ curl --request POST \
 
 Response (`201 Created`) พร้อม `Location: /api/v1/users/<id>`:
 
+การใช้ชื่อเดิมหลังลบบัญชีตอบ `201 Created` เหมือนการสร้างปกติ โดย `data.id` และ `Location` เป็น user ID ใหม่ ผู้ใช้ login ด้วยรหัสผ่านที่ส่งในคำขอใหม่นี้ ไม่ใช้รหัสผ่านของบัญชีที่ลบแล้ว
+
 ```json
 {
   "success": true,
@@ -429,13 +432,14 @@ Response (`201 Created`) พร้อม `Location: /api/v1/users/<id>`:
 
 - Permission: `users:edit` **หรือ** `permissions:manage`
 - ใช้สร้าง managed officer/admin account โดย payload นี้ไม่มี `password` และไม่มี `permissionOverrides`
+- สร้างบัญชีใน provider `local` ด้วย user ID ใหม่ จึงใช้ username ของบัญชีที่ soft-delete แล้วได้โดยไม่รับสิทธิ์หรือประวัติเดิม; บัญชีที่ยังไม่ถูกลบรวม inactive/suspended ยังสงวนชื่อและตอบ `409 CONFLICT`
 - Request body: บังคับ; ไม่รับ field นอก schema
 
 Top-level request fields:
 
 | Field | Type | Required | Nullable | Default / Rules |
 | --- | --- | --- | --- | --- |
-| `username` | string | yes | no | trim แล้ว `3-64`; ต้องไม่ซ้ำ |
+| `username` | string | yes | no | trim แล้ว `3-64`; ไม่ซ้ำกับบัญชี local ที่ยังไม่ถูก soft-delete |
 | `externalId` | string | no | no | `1-32`; ถ้าส่งต้องเท่ากับ `username`; ถ้าไม่ส่งใช้ `username` |
 | `userType` | `officer` \| `admin` | no | no | default `officer` |
 | `prenameTh` | string | no | yes | ไม่เกิน `16` |
@@ -628,6 +632,7 @@ curl --request PATCH \
 ข้อจำกัดร่วมของ PATCH:
 
 - local/POMS account: ถ้าเปลี่ยน `username` ระบบทำให้ account key ตรงกัน; ถ้าส่งทั้ง `username` และ `externalId` ต้องเท่ากัน
+- เปลี่ยน username ของ local/POMS account ไปใช้ชื่อของบัญชีที่ soft-delete แล้วได้ โดยคง user ID ของบัญชีที่กำลังแก้ไข ไม่รวมบัญชีและไม่รับสิทธิ์หรือประวัติจากบัญชีที่ลบแล้ว; ถ้าชื่อยังอยู่กับบัญชีที่ไม่ถูกลบ รวม inactive/suspended จะตอบ `409 CONFLICT`
 - API/IdP account: เปลี่ยน `username`, `externalId`, ข้อมูลบุคลากร, email, phone หรือ password ไม่ได้; Shape A ส่งค่าเดิมของ `username`, `fullName`, `department`, `lineNameTh`, `levelNameTh` กลับมาได้และ backend จะไม่นำ provider-owned fields เหล่านี้ไปเขียนทับ
 - เมื่อส่ง Shape A สำหรับ API/IdP account ให้ส่ง `source: "api"` หรือ `accountType: "api"` ตามค่าจาก `GET /users/:id` เพื่อให้ backend แยก provider-owned fields ออกจาก authorization assignment ถูกต้อง
 - API/IdP account ยังแก้ role, `isActive` และ authorization assignment (`regionalAccess`, จังหวัด, นิคม) ได้เมื่อผู้เรียกมีสิทธิ์ครบ
@@ -678,7 +683,8 @@ curl --request DELETE \
 - สำเร็จตอบ `204 No Content` โดยไม่มี response body
 - user ลบตัวเองไม่ได้; ตอบ `403 FORBIDDEN`
 - backend ทำ soft delete โดยตั้งบัญชี inactive และไม่คืนผู้ใช้นั้นในรายการปกติ
-- การ soft-delete ไม่คืนชื่อบัญชีให้ใช้ซ้ำ; การสร้างหรือเปลี่ยน identity ให้ตรงบัญชีที่ลบแล้วตอบ `409 CONFLICT`
+- เมื่อ soft-delete บัญชี provider `local` สำเร็จ สามารถใช้ username เดิมสร้างบัญชีใหม่ หรือเปลี่ยน username ของบัญชี local อื่นมาใช้ชื่อนี้ได้; การตั้ง inactive/suspended อย่างเดียวไม่คืนชื่อให้ใช้ซ้ำ
+- ข้อมูลและประวัติของบัญชีที่ลบยังคงอยู่กับ user ID เดิม ไม่ย้ายไปบัญชีที่ใช้ชื่อซ้ำ ส่วน provider อื่นยังสงวน account key แม้ถูก soft-delete แล้ว
 
 ### Authentication, authorization, and error behavior
 
@@ -690,7 +696,7 @@ curl --request DELETE \
 | `403` | `FORBIDDEN` | token ผ่านแต่ไม่มี permission ตาม route guard | route บางตัวเปิดด้วย `users:view` หรือ `permissions:manage`; `GET/PUT /:id/permissions` ต้องมี `permissions:manage` เสมอ |
 | `404` | `NOT_FOUND` | ไม่พบ user ตาม `:id` หรือ resource ถูกลบแล้ว | ใช้กับ `GET`, `PATCH`, `DELETE`, `GET/PUT permissions` |
 | `400` | `BAD_REQUEST` / validation error | payload หรือ query ไม่ผ่าน schema | duplicate permission code และ scope/location ผิดรูปแบบอยู่ในกลุ่มนี้ |
-| `409` | `CONFLICT` | `username`/account key ซ้ำภายใน identity provider เดียวกัน รวมบัญชีที่ soft-delete | `POST /users`, `POST /users/local-accounts`, `PATCH /users/:id`; รวมกรณีคำขอบันทึกชนกัน |
+| `409` | `CONFLICT` | local: ชื่อซ้ำกับบัญชีที่ยังไม่ถูก soft-delete รวม inactive/suspended; provider อื่น: account key ซ้ำรวมบัญชีที่ soft-delete | `POST /users`, `POST /users/local-accounts`, `PATCH /users/:id`; รวมกรณีคำขอบันทึกชนกัน |
 
 ตัวอย่าง identity ซ้ำ (`409 Conflict`):
 
@@ -742,3 +748,7 @@ Route-specific notes:
 - Runtime OpenAPI: [backend/src/modules/api-docs/poms.openapi.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/api-docs/poms.openapi.ts:1)
 - Identity conflict regression: [users.identity-conflicts.test.ts](../../../../../backend/tests/unit/users.identity-conflicts.test.ts)
 - Identity conflict OpenAPI: [users.openapi.test.ts](../../../../../backend/tests/unit/users.openapi.test.ts)
+- Local account reuse regression: [users.local-account-reuse.test.ts](../../../../../backend/tests/unit/users.local-account-reuse.test.ts)
+- Migration และ rollback regression: [local-user-identity-reuse-migration.test.ts](../../../../../backend/tests/unit/local-user-identity-reuse-migration.test.ts)
+
+การ deploy พฤติกรรมใช้ชื่อเดิมซ้ำต้องรัน [migration 0125](../../../../../backend/src/db/migrations/0125_reuse_deleted_local_user_identity.ts) พร้อม release เพื่อปรับ unique index โดยเก็บบัญชีและประวัติเดิมทั้งหมดไว้ หากมีบัญชีเก่าและใหม่ที่ใช้ identity เดียวกันแล้ว การ rollback migration จะปฏิเสธและคง index ปัจจุบันไว้ ให้แก้ต่อด้วย forward migration เพื่อรักษาข้อมูล ไม่ลบแถวบัญชีเพื่อให้ rollback ผ่าน
