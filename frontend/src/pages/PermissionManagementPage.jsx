@@ -134,6 +134,36 @@ function buildLocationOptions(options) {
 
 const permissionRegionOptions = buildLocationOptions(regionOptions)
 const permissionProvinceOptions = buildLocationOptions(provinceOptions)
+const assignedRegionOptions = regionOptions.filter((option) => option.value !== 'all')
+const assignedProvinceOptions = provinceOptions.filter((option) => option.value !== 'all')
+
+function getUserLocationField(roleCode) {
+  if (['monitoring_5_centers', 'center_director'].includes(roleCode)) {
+    return { name: 'regionName', label: 'ภาคที่รับผิดชอบ', options: assignedRegionOptions }
+  }
+  if (roleCode === 'provincial_office') {
+    return { name: 'provinceName', label: 'จังหวัดที่รับผิดชอบ', options: assignedProvinceOptions }
+  }
+  return null
+}
+
+function validateUserLocationFields(formData, roleCode) {
+  const field = getUserLocationField(roleCode)
+  if (!field) return {}
+  const value = String(formData.get(field.name) ?? '').trim()
+  return field.options.some((option) => option.value === value)
+    ? {} : { [field.name]: `กรุณาเลือก${field.label}` }
+}
+
+function buildUserLocationPayload(formData, roleCode, user, isAddMode) {
+  const field = getUserLocationField(roleCode)
+  const previousField = getUserLocationField(user?.roleCode)
+  const location = field ? { [field.name]: String(formData.get(field.name) ?? '').trim() } : {}
+  if (!isAddMode && previousField && previousField.name !== field?.name) {
+    location[previousField.name] = null
+  }
+  return location
+}
 
 const permissionSections = [
   {
@@ -329,6 +359,7 @@ function getDisplayName(value) {
 function mapApiUser(user, permissions = {}, fallbackId) {
   const roleCode = getRoleCodeFromUser(user)
   const accountType = getAccountTypeFromUser(user)
+  const assignedRegions = user.regionalAccess?.regions ?? user.regions
 
   return {
     id: user.id ?? fallbackId,
@@ -340,6 +371,9 @@ function mapApiUser(user, permissions = {}, fallbackId) {
     affiliation: getDisplayName(user.department ?? user.officerProfile?.department),
     position: user.lineNameTh ?? user.officerProfile?.lineNameTh ?? '',
     level: user.levelNameTh ?? user.officerProfile?.levelNameTh ?? '',
+    regionName: Array.isArray(assignedRegions)
+      ? (assignedRegions.length === 1 ? assignedRegions[0] : '') : user.regionName ?? '',
+    provinceName: user.provinceName ?? '',
     role: roleNameThByCode[roleCode] ?? user.primaryRole?.nameTh ?? user.roles?.[0]?.nameTh ?? roleCode ?? '-',
     roleCode: roleCode ?? '',
     status: user.isActive ? 'ใช้งาน' : 'ระงับใช้งาน',
@@ -444,6 +478,54 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
       return [section.permissionKey, permission]
     }),
   )
+}
+
+function buildUserPermissionPayload(formData, { mode, user }) {
+  const isAddMode = mode === 'add'
+  const isApiAccount = !isAddMode && user?.accountType === 'api'
+  const roleCode = String(formData.get('roleCode') ?? roleOptions[0].value)
+  const locationErrors = validateUserLocationFields(formData, roleCode)
+  if (Object.keys(locationErrors).length) throw new Error(Object.values(locationErrors)[0])
+  const location = buildUserLocationPayload(formData, roleCode, user, isAddMode)
+  const baseUserPayload = {
+    fullName: String(formData.get('fullName') ?? '').trim(),
+    username: String(formData.get('username') ?? '').trim(),
+    department: emptyToNull(formData.get('department')),
+    lineNameTh: emptyToNull(formData.get('lineNameTh')),
+    levelNameTh: emptyToNull(formData.get('levelNameTh')),
+    roleCodes: [roleCode],
+    isActive: String(formData.get('status') ?? statusOptions[0].value) === 'active',
+    ...location,
+  }
+  const permissions = isAddMode ? {} : buildPermissionsFromForm(formData, user?.permissions)
+  if (isAddMode) {
+    return {
+      user: {
+        ...baseUserPayload,
+        userType: 'officer',
+        department: baseUserPayload.department ?? '',
+        lineNameTh: baseUserPayload.lineNameTh ?? '',
+        levelNameTh: baseUserPayload.levelNameTh ?? '',
+        password: String(formData.get('password') ?? ''),
+      },
+      permissions,
+    }
+  }
+  if (isApiAccount) {
+    return {
+      user: {
+        accountType: 'api', source: 'api',
+        username: user?.username ?? '', fullName: user?.fullName ?? '',
+        roleCodes: baseUserPayload.roleCodes, isActive: baseUserPayload.isActive,
+        ...location,
+      },
+      permissions,
+    }
+  }
+  return {
+    user: { ...baseUserPayload, password: String(formData.get('password') ?? '') },
+    permissions,
+  }
 }
 
 function PermissionManagementPage({ accessToken = '' }) {
@@ -900,7 +982,7 @@ function PermissionManagementPage({ accessToken = '' }) {
       </Paper>
 
       <UserPermissionDialog
-        key={`${dialogMode}-${selectedUser?.id ?? 'closed'}`}
+        key={`${dialogMode}-${selectedUser ? selectedUser.id ?? 'new' : 'closed'}-${selectedUser?.detailVersion ?? 0}`}
         mode={dialogMode}
         open={Boolean(selectedUser)}
         user={selectedUser}
@@ -945,8 +1027,11 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
   const [permissionLocationErrors, setPermissionLocationErrors] = useState({})
   const [permissionResetKey, setPermissionResetKey] = useState(0)
   const title = isAddMode ? 'เพิ่มผู้ใช้งาน' : 'แก้ไขสิทธิ์การใช้งาน'
-  const selectedRoleValue =
-    user?.roleCode ?? roleOptions.find((role) => role.label === user?.role)?.value ?? roleOptions[0].value
+  const [selectedRoleValue, setSelectedRoleValue] = useState(
+    user?.roleCode ?? roleOptions.find((role) => role.label === user?.role)?.value ?? roleOptions[0].value,
+  )
+  const [userLocation, setUserLocation] = useState({ regionName: user?.regionName ?? '', provinceName: user?.provinceName ?? '' })
+  const [userLocationErrors, setUserLocationErrors] = useState({})
   const dialogRoleOptions = roleOptions.some((role) => role.value === selectedRoleValue)
     ? roleOptions
     : [
@@ -983,58 +1068,16 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
             event.preventDefault()
             const formData = new FormData(event.currentTarget)
             const locationErrors = isAddMode ? {} : validatePermissionLocationFields(formData)
+            const assignmentErrors = validateUserLocationFields(formData, selectedRoleValue)
 
             setPermissionLocationErrors(locationErrors)
+            setUserLocationErrors(assignmentErrors)
 
-            if (Object.keys(locationErrors).length > 0) {
+            if (Object.keys(locationErrors).length > 0 || Object.keys(assignmentErrors).length > 0) {
               return
             }
 
-            const statusValue = String(formData.get('status') ?? statusOptions[0].value)
-            const roleCode = String(formData.get('roleCode') ?? roleOptions[0].value)
-            const permissions = isAddMode ? {} : buildPermissionsFromForm(formData, user?.permissions)
-            const baseUserPayload = {
-              fullName: String(formData.get('fullName') ?? '').trim(),
-              username: String(formData.get('username') ?? '').trim(),
-              department: emptyToNull(formData.get('department')),
-              lineNameTh: emptyToNull(formData.get('lineNameTh')),
-              levelNameTh: emptyToNull(formData.get('levelNameTh')),
-              roleCodes: [roleCode],
-              isActive: statusValue === 'active',
-            }
-            const payload = isAddMode
-              ? {
-                  user: {
-                    ...baseUserPayload,
-                    userType: 'officer',
-                    department: baseUserPayload.department ?? '',
-                    lineNameTh: baseUserPayload.lineNameTh ?? '',
-                    levelNameTh: baseUserPayload.levelNameTh ?? '',
-                    password: String(formData.get('password') ?? ''),
-                  },
-                  permissions,
-                }
-              : isApiAccount
-                ? {
-                    user: {
-                      accountType: 'api',
-                      source: 'api',
-                      username: user?.username ?? '',
-                      fullName: user?.fullName ?? '',
-                      roleCodes: baseUserPayload.roleCodes,
-                      isActive: baseUserPayload.isActive,
-                    },
-                    permissions,
-                  }
-                : {
-                    user: {
-                      ...baseUserPayload,
-                      password: String(formData.get('password') ?? ''),
-                    },
-                    permissions,
-                  }
-
-            onSave?.(payload)
+            onSave?.(buildUserPermissionPayload(formData, { mode, user }))
           },
           sx: {
             borderRadius: 2,
@@ -1152,7 +1195,15 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
                     labelId="system-role-label"
                     label="สิทธิ์ในระบบ"
                     name="roleCode"
-                    defaultValue={selectedRoleValue}
+                    value={selectedRoleValue}
+                    onChange={(event) => {
+                      const roleCode = event.target.value
+                      if (getUserLocationField(roleCode)?.name !== getUserLocationField(selectedRoleValue)?.name) {
+                        setUserLocation({ regionName: '', provinceName: '' })
+                      }
+                      setSelectedRoleValue(roleCode)
+                      setUserLocationErrors({})
+                    }}
                   >
                     {dialogRoleOptions.map((role) => (
                       <MenuItem key={role.value} value={role.value}>
@@ -1176,6 +1227,16 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
                     ))}
                   </Select>
                 </FormControl>
+                <UserLocationField
+                  roleCode={selectedRoleValue}
+                  values={userLocation}
+                  errors={userLocationErrors}
+                  disabled={isSaving || user?.isLoadingDetail}
+                  onChange={(name, value) => {
+                    setUserLocation((current) => ({ ...current, [name]: value }))
+                    setUserLocationErrors({})
+                  }}
+                />
               </Box>
             </Stack>
           </Paper>
@@ -1213,6 +1274,29 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
         </Button>
       </DialogActions>
     </Dialog>
+  )
+}
+
+function UserLocationField({ roleCode, values, errors = {}, disabled = false, onChange }) {
+  const field = getUserLocationField(roleCode)
+  if (!field) return null
+  const value = values[field.name]
+  const selectedValue = field.options.some((option) => option.value === value) ? value : ''
+  return (
+    <FormControl fullWidth required error={Boolean(errors[field.name])} disabled={disabled}>
+      <InputLabel id={`user-${field.name}-label`}>{field.label}</InputLabel>
+      <Select
+        labelId={`user-${field.name}-label`}
+        label={field.label}
+        name={field.name}
+        value={selectedValue}
+        onChange={(event) => onChange(field.name, event.target.value)}
+      >
+        <MenuItem value=""><em>-</em></MenuItem>
+        {field.options.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+      </Select>
+      {errors[field.name] ? <FormHelperText>{errors[field.name]}</FormHelperText> : null}
+    </FormControl>
   )
 }
 
