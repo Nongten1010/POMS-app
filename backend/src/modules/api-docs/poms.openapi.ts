@@ -403,6 +403,13 @@ const loginExample = {
   password: examplePasswordPlaceholder,
 };
 
+const userIdentityConflictDescription =
+  'username/account key ต้องไม่ซ้ำภายใน identity provider เดียวกัน รวมบัญชีที่ soft-delete แล้ว; ตอบ 409 CONFLICT ทั้งเมื่อตรวจพบก่อนบันทึกและเมื่อบันทึกชนกัน ไม่คืนชีพหรือแก้ไขบัญชีเดิม ให้ใช้ username ใหม่';
+const userIdentityConflictResponse = errorResponse(userIdentityConflictDescription, {
+  success: false,
+  error: { code: 'CONFLICT', message: 'External ID already exists' },
+});
+
 const createLocalAccountExample = {
   user: {
     fullName: 'เจ้าหน้าที่ กกพ.',
@@ -5109,9 +5116,11 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Create managed user',
       operationId: 'createManagedUser',
+      description: userIdentityConflictDescription,
       requestBody: jsonRequestBody(schemaRef('CreateManagedUserRequest'), createManagedUserExample),
       successStatus: '201',
       successSchema: schemaRef('SuccessEnvelope'),
+      extraResponses: { '409': userIdentityConflictResponse },
     }),
   },
   '/users/local-accounts': {
@@ -5119,12 +5128,14 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Create local POMS account',
       operationId: 'createLocalAccount',
+      description: userIdentityConflictDescription,
       requestBody: jsonRequestBody(
         schemaRef('CreateLocalAccountRequest'),
         createLocalAccountExample,
       ),
       successStatus: '201',
       successSchema: schemaRef('SuccessEnvelope'),
+      extraResponses: { '409': userIdentityConflictResponse },
     }),
   },
   '/users/{id}': {
@@ -5139,8 +5150,10 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Update managed user',
       operationId: 'updateUser',
+      description: userIdentityConflictDescription,
       parameters: [userIdParameter],
       requestBody: jsonRequestBody(schemaRef('UpdateManagedUserRequest'), updateManagedUserExample),
+      extraResponses: { '409': userIdentityConflictResponse },
     }),
     delete: securedOperation({
       tag: 'Permissions',
