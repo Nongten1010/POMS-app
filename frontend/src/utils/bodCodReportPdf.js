@@ -2,6 +2,7 @@ import fontkit from '@pdf-lib/fontkit'
 import { PDFDocument, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
+import locationOptions from '../option/locationOptions.json'
 import { formatBodCodDate, getBodCodSequenceLabel, getBodCodStatus } from './bodCodReportRules'
 
 const colors = {
@@ -420,6 +421,24 @@ function isCentralRegionReportValue(report = {}) {
   return String(report.regionName ?? report.regionCode ?? report.region ?? '').trim() === 'ภาคกลาง'
 }
 
+export function getBodCodInspectorPosition(report = {}) {
+  if (isCentralRegionReportValue(report)) return 'เจ้าหน้าที่ กฝม.'
+  const regionNames = locationOptions.regions.map((region) => region.value).filter((value) => value !== 'ทั้งหมด')
+  const explicitRegion = [report.regionName, report.regionCode, report.region]
+    .map((value) => String(value ?? '').trim()).find((value) => regionNames.includes(value))
+  const province = String(report.province || report.provinceName || '').trim().replace(/^จังหวัด\s*/u, '')
+  const region = explicitRegion ?? locationOptions.provinces.find((item) => item.value === province || item.label === province)?.region
+  return `เจ้าหน้าที่ กฝม. ${region || 'ภาค...'}`
+}
+
+export function getBodCodResultNoticeSigners(report = {}) {
+  const steps = Array.isArray(report.steps) ? report.steps : []
+  return Object.fromEntries(['RESULT_NOTICE', 'REVIEWER', 'APPROVER'].map((role) => {
+    const step = steps.find((item) => item?.roleCode === role && item.status === 'APPROVED' && item.isCurrent !== true)
+    return [role, { name: String(step?.actorName ?? '').trim(), date: step?.decidedAt }]
+  }))
+}
+
 function getResultNoticeValues(report = {}) {
   const resultNotice = report.resultNotice ?? {}
   const checkedParameters = Array.isArray(resultNotice.checkedParameters)
@@ -431,8 +450,7 @@ function getResultNoticeValues(report = {}) {
     checkedParameters,
     reviewResult: resultNotice.reviewResult ?? '',
     comment: resultNotice.comment ?? '',
-    inspectorName: resultNotice.inspectorName ?? '',
-    inspectorPosition: resultNotice.inspectorPosition ?? '',
+    inspectorPosition: getBodCodInspectorPosition(report),
   }
 }
 
@@ -591,13 +609,14 @@ function drawResultNoticeBody(layout, report = {}) {
   })
 
   const signatureTop = isCentral ? 330 : 258
+  const signers = getBodCodResultNoticeSigners(report)
   if (isCentral) {
-    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', notice.inspectorName, notice.inspectorPosition, report.resultNotice?.updatedAt ?? report.resultNotice?.createdAt)
-    drawResultNoticeSignature(layout, x + 300, signatureTop, 'ผู้ทบทวน', '', 'ผอ.กฝม.')
-    drawResultNoticeSignature(layout, x + 186, signatureTop - 102, 'ผู้อนุมัติ', '', 'ผอ.กวภ.')
+    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', signers.RESULT_NOTICE.name, notice.inspectorPosition, signers.RESULT_NOTICE.date)
+    drawResultNoticeSignature(layout, x + 300, signatureTop, 'ผู้ทบทวน', signers.REVIEWER.name, 'ผอ.กฝม.', signers.REVIEWER.date)
+    drawResultNoticeSignature(layout, x + 186, signatureTop - 102, 'ผู้อนุมัติ', signers.APPROVER.name, 'ผอ.กวภ.', signers.APPROVER.date)
   } else {
-    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', notice.inspectorName, notice.inspectorPosition, report.resultNotice?.updatedAt ?? report.resultNotice?.createdAt)
-    drawResultNoticeSignature(layout, x + 300, signatureTop, 'ผู้อนุมัติ', '', 'ผอ.ศวภ.')
+    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', signers.RESULT_NOTICE.name, notice.inspectorPosition, signers.RESULT_NOTICE.date)
+    drawResultNoticeSignature(layout, x + 300, signatureTop, 'ผู้อนุมัติ', signers.APPROVER.name, 'ผอ.ศวภ.', signers.APPROVER.date)
   }
 
   drawResultNoticeContact(layout, isCentral, x, right, 114)
@@ -614,13 +633,18 @@ function drawResultNoticeSignature(layout, x, y, role, name = '', position = '',
   layout.drawText(')', x + width + 4, y - 22, { size })
   if (name) {
     const nameWidth = layout.textWidth(name, size)
-    layout.drawText(name, centerX - (nameWidth / 2), y - 18, { size })
+    const nameSize = nameWidth > width ? size * width / nameWidth : size
+    const nameX = centerX - layout.textWidth(name, nameSize) / 2
+    layout.drawText(name, nameX, y + 2, { size: nameSize })
+    layout.drawText(name, nameX, y - 18, { size: nameSize })
   }
   layout.drawText('ตำแหน่ง', x - 45, y - 43, { size })
   layout.drawDottedLine(x, x + width, y - 42)
   if (position) {
     const positionWidth = layout.textWidth(position, size)
-    layout.drawText(position, centerX - (positionWidth / 2), y - 40, { size })
+    const positionSize = positionWidth > width ? size * width / positionWidth : size
+    const fittedWidth = layout.textWidth(position, positionSize)
+    layout.drawText(position, centerX - (fittedWidth / 2), y - 40, { size: positionSize })
   }
   const roleWidth = layout.textWidth(role, size, true)
   layout.drawText(role, centerX - (roleWidth / 2), y - 64, { size, bold: true })

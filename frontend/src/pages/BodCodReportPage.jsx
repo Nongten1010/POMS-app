@@ -42,7 +42,7 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import locationOptions from '../option/locationOptions.json'
-import { createBodCodReportPdf, createBodCodResultNoticePdf } from '../utils/bodCodReportPdf'
+import { createBodCodReportPdf, createBodCodResultNoticePdf, getBodCodInspectorPosition, getBodCodResultNoticeSigners } from '../utils/bodCodReportPdf'
 import { findPendingBodCodReport, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodStatus, getBodCodSubmissionError, hasBodCodIdentityChanged } from '../utils/bodCodReportRules'
 import { bodCodDeviationReportsApiBaseUrl, cancelBodCodReport, readBodCodApiResponse } from '../utils/bodCodReportApi'
 
@@ -1443,6 +1443,7 @@ function NoticeBoldText({ children }) {
 
 function ResultNoticePaperDocument({ report }) {
   const isCentral = isCentralRegionReport(report)
+  const signers = getBodCodResultNoticeSigners(report)
   const noticeForm = getResultNoticeFormValues(report)
   const checkedParameters = Array.isArray(report?.resultNotice?.checkedParameters)
     ? report.resultNotice.checkedParameters
@@ -1466,19 +1467,19 @@ function ResultNoticePaperDocument({ report }) {
       {checked ? '✓' : ''}
     </Box>
   )
-  const signatureBlock = (role, position = '') => (
+  const signatureBlock = (role, stepRole, position = '') => (
     <Box sx={{ width: 250, textAlign: 'center', fontSize: 14, lineHeight: 1.55 }}>
-      <Box sx={{ borderBottom: '1px dotted #111', height: 22 }} />
+      <Box sx={{ borderBottom: '1px dotted #111', minHeight: 22, overflowWrap: 'anywhere' }}>{signers[stepRole].name}</Box>
       <Box>(
         <Box component="span" sx={{ display: 'inline-block', minWidth: 220, borderBottom: '1px dotted #111' }}>
-          {role === 'ผู้ตรวจสอบ' ? noticeForm.inspectorName : ''}
+          {signers[stepRole].name}
         </Box>
         )
       </Box>
       <Box>
         ตำแหน่ง{' '}
         <Box component="span" sx={{ display: 'inline-block', minWidth: 150, borderBottom: '1px dotted #111' }}>
-          {role === 'ผู้ตรวจสอบ' ? noticeForm.inspectorPosition : position}
+          {role === 'ผู้ตรวจสอบ' ? getBodCodInspectorPosition(getBodCodReportWithRegion(report)) : position}
         </Box>
       </Box>
       <Box>{role}</Box>
@@ -1580,15 +1581,15 @@ function ResultNoticePaperDocument({ report }) {
         {isCentral ? (
           <Stack spacing={4} sx={{ alignItems: 'center' }}>
             <Stack direction="row" spacing={10} sx={{ justifyContent: 'center' }}>
-              {signatureBlock('ผู้ตรวจสอบ')}
-              {signatureBlock('ผู้ทบทวน', 'ผอ.กฝม.')}
+              {signatureBlock('ผู้ตรวจสอบ', 'RESULT_NOTICE')}
+              {signatureBlock('ผู้ทบทวน', 'REVIEWER', 'ผอ.กฝม.')}
             </Stack>
-            {signatureBlock('ผู้อนุมัติ', 'ผอ.กวภ.')}
+            {signatureBlock('ผู้อนุมัติ', 'APPROVER', 'ผอ.กวภ.')}
           </Stack>
         ) : (
           <Stack direction="row" spacing={10} sx={{ justifyContent: 'center' }}>
-            {signatureBlock('ผู้ตรวจสอบ')}
-            {signatureBlock('ผู้อนุมัติ', 'ผอ.ศวภ.')}
+            {signatureBlock('ผู้ตรวจสอบ', 'RESULT_NOTICE')}
+            {signatureBlock('ผู้อนุมัติ', 'APPROVER', 'ผอ.ศวภ.')}
           </Stack>
         )}
 

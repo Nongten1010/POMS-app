@@ -15,8 +15,8 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
     cacheDir, optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'bod-cod-test-exports', enforce: 'pre', transform(code, id) {
-      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, StatusChip, getReportColumns, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus };`
-      if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, drawSignature, BodCodPdfLayout };`
+      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, StatusChip, getReportColumns, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus, ResultNoticePaperDocument };`
+      if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, drawSignature, drawResultNoticeSignature, BodCodPdfLayout };`
     } }],
   })
   try {
@@ -30,6 +30,11 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
       selectedParameterCode: 'COD', reporterName: 'ผู้รายงาน ทดสอบ', reporterPosition: 'ผู้จัดการ',
       submittedAt: '2026-09-19T18:00:00Z', statusCode: 'APPROVED',
       resultNotice: { inspectorName: 'ผู้ตรวจสอบ ทดสอบ', inspectorPosition: 'เจ้าหน้าที่', updatedAt: '2026-09-20T01:00:00Z' },
+      steps: ['INSPECTOR', 'RESULT_NOTICE', 'REVIEWER', 'APPROVER'].map((roleCode, index) => ({
+        roleCode, status: 'APPROVED', isCurrent: false, actorUserId: index + 1,
+        actorName: ['ผู้ตรวจข้อมูล ทดสอบ', 'ผู้บันทึกแจ้งผล ทดสอบ', 'ผู้ทบทวน ทดสอบ', 'ผู้อนุมัติ ทดสอบ'][index],
+        decidedAt: `2026-09-${17 + index}T01:00:00Z`,
+      })),
     }
     await t.test('status chips use the approved palette for both codes and Thai labels', () => {
       for (const [statusCode, value, color] of [
@@ -223,13 +228,76 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         }
       }
     })
+    await t.test('inspector position follows the report track and region instead of saved position', () => {
+      const central = { approvalTrack: 'CENTRAL', regionName: 'ภาคเหนือ', resultNotice: { inspectorPosition: 'ตำแหน่งเดิม' } }
+      assert.equal(pdf.getBodCodInspectorPosition(central), 'เจ้าหน้าที่ กฝม.')
+      assert.equal(pdf.getBodCodInspectorPosition({ regionName: 'ภาคกลาง' }), 'เจ้าหน้าที่ กฝม.')
+      for (const regionName of ['ภาคกลาง', 'ภาคเหนือ', 'ภาคใต้', 'ภาคตะวันออก', 'ภาคตะวันตก', 'ภาคตะวันออกเฉียงเหนือ']) {
+        assert.equal(pdf.getBodCodInspectorPosition({ ...central, approvalTrack: 'REGIONAL', regionName }), `เจ้าหน้าที่ กฝม. ${regionName}`)
+      }
+      assert.equal(pdf.getBodCodInspectorPosition({ approvalTrack: 'REGIONAL', regionCode: 'R1', provinceName: 'จังหวัดเชียงใหม่' }), 'เจ้าหน้าที่ กฝม. ภาคเหนือ')
+      assert.equal(pdf.getBodCodInspectorPosition({ approvalTrack: 'REGIONAL', regionCode: 'unknown' }), 'เจ้าหน้าที่ กฝม. ภาค...')
+    })
+    await t.test('inspector position fits and is centered within its signature line', () => {
+      const output = []
+      const layout = { textWidth: (text, size) => text.length * size / 2,
+        drawDottedLine: () => {}, drawText: (text, x, y, options) => output.push({ text, x, y, ...options }) }
+      const position = 'เจ้าหน้าที่ กฝม. ภาคตะวันออกเฉียงเหนือ'
+      pdf.drawResultNoticeSignature(layout, 100, 300, 'ผู้ตรวจสอบ', '', position)
+      const value = output.find((item) => item.text === position)
+      const width = layout.textWidth(value.text, value.size)
+      assert.ok(value.x >= 100 && value.x + width <= 260)
+      assert.ok(Math.abs(value.x + width / 2 - 180) < 0.001)
+    })
+    await t.test('notice signatures use completed workflow actors and never form names or IDs', () => {
+      const signers = pdf.getBodCodResultNoticeSigners(fixture)
+      for (const roleCode of ['RESULT_NOTICE', 'REVIEWER', 'APPROVER']) {
+        const step = fixture.steps.find((item) => item.roleCode === roleCode)
+        assert.deepEqual(signers[roleCode], { name: step.actorName, date: step.decidedAt })
+        for (const changes of [{ status: 'PENDING', isCurrent: true }, { status: 'WAITING' }, { status: 'REJECTED' }, { isCurrent: true }]) {
+          const steps = fixture.steps.map((item) => item.roleCode === roleCode ? { ...item, ...changes } : item)
+          assert.deepEqual(pdf.getBodCodResultNoticeSigners({ ...fixture, steps })[roleCode], { name: '', date: undefined })
+        }
+        const steps = fixture.steps.map((item) => item.roleCode === roleCode ? { ...item, actorName: null } : item)
+        assert.equal(pdf.getBodCodResultNoticeSigners({ ...fixture, steps })[roleCode].name, '')
+      }
+      for (const steps of [undefined, null, []]) {
+        assert.ok(Object.values(pdf.getBodCodResultNoticeSigners({ ...fixture, steps })).every((signer) => signer.name === ''))
+      }
+      for (const regionName of ['ภาคกลาง', 'ภาคเหนือ']) {
+        const html = renderToStaticMarkup(createElement(page.ResultNoticePaperDocument, { report: { ...fixture, regionName } }))
+        for (const roleCode of ['RESULT_NOTICE', 'REVIEWER', 'APPROVER']) {
+          assert.equal(html.split(signers[roleCode].name).length - 1, roleCode === 'REVIEWER' && regionName !== 'ภาคกลาง' ? 0 : 2)
+        }
+        assert.ok(!html.includes(fixture.resultNotice.inspectorName))
+        const pendingHtml = renderToStaticMarkup(createElement(page.ResultNoticePaperDocument, { report: { ...fixture, regionName, steps: [] } }))
+        assert.ok(Object.values(signers).every((signer) => !pendingHtml.includes(signer.name)))
+      }
+    })
+    await t.test('names fit and are centered on both signature and parenthesis lines', () => {
+      for (const name of ['', 'ชื่อผู้ดำเนินการ ทดสอบ', 'ชื่อผู้ดำเนินการที่ยาวมาก '.repeat(4)]) {
+        const output = []
+        const layout = { textWidth: (text, size) => text.length * size / 2,
+          drawDottedLine: () => {}, drawText: (text, x, y, options) => output.push({ text, x, y, ...options }) }
+        pdf.drawResultNoticeSignature(layout, 100, 300, 'ผู้ตรวจสอบ', name)
+        const names = output.filter((item) => item.text === name)
+        assert.equal(names.length, name ? 2 : 0)
+        if (name) assert.deepEqual(names.map((item) => item.y), [302, 282])
+        for (const item of names) {
+          const width = layout.textWidth(item.text, item.size)
+          assert.ok(item.x >= 100 && item.x + width <= 260)
+          assert.ok(Math.abs(item.x + width / 2 - 180) < 0.001)
+        }
+      }
+    })
     await t.test('both PDFs generate with local fonts, including central/regional notice', async () => {
       globalThis.fetch = async (url) => new Response(await readFile(new URL(`../assets/fonts/${String(url).includes('-Bold') ? 'THSarabunNew-Bold.ttf' : 'THSarabunNew.ttf'}`, import.meta.url)))
       const report = page.mapBodCodReportDetail(fixture)
       for (const [name, generator, data] of [
         ['report', pdf.createBodCodReportPdf, report],
         ['notice-central', pdf.createBodCodResultNoticePdf, { ...report, approvalTrack: 'CENTRAL', regionCode: 'CENTRAL' }],
-        ['notice-regional', pdf.createBodCodResultNoticePdf, { ...report, approvalTrack: 'REGIONAL', regionCode: 'R1' }],
+        ['notice-regional', pdf.createBodCodResultNoticePdf, { ...report, approvalTrack: 'REGIONAL', regionName: 'ภาคตะวันออกเฉียงเหนือ' }],
+        ['notice-pending', pdf.createBodCodResultNoticePdf, { ...report, approvalTrack: 'REGIONAL', regionName: 'ภาคตะวันออกเฉียงเหนือ', steps: fixture.steps.map((step) => ({ ...step, status: 'PENDING', isCurrent: true })) }],
       ]) {
         const drawn = []
         const originalDrawText = pdf.BodCodPdfLayout.prototype.drawText
@@ -240,6 +308,14 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         let bytes
         try { bytes = await generator(data) } finally { pdf.BodCodPdfLayout.prototype.drawText = originalDrawText }
         if (name.startsWith('notice-')) {
+          const expectedPosition = name === 'notice-central' ? 'เจ้าหน้าที่ กฝม.' : 'เจ้าหน้าที่ กฝม. ภาคตะวันออกเฉียงเหนือ'
+          assert.ok(drawn.some((item) => item.value === expectedPosition))
+          assert.ok(!drawn.some((item) => item.value === fixture.resultNotice.inspectorPosition))
+          assert.ok(!drawn.some((item) => item.value === fixture.resultNotice.inspectorName))
+          for (const step of fixture.steps) {
+            const expected = name === 'notice-pending' || step.roleCode === 'INSPECTOR' || (name !== 'notice-central' && step.roleCode === 'REVIEWER') ? 0 : 2
+            assert.equal(drawn.filter((item) => item.value === step.actorName).length, expected, `${name}/${step.roleCode}`)
+          }
           assert.ok(!drawn.some((item) => item.value === 'ผู้รายงาน :'))
           assert.ok(!drawn.some((item) => item.value === 'วันที่ :' && item.y === 47))
           assert.ok(drawn.some((item) => item.value === '(ลงชื่อ)'))
