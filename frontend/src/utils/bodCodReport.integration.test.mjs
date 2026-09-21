@@ -15,7 +15,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
     cacheDir, optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'bod-cod-test-exports', enforce: 'pre', transform(code, id) {
-      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus };`
+      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, StatusChip, getReportColumns, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus };`
       if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, drawSignature, BodCodPdfLayout };`
     } }],
   })
@@ -31,6 +31,56 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
       submittedAt: '2026-09-19T18:00:00Z', statusCode: 'APPROVED',
       resultNotice: { inspectorName: 'ผู้ตรวจสอบ ทดสอบ', inspectorPosition: 'เจ้าหน้าที่', updatedAt: '2026-09-20T01:00:00Z' },
     }
+    await t.test('status chips use the approved palette for both codes and Thai labels', () => {
+      for (const [statusCode, value, color] of [
+        ['REVISION_REQUESTED', 'รอโรงงานแก้ไข', '#f97316'],
+        ['SUBMITTED', 'รอพิจารณา', '#2563eb'],
+        ['REVISED_PENDING_REVIEW', 'แก้ไขแล้ว/รอพิจารณา', '#2563eb'],
+        ['WAITING_RESULT_NOTICE', 'กรอกแบบแจ้งผล', '#2563eb'],
+        ['WAITING_REVIEW', 'รอทบทวน', '#7c3aed'],
+        ['WAITING_APPROVAL', 'รออนุมัติ', '#7c3aed'],
+        ['APPROVED', 'ผ่านการพิจารณา', '#16a34a'],
+        ['REJECTED', 'ไม่อนุมัติ', '#dc2626'],
+        ['CANCELLED', 'ยกเลิก', '#dc2626'],
+      ]) {
+        for (const props of [{ statusCode, value }, { value }, { value: statusCode }]) {
+          const chip = page.StatusChip(props)
+          assert.equal(chip.props.variant, 'filled')
+          assert.equal(chip.props.sx.bgcolor, color)
+          assert.equal(chip.props.sx.borderColor, color)
+          assert.equal(chip.props.sx.color, '#ffffff')
+          assert.equal(chip.props.label, props.value)
+          const html = renderToStaticMarkup(chip)
+          assert.ok(html.includes(`background-color:${color}`))
+          assert.ok(html.includes(props.value))
+        }
+      }
+    })
+    await t.test('operator pending labels retain actual workflow colors in the report grid', () => {
+      for (const [statusCode, color] of [
+        ['SUBMITTED', '#2563eb'], ['REVISED_PENDING_REVIEW', '#2563eb'],
+        ['WAITING_RESULT_NOTICE', '#2563eb'], ['WAITING_REVIEW', '#7c3aed'], ['WAITING_APPROVAL', '#7c3aed'],
+      ]) {
+        const row = page.mapBodCodReportRow({ ...fixture, statusCode }, 0, { isOperatorView: true })
+        assert.equal(row.status, 'รอพิจารณา')
+        const column = page.getReportColumns('operator', {}).find((item) => item.field === 'status')
+        const cell = column.renderCell({ row, value: row.status })
+        const chip = page.StatusChip(cell.props)
+        assert.equal(chip.props.label, 'รอพิจารณา')
+        assert.equal(chip.props.sx.bgcolor, color)
+      }
+      assert.equal(page.StatusChip({ statusCode: 'REJECTED', value: 'รอพิจารณา' }).props.sx.bgcolor, '#dc2626')
+    })
+    await t.test('missing or unknown statuses keep neutral styling instead of implying a workflow action', () => {
+      for (const value of ['', 'ยังไม่ยื่น', 'DRAFT', 'UNKNOWN']) {
+        const chip = page.StatusChip({ value })
+        assert.equal(chip.props.variant, 'outlined')
+        assert.equal(chip.props.sx, undefined)
+      }
+      assert.equal(page.StatusChip({ statusCode: 'UNKNOWN', value: 'รอพิจารณา' }).props.variant, 'outlined')
+      const blank = renderToStaticMarkup(page.StatusChip({ value: '-', statusCode: 'SUBMITTED' }))
+      assert.ok(!blank.includes('MuiChip'))
+    })
     await t.test('mapping keeps annual sequence separate; payload still sends half-year and no invented number', async () => {
       const row = page.mapBodCodReportRow(fixture)
       assert.equal(row.reportRound, 'ก.ค.-ธ.ค.')

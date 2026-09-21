@@ -43,7 +43,7 @@ import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import locationOptions from '../option/locationOptions.json'
 import { createBodCodReportPdf, createBodCodResultNoticePdf } from '../utils/bodCodReportPdf'
-import { findPendingBodCodReport, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodSubmissionError, hasBodCodIdentityChanged } from '../utils/bodCodReportRules'
+import { findPendingBodCodReport, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodStatus, getBodCodSubmissionError, hasBodCodIdentityChanged } from '../utils/bodCodReportRules'
 import { bodCodDeviationReportsApiBaseUrl, cancelBodCodReport, readBodCodApiResponse } from '../utils/bodCodReportApi'
 
 dayjs.locale('th')
@@ -99,42 +99,32 @@ const borderedTableSx = {
   },
 }
 
-const waitingStatusSx = {
-  bgcolor: '#5b21b6',
-  borderColor: '#5b21b6',
-  color: '#ffffff',
+const statusChipColors = {
+  REVISION_REQUESTED: '#f97316',
+  SUBMITTED: '#2563eb',
+  REVISED_PENDING_REVIEW: '#2563eb',
+  WAITING_RESULT_NOTICE: '#2563eb',
+  WAITING_REVIEW: '#7c3aed',
+  WAITING_APPROVAL: '#7c3aed',
+  APPROVED: '#16a34a',
+  REJECTED: '#dc2626',
+  CANCELLED: '#dc2626',
 }
 
-function StatusChip({ value }) {
+function StatusChip({ value, statusCode }) {
   if (value === '-') {
     return <Typography variant="body2">-</Typography>
   }
 
-  if (
-    [
-      'รอพิจารณา',
-      'แก้ไขแล้ว/รอพิจารณา',
-      'SUBMITTED',
-      'REVISED_PENDING_REVIEW',
-    ].includes(value)
-  ) {
-    return <Chip label={value} size="small" variant="outlined" sx={{ ...waitingStatusSx, fontWeight: 300 }} />
-  }
-
-  const color =
-    value === 'ผ่านการพิจารณา' || value === 'APPROVED'
-      ? 'success'
-      : value === 'รอโรงงานแก้ไข' || value === 'REVISION_REQUESTED'
-        || value === 'รอทบทวน'
-        || value === 'รออนุมัติ'
-        || value === 'WAITING_REVIEW'
-        || value === 'WAITING_APPROVAL'
-        ? 'warning'
-        : value === 'กรอกแบบแจ้งผล' || value === 'WAITING_RESULT_NOTICE'
-          ? 'info'
-          : 'default'
-
-  return <Chip size="small" color={color} label={value || '-'} variant={color === 'default' ? 'outlined' : 'filled'} />
+  const color = statusChipColors[getBodCodStatus({ statusCode, status: value })]
+  return (
+    <Chip
+      size="small"
+      label={value || '-'}
+      variant={color ? 'filled' : 'outlined'}
+      sx={color ? { bgcolor: color, borderColor: color, color: '#ffffff', fontWeight: 500 } : undefined}
+    />
+  )
 }
 
 function hasBodCodParameter(parameters = '') {
@@ -1934,8 +1924,8 @@ function MonitoringPointDialog({ factory, open, onClose, onOpenReport, canCreate
                     <TableCell>{row.name}</TableCell>
                     <TableCell>{row.type}</TableCell>
                     <TableCell>{row.parameters}</TableCell>
-                    <TableCell><StatusChip value={round1Status} /></TableCell>
-                    <TableCell><StatusChip value={round2Status} /></TableCell>
+                    <TableCell><StatusChip value={round1Status} statusCode={row.round1StatusCode} /></TableCell>
+                    <TableCell><StatusChip value={round2Status} statusCode={row.round2StatusCode} /></TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1} sx={tableActionStackSx}>
                         <Button
@@ -2597,7 +2587,7 @@ function getReportColumns(mode, actionContext, onOpenReport, onOpenResultNotice)
       field: 'status',
       headerName: 'สถานะ',
       width: 180,
-      renderCell: (params) => <StatusChip value={params.value} />,
+      renderCell: (params) => <StatusChip value={params.value} statusCode={params.row.statusCode} />,
     },
     {
       field: 'actions',
