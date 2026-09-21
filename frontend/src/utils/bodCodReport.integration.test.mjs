@@ -16,7 +16,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'bod-cod-test-exports', enforce: 'pre', transform(code, id) {
       if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus };`
-      if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, BodCodPdfLayout };`
+      if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, drawSignature, BodCodPdfLayout };`
     } }],
   })
   try {
@@ -135,6 +135,29 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
       pdf.drawDocumentMetadata(layout, { ...fixture, statusCode: 'WAITING_APPROVAL' })
       assert.ok(!output.some((text) => text.value === 'ผ่านการพิจารณา'))
     })
+    await t.test('reporter name and signature date are centered on their dotted lines', () => {
+      for (const reporterName of ['ผู้รายงาน ทดสอบ', 'ชื่อผู้รายงานที่ยาวมาก '.repeat(5), '']) {
+        const texts = []
+        const lines = []
+        const layout = {
+          width: 595, margin: { right: 46, bottom: 42 }, y: 250,
+          ensureSpace: () => {},
+          textWidth: (text, size) => text.length * size / 2,
+          drawText: (text, x, y, { size }) => texts.push({ text, x, y, size }),
+          page: { drawLine: (line) => lines.push(line) },
+        }
+        pdf.drawSignature(layout, { ...fixture, reporterName })
+        for (const label of ['ผู้รายงานผลการทดสอบ', 'ลงวันที่']) {
+          const labelText = texts.find((item) => item.text === label)
+          const value = texts.find((item) => item.y === labelText.y && item !== labelText)
+          const line = lines.find((item) => item.start.y === labelText.y - 4)
+          const width = layout.textWidth(value.text, value.size)
+          assert.ok(Math.abs(value.x + width / 2 - (line.start.x + line.end.x) / 2) < 0.001)
+          assert.ok(value.x >= line.start.x && value.x + width <= line.end.x)
+          assert.ok(value.size <= 13)
+        }
+      }
+    })
     await t.test('both PDFs generate with local fonts, including central/regional notice', async () => {
       globalThis.fetch = async (url) => new Response(await readFile(new URL(`../assets/fonts/${String(url).includes('-Bold') ? 'THSarabunNew-Bold.ttf' : 'THSarabunNew.ttf'}`, import.meta.url)))
       const report = page.mapBodCodReportDetail(fixture)
@@ -164,6 +187,48 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         }
         assert.ok((await PDFDocument.load(bytes)).getPageCount() > 0)
         if (process.env.BOD_COD_PDF_DIR) await writeFile(join(process.env.BOD_COD_PDF_DIR, `${name}.pdf`), bytes)
+      }
+    })
+    await t.test('business activity wraps without overlapping later fields, tables or signatures', async () => {
+      globalThis.fetch = async (url) => new Response(await readFile(new URL(`../assets/fonts/${String(url).includes('-Bold') ? 'THSarabunNew-Bold.ttf' : 'THSarabunNew.ttf'}`, import.meta.url)))
+      const longActivity = 'ผลิตสารเคมีสำหรับใช้ในอุตสาหกรรมและผลิตภัณฑ์พลาสติก รวมถึงการแปรรูปวัตถุดิบและการบำบัดน้ำเสียจากกระบวนการผลิต'
+      for (const [name, businessActivity] of [
+        ['short', 'ผลิตไฟฟ้า'], ['empty', ''], ['long', longActivity],
+        ['newlines', 'ผลิตไฟฟ้า\nบำบัดน้ำเสีย'], ['overflow', longActivity.repeat(15)],
+      ]) {
+        const drawn = []
+        const originalDrawText = pdf.BodCodPdfLayout.prototype.drawText
+        pdf.BodCodPdfLayout.prototype.drawText = function (value, x, y, options = {}) {
+          drawn.push({ value, x, y, page: this.pdfDoc.getPageCount(), right: x + this.textWidth(value, options.size, options.bold) })
+          return originalDrawText.call(this, value, x, y, options)
+        }
+        let bytes
+        try {
+          bytes = await pdf.createBodCodReportPdf({ ...page.mapBodCodReportDetail(fixture), businessActivity })
+        } finally {
+          pdf.BodCodPdfLayout.prototype.drawText = originalDrawText
+        }
+        const start = drawn.findIndex((item) => item.value === 'ประกอบกิจการ :')
+        const end = drawn.findIndex((item) => item.value === 'สถานที่ตั้ง :')
+        const activityLines = drawn.slice(start + 1, end)
+        assert.equal(activityLines.map((item) => item.value).join('').replace(/\s/g, ''), businessActivity.replace(/\s/g, ''), name)
+        if (['long', 'newlines', 'overflow'].includes(name)) assert.ok(activityLines.length > 1, name)
+        else assert.equal(activityLines.length, 1, name)
+        for (const item of activityLines) {
+          assert.ok(item.right <= 595.28 - 46, `${name}: activity must fit column`)
+          assert.ok(item.y >= 42, `${name}: activity must fit page`)
+        }
+        const last = activityLines.at(-1)
+        const address = drawn[end]
+        assert.ok(address.page > last.page || address.y <= last.y - 18, `${name}: address must follow activity`)
+        const signature = drawn.find((item) => item.value === 'ผู้รายงานผลการทดสอบ')
+        const finalNote = drawn.find((item) => item.value === 'การปัดเศษ ให้เป็นไปตาม มอก.929-2533')
+        assert.ok(signature.page > finalNote.page || signature.y <= finalNote.y - 28, `${name}: signature must follow notes`)
+        assert.ok(drawn.every((item) => item.y >= 42), `${name}: all content must fit pages`)
+        const doc = await PDFDocument.load(bytes)
+        if (name === 'short' || name === 'empty') assert.equal(doc.getPageCount(), 1)
+        if (name === 'overflow') assert.ok(doc.getPageCount() > 1)
+        if (process.env.BOD_COD_PDF_DIR) await writeFile(join(process.env.BOD_COD_PDF_DIR, `activity-${name}.pdf`), bytes)
       }
     })
   } finally {

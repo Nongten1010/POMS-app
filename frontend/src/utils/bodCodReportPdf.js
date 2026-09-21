@@ -669,8 +669,23 @@ function drawMainFormFields(layout, report = {}) {
   line('ชื่อบริษัท', report.factoryName, x, right)
   next()
   line('เลขทะเบียนโรงงาน', report.factoryRegistration ?? report.factoryRegistrationNo, x, midX - 8)
-  line('ประกอบกิจการ', report.businessActivity, midX + 8, right)
-  next()
+  const activityX = midX + 8
+  const activityLabel = 'ประกอบกิจการ :'
+  const activityValueX = activityX + layout.textWidth(activityLabel, textSizes.body) + 5
+  const activityLines = displayText(report.businessActivity).split(/\r?\n/)
+    .flatMap((text) => layout.wrapText(text, right - activityValueX - 4, textSizes.body))
+  activityLines.forEach((text, index) => {
+    layout.y = y
+    layout.ensureSpace(rowGap)
+    y = layout.y
+    if (index === 0) layout.drawText(activityLabel, activityX, y, { size: textSizes.body })
+    layout.drawDottedLine(activityValueX, right, y - 2)
+    layout.drawText(text, activityValueX + 2, y, { size: textSizes.body })
+    next()
+  })
+  layout.y = y
+  layout.ensureSpace(rowGap * 9 + 34)
+  y = layout.y
   line('สถานที่ตั้ง', report.factoryAddress, x, right)
   next()
   line('ปริมาณการระบายน้ำทิ้งขณะเก็บตัวอย่าง', report.wastewaterFlow, x, right, 'ลบ.ม./ชั่วโมง')
@@ -724,6 +739,7 @@ function drawMeasurementTable(layout, report = {}) {
   const colWidths = columns.map(() => width / columns.length)
   const headerHeight = 86
   const rowHeight = 56
+  layout.ensureSpace(headerHeight + rowHeight)
   let y = layout.y
 
   const drawCell = (text, cellX, topY, cellWidth, height, options = {}) => {
@@ -743,17 +759,26 @@ function drawMeasurementTable(layout, report = {}) {
     })
   }
 
-  let cellX = x
-  columns.forEach((column, index) => {
-    drawCell(column.label, cellX, y, colWidths[index], headerHeight, {
-      fill: colors.headerFill,
-      bold: true,
+  let cellX
+  const drawHeaderRow = () => {
+    cellX = x
+    columns.forEach((column, index) => {
+      drawCell(column.label, cellX, y, colWidths[index], headerHeight, {
+        fill: colors.headerFill,
+        bold: true,
+      })
+      cellX += colWidths[index]
     })
-    cellX += colWidths[index]
-  })
-  y -= headerHeight
+    y -= headerHeight
+  }
+  drawHeaderRow()
 
   rows.forEach((row) => {
+    if (y - rowHeight < layout.margin.bottom) {
+      layout.addPage()
+      y = layout.y
+      drawHeaderRow()
+    }
     const cells = [
       row.sampleDate,
       row.sampleTime,
@@ -787,6 +812,11 @@ function drawNotes(layout) {
     { number: '3.', text: 'การปัดเศษ ให้เป็นไปตาม มอก.929-2533', bold: true },
   ]
 
+  const notesHeight = lines.reduce((height, line) => {
+    const textX = line.indent ?? detailX
+    return height + layout.wrapText(line.text, maxWidth - (textX - x), textSizes.small, line.bold ?? false).length * 14
+  }, 20)
+  layout.ensureSpace(notesHeight)
   layout.y -= 20
   lines.forEach((line) => {
     if (line.prefix) {
@@ -809,6 +839,7 @@ function drawNotes(layout) {
 }
 
 function drawSignature(layout, report = {}) {
+  layout.ensureSpace(122)
   const contentRight = layout.width - layout.margin.right
   const lineEndX = contentRight
   const lineStartX = contentRight - 132
@@ -829,10 +860,17 @@ function drawSignature(layout, report = {}) {
     const labelWidth = layout.textWidth(label, labelSize)
     layout.drawText(label, lineStartX - labelWidth - labelGap, ty, { size: labelSize })
   }
+  const drawCenteredSignatureValue = (value, ty) => {
+    const text = displayValue(value)
+    const maxWidth = lineEndX - lineStartX - 4
+    const width = layout.textWidth(text, labelSize)
+    const size = width > maxWidth ? labelSize * maxWidth / width : labelSize
+    layout.drawText(text, signCenterX - layout.textWidth(text, size) / 2, ty, { size })
+  }
 
   drawSignatureLabel('ผู้รายงานผลการทดสอบ', signatureTopY)
   drawSignatureLine(signatureTopY - 4)
-  layout.drawText(displayValue(report.reporterName), lineStartX + 2, signatureTopY, { size: labelSize, maxWidth: lineEndX - lineStartX - 4 })
+  drawCenteredSignatureValue(report.reporterName, signatureTopY)
   const parenthesisY = signatureTopY - 23
   layout.drawText('(', lineStartX - 8, parenthesisY, { size: labelSize })
   drawSignatureLine(parenthesisY - 4)
@@ -853,7 +891,7 @@ function drawSignature(layout, report = {}) {
   const dateY = signatureTopY - 67
   drawSignatureLabel('ลงวันที่', dateY)
   drawSignatureLine(dateY - 4)
-  layout.drawText(getSubmittedDate(report), lineStartX + 2, dateY, { size: labelSize })
+  drawCenteredSignatureValue(getSubmittedDate(report), dateY)
   layout.y = dateY - 24
 }
 
