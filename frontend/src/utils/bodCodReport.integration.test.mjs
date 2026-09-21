@@ -176,6 +176,19 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         assert.equal(button.includes('disabled=""'), statusCode === 'APPROVED')
       }
     })
+    await t.test('operator result-notice button is enabled only for approved or rejected reports', () => {
+      for (const statusCode of ['APPROVED', 'REJECTED', 'CANCELLED', 'DRAFT', 'SUBMITTED', 'REVISED_PENDING_REVIEW', 'REVISION_REQUESTED', 'WAITING_RESULT_NOTICE', 'WAITING_REVIEW', 'WAITING_APPROVAL']) {
+        for (const view of [true, false]) {
+          const html = renderToStaticMarkup(createElement(page.ReportActions, {
+            row: { statusCode, currentStep: null, allowedActions: [] }, mode: 'operator',
+            actionContext: { userType: 'operator', roleCode: 'factory_operator', permissions: { bod_cod_errors: { view } } },
+          }))
+          const button = html.match(/<button[^>]*>แบบแจ้งผล(?:<[^>]+>)*<\/button>/)?.[0]
+          assert.ok(button)
+          assert.equal(button.includes('disabled=""'), !(view && ['APPROVED', 'REJECTED'].includes(statusCode)), statusCode)
+        }
+      }
+    })
     await t.test('regional inspector result-notice button allows testing server authorization', () => {
       const row = {
         statusCode: 'WAITING_RESULT_NOTICE',

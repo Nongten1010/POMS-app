@@ -62,6 +62,24 @@ test('operator cancellation includes rejected and all nonterminal workflow stage
   assert.equal(getBodCodActions({ status: 'รอพิจารณา', statusCode: 'APPROVED' }, operator).cancel, false)
 })
 
+test('operators can view result notices only after approval or rejection and with view permission', () => {
+  for (const statusCode of ['APPROVED', 'REJECTED']) {
+    const row = { statusCode, currentStep: null, allowedActions: [] }
+    assert.equal(getBodCodActions(row, { ...operator, permissions: { bod_cod_errors: { view: true } } }).viewNotice, true)
+    assert.equal(getBodCodActions(row, operator).fillNotice, false)
+    for (const view of [false, undefined, 'true']) {
+      assert.equal(getBodCodActions(row, { ...operator, permissions: { bod_cod_errors: { view } } }).viewNotice, false)
+    }
+  }
+  for (const statusCode of ['DRAFT', 'SUBMITTED', 'REVISED_PENDING_REVIEW', 'REVISION_REQUESTED', 'WAITING_RESULT_NOTICE', 'WAITING_REVIEW', 'WAITING_APPROVAL', 'CANCELLED', '']) {
+    assert.equal(getBodCodActions({ statusCode }, operator).viewNotice, false, statusCode)
+  }
+  for (const statusCode of ['WAITING_REVIEW', 'WAITING_APPROVAL', 'APPROVED']) {
+    assert.equal(getBodCodActions({ statusCode }, officer).viewNotice, true)
+  }
+  assert.equal(getBodCodActions({ statusCode: 'REJECTED' }, officer).viewNotice, false)
+})
+
 test('pending requests block same parameter/point/year across both periods, not other identities', () => {
   assert.match(getBodCodSubmissionError(draft, [pending], now), /ยังไม่สิ้นสุด/)
   assert.match(getBodCodSubmissionError(draft, [{ ...pending, roundNo: 1 }], now), /ยังไม่สิ้นสุด/)
