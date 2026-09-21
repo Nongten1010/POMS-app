@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -16,6 +16,7 @@ import {
   MenuItem,
   Paper,
   Popover,
+  Snackbar,
   Stack,
   Tab,
   Table,
@@ -42,7 +43,8 @@ import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import locationOptions from '../option/locationOptions.json'
 import { createBodCodReportPdf, createBodCodResultNoticePdf } from '../utils/bodCodReportPdf'
-import { getBodCodActions, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodSubmissionError } from '../utils/bodCodReportRules'
+import { findPendingBodCodReport, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodSubmissionError, hasBodCodIdentityChanged } from '../utils/bodCodReportRules'
+import { bodCodDeviationReportsApiBaseUrl, cancelBodCodReport, readBodCodApiResponse } from '../utils/bodCodReportApi'
 
 dayjs.locale('th')
 
@@ -51,9 +53,6 @@ const appBarHeight = {
   md: 72,
 }
 
-const bodCodDeviationReportsApiBaseUrl = import.meta.env.DEV
-  ? '/api-proxy/v1/bod-cod-deviation-reports'
-  : 'https://d-poms.diw.go.th/api/v1/bod-cod-deviation-reports'
 const bodCodProvinceRegionMap = Object.fromEntries(
   locationOptions.provinces.flatMap((province) => [
     [province.value, province.region],
@@ -139,29 +138,9 @@ function StatusChip({ value }) {
 }
 
 function hasBodCodParameter(parameters = '') {
-  return /\b(BOD|COD)\b/i.test(parameters)
+  return getBodCodParameters(parameters).length > 0
 }
 
-async function readBodCodApiResponse(result, fallbackMessage) {
-  const rawText = await result.text()
-  let response
-
-  try {
-    response = rawText ? JSON.parse(rawText) : null
-  } catch {
-    response = rawText
-  }
-
-  if (!result.ok || response?.success === false) {
-    const message =
-      response?.error?.message ??
-      response?.message ??
-      `${fallbackMessage} (${result.status} ${result.statusText})`
-    throw new Error(message)
-  }
-
-  return response
-}
 
 function toNumberOrNull(value) {
   if (value === '' || value === undefined || value === null) {
@@ -392,8 +371,8 @@ function mapBodCodReportDetail(detail = {}, row = {}, options = {}) {
     measurements,
     attachments: Array.isArray(detail.attachments) ? detail.attachments : [],
     statusHistory: normalizeBodCodStatusHistory(detail).length ? normalizeBodCodStatusHistory(detail) : mappedRow.statusHistory,
-    allowedActions: detail.allowedActions ?? row.allowedActions,
-    currentStep: detail.currentStep ?? row.currentStep ?? null,
+    allowedActions: Array.isArray(detail.allowedActions) ? detail.allowedActions : [],
+    currentStep: detail.currentStep ?? null,
     steps: detail.steps ?? row.steps ?? [],
     resultNotice: detail.resultNotice ?? row.resultNotice ?? null,
   }
@@ -436,6 +415,9 @@ async function buildBodCodAttachmentMetadata(files = [], attachmentType, accessT
 }
 
 async function buildBodCodReportPayload(report = {}, accessToken = '') {
+  if (report.mode === 'edit' && hasBodCodIdentityChanged(report, report.originalIdentity)) {
+    throw new Error('ไม่สามารถเปลี่ยนข้อมูลอ้างอิงของคำขอเดิมได้')
+  }
   const measurementRows = Array.isArray(report.measurementRows) ? report.measurementRows : []
   const attachmentFiles = report.attachmentFiles ?? {}
   const attachments = [
@@ -1382,7 +1364,7 @@ function ReportPreviewDialog({
                 <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
                   ยกเลิก
                 </Button>
-                <Button variant="contained" disabled={submitting || !report} onClick={() => onSubmit?.(report)}>
+                <Button variant="contained" disabled={submitting || !report || !actions.create} onClick={() => onSubmit?.(report)}>
                   {submitting ? 'กำลังส่งแบบฟอร์ม' : 'ยืนยันการส่งแบบฟอร์ม'}
                 </Button>
               </>
@@ -1391,7 +1373,7 @@ function ReportPreviewDialog({
                 <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
                   ยกเลิก
                 </Button>
-                <Button variant="contained" disabled={submitting || !report} onClick={() => onSubmit?.(report)}>
+                <Button variant="contained" disabled={submitting || !report || !actions.edit} onClick={() => onSubmit?.(report)}>
                   {submitting ? 'กำลังบันทึกการแก้ไข' : 'บันทึกการแก้ไข'}
                 </Button>
               </>
@@ -1940,7 +1922,7 @@ function MonitoringPointDialog({ factory, open, onClose, onOpenReport, canCreate
             </TableHead>
             <TableBody>
               {rows.map((row) => {
-                const canReportParameter = hasBodCodParameter(row.parameters)
+                const canReportParameter = hasBodCodParameter(row.parameterCodes ?? row.parameters)
                 const round1Status = canReportParameter ? row.round1Status : '-'
                 const round2Status = canReportParameter ? row.round2Status : '-'
                 const canReportRound1 = canCreate && canReportParameter && period.roundNo === 1
@@ -1985,33 +1967,21 @@ function MonitoringPointDialog({ factory, open, onClose, onOpenReport, canCreate
   )
 }
 
-function getDefaultBodCodParameter(parameters = '') {
-  const parameterText = String(parameters ?? '').toUpperCase()
-
-  if (parameterText.includes('BOD')) {
-    return 'BOD'
-  }
-
-  if (parameterText.includes('COD')) {
-    return 'COD'
-  }
-
-  return ''
-}
-
 function makeDraftReport(factory, point, roundNo, currentUser = null) {
   const reportRound = getBodCodPeriodLabel(roundNo)
-  const parameter = getDefaultBodCodParameter(point.parameters)
+  const allowedParameterCodes = getBodCodParameters(point.parameterCodes ?? point.parameters)
+  const parameter = allowedParameterCodes[0] ?? ''
+  const pointId = point.connectedMeasurementPointId ?? point.id
 
   return {
-    id: `draft-${point.id}-${reportRound}`,
+    id: `draft-${point.id}-${roundNo}-${getBodCodPeriod().year}`,
     factoryId: factory.factoryId ?? factory.id ?? '',
     factoryName: factory.factoryName,
     factoryRegistration: factory.factoryRegistration ?? factory.newRegistrationNo,
     province: factory.province,
     businessActivity: factory.industryType,
     factoryAddress: factory.address ?? '',
-    monitoringPointId: point.id ?? point.connectedMeasurementPointId,
+    monitoringPointId: Number.isSafeInteger(Number(pointId)) && Number(pointId) > 0 ? Number(pointId) : null,
     monitoringPointCode: point.code,
     monitoringPointName: point.name,
     pointCode: point.code,
@@ -2034,6 +2004,7 @@ function makeDraftReport(factory, point, roundNo, currentUser = null) {
     deviceModel: '',
     serialNo: '',
     parameter,
+    allowedParameterCodes,
     reporterName: String(currentUser?.name ?? '').trim(),
     reporterPosition: '',
     measurementRows: [],
@@ -2049,6 +2020,8 @@ function makeEditableReport(row) {
   return {
     ...row,
     mode: 'edit',
+    originalIdentity: getBodCodIdentity(row),
+    allowedParameterCodes: getBodCodParameters(row.parameter ?? row.selectedParameterCode),
     roundNo: row.roundNo ?? row.reportRoundNo ?? row.reportRound?.replace('ครั้งที่ ', '') ?? '',
     businessActivity: row.businessActivity ?? '',
     factoryAddress: row.factoryAddress ?? '',
@@ -2407,11 +2380,13 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview, validationErr
                     label="รายการที่ตรวจสอบค่าความคลาดเคลื่อน"
                     size="small"
                     value={form.parameter}
+                    disabled={isEditMode}
                     onChange={(event) => updateForm('parameter', event.target.value)}
                     fullWidth
                   >
-                    <MenuItem value="BOD">BOD</MenuItem>
-                    <MenuItem value="COD">COD</MenuItem>
+                    {getBodCodParameters(report.allowedParameterCodes).map((parameter) => (
+                      <MenuItem key={parameter} value={parameter}>{parameter}</MenuItem>
+                    ))}
                   </TextField>
                 </Grid>
               </Grid>
@@ -2686,6 +2661,10 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
   const pageActions = getBodCodActions({}, actionContext)
   const [cancelReport, setCancelReport] = useState(null)
   const [cancelError, setCancelError] = useState('')
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [cancelNeedsReload, setCancelNeedsReload] = useState(false)
+  const cancelInFlight = useRef(false)
+  const [successMessage, setSuccessMessage] = useState('')
   const availableSubMenus = isOfficer ? officerSubMenus : operatorSubMenus
   const [factoryTableRows, setFactoryTableRows] = useState([])
   const [reportTableRows, setReportTableRows] = useState([])
@@ -2743,7 +2722,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
       throw new Error('กรุณาเข้าสู่ระบบเพื่อโหลดรายละเอียดรายงาน')
     }
 
-    if (!row?.id) {
+    if (!Number.isSafeInteger(Number(row?.id)) || Number(row.id) <= 0) {
       throw new Error('ไม่พบรหัสรายงาน')
     }
 
@@ -2753,8 +2732,8 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
       },
     })
     const response = await readBodCodApiResponse(result, 'โหลดรายละเอียดรายงานไม่สำเร็จ')
-
-    return mapBodCodReportDetail(response?.data ?? {}, row, { isOperatorView: !isOfficer })
+    if (!response.data || Number(response.data.id) !== Number(row.id)) throw new Error('ข้อมูลตอบกลับไม่ตรงกับคำขอที่เลือก')
+    return mapBodCodReportDetail(response.data, row, { isOperatorView: !isOfficer })
   }, [accessToken, isOfficer])
   const loadFactoryRows = useCallback(async (options) => {
     const rows = await fetchFactoryRows(options)
@@ -2835,6 +2814,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
           if (!actions[action]) throw new Error('สิทธิ์หรือสถานะปัจจุบันไม่อนุญาตให้ดำเนินการ')
           if (mode === 'cancel') {
             setCancelError('')
+            setCancelNeedsReload(false)
             setCancelReport(detail)
             return
           }
@@ -2866,6 +2846,104 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
     }),
     [fetchReportDetail, isOfficer, actionContext],
   )
+  const refreshTablesAfterMutation = async () => {
+    try {
+      await loadReportRows()
+      await loadFactoryRows()
+    } catch (error) {
+      setTableError(`ดำเนินการสำเร็จแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ: ${error.message}`)
+    }
+  }
+  const confirmCancelReport = async () => {
+    if (cancelInFlight.current || !cancelReport || cancelNeedsReload) return
+    cancelInFlight.current = true
+    setCancelSubmitting(true)
+    setCancelError('')
+    const report = cancelReport
+    try {
+      const latest = await fetchReportDetail(report)
+      setCancelReport(latest)
+      if (!getBodCodActions(latest, actionContext).cancel) throw new Error('สิทธิ์หรือสถานะล่าสุดไม่อนุญาตให้ยกเลิกคำขอ')
+      const cancelled = await cancelBodCodReport(latest.id, accessToken)
+      setReportTableRows((rows) => rows.map((row) => String(row.id) === String(cancelled.id)
+        ? { ...row, ...cancelled, status: 'ยกเลิก', statusLabel: 'ยกเลิก' } : row))
+      setCancelReport(null)
+      setSuccessMessage(`ยกเลิกคำขอเลขที่ ${latest.reportNo} แล้ว`)
+      await refreshTablesAfterMutation()
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : 'ยกเลิกคำขอไม่สำเร็จ')
+      // A timeout may follow a successful mutation. Read state, never retry the POST automatically.
+      setCancelNeedsReload(true)
+      try {
+        const latest = await fetchReportDetail(report)
+        setCancelReport(latest)
+        setCancelNeedsReload(false)
+        if (latest.statusCode === 'CANCELLED') setCancelError('สถานะล่าสุด: คำขอนี้ถูกยกเลิกแล้ว')
+        await loadReportRows()
+        await loadFactoryRows()
+      } catch {
+        setCancelNeedsReload(true)
+        setCancelError(`${error.message} กรุณาปิดหน้าต่างและโหลดข้อมูลใหม่ก่อนดำเนินการอีกครั้ง`)
+      }
+    } finally {
+      cancelInFlight.current = false
+      setCancelSubmitting(false)
+    }
+  }
+  const recoverSubmissionConflict = async (error, report) => {
+    const action = getBodCodConflictAction(error, report)
+    if (!action) return false
+    if (action === 'reload-period') {
+      const factories = await loadFactoryRows()
+      const factory = factories.find((item) => String(item.factoryId) === String(report.factoryId))
+      const points = factory?.measurementPoints ?? []
+      const matches = points.filter((point) => report.monitoringPointId != null
+        ? String(point.connectedMeasurementPointId ?? point.id) === String(report.monitoringPointId)
+        : point.code === report.monitoringPointCode)
+      if (!factory || matches.length !== 1) throw new Error('โหลดโรงงานล่าสุดแล้ว แต่ไม่พบจุดตรวจวัดเดิม กรุณาเลือกจุดตรวจวัดใหม่')
+      const fresh = makeDraftReport(factory, matches[0], getBodCodPeriod().roundNo, currentUser)
+      setReportForm({
+        ...report, id: fresh.id, year: fresh.year, roundNo: fresh.roundNo, reportRound: fresh.reportRound,
+        allowedParameterCodes: fresh.allowedParameterCodes,
+        parameter: fresh.allowedParameterCodes.includes(report.parameter) ? report.parameter : '',
+        monitoringPointId: fresh.monitoringPointId, monitoringPointCode: fresh.monitoringPointCode,
+        pointCode: fresh.pointCode, monitoringPointName: fresh.monitoringPointName, pointName: fresh.pointName,
+        factoryName: fresh.factoryName, factoryRegistration: fresh.factoryRegistration,
+        province: fresh.province, factoryAddress: fresh.factoryAddress, businessActivity: fresh.businessActivity,
+      })
+      setFormError('รอบรายงานเดิมปิดแล้ว โหลดรอบปัจจุบันให้แล้ว กรุณาตรวจสอบข้อมูลก่อนส่งอีกครั้ง')
+      setPreviewReport(null)
+      setPreviewMode('view')
+      return true
+    }
+    const rows = await loadReportRows()
+    const target = action === 'open-pending' ? findPendingBodCodReport(report, rows) : report.mode === 'edit' ? report : null
+    if (!target) return false
+    const latest = await fetchReportDetail(target)
+    setPreviewReport(latest)
+    setPreviewMode('view')
+    setPreviewSubmitError(action === 'open-pending' ? 'มีคำขอค้างของจุดตรวจวัดและพารามิเตอร์นี้ เปิดคำขอเดิมให้แล้ว' : error.message)
+    return true
+  }
+  const refreshWorkflowConflict = async (error, report, notice = false) => {
+    if (![403, 409].includes(error?.status)) return
+    try {
+      const latest = await fetchReportDetail(report)
+      const actions = getBodCodActions(latest, actionContext)
+      if (notice) {
+        setResultNoticeReport(latest)
+        setResultNoticeMode(actions.fillNotice ? 'edit' : 'view')
+      } else {
+        setPreviewReport(latest)
+        setPreviewMode(actions.process ? 'review' : 'view')
+      }
+      await loadReportRows()
+    } catch {
+      if (notice) setResultNoticeMode('view')
+      else setPreviewMode('view')
+      setTableError('โหลดสถานะล่าสุดไม่สำเร็จ กรุณาโหลดรายการใหม่ก่อนดำเนินการต่อ')
+    }
+  }
   const confirmResultNotice = async (report, noticeForm) => {
     if (!report) return
     if (!getBodCodActions(report, actionContext).fillNotice) {
@@ -2882,8 +2960,12 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
     setResultNoticeSubmitError('')
 
     try {
+      const latest = await fetchReportDetail(report)
+      if (!getBodCodActions(latest, actionContext).fillNotice) {
+        throw Object.assign(new Error('สิทธิ์หรือขั้นตอนล่าสุดไม่อนุญาตให้บันทึกแบบแจ้งผล'), { status: 409 })
+      }
       const result = await fetch(`${bodCodDeviationReportsApiBaseUrl}/${report.id}/result-notice`, {
-        method: report.resultNotice ? 'PUT' : 'POST',
+        method: latest.resultNotice ? 'PUT' : 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
@@ -2891,12 +2973,13 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
         },
         body: JSON.stringify(buildBodCodResultNoticePayload(noticeForm)),
       })
-      await readBodCodApiResponse(result, 'บันทึกแบบแจ้งผลไม่สำเร็จ')
-      await submitWorkflowAction(report, 'APPROVE', 'บันทึกแบบแจ้งผลและส่งอนุมัติ')
+      const saved = await readBodCodApiResponse(result, 'บันทึกแบบแจ้งผลไม่สำเร็จ')
+      await submitWorkflowAction({ ...latest, ...saved.data }, 'APPROVE', 'บันทึกแบบแจ้งผลและส่งอนุมัติ', true)
       setResultNoticeReport(null)
       setResultNoticeMode('view')
       await loadReportRows()
     } catch (error) {
+      await refreshWorkflowConflict(error, report, true)
       setResultNoticeSubmitError(error instanceof Error ? error.message : 'ส่งอนุมัติไม่สำเร็จ')
     } finally {
       setResultNoticeSubmitting(false)
@@ -2915,7 +2998,13 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
       const isEditMode = previewMode === 'edit' || report?.mode === 'edit'
       const actions = getBodCodActions(report, actionContext)
       if (!(isEditMode ? actions.edit : actions.create)) throw new Error('ไม่มีสิทธิ์ส่งแบบฟอร์ม')
-      const currentReports = await fetchReportRows()
+      if (isEditMode) {
+        const latest = await fetchReportDetail(report)
+        if (!getBodCodActions(latest, actionContext).edit || hasBodCodIdentityChanged(report, getBodCodIdentity(latest))) {
+          throw Object.assign(new Error('สถานะหรือข้อมูลอ้างอิงของคำขอเปลี่ยนไป กรุณาเปิดข้อมูลล่าสุด'), { status: 409 })
+        }
+      }
+      const currentReports = isEditMode ? [] : await fetchReportRows()
       const submissionError = getBodCodSubmissionError(report, currentReports)
       if (submissionError) throw new Error(submissionError)
       const payload = await buildBodCodReportPayload(report, accessToken)
@@ -2938,15 +3027,25 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
       setPreviewMode('view')
       await reloadCurrentTable()
     } catch (error) {
+      try {
+        if (await recoverSubmissionConflict(error, report)) return
+      } catch (recoveryError) {
+        setPreviewSubmitError(`${error.message} โหลดข้อมูลล่าสุดไม่สำเร็จ: ${recoveryError.message}`)
+        return
+      }
       setPreviewSubmitError(error instanceof Error ? error.message : 'ส่งแบบฟอร์มไม่สำเร็จ')
     } finally {
       setPreviewSubmitting(false)
     }
   }
-  const submitWorkflowAction = async (report, action, officerNote = '') => {
-    const actions = getBodCodActions(report, actionContext)
-    const allowed = action === 'REQUEST_REVISION' ? actions.requestRevision : actions.approve || actions.fillNotice
-    if (!allowed) throw new Error('สิทธิ์หรือสถานะปัจจุบันไม่อนุญาตให้ดำเนินการ')
+  const submitWorkflowAction = async (report, action, officerNote = '', notice = false) => {
+    const latest = await fetchReportDetail(report)
+    if (report.currentStep?.roleCode !== latest.currentStep?.roleCode) {
+      throw Object.assign(new Error('ขั้นตอนของคำขอเปลี่ยนไป กรุณาตรวจสอบข้อมูลล่าสุด'), { status: 409 })
+    }
+    const actions = getBodCodActions(latest, actionContext)
+    const allowed = action === 'REQUEST_REVISION' ? actions.requestRevision : notice ? actions.fillNotice : actions.approve
+    if (!allowed) throw Object.assign(new Error('สิทธิ์หรือสถานะล่าสุดไม่อนุญาตให้ดำเนินการ'), { status: 409 })
     if (!accessToken) {
       throw new Error('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อดำเนินการ')
     }
@@ -2978,7 +3077,12 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
   }
   const requestReportRevision = async (report, officerNote) => {
     setPreviewSubmitError('')
-    await submitWorkflowAction(report, 'REQUEST_REVISION', officerNote)
+    try {
+      await submitWorkflowAction(report, 'REQUEST_REVISION', officerNote)
+    } catch (error) {
+      await refreshWorkflowConflict(error, report)
+      throw error
+    }
     setPreviewReport(null)
     setPreviewMode('view')
     await loadReportRows()
@@ -2993,6 +3097,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
       setPreviewMode('view')
       await loadReportRows()
     } catch (error) {
+      await refreshWorkflowConflict(error, report)
       setPreviewSubmitError(error instanceof Error ? error.message : 'ผ่านการพิจารณาไม่สำเร็จ')
     } finally {
       setPreviewSubmitting(false)
@@ -3107,17 +3212,19 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
           setMonitoringPointFactory(null)
         }}
       />
-      <Dialog open={Boolean(cancelReport)} onClose={() => setCancelReport(null)} fullWidth maxWidth="xs">
+      <Dialog open={Boolean(cancelReport)} onClose={() => { if (!cancelInFlight.current) setCancelReport(null) }} fullWidth maxWidth="xs">
         <DialogTitle>ยืนยันการยกเลิกคำขอ</DialogTitle>
         <DialogContent dividers>
           <Typography>ยืนยันยกเลิกคำขอเลขที่ {cancelReport?.reportNo} หรือไม่?</Typography>
           {cancelError && <Alert severity="warning" sx={{ mt: 2 }}>{cancelError}</Alert>}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCancelReport(null)}>กลับ</Button>
-          <Button color="error" variant="contained" onClick={() => {
-            setCancelError('ยังไม่สามารถยกเลิกได้ เนื่องจาก API ยังไม่มีช่องทางยกเลิกคำขอ กรุณาติดต่อผู้ดูแลระบบ')
-          }}>ยืนยันยกเลิกคำขอ</Button>
+          <Button disabled={cancelSubmitting} onClick={() => setCancelReport(null)}>กลับ</Button>
+          <Button color="error" variant="contained"
+            disabled={cancelSubmitting || cancelNeedsReload || !getBodCodActions(cancelReport ?? {}, actionContext).cancel}
+            onClick={confirmCancelReport}>
+            {cancelSubmitting ? 'กำลังยกเลิกคำขอ' : 'ยืนยันยกเลิกคำขอ'}
+          </Button>
         </DialogActions>
       </Dialog>
       <BodCodReportFormSheet
@@ -3132,7 +3239,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
           setFormValidating(true)
           setFormError('')
           try {
-            const rows = await fetchReportRows()
+            const rows = report.mode === 'edit' ? [] : await fetchReportRows()
             const error = getBodCodSubmissionError(report, rows)
             if (error) throw new Error(error)
             setPreviewMode(report?.mode === 'edit' ? 'edit' : 'submit')
@@ -3176,6 +3283,9 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
         submitError={resultNoticeSubmitError}
         onConfirm={confirmResultNotice}
       />
+      <Snackbar open={Boolean(successMessage)} autoHideDuration={6000} onClose={() => setSuccessMessage('')}>
+        <Alert severity="success" onClose={() => setSuccessMessage('')}>{successMessage}</Alert>
+      </Snackbar>
     </>
   )
 }

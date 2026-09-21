@@ -73,10 +73,48 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         assert.equal(editable.reporterPosition, fixture.reporterPosition)
       }
     })
+    await t.test('resubmission payload retains old year, period, point and parameter without sending annual sequence', async () => {
+      const original = page.mapBodCodReportDetail({ ...fixture, reportYear: 2568, reportRoundNo: 1, statusCode: 'REVISION_REQUESTED' })
+      const edited = page.makeEditableReport(original)
+      assert.equal(edited.mode, 'edit')
+      assert.deepEqual(edited.allowedParameterCodes, ['COD'])
+      const payload = await page.buildBodCodReportPayload(edited, 'test')
+      assert.equal(payload.reportYear, 2568)
+      assert.equal(payload.reportRoundNo, 1)
+      assert.equal(payload.connectedMeasurementPointId, 10)
+      assert.equal(payload.selectedParameterCode, 'COD')
+      assert.equal(payload.reportSequenceNo, undefined)
+      assert.equal(payload.originalIdentity, undefined)
+      assert.equal(edited.reportNo, original.reportNo)
+      await assert.rejects(page.buildBodCodReportPayload({ ...edited, parameter: 'BOD' }, 'test'), /ข้อมูลอ้างอิง/)
+    })
+    await t.test('factory parameter codes are authoritative and synthetic table IDs never enter the payload', async () => {
+      const factory = { factoryId: 'F1' }
+      const point = { id: 'point-0-0', code: 'P0010', parameterCodes: ['COD (mg/l)'], parameters: 'BOD, COD' }
+      const draft = page.makeDraftReport(factory, point, 2)
+      assert.deepEqual(draft.allowedParameterCodes, ['COD'])
+      assert.equal(draft.parameter, 'COD')
+      assert.equal(draft.monitoringPointId, null)
+      const payload = await page.buildBodCodReportPayload(draft, 'test')
+      assert.equal(payload.connectedMeasurementPointId, null)
+      assert.equal(payload.pointCode, 'P0010')
+      const noParameters = page.makeDraftReport(factory, { ...point, parameterCodes: [] }, 2)
+      assert.equal(noParameters.parameter, '')
+      assert.deepEqual(noParameters.allowedParameterCodes, [])
+    })
+    await t.test('authoritative detail null step and empty actions cannot inherit stale grants from the list', () => {
+      const cached = { ...fixture, currentStep: { roleCode: 'INSPECTOR', status: 'PENDING', isCurrent: true }, allowedActions: ['APPROVE'] }
+      const latest = page.mapBodCodReportDetail({ id: fixture.id, currentStep: null, allowedActions: [] }, cached)
+      assert.equal(latest.currentStep, null)
+      assert.deepEqual(latest.allowedActions, [])
+      const incomplete = page.mapBodCodReportDetail({ id: fixture.id }, cached)
+      assert.equal(incomplete.currentStep, null)
+      assert.deepEqual(incomplete.allowedActions, [])
+    })
     await t.test('operator cancel stays visible/enabled for rejected but disabled for approved', () => {
       for (const statusCode of ['REJECTED', 'APPROVED']) {
         const html = renderToStaticMarkup(createElement(page.ReportActions, {
-          row: { statusCode }, mode: 'operator', actionContext: { userType: 'operator', permissions },
+          row: { statusCode }, mode: 'operator', actionContext: { userType: 'operator', roleCode: 'factory_operator', permissions },
         }))
         const button = html.match(/<button[^>]*>ยกเลิกคำขอ(?:<[^>]+>)*<\/button>/)?.[0]
         assert.ok(button)

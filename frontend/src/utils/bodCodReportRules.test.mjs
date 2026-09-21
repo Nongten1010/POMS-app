@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatBodCodDate, getBodCodActions, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodSubmissionError } from './bodCodReportRules.js'
+import { formatBodCodDate, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodSubmissionError } from './bodCodReportRules.js'
 
 const permissions = { bod_cod_errors: { view: true, edit: true, approve: true } }
-const operator = { userType: 'operator', permissions }
+const operator = { userType: 'operator', roleCode: 'factory_operator', permissions }
 const officer = { userType: 'officer', permissions, roleCode: 'monitoring_kpm' }
-const draft = { id: 'draft', factoryId: 'F1', monitoringPointId: 10, monitoringPointCode: 'P0010', parameter: 'COD', year: 2569, roundNo: 2 }
+const draft = { id: 'draft', factoryId: 'F1', monitoringPointId: 10, monitoringPointCode: 'P0010', parameter: 'COD', allowedParameterCodes: ['COD', 'BOD'], year: 2569, roundNo: 2 }
 const now = new Date('2026-09-20T00:00:00Z')
 const pending = { ...draft, id: 1, statusCode: 'SUBMITTED' }
 
@@ -89,4 +89,59 @@ test('annual sequence is never inferred from period or row count; dates never fa
   assert.equal(formatBodCodDate('20/09/2569'), '20/09/2569')
   assert.equal(formatBodCodDate(null), '-')
   assert.equal(formatBodCodDate('invalid'), '-')
+})
+
+test('authoritative current step, role and allowedActions must all agree', () => {
+  const stages = [
+    ['SUBMITTED', 'INSPECTOR', ['monitoring_kpm', 'monitoring_5_centers', 'admin'], 'approve'],
+    ['WAITING_RESULT_NOTICE', 'RESULT_NOTICE', ['monitoring_kpm', 'admin'], 'fillNotice'],
+    ['WAITING_REVIEW', 'REVIEWER', ['kpm_director'], 'approve'],
+    ['WAITING_APPROVAL', 'APPROVER', ['center_director', 'kwp_director'], 'approve'],
+  ]
+  const allRoles = ['monitoring_kpm', 'monitoring_5_centers', 'admin', 'kpm_director', 'center_director', 'kwp_director', 'other']
+  for (const [statusCode, roleCode, allowedRoles, action] of stages) {
+    const row = { statusCode, currentStep: { roleCode, status: 'PENDING', isCurrent: true }, allowedActions: ['APPROVE'] }
+    for (const userRole of allRoles) {
+      assert.equal(getBodCodActions(row, { ...officer, roleCode: userRole })[action], allowedRoles.includes(userRole), `${statusCode}/${userRole}`)
+    }
+    const context = { ...officer, roleCode: allowedRoles[0] }
+    for (const currentStep of [null, { ...row.currentStep, isCurrent: false }, { ...row.currentStep, status: 'APPROVED' }, { ...row.currentStep, roleCode: 'WRONG' }]) {
+      assert.equal(getBodCodActions({ ...row, currentStep }, context)[action], false)
+    }
+    assert.equal(getBodCodActions({ ...row, allowedActions: [] }, context)[action], false)
+  }
+  assert.equal(getBodCodActions({ statusCode: 'REJECTED', allowedActions: [] }, operator).cancel, false)
+  assert.equal(getBodCodActions({ statusCode: 'REJECTED', allowedActions: ['CANCEL'] }, operator).cancel, true)
+  assert.equal(getBodCodActions({}, { ...operator, roleCode: 'other' }).create, false)
+})
+
+test('resubmission keeps its original identity across half-years and years without treating itself as a new report', () => {
+  const original = { ...draft, id: 10, year: 2568, roundNo: 1, reportSequenceNo: 3, reportNo: 'E-01-0010/2568' }
+  const edited = { ...original, mode: 'edit', originalIdentity: getBodCodIdentity(original) }
+  assert.equal(getBodCodSubmissionError(edited, [pending], now), '')
+  for (const changes of [{ factoryId: 'F2' }, { factoryRegistration: 'new' }, { monitoringPointId: 11 }, { monitoringPointCode: 'P0011' }, { year: 2569 }, { roundNo: 2 }, { parameter: 'BOD' }]) {
+    assert.match(getBodCodSubmissionError({ ...edited, ...changes }, [], now), /คำขอเดิม/)
+  }
+  assert.match(getBodCodSubmissionError({ ...edited, originalIdentity: undefined }, [], now), /คำขอเดิม/)
+  assert.match(getBodCodSubmissionError({ ...original, id: 'new' }, [], now), /ย้อนหลังหรือข้ามรอบ/)
+})
+
+test('new report parameters must come from the selected live point; code-only identity is supported', () => {
+  assert.deepEqual(getBodCodParameters(['BOD (mg/l)', 'COD', 'cod (mg/L)', 'TSS (mg/l)', 'BODX']), ['BOD', 'COD'])
+  assert.deepEqual(getBodCodParameters('COD (mg/l), BOD (mg/l)'), ['COD', 'BOD'])
+  assert.deepEqual(getBodCodParameters([]), [])
+  assert.match(getBodCodSubmissionError({ ...draft, allowedParameterCodes: ['BOD'] }, [], now), /ไม่มีอยู่/)
+  assert.match(getBodCodSubmissionError({ ...draft, allowedParameterCodes: [] }, [], now), /ไม่มีอยู่/)
+  assert.equal(getBodCodSubmissionError({ ...draft, monitoringPointId: null }, [], now), '')
+  assert.match(getBodCodSubmissionError({ ...draft, monitoringPointId: 'point-0-0' }, [], now), /ไม่ถูกต้อง/)
+  assert.match(getBodCodSubmissionError({ ...draft, monitoringPointId: null, monitoringPointCode: '' }, [], now), /ไม่พบรหัส/)
+})
+
+test('409 recovery never advances an old resubmission into a new period', () => {
+  const closed = { status: 409, code: 'CONFLICT', details: { reason: 'REPORT_PERIOD_CLOSED' } }
+  assert.equal(getBodCodConflictAction(closed, draft), 'reload-period')
+  assert.equal(getBodCodConflictAction(closed, { ...draft, mode: 'edit' }), 'reload-detail')
+  assert.equal(getBodCodConflictAction({ ...closed, details: { reason: 'PENDING_REPORT_EXISTS' } }, draft), 'open-pending')
+  assert.equal(getBodCodConflictAction({ ...closed, details: {} }, draft), 'reload-detail')
+  assert.equal(getBodCodConflictAction({ ...closed, status: 403 }, draft), null)
 })
