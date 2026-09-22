@@ -2085,13 +2085,11 @@ async function uploadDocumentImages(formData, accessToken, uploadUrl = getDocume
     const files = getDocumentImageFiles(formData, index)
     const link = getOptionalFormValue(formData, `documentImageLink-${index}`)
 
-    if (!files.length && !link) {
+    if (!files.length) {
       continue
     }
 
-    const uploadFiles = files.length ? files : [null]
-
-    for (const file of uploadFiles) {
+    for (const file of files) {
       const uploadFormData = new FormData()
       uploadFormData.append('title', item.title)
 
@@ -2103,9 +2101,7 @@ async function uploadDocumentImages(formData, accessToken, uploadUrl = getDocume
         uploadFormData.append('link', link)
       }
 
-      if (file) {
-        uploadFormData.append('file', file)
-      }
+      uploadFormData.append('file', file)
 
       const result = await fetch(uploadUrl, {
         method: 'POST',
