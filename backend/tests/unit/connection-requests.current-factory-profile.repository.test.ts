@@ -141,7 +141,19 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
       const builder = {
         where(column: string | ((query: unknown) => void), value?: unknown) {
           if (typeof column === 'string') {
-            predicates.push((row) => row[column.split('.').at(-1) ?? column] === value);
+            const key = column.split('.').at(-1) ?? column;
+            const numericIdColumns = new Set([
+              'id',
+              'request_id',
+              'eligible_factory_id',
+              'source_request_id',
+              'source_measurement_point_id',
+            ]);
+            predicates.push((row) =>
+              numericIdColumns.has(key) && row[key] != null && value != null
+                ? String(row[key]) === String(value)
+                : row[key] === value,
+            );
           } else {
             const alternatives: Array<Array<(row: Row) => boolean>> = [[]];
             const add = (predicate: (row: Row) => boolean, or = false) => {
@@ -355,6 +367,7 @@ function currentPoint(): Row {
     source_request_id: 55,
     source_measurement_point_id: 51,
     point_code: 'P0017',
+    system_type: 'WPMS',
     parameters_json: '["BOD"]',
     deleted_at: null,
   };
@@ -1079,7 +1092,7 @@ describe('connection profile persistence with a stale submitted factory', () => 
       source_request_id: 55,
       source_measurement_point_id: 51,
     });
-    fixture.tables[CONNECTED].push({ ...currentPoint(), point_code: 'S0527' });
+    fixture.tables[CONNECTED].push({ ...currentPoint(), point_code: 'S0527', system_type: 'CEMS' });
     const registryBefore = structuredClone(fixture.tables[REGISTRY]);
     const connectedBefore = structuredClone(fixture.tables[CONNECTED]);
 
@@ -1499,5 +1512,424 @@ describe('connection profile persistence with a stale submitted factory', () => 
       eia_assessment: 'มี EIA',
       project_name: 'โครงการเก่าจากคำขอ',
     });
+  });
+});
+
+const addParameterOperations = [
+  'create',
+  'resubmit',
+  'approve',
+  'confirm',
+  'connect',
+  'sync',
+] as const;
+type AddParameterOperation = (typeof addParameterOperations)[number];
+
+function addParameterOwnershipFixture(operation: AddParameterOperation) {
+  const fixture = fixtureDatabase([{ ...currentPoint(), parameters_json: '["BOD (mg/l)"]' }], true);
+  const input = {
+    ...oldRequest('ADD_PARAMETER', 'P0017'),
+    contactName: 'ผู้ประสานงาน',
+    contactPhone: '0812345678',
+  };
+  Object.assign(input.measurementPoints[0], {
+    pointType: 'WASTEWATER',
+    parameters: ['COD (mg/l)'],
+  });
+  Object.assign(fixture.tables.cems_wpms_connection_requests[0], {
+    eligible_factory_id: 17,
+    factory_id: 'FID-17',
+    factory_registration_no: 'REG-17',
+    factory_name: 'Own factory',
+    request_type: 'ADD_PARAMETER',
+    system_type: 'WPMS',
+    status: operation === 'connect' ? 'CONNECTION_CONFIRMED' : 'WAITING_FACTORY_REVISION',
+    updated_at: '2026-09-13T00:00:00.000Z',
+    deleted_at: null,
+  });
+  fixture.tables[POINTS] = [
+    {
+      id: 18,
+      request_id: 3,
+      point_name: 'จุดใหม่',
+      point_code: 'P0017',
+      point_type: 'WASTEWATER',
+      parameters_json: '["COD (mg/l)"]',
+      deleted_at: null,
+    },
+  ];
+  fixture.tables[REGISTRY] = [
+    {
+      id: 77,
+      point_code: 'P0017',
+      normalized_point_code: 'P0017',
+      source_request_id: 55,
+      source_measurement_point_id: 51,
+      assignment_mode: 'LEGACY_IMPORTED',
+    },
+  ];
+  const execute = () => {
+    if (operation === 'create')
+      return connectionRequestsRepository.create(input as never, 7, 'PENDING_DESIGN_REVIEW');
+    if (operation === 'resubmit')
+      return connectionRequestsRepository.replaceForm(
+        3,
+        input as never,
+        7,
+        'REVISED_PENDING_DESIGN_REVIEW',
+        {
+          actorUserId: 7,
+          scope: 'ALL',
+          expectedUpdatedAt: '2026-09-13T00:00:00.000Z',
+        },
+      );
+    if (operation === 'approve')
+      return connectionRequestsRepository.updateStatus(3, 'WAITING_CONNECTION', 7, {
+        officerNote: 'approved',
+      });
+    if (operation === 'confirm')
+      return connectionRequestsRepository.updateStatus(3, 'CONNECTION_CONFIRMED', 7, {
+        confirmedAt: '2026-09-22T00:00:00.000Z',
+      });
+    if (operation === 'connect')
+      return connectionRequestsRepository.connect(3, 7, { verifiedAt: '2026-09-22T00:00:00.000Z' });
+    return connectionRequestsRepository.syncConnectedMeasurementPoints(input as never, 7);
+  };
+  return { ...fixture, input, execute };
+}
+
+describe('ADD_PARAMETER point ownership at repository write boundaries', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    env.FACTORY_PROFILE_MODE = 'canonical';
+  });
+  afterEach(() => {
+    env.FACTORY_PROFILE_MODE = previousMode;
+  });
+
+  it.each(addParameterOperations)(
+    'rejects another factory before %s without changing any persisted rows',
+    async (operation) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      Object.assign(fixture.tables[CONNECTED][0], {
+        eligible_factory_id: 99,
+        factory_id: 'FOREIGN',
+        factory_registration_no: 'FOREIGN-REG',
+      });
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.execute()).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'CONFLICT',
+        details: {
+          path: 'measurementPoints.0.pointCode',
+          reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID',
+        },
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each(addParameterOperations)(
+    'allows an active point owned by the same factory during %s',
+    async (operation) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+      const connectedBefore = structuredClone(fixture.tables[CONNECTED]);
+      await fixture.execute();
+      expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+      if (operation === 'connect' || operation === 'sync') {
+        const active = fixture.tables[CONNECTED].filter((point) => point.deleted_at == null);
+        expect(active).toHaveLength(1);
+        expect(active[0]).toMatchObject({
+          eligible_factory_id: 17,
+          system_type: 'WPMS',
+          point_code: 'P0017',
+        });
+        expect(JSON.parse(String(active[0].parameters_json))).toEqual(['BOD (mg/l)', 'COD (mg/l)']);
+      } else {
+        expect(fixture.tables[CONNECTED]).toEqual(connectedBefore);
+        expect(fixture.tables[POINTS].some((point) => point.point_code === 'P0017')).toBe(true);
+      }
+      expect(fixture.locks).toContain(CONNECTED);
+    },
+  );
+
+  const invalidTargets = [
+    'wrong system',
+    'missing point',
+    'deleted point',
+    'unresolved owner',
+    'duplicate live code',
+    'blank code',
+  ] as const;
+  it.each(
+    addParameterOperations.flatMap((operation) =>
+      invalidTargets.map((problem) => ({ operation, problem })),
+    ),
+  )(
+    'rejects $problem during $operation without revealing owner details or saving any rows',
+    async ({ operation, problem }) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      if (problem === 'wrong system') fixture.tables[CONNECTED][0].system_type = 'CEMS';
+      if (problem === 'missing point') fixture.tables[CONNECTED] = [];
+      if (problem === 'deleted point')
+        fixture.tables[CONNECTED][0].deleted_at = '2026-09-21T00:00:00.000Z';
+      if (problem === 'unresolved owner') fixture.tables[CONNECTED][0].eligible_factory_id = null;
+      if (problem === 'duplicate live code')
+        fixture.tables[CONNECTED].push({
+          ...fixture.tables[CONNECTED][0],
+          id: 21,
+          point_code: ' p0017 ',
+        });
+      if (problem === 'blank code') {
+        fixture.input.measurementPoints[0].pointCode = ' ';
+        fixture.tables[POINTS][0].point_code = ' ';
+      }
+      const before = structuredClone(fixture.tables);
+      let failure: unknown;
+      try {
+        await fixture.execute();
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+      expect((failure as { details?: unknown }).details).toEqual({
+        path: 'measurementPoints.0.pointCode',
+        reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID',
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each(addParameterOperations)(
+    'validates every point before %s when a later point belongs to another factory',
+    async (operation) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      fixture.input.measurementPoints.push({
+        ...fixture.input.measurementPoints[0],
+        id: 19,
+        pointName: 'Second point',
+        pointCode: 'P0018',
+      });
+      fixture.tables[POINTS].push({
+        ...fixture.tables[POINTS][0],
+        id: 19,
+        point_name: 'Second point',
+        point_code: 'P0018',
+      });
+      fixture.tables[CONNECTED].push({
+        ...fixture.tables[CONNECTED][0],
+        id: 21,
+        point_code: 'P0018',
+        eligible_factory_id: 99,
+        factory_id: 'FOREIGN',
+        factory_registration_no: 'FOREIGN-REG',
+      });
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.execute()).rejects.toMatchObject({
+        statusCode: 409,
+        details: {
+          path: 'measurementPoints.1.pointCode',
+          reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID',
+        },
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each(addParameterOperations)(
+    'rejects duplicate input code during %s without partially applying the first point',
+    async (operation) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      fixture.input.measurementPoints.push({
+        ...fixture.input.measurementPoints[0],
+        id: 19,
+        pointName: 'Second point',
+        pointCode: ' p0017 ',
+      });
+      fixture.tables[POINTS].push({
+        ...fixture.tables[POINTS][0],
+        id: 19,
+        point_name: 'Second point',
+        point_code: ' p0017 ',
+      });
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.execute()).rejects.toMatchObject({
+        statusCode: 409,
+        details: {
+          path: 'measurementPoints.1.pointCode',
+          reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID',
+        },
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each(addParameterOperations)(
+    'uses stable eligible ID instead of stale factory aliases during %s',
+    async (operation) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      Object.assign(fixture.tables[CONNECTED][0], {
+        factory_id: 'HISTORICAL-FID',
+        factory_registration_no: 'HISTORICAL-REG',
+      });
+      const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+      await fixture.execute();
+      expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+      expect(fixture.tables[CONNECTED].filter((point) => point.deleted_at == null)).toEqual([
+        expect.objectContaining({ eligible_factory_id: 17, point_code: 'P0017' }),
+      ]);
+    },
+  );
+
+  it.each(addParameterOperations)(
+    'rejects a foreign eligible ID even when aliases match during %s',
+    async (operation) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      fixture.tables[CONNECTED][0].eligible_factory_id = 99;
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.execute()).rejects.toMatchObject({
+        statusCode: 409,
+        details: { reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID' },
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each(['create', 'resubmit', 'connect', 'sync'] as const)(
+    'keeps canonical point code after a normalized lookup during %s',
+    async (operation) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      fixture.input.measurementPoints[0].pointCode = ' p0017 ';
+      fixture.tables[POINTS][0].point_code = ' p0017 ';
+      const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+      const result = await fixture.execute();
+      if (operation === 'create' || operation === 'resubmit') {
+        expect(result).toMatchObject({
+          measurementPoints: [expect.objectContaining({ pointCode: 'P0017' })],
+        });
+      } else {
+        expect(fixture.tables[CONNECTED].filter((point) => point.deleted_at == null)).toEqual([
+          expect.objectContaining({ point_code: 'P0017', eligible_factory_id: 17 }),
+        ]);
+      }
+      expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+    },
+  );
+
+  it.each(['after approval', 'after confirmation'] as const)(
+    'rechecks ownership changed %s without advancing workflow',
+    async (stage) => {
+      const fixture = addParameterOwnershipFixture('approve');
+      await fixture.execute();
+      if (stage === 'after confirmation') {
+        await connectionRequestsRepository.updateStatus(3, 'CONNECTION_CONFIRMED', 7, {
+          confirmedAt: '2026-09-22T00:00:00.000Z',
+        });
+      }
+      fixture.tables[CONNECTED][0].eligible_factory_id = 99;
+      const before = structuredClone(fixture.tables);
+      const proceed =
+        stage === 'after approval'
+          ? connectionRequestsRepository.updateStatus(3, 'CONNECTION_CONFIRMED', 7, {
+              confirmedAt: '2026-09-22T00:00:00.000Z',
+            })
+          : connectionRequestsRepository.connect(3, 7, { verifiedAt: '2026-09-22T00:00:00.000Z' });
+      await expect(proceed).rejects.toMatchObject({
+        statusCode: 409,
+        details: { reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID' },
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each(addParameterOperations)(
+    'accepts a same-factory CEMS point during %s without changing registry ownership',
+    async (operation) => {
+      const fixture = addParameterOwnershipFixture(operation);
+      fixture.input.systemType = 'CEMS';
+      Object.assign(fixture.input.measurementPoints[0], {
+        pointCode: 'S0017',
+        pointType: 'STACK',
+        parameters: ['NOx (ppm)'],
+      });
+      fixture.tables.cems_wpms_connection_requests[0].system_type = 'CEMS';
+      Object.assign(fixture.tables[POINTS][0], {
+        point_code: 'S0017',
+        point_type: 'STACK',
+        parameters_json: '["NOx (ppm)"]',
+      });
+      Object.assign(fixture.tables[CONNECTED][0], {
+        point_code: 'S0017',
+        system_type: 'CEMS',
+        parameters_json: '["CO (ppm)"]',
+      });
+      Object.assign(fixture.tables[REGISTRY][0], {
+        point_code: 'S0017',
+        normalized_point_code: 'S0017',
+      });
+      const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+      await fixture.execute();
+      expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+      const active = fixture.tables[CONNECTED].filter((point) => point.deleted_at == null);
+      expect(active).toHaveLength(1);
+      expect(active[0]).toMatchObject({
+        eligible_factory_id: 17,
+        system_type: 'CEMS',
+        point_code: 'S0017',
+      });
+      if (operation === 'connect' || operation === 'sync')
+        expect(JSON.parse(String(active[0].parameters_json))).toEqual(['CO (ppm)', 'NOx (ppm)']);
+    },
+  );
+
+  it('accepts the same BIGINT owner returned by the driver as a string', async () => {
+    const fixture = addParameterOwnershipFixture('sync');
+    fixture.tables[CONNECTED][0].eligible_factory_id = '17';
+    await fixture.execute();
+    expect(fixture.tables[CONNECTED].filter((point) => point.deleted_at == null)).toEqual([
+      expect.objectContaining({ eligible_factory_id: 17, point_code: 'P0017' }),
+    ]);
+  });
+
+  it('ignores retired historical rows when exactly one active same-factory point owns the code', async () => {
+    const fixture = addParameterOwnershipFixture('sync');
+    fixture.tables[CONNECTED].push({
+      ...fixture.tables[CONNECTED][0],
+      id: 19,
+      eligible_factory_id: 99,
+      deleted_at: '2026-09-20T00:00:00.000Z',
+    });
+    const retiredBefore = structuredClone(fixture.tables[CONNECTED][1]);
+    await fixture.execute();
+    expect(fixture.tables[CONNECTED].find((point) => point.id === 19)).toEqual(retiredBefore);
+    expect(fixture.tables[CONNECTED].filter((point) => point.deleted_at == null)).toEqual([
+      expect.objectContaining({ eligible_factory_id: 17, point_code: 'P0017' }),
+    ]);
+  });
+
+  it('reports a persisted ownership error using the same point order as the response', async () => {
+    const fixture = addParameterOwnershipFixture('approve');
+    const validPoint = fixture.tables[POINTS][0];
+    fixture.tables[POINTS] = [
+      { ...validPoint, id: 19, point_name: 'First in storage', point_code: 'P0018' },
+      validPoint,
+    ];
+    fixture.tables[CONNECTED].push({
+      ...fixture.tables[CONNECTED][0],
+      id: 21,
+      point_code: 'P0018',
+      eligible_factory_id: 99,
+    });
+    const before = structuredClone(fixture.tables);
+
+    await expect(fixture.execute()).rejects.toMatchObject({
+      statusCode: 409,
+      details: {
+        path: 'measurementPoints.1.pointCode',
+        reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID',
+      },
+    });
+    expect(fixture.tables).toEqual(before);
   });
 });

@@ -156,6 +156,19 @@ interface ConnectedMeasurementPointRow {
   instruments_json: string | null;
 }
 
+interface AddParameterPointOwnerRow extends ConnectedMeasurementPointRow {
+  eligible_factory_id: number | string | null;
+  system_type: 'CEMS' | 'WPMS';
+  point_code: string;
+}
+
+interface AddParameterPointOwnerInput {
+  requestType?: ConnectionRequestType;
+  eligibleFactoryId?: number | null;
+  systemType: 'CEMS' | 'WPMS';
+  measurementPoints: Array<{ pointCode?: string | null }>;
+}
+
 interface ConnectedFactoryProfileRow {
   factory_name?: string;
   factory_address?: string | null;
@@ -1021,6 +1034,7 @@ export const connectionRequestsRepository = {
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
       await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
+      input = await validateAndNormalizeAddParameterInput(trx, input);
       const profileRevisionPatch = await captureFactoryProfileRevision(
         trx,
         input.eligibleFactoryId,
@@ -1262,6 +1276,7 @@ export const connectionRequestsRepository = {
         );
       }
       await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
+      input = await validateAndNormalizeAddParameterInput(trx, input);
       const profileRevisionPatch = await captureFactoryProfileRevision(
         trx,
         input.eligibleFactoryId,
@@ -1415,6 +1430,18 @@ export const connectionRequestsRepository = {
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
       if (
+        status === CONNECTION_REQUEST_STATUS.WAITING_CONNECTION ||
+        status === CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED
+      ) {
+        const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+          .where('id', id)
+          .whereNull('deleted_at')
+          .forUpdate()
+          .first();
+        if (!current) throw new NotFoundError('Connection request not found');
+        await validatePersistedAddParameterPoints(trx, current);
+      }
+      if (
         shouldIssueWaitingConnectionSideEffects(status, options) ||
         options.activateFullyExemptedPoints
       ) {
@@ -1468,7 +1495,7 @@ export const connectionRequestsRepository = {
         .where('id', id)
         .whereNull('deleted_at')
         .forUpdate()
-        .first('id', 'status', 'eligible_factory_id');
+        .first();
 
       if (!current) throw new NotFoundError('Connection request not found');
       if (current.status !== CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED) {
@@ -1487,6 +1514,7 @@ export const connectionRequestsRepository = {
         trx,
         eligibleFactoryId,
       );
+      await validatePersistedAddParameterPoints(trx, current);
 
       await trx('cems_wpms_connection_requests')
         .where('id', id)
@@ -1634,6 +1662,9 @@ async function syncConnectedMeasurementPointsInTransaction(
   actorUserId: number,
   activeEligibleFactory: EligibleFactoryProfileRow,
 ): Promise<void> {
+  // Check every target before changing either the factory profile or any live point.
+  const owners = await lockAddParameterPointOwners(trx, request);
+  const isAddParameter = request.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER;
   const factoryProfile = await syncFactoryProfileInTransaction(
     trx,
     activeEligibleFactory,
@@ -1641,9 +1672,11 @@ async function syncConnectedMeasurementPointsInTransaction(
     actorUserId,
     request.id,
   );
-  for (const point of request.measurementPoints) {
-    const existing = await findConnectedPointForMeasurementPoint(trx, point);
-    const isAddParameter = request.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER;
+  for (const [index, point] of request.measurementPoints.entries()) {
+    const owner = owners[index];
+    const existing = isAddParameter
+      ? owner
+      : await findConnectedPointForMeasurementPoint(trx, point);
     const pointParameters = getConnectedMeasurementPointParameters(point);
     const parameters = uniqueParameters([
       ...(existing && (isAddParameter || pointParameters.length === 0)
@@ -1659,7 +1692,21 @@ async function syncConnectedMeasurementPointsInTransaction(
         )
       : point.measurementInstruments;
 
-    await softDeleteConnectedPoint(trx, point, actorUserId);
+    if (isAddParameter) {
+      const retiredCount = await trx('cems_wpms_connected_measurement_points')
+        .where('id', owner.id)
+        .where('eligible_factory_id', request.eligibleFactoryId)
+        .where('system_type', request.systemType)
+        .whereNull('deleted_at')
+        .update({
+          deleted_at: trx.fn.now(),
+          updated_at: trx.fn.now(),
+          updated_by: actorUserId,
+        });
+      if (retiredCount !== 1) throw addParameterPointOwnershipConflict(index);
+    } else {
+      await softDeleteConnectedPoint(trx, point, actorUserId);
+    }
     await trx('cems_wpms_connected_measurement_points').insert({
       source_request_id: request.id,
       source_measurement_point_id: point.id,
@@ -1671,7 +1718,7 @@ async function syncConnectedMeasurementPointsInTransaction(
       ...factoryProfile,
       system_type: request.systemType,
       point_name: point.pointName,
-      point_code: point.pointCode,
+      point_code: isAddParameter ? owner.point_code : point.pointCode,
       point_type: point.pointType,
       parameters_json: JSON.stringify(parameters),
       monitoring_point_status: point.monitoringPointStatus ?? null,
@@ -1686,6 +1733,103 @@ async function syncConnectedMeasurementPointsInTransaction(
       updated_by: actorUserId,
     });
   }
+}
+
+function addParameterPointOwnershipConflict(index: number): ConflictError {
+  return new ConflictError(
+    'Add parameter point must reference an active point owned by this factory and system',
+    {
+      path: `measurementPoints.${index}.pointCode`,
+      reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID',
+    },
+  );
+}
+
+/** Call after locking the request (when persisted) and its active eligible factory. */
+async function lockAddParameterPointOwners(
+  trx: Knex.Transaction,
+  input: AddParameterPointOwnerInput,
+): Promise<AddParameterPointOwnerRow[]> {
+  if (input.requestType !== CONNECTION_REQUEST_TYPE.ADD_PARAMETER) return [];
+  const eligibleFactoryId = Number(input.eligibleFactoryId);
+  if (
+    !Number.isSafeInteger(eligibleFactoryId) ||
+    eligibleFactoryId < 1 ||
+    !input.measurementPoints.length
+  ) {
+    throw addParameterPointOwnershipConflict(0);
+  }
+  // Preserve the shared lock order used by profile and POMS approval writes.
+  // This only locks the profile; no projection happens before ownership passes.
+  await lockFactoryProfileInTransaction(trx, eligibleFactoryId);
+  const seenCodes = new Set<string>();
+  const owners: AddParameterPointOwnerRow[] = [];
+  for (const [index, point] of input.measurementPoints.entries()) {
+    const pointCode = normalizePointCode(point.pointCode ?? '');
+    if (!pointCode || seenCodes.has(pointCode)) throw addParameterPointOwnershipConflict(index);
+    seenCodes.add(pointCode);
+    const matches = await trx<AddParameterPointOwnerRow>('cems_wpms_connected_measurement_points')
+      .whereNull('deleted_at')
+      .whereRaw('UPPER(LTRIM(RTRIM(point_code))) = ?', [pointCode])
+      .forUpdate()
+      .select(
+        'id',
+        'eligible_factory_id',
+        'system_type',
+        'point_code',
+        'parameters_json',
+        'instruments_json',
+      );
+    const owner = matches[0];
+    // The stable eligible identity is authoritative. Legacy/null identity must be
+    // repaired explicitly instead of guessing from names or reusable identifiers.
+    if (
+      matches.length !== 1 ||
+      !Number.isSafeInteger(Number(owner?.eligible_factory_id)) ||
+      Number(owner?.eligible_factory_id) !== eligibleFactoryId ||
+      owner?.system_type !== input.systemType
+    ) {
+      throw addParameterPointOwnershipConflict(index);
+    }
+    owners.push(owner);
+  }
+  return owners;
+}
+
+async function validateAndNormalizeAddParameterInput(
+  trx: Knex.Transaction,
+  input: CreateConnectionRequestInput,
+): Promise<CreateConnectionRequestInput> {
+  const owners = await lockAddParameterPointOwners(trx, input);
+  if (input.requestType !== CONNECTION_REQUEST_TYPE.ADD_PARAMETER) return input;
+  return {
+    ...input,
+    measurementPoints: input.measurementPoints.map((point, index) => ({
+      ...point,
+      pointCode: owners[index].point_code,
+    })),
+  };
+}
+
+async function validatePersistedAddParameterPoints(
+  trx: Knex.Transaction,
+  request: ConnectionRequestRow,
+): Promise<void> {
+  if (request.request_type !== CONNECTION_REQUEST_TYPE.ADD_PARAMETER) return;
+  const eligibleFactoryId = Number(request.eligible_factory_id);
+  await requireActiveEligibleFactoryInTransaction(trx, eligibleFactoryId);
+  const points = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
+    .where('request_id', request.id)
+    .whereNull('deleted_at')
+    .forUpdate()
+    .orderBy('id', 'asc')
+    .select('point_code');
+  await lockAddParameterPointOwners(trx, {
+    requestType: request.request_type,
+    eligibleFactoryId,
+    systemType: request.system_type,
+    measurementPoints: points.map((point) => ({ pointCode: point.point_code })),
+  });
 }
 
 async function captureFactoryProfileRevision(

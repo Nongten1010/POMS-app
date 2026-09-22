@@ -453,7 +453,10 @@ function pointCodeHarness(
     });
     return 1;
   });
-  const requestStatusUpdate = makeChain({ update: async () => 1 });
+  const requestState: Record<string, unknown> = {
+    ...requestRow(systemType),
+    status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+  };
   const historyInsert = jest.fn(async () => 1);
 
   const measurementPointBuilders: unknown[] = [];
@@ -496,16 +499,6 @@ function pointCodeHarness(
   }
 
   const queues = new Map<string, unknown[]>([
-    [
-      'cems_wpms_connection_requests',
-      [
-        makeChain({
-          first: async () => ({ system_type: systemType, request_type: 'NEW_CONNECTION' }),
-        }),
-        requestStatusUpdate,
-        makeChain({ first: async () => requestRow(systemType) }),
-      ],
-    ],
     ['cems_wpms_measurement_points', measurementPointBuilders],
     [
       'cems_wpms_point_code_sequences',
@@ -529,13 +522,14 @@ function pointCodeHarness(
 
   const trx = Object.assign(
     jest.fn((tableName: string) => {
+      if (tableName === 'cems_wpms_connection_requests') return requestStateBuilder(requestState);
       const builder = queues.get(tableName)?.shift();
       if (!builder) throw new Error(`Unexpected query for ${tableName}`);
       return builder;
     }),
     {
       raw: jest.fn(async () => undefined),
-      fn: { now: jest.fn(() => 'db-now') },
+      fn: { now: jest.fn(() => '2026-07-24T00:00:00.000Z') },
     },
   );
 
@@ -550,6 +544,27 @@ function pointCodeHarness(
       return result;
     },
   };
+}
+
+/** Persist one request row across repeated reads instead of consuming a query queue. */
+function requestStateBuilder(state: Record<string, unknown>, acquireLock?: () => Promise<void>) {
+  let lockRequested = false;
+  const builder = makeChain({
+    first: async () => {
+      if (lockRequested) await acquireLock?.();
+      return { ...state };
+    },
+    update: async (values) => {
+      await acquireLock?.();
+      Object.assign(state, values);
+      return 1;
+    },
+  });
+  builder.forUpdate = jest.fn(() => {
+    lockRequested = true;
+    return builder;
+  });
+  return builder;
 }
 
 function makeChain(options: {
@@ -680,12 +695,22 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
   });
   const requestLock = new AsyncMutex();
   const sequenceLock = new AsyncMutex();
+  const requestState: Record<string, unknown> = {
+    ...requestRow(systemType),
+    status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+  };
   let lastSequence = 2000;
 
   const runTransaction = async (...args: unknown[]) => {
     const releases: Array<() => void> = [];
+    let requestLockHeld = false;
+    const lockRequest = async () => {
+      // Reading the locked row again in the same SQL transaction is re-entrant.
+      if (requestLockHeld) return;
+      releases.push(await requestLock.acquire());
+      requestLockHeld = true;
+    };
     const state = {
-      requestCalls: 0,
       pointCalls: 0,
       registryCalls: 0,
       sequenceCalls: 0,
@@ -695,15 +720,7 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
     const trx = Object.assign(
       jest.fn((tableName: string) => {
         if (tableName === 'cems_wpms_connection_requests') {
-          state.requestCalls += 1;
-          if (state.requestCalls === 1) {
-            return lockingFirstBuilder(async () => {
-              releases.push(await requestLock.acquire());
-              return { system_type: systemType, request_type: 'NEW_CONNECTION' };
-            });
-          }
-          if (state.requestCalls === 2) return makeChain({ update: async () => 1 });
-          return makeChain({ first: async () => requestRow(systemType) });
+          return requestStateBuilder(requestState, lockRequest);
         }
 
         if (tableName === 'cems_wpms_measurement_points') {
@@ -777,7 +794,7 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
       }),
       {
         raw: jest.fn(async () => undefined),
-        fn: { now: jest.fn(() => 'db-now') },
+        fn: { now: jest.fn(() => '2026-07-24T00:00:00.000Z') },
       },
     );
 

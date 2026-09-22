@@ -101,6 +101,38 @@ const connectionProfileConflictResponse: OpenApiObject = {
     '409 CONFLICT: legacy สำเนาข้อมูลโรงงานปัจจุบันขัดกัน ใช้ error.details.reason = FACTORY_PROFILE_CONFLICT; canonical การเชื่อมต่อครั้งแรกมีข้อมูลทั่วไปแต่ source revision หายหรือเก่า ใช้ error.details.reason = FACTORY_PROFILE_CHANGED ให้ reload และ resubmit. canonical profile ยังไม่พร้อม หรือ eligible factory ไม่ active ก็ตอบ CONFLICT; ไม่มี partial update',
   content: { 'application/json': { schema: schemaRef('ErrorEnvelope') } },
 };
+const addParameterOwnershipDescription =
+  'สำหรับ ADD_PARAMETER รหัสต้องอ้าง active connected point เพียงรายการเดียวที่มี eligible_factory_id เดียวกับโรงงานของคำขอและ systemType ตรงกัน. เทียบรหัสโดย trim และไม่แยกตัวพิมพ์; ตอนสร้าง/ส่งแบบแก้ไขและบันทึกจุดปัจจุบันใช้ pointCode ตามค่าที่เก็บในจุดต้นทาง. จุดต้นทางต้องมี stable eligible_factory_id; ไม่ใช้ชื่อหรือเลขทะเบียนเดาเจ้าของจุด. การตรวจโรงงานของคำขอยังใช้กฎ active eligible factory และ error เดิมก่อนตรวจเจ้าของจุด. source request/measurement point IDs ต่างกันได้เมื่อเป็นจุดของโรงงานและระบบเดียวกัน. ตรวจตอนสร้าง ส่งแบบแก้ไข อนุมัติ ยืนยัน และก่อนเชื่อมต่อจริงซ้ำใน transaction. เมื่อไม่พบจุด active ที่ระบุได้แน่นอน เจ้าของไม่ตรง ระบบไม่ตรง หรือจุดต้นทางไม่มี stable owner ตอบ 409 CONFLICT พร้อม error.details.reason = ADD_PARAMETER_POINT_OWNERSHIP_INVALID และ path = measurementPoints.i.pointCode โดยไม่เปิดเผยโรงงานหรือจุดของผู้อื่นและไม่บันทึกบางส่วน. โหลดรายการจุดของโรงงานและระบบที่เลือกใหม่ก่อนส่งอีกครั้ง';
+const addParameterOwnershipConflictExample: OpenApiObject = {
+  summary: 'จุดเดิมไม่ใช่ active point ของโรงงานและระบบที่ระบุ',
+  value: {
+    success: false,
+    error: {
+      code: 'CONFLICT',
+      message:
+        'Add parameter point must reference an active point owned by this factory and system',
+      details: {
+        path: 'measurementPoints.0.pointCode',
+        reason: 'ADD_PARAMETER_POINT_OWNERSHIP_INVALID',
+      },
+    },
+  },
+};
+const addParameterOwnershipConflictResponse: OpenApiObject = {
+  description:
+    'ข้อมูลขัดแย้ง เช่น pointCode ซ้ำ หรือสถานะไม่รองรับ action. ' +
+    addParameterOwnershipDescription,
+  content: {
+    'application/json': {
+      schema: schemaRef('ErrorEnvelope'),
+      examples: { addParameterPointOwnershipInvalid: addParameterOwnershipConflictExample },
+    },
+  },
+};
+const connectionProfileAndParameterConflictResponse: OpenApiObject = {
+  ...addParameterOwnershipConflictResponse,
+  description: `${connectionProfileConflictResponse.description} ${addParameterOwnershipDescription}`,
+};
 const requestEditAccessDescription =
   'Permission: cems_wpms_requests:edit ตาม scope และ regionalAccess. OWN_FACTORY ใช้ assignment ผ่าน user_juristics หรือ user_factory_access; ผู้ทำรายการไม่ต้องตรงกับ createdBy และผู้สร้างเดิมก็ต้องผ่าน scope. เก็บ createdBy เดิมและบันทึกผู้ทำรายการจริง. ';
 const resubmitPointReplacementDescription =
@@ -1655,7 +1687,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'ผู้ประกอบการต้องส่ง details และ measurementInstruments; เฉพาะ userType officer/admin ที่มี role monitoring_kpm/admin สามารถละทั้งสอง field หรือส่ง null ได้ โดยใช้ตัวตนจาก access token',
     properties: {
       pointName: { type: 'string', minLength: 1, maxLength: 255 },
-      pointCode: { type: 'string', minLength: 1, maxLength: 64 },
+      pointCode: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description:
+          'รหัสไม่ว่างของ active connected point ที่มี eligible_factory_id และ systemType ตรงคำขอ ต้องระบุได้เพียงจุดเดียวหลัง trim และเทียบโดยไม่แยกตัวพิมพ์; ใช้ค่ารหัสที่เก็บในจุดต้นทางเมื่อบันทึกคำขอ',
+      },
       pointType: { ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels) },
       latitude: nullableNumber(-90, 90, 'Optional'),
       longitude: nullableNumber(-180, 180, 'Optional'),
@@ -1747,7 +1785,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
     description:
-      'ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องอ้าง point เดิม exactly 1 point. เฉพาะ userType officer/admin และ role monitoring_kpm/admin จาก access token ไม่บังคับ details และ measurementInstruments (ละ field หรือ null); ผู้ประกอบการยังบังคับทั้งสองส่วน. กฎ field อื่นและสถานะ PENDING_DESIGN_REVIEW คงเดิม',
+      'ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องอ้าง point เดิม exactly 1 point. เฉพาะ userType officer/admin และ role monitoring_kpm/admin จาก access token ไม่บังคับ details และ measurementInstruments (ละ field หรือ null); ผู้ประกอบการยังบังคับทั้งสองส่วน. กฎ field อื่นและสถานะ PENDING_DESIGN_REVIEW คงเดิม. ' +
+      addParameterOwnershipDescription,
     example: addParameterExample,
   },
   PointCodeAssignment: {
@@ -1794,7 +1833,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: { ...operatorFormProperties, expectedUpdatedAt: expectedUpdatedAtProperty },
     description:
       'ใช้ requestType เดิมของคำขอ validate; factoryId, factoryRegistrationNo, systemType และ requestType ต้องตรงของเดิม ผู้เรียกมี cems_wpms_requests:edit ตาม data scope และคำขออยู่สถานะ WAITING_FACTORY_REVISION; OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access แม้เป็นผู้สร้างเดิม. ' +
-      resubmitPointReplacementDescription,
+      resubmitPointReplacementDescription +
+      ' ' +
+      addParameterOwnershipDescription,
     example: addPointExample,
   },
   DirectConnectionMeasurementPoint: {
@@ -2490,7 +2531,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ขอเพิ่มพารามิเตอร์ให้จุดเดิม',
       operationId: 'createParameterRequest',
       description:
-        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องมี exactly 1 measurement point พร้อม pointCode เดิม. เฉพาะ userType officer/admin และ role monitoring_kpm/admin จาก access token ละ details และ measurementInstruments หรือส่ง null ได้; ผู้ประกอบการยังต้องส่งทั้งสองส่วน. ข้อมูลที่ส่งมาต้องผ่าน validation เดิม; การจับคู่ requestedParameters กับเครื่องมือใช้เมื่อมี measurementInstruments. สร้าง PENDING_DESIGN_REVIEW เหมือนเดิม. เมื่อ CONNECTED ให้รวมพารามิเตอร์เดิมของ active point กับรายการใหม่ ไม่แทนที่รายการเดิม; เก็บลำดับเดิมแล้วต่อท้ายตัวใหม่ ไม่ซ้ำเมื่อแตกต่างเพียงตัวพิมพ์หรือช่องว่างหัวท้าย และแยกหน่วยที่ต่างกัน. เก็บข้อมูลเครื่องมือเดิมที่ยังอยู่ในจุดปัจจุบันแม้ส่งเฉพาะเครื่องมือใหม่หรือละ/ส่ง null ตามสิทธิ์; ถ้าส่งพารามิเตอร์เดิมซ้ำ ใช้ค่าใหม่เฉพาะ field ที่ระบุรวม explicit null และเก็บ field ที่ละไว้ ไม่คืนเครื่องมือของพารามิเตอร์ที่ถูกนำออก. ตัวอย่างเดิม Flow Rate (m3/hr) เพิ่ม NOx (ppm), SO2 (ppm), O2 (%) แล้วจุดปัจจุบันมีครบ 4 ตัว. Response และประวัติคำขอยังคงเป็น snapshot ของคำขอ; การยื่นคำขอยังไม่เปลี่ยน active point',
+        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องมี exactly 1 measurement point พร้อม pointCode เดิม. เฉพาะ userType officer/admin และ role monitoring_kpm/admin จาก access token ละ details และ measurementInstruments หรือส่ง null ได้; ผู้ประกอบการยังต้องส่งทั้งสองส่วน. ข้อมูลที่ส่งมาต้องผ่าน validation เดิม; การจับคู่ requestedParameters กับเครื่องมือใช้เมื่อมี measurementInstruments. สร้าง PENDING_DESIGN_REVIEW เหมือนเดิม. เมื่อ CONNECTED ให้รวมพารามิเตอร์เดิมของ active point กับรายการใหม่ ไม่แทนที่รายการเดิม; เก็บลำดับเดิมแล้วต่อท้ายตัวใหม่ ไม่ซ้ำเมื่อแตกต่างเพียงตัวพิมพ์หรือช่องว่างหัวท้าย และแยกหน่วยที่ต่างกัน. เก็บข้อมูลเครื่องมือเดิมที่ยังอยู่ในจุดปัจจุบันแม้ส่งเฉพาะเครื่องมือใหม่หรือละ/ส่ง null ตามสิทธิ์; ถ้าส่งพารามิเตอร์เดิมซ้ำ ใช้ค่าใหม่เฉพาะ field ที่ระบุรวม explicit null และเก็บ field ที่ละไว้ ไม่คืนเครื่องมือของพารามิเตอร์ที่ถูกนำออก. ตัวอย่างเดิม Flow Rate (m3/hr) เพิ่ม NOx (ppm), SO2 (ppm), O2 (%) แล้วจุดปัจจุบันมีครบ 4 ตัว. Response และประวัติคำขอยังคงเป็น snapshot ของคำขอ; การยื่นคำขอยังไม่เปลี่ยน active point. ' +
+        addParameterOwnershipDescription,
       requestBody: {
         required: true,
         content: {
@@ -2513,6 +2555,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       successStatus: '201',
       successDescription: 'สร้างคำขอเพิ่มพารามิเตอร์แล้ว',
       successSchema: schemaRef('ConnectionRequestResponse'),
+      extraResponses: { '409': addParameterOwnershipConflictResponse },
       focus: true,
     }),
   },
@@ -2606,7 +2649,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'resubmitConnectionRequestForm',
       description:
         'Permission: cems_wpms_requests:edit ตาม data scope. OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access; createdBy อย่างเดียวไม่ให้สิทธิ์แก้ไข. เจ้าหน้าที่ต้องมี edit scope ครอบคลุมคำขอและผ่าน regionalAccess. ใช้ได้เฉพาะ WAITING_FACTORY_REVISION; factoryId, factoryRegistrationNo, systemType และ requestType ถ้าส่งต้องตรงเดิม. เก็บ createdBy เดิมและบันทึกผู้แก้จริงใน updated_by/ประวัติ. ตรวจสิทธิ์ สถานะและ updatedAt ซ้ำภายใต้ transaction lock. แนะนำส่ง expectedUpdatedAt จาก GET form เพื่อป้องกันฟอร์มเก่าข้ามรอบแก้ไข; ถ้าไม่ส่งยังตรวจการเปลี่ยนระหว่างประมวลผล แต่ไม่ทราบรุ่นที่ client เปิดอ่าน. ข้อมูลเปลี่ยนตอบ 409 CONFLICT พร้อม reason REQUEST_CHANGED. ' +
-        resubmitPointReplacementDescription,
+        resubmitPointReplacementDescription +
+        ' ' +
+        addParameterOwnershipDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(schemaRef('ResubmitConnectionRequest'), addPointExample),
       successDescription: 'ส่งแบบแก้ไขแล้วและเปลี่ยนเป็น REVISED_PENDING_DESIGN_REVIEW',
@@ -2655,11 +2700,13 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         },
         '409': {
           description:
-            'REQUEST_CHANGED: คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่. POINT_CODE_RESERVATION_MISMATCH: ทะเบียนของจุดที่จะเก็บหายหรือเจ้าของ/assignment mode ไม่ตรง ให้เจ้าหน้าที่ตรวจทะเบียน; มี path = measurementPoints.i.pointCode, requestId, measurementPointId และ pointCode. REQUEST_POINTS_ALREADY_CONNECTED: จุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้. POINT_CODE_RELEASE_BLOCKED: รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้; ให้เจ้าหน้าที่ตรวจข้อมูลอ้างอิงก่อนส่งใหม่. reason อยู่ใน error.details; สองกรณีหลังมี path = measurementPoints และ requestId และอาจมี pointCode เมื่อคืนรหัสไม่ได้. ไม่มี partial update',
+            'REQUEST_CHANGED: คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่. POINT_CODE_RESERVATION_MISMATCH: ทะเบียนของจุดที่จะเก็บหายหรือเจ้าของ/assignment mode ไม่ตรง ให้เจ้าหน้าที่ตรวจทะเบียน; มี path = measurementPoints.i.pointCode, requestId, measurementPointId และ pointCode. REQUEST_POINTS_ALREADY_CONNECTED: จุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้. POINT_CODE_RELEASE_BLOCKED: รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้; ให้เจ้าหน้าที่ตรวจข้อมูลอ้างอิงก่อนส่งใหม่. reason อยู่ใน error.details; สองกรณีหลังมี path = measurementPoints และ requestId และอาจมี pointCode เมื่อคืนรหัสไม่ได้. ไม่มี partial update. ' +
+            addParameterOwnershipDescription,
           content: {
             'application/json': {
               schema: schemaRef('ErrorEnvelope'),
               examples: {
+                addParameterPointOwnershipInvalid: addParameterOwnershipConflictExample,
                 requestChanged: {
                   summary: 'คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่',
                   value: {
@@ -2733,7 +2780,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'พิจารณาคำขอ',
       summary: 'อนุมัติแบบหรือแจ้งแก้ไข',
       operationId: 'reviewConnectionRequest',
-      description: 'Permission: cems_wpms_requests:approve',
+      description: 'Permission: cems_wpms_requests:approve. ' + addParameterOwnershipDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -2786,7 +2833,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         },
       ),
       extraResponses: {
-        '409': { $ref: '#/components/responses/Conflict' },
+        '409': addParameterOwnershipConflictResponse,
       },
     }),
   },
@@ -2796,7 +2843,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เปลี่ยนสถานะหรือแจ้งแก้ไข',
       operationId: 'changeConnectionRequestStatus',
       description:
-        'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นผู้มีสิทธิ์ edit ตาม scope/assignment ของโรงงาน resubmit เพื่อเก็บ revision ใหม่ ทั้ง OPERATOR_FORM และ OFFICER_DIRECT_API โดยคง createdBy เดิม. กรณีอื่นคงข้อจำกัด transition เดิม',
+        'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นผู้มีสิทธิ์ edit ตาม scope/assignment ของโรงงาน resubmit เพื่อเก็บ revision ใหม่ ทั้ง OPERATOR_FORM และ OFFICER_DIRECT_API โดยคง createdBy เดิม. กรณีอื่นคงข้อจำกัด transition เดิม. ' +
+        addParameterOwnershipDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -2855,7 +2903,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         },
       ),
       extraResponses: {
-        '409': { $ref: '#/components/responses/Conflict' },
+        '409': addParameterOwnershipConflictResponse,
       },
     }),
   },
@@ -2948,8 +2996,10 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       description:
         requestEditAccessDescription +
         'ใช้ได้ใน WAITING_CONNECTION สำหรับ SAVE และ CONFIRM; ' +
-        connectionProfileWriteDescription,
-      extraResponses: { '409': connectionProfileConflictResponse },
+        connectionProfileWriteDescription +
+        ' ' +
+        addParameterOwnershipDescription,
+      extraResponses: { '409': connectionProfileAndParameterConflictResponse },
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -2975,8 +3025,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เจ้าหน้าที่ตรวจยืนยันการเชื่อมต่อ',
       operationId: 'verifyConnectionRequestConnection',
       description:
-        'Permission: cems_wpms_requests:approve' + ` ${connectionProfileWriteDescription}`,
-      extraResponses: { '409': connectionProfileConflictResponse },
+        'Permission: cems_wpms_requests:approve' +
+        ` ${connectionProfileWriteDescription} ${addParameterOwnershipDescription}`,
+      extraResponses: { '409': connectionProfileAndParameterConflictResponse },
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
