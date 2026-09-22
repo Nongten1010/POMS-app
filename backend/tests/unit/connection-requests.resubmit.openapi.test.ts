@@ -60,9 +60,37 @@ describe('collaborative resubmission contract', () => {
     const conflict = obj(obj(obj(obj(operation.responses)['409']).content)['application/json']);
     expect(conflict.schema).toEqual({ $ref: '#/components/schemas/ErrorEnvelope' });
     expect(schemas.ErrorEnvelope).toBeDefined();
-    expect(conflict.example).toMatchObject({
+    expect(obj(obj(conflict.examples).requestChanged).value).toMatchObject({
       success: false,
       error: { code: 'CONFLICT', details: { reason: 'REQUEST_CHANGED' } },
     });
+  });
+
+  it.each([
+    {
+      name: 'pointsAlreadyConnected',
+      reason: 'REQUEST_POINTS_ALREADY_CONNECTED',
+      message: 'Connected measurement points cannot be removed by resubmission',
+      details: { path: 'measurementPoints', requestId: 101 },
+    },
+    {
+      name: 'pointCodeReleaseBlocked',
+      reason: 'POINT_CODE_RELEASE_BLOCKED',
+      message: 'Measurement point code is still referenced and cannot be released',
+      details: { path: 'measurementPoints', requestId: 101, pointCode: 'S1054' },
+    },
+  ])('publishes an actionable 409 example for $reason', ({ name, reason, message, details }) => {
+    const response = obj(obj(operation.responses)['409']);
+    const media = obj(obj(response.content)['application/json']);
+    expect(media.example).toBeUndefined();
+    expect(obj(obj(media.examples)[name]).value).toEqual({
+      success: false,
+      error: { code: 'CONFLICT', message, details: { ...details, reason } },
+    });
+    expect(response.description).toEqual(expect.stringContaining(reason));
+    expect(operation.description).toEqual(expect.stringContaining(reason));
+    expect(obj(schemas.ResubmitConnectionRequest).description).toEqual(
+      expect.stringContaining(reason),
+    );
   });
 });

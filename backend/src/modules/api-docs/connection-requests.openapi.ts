@@ -103,6 +103,8 @@ const connectionProfileConflictResponse: OpenApiObject = {
 };
 const requestEditAccessDescription =
   'Permission: cems_wpms_requests:edit ตาม scope และ regionalAccess. OWN_FACTORY ใช้ assignment ผ่าน user_juristics หรือ user_factory_access; ผู้ทำรายการไม่ต้องตรงกับ createdBy และผู้สร้างเดิมก็ต้องผ่าน scope. เก็บ createdBy เดิมและบันทึกผู้ทำรายการจริง. ';
+const resubmitPointReplacementDescription =
+  'เมื่อแทนที่ฟอร์ม ลบแถวจุดเดิมที่ยังไม่เคยเชื่อมต่ออย่างถาวร รวมแถวที่ถูก soft-delete ในรอบก่อน และคืนเฉพาะการจองรหัสที่เป็นของจุดนั้นในคำขอนั้น; ไม่เก็บแถวจุดเก่า แต่ยังเก็บตัวคำขอและ statusHistory. ADD_PARAMETER คง pointCode เดิมและไม่คืนการจองของจุดต้นทาง. จุดใหม่มี ID ใหม่ ให้ใช้ detail/response ล่าสุดในการอนุมัติ; รหัส legacy ที่คืนแล้วสามารถกำหนดใหม่ด้วย MANUAL_LEGACY หากยังว่างและผ่าน validation เดิม. หากจุดเดิมมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้ว ตอบ 409 CONFLICT พร้อม reason REQUEST_POINTS_ALREADY_CONNECTED; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ reason POINT_CODE_RELEASE_BLOCKED. ทั้งสองกรณีมี details.path = measurementPoints และ requestId; POINT_CODE_RELEASE_BLOCKED อาจมี pointCode. ไม่มี partial update';
 const currentDeviceConfigDescription =
   'อ่านพารามิเตอร์จาก active connected point หลังตรวจสิทธิ์; คง mapping เดิมที่ยังอยู่, ซ่อนช่องที่ถอดออก, เพิ่ม mapping ว่างสำหรับพารามิเตอร์ใหม่. rawConfigs แสดงเฉพาะค่าที่บันทึกจริง; request-specific device-configs ยังคง snapshot เดิม';
 
@@ -1766,7 +1768,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         pattern: '^[SP]\\d{4}$',
         example: 'S1054',
         description:
-          'Required เมื่อ assignmentMode = MANUAL_LEGACY; ต้องเป็นรหัส legacy รูปแบบ S/P ตามด้วย 4 หลัก, ค่าตัวเลขช่วง 0001-1999 และ prefix ต้องตรงกับ systemType (CEMS = S, WPMS = P)',
+          'Required เมื่อ assignmentMode = MANUAL_LEGACY; ต้องเป็นรหัส legacy รูปแบบ S/P ตามด้วย 4 หลัก, ค่าตัวเลขช่วง 0001-1999 และ prefix ต้องตรงกับ systemType (CEMS = S, WPMS = P). รหัสที่ยังจองอยู่ตอบ 409 CONFLICT พร้อม reason POINT_CODE_ALREADY_ASSIGNED; รหัสที่คืนการจองแล้วจากการลบจุดที่ยังไม่เคยเชื่อมต่อขณะส่งแบบแก้ไข ใช้ได้หากยังว่าง',
       },
       reason: {
         type: 'string',
@@ -1784,7 +1786,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
     required: ['factoryId', 'factoryName', 'systemType', 'measurementPoints'],
     properties: { ...operatorFormProperties, expectedUpdatedAt: expectedUpdatedAtProperty },
     description:
-      'ใช้ requestType เดิมของคำขอ validate; factoryId, factoryRegistrationNo, systemType และ requestType ต้องตรงของเดิม ผู้เรียกมี cems_wpms_requests:edit ตาม data scope และคำขออยู่สถานะ WAITING_FACTORY_REVISION; OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access แม้เป็นผู้สร้างเดิม',
+      'ใช้ requestType เดิมของคำขอ validate; factoryId, factoryRegistrationNo, systemType และ requestType ต้องตรงของเดิม ผู้เรียกมี cems_wpms_requests:edit ตาม data scope และคำขออยู่สถานะ WAITING_FACTORY_REVISION; OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access แม้เป็นผู้สร้างเดิม. ' +
+      resubmitPointReplacementDescription,
     example: addPointExample,
   },
   DirectConnectionMeasurementPoint: {
@@ -1793,7 +1796,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
     required: ['pointCode'],
     properties: {
       pointName: nullableString(255, 'Optional; default เป็น pointCode'),
-      pointCode: { type: 'string', minLength: 1, maxLength: 64 },
+      pointCode: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description:
+          'ห้ามซ้ำกับรหัสที่ยังจองอยู่ในทะเบียนกลาง รวมจุดที่เลิกใช้งานแล้ว; การส่งแบบแก้ไขคืนได้เฉพาะการจองของจุดเดิมที่ยังไม่เคยเชื่อมต่อและผ่านการตรวจการใช้งานก่อนลบถาวร',
+      },
       pointType: {
         ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels),
         nullable: true,
@@ -2589,23 +2598,62 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ส่งแบบใหม่หลังถูกแจ้งแก้ไข',
       operationId: 'resubmitConnectionRequestForm',
       description:
-        'Permission: cems_wpms_requests:edit ตาม data scope. OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access; createdBy อย่างเดียวไม่ให้สิทธิ์แก้ไข. เจ้าหน้าที่ต้องมี edit scope ครอบคลุมคำขอและผ่าน regionalAccess. ใช้ได้เฉพาะ WAITING_FACTORY_REVISION; factoryId, factoryRegistrationNo, systemType และ requestType ถ้าส่งต้องตรงเดิม. เก็บ createdBy เดิมและบันทึกผู้แก้จริงใน updated_by/ประวัติ. ตรวจสิทธิ์ สถานะและ updatedAt ซ้ำภายใต้ transaction lock. แนะนำส่ง expectedUpdatedAt จาก GET form เพื่อป้องกันฟอร์มเก่าข้ามรอบแก้ไข; ถ้าไม่ส่งยังตรวจการเปลี่ยนระหว่างประมวลผล แต่ไม่ทราบรุ่นที่ client เปิดอ่าน. ข้อมูลเปลี่ยนตอบ 409 CONFLICT พร้อม reason REQUEST_CHANGED',
+        'Permission: cems_wpms_requests:edit ตาม data scope. OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access; createdBy อย่างเดียวไม่ให้สิทธิ์แก้ไข. เจ้าหน้าที่ต้องมี edit scope ครอบคลุมคำขอและผ่าน regionalAccess. ใช้ได้เฉพาะ WAITING_FACTORY_REVISION; factoryId, factoryRegistrationNo, systemType และ requestType ถ้าส่งต้องตรงเดิม. เก็บ createdBy เดิมและบันทึกผู้แก้จริงใน updated_by/ประวัติ. ตรวจสิทธิ์ สถานะและ updatedAt ซ้ำภายใต้ transaction lock. แนะนำส่ง expectedUpdatedAt จาก GET form เพื่อป้องกันฟอร์มเก่าข้ามรอบแก้ไข; ถ้าไม่ส่งยังตรวจการเปลี่ยนระหว่างประมวลผล แต่ไม่ทราบรุ่นที่ client เปิดอ่าน. ข้อมูลเปลี่ยนตอบ 409 CONFLICT พร้อม reason REQUEST_CHANGED. ' +
+        resubmitPointReplacementDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(schemaRef('ResubmitConnectionRequest'), addPointExample),
       successDescription: 'ส่งแบบแก้ไขแล้วและเปลี่ยนเป็น REVISED_PENDING_DESIGN_REVIEW',
       successSchema: schemaRef('ConnectionRequestResponse'),
       extraResponses: {
         '409': {
-          description: 'คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่; ไม่มี partial update',
+          description:
+            'REQUEST_CHANGED: คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่. REQUEST_POINTS_ALREADY_CONNECTED: มีข้อมูลเชื่อมต่ออ้างอิงจุดเดิม รวมรายการที่เลิกใช้งานแล้ว. POINT_CODE_RELEASE_BLOCKED: รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้; ให้เจ้าหน้าที่ตรวจข้อมูลอ้างอิงก่อนส่งใหม่. reason อยู่ใน error.details; สองกรณีหลังมี path = measurementPoints และ requestId และอาจมี pointCode เมื่อคืนรหัสไม่ได้. ไม่มี partial update',
           content: {
             'application/json': {
               schema: schemaRef('ErrorEnvelope'),
-              example: {
-                success: false,
-                error: {
-                  code: 'CONFLICT',
-                  message: 'Connection request has changed; reload the form before resubmitting',
-                  details: { reason: 'REQUEST_CHANGED' },
+              examples: {
+                requestChanged: {
+                  summary: 'คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่',
+                  value: {
+                    success: false,
+                    error: {
+                      code: 'CONFLICT',
+                      message:
+                        'Connection request has changed; reload the form before resubmitting',
+                      details: { reason: 'REQUEST_CHANGED' },
+                    },
+                  },
+                },
+                pointsAlreadyConnected: {
+                  summary: 'มีข้อมูลเชื่อมต่ออ้างอิงจุดเดิม จึงลบถาวรไม่ได้',
+                  value: {
+                    success: false,
+                    error: {
+                      code: 'CONFLICT',
+                      message: 'Connected measurement points cannot be removed by resubmission',
+                      details: {
+                        path: 'measurementPoints',
+                        reason: 'REQUEST_POINTS_ALREADY_CONNECTED',
+                        requestId: 101,
+                      },
+                    },
+                  },
+                },
+                pointCodeReleaseBlocked: {
+                  summary: 'รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้',
+                  value: {
+                    success: false,
+                    error: {
+                      code: 'CONFLICT',
+                      message: 'Measurement point code is still referenced and cannot be released',
+                      details: {
+                        path: 'measurementPoints',
+                        reason: 'POINT_CODE_RELEASE_BLOCKED',
+                        requestId: 101,
+                        pointCode: 'S1054',
+                      },
+                    },
+                  },
                 },
               },
             },

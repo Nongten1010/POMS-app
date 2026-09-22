@@ -437,7 +437,8 @@ criteria normalization สำคัญ
 - `MANUAL_LEGACY` ใช้เฉพาะกรณีจุดตรวจวัดเก่าที่ต้อง reuse รหัสเดิม
 - `MANUAL_LEGACY` ต้องส่งทั้ง `pointCode` และ `reason`; prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = P`)
 - ถ้าส่ง `measurementPointId` ที่ไม่อยู่ในคำขอ ระบบตอบ `400 BAD_REQUEST`
-- ถ้ารหัสถูกจองแล้วในคำขอที่รอเชื่อมต่อ จุดที่เชื่อมต่ออยู่ หรือประวัติที่เลิกใช้งานแล้ว ระบบตอบ `409 CONFLICT` และไม่ reuse รหัสนั้น
+- ถ้ารหัสยังจองอยู่ในคำขอที่รอเชื่อมต่อ จุดที่เชื่อมต่ออยู่ หรือประวัติที่เลิกใช้งานแล้ว ระบบตอบ `409 CONFLICT` พร้อม `error.details.reason = "POINT_CODE_ALREADY_ASSIGNED"` และไม่ reuse รหัสนั้น
+- รหัสที่คืนการจองอย่างปลอดภัยแล้วเมื่อ [ส่งแบบแก้ไข](#put-apiv1cems-wpms-requestsidform) และลบจุดเดิมที่ยังไม่เคยเชื่อมต่อ สามารถใช้ `MANUAL_LEGACY` ตอนอนุมัติจุดใหม่ได้ หากรหัสยังว่างและผ่านกฎช่วง legacy เดิม
 
 หมายเหตุ: schema/รูปแบบข้อมูลที่ไม่ถูกต้องตอบ `400 VALIDATION_ERROR`; business validation ที่ต้องตรวจจากข้อมูลคำขอ เช่น prefix ไม่ตรงระบบ, รายการไม่ครบ หรือ id ไม่อยู่ในคำขอ ตอบ `400 BAD_REQUEST`.
 
@@ -718,6 +719,9 @@ criteria normalization สำคัญ
 - request เดิมต้องอยู่สถานะ `WAITING_FACTORY_REVISION`
 - backend ใช้ `requestType` เดิมของคำขอมา validate body อีกครั้ง แม้ body จะ omit field นี้
 - ถ้าเป็น add-parameter ระบบ preserve `pointCode`; ถ้าเป็น new connection หรือ add-point ระบบ clear pending point codes ของจุดใหม่ก่อน replace form
+- การแทนที่ฟอร์มลบแถวจุดเดิมที่ยังไม่เคยเชื่อมต่ออย่างถาวร รวมแถวที่ถูก soft-delete ในรอบแก้ไขก่อน ไม่เก็บแถวที่ถูกแทนที่เป็นประวัติ และคืนเฉพาะการจองรหัสใน `cems_wpms_point_code_registry` ที่ผูกกับ `source_request_id` และ `source_measurement_point_id` ของจุดที่ลบจริง ไม่คืนการจองของจุดอื่นหรือคำขออื่น เช่น จุดต้นทางของ `ADD_PARAMETER`
+- ก่อนลบและคืนรหัส backend ตรวจข้อมูลใน transaction เดียวกัน: หากจุดเดิมมีแถวใน `cems_wpms_connected_measurement_points` อ้างอิงอยู่ รวมแถวที่เลิกใช้งานแล้ว ตอบ `409 CONFLICT` พร้อม `reason = "REQUEST_POINTS_ALREADY_CONNECTED"`; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ `reason = "POINT_CODE_RELEASE_BLOCKED"` โดยปฏิเสธทั้งรายการและไม่บันทึกบางส่วน
+- การส่งกลับไม่ลบตัวคำขอหรือ `statusHistory`; จุดใหม่มี ID ใหม่ ให้โหลด detail/response ล่าสุดก่อนส่ง `pointCodeAssignments` ในรอบอนุมัติถัดไป รหัส legacy ที่คืนแล้วอาจกำหนดให้จุดใหม่ด้วย `MANUAL_LEGACY` ได้หากยังว่าง
 - หลังผ่าน validation จะเปลี่ยนสถานะเป็น `REVISED_PENDING_DESIGN_REVIEW`
 
 ### Errors
@@ -732,6 +736,10 @@ criteria normalization สำคัญ
 | `403`       | `FORBIDDEN`        | ไม่มี edit permission หรือคำขออยู่นอก edit scope/assignment                                       | ซ่อนการแก้ไข                            |
 | `404`       | `NOT_FOUND`        | ไม่พบคำขอ หรือหา active eligible factory ใหม่ไม่เจอ                         | refresh รายการคำขอ                  |
 | `409`       | `CONFLICT`         | ข้อมูลหรือสถานะเปลี่ยนระหว่างแก้ไข (`error.details.reason=REQUEST_CHANGED`)                       | โหลดฟอร์มล่าสุดและตรวจข้อมูลก่อนส่งใหม่ |
+| `409`       | `CONFLICT`         | จุดเดิมมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้ว (`error.details.reason=REQUEST_POINTS_ALREADY_CONNECTED`) | ให้เจ้าหน้าที่ตรวจจุดที่เชื่อมต่อก่อนส่งแบบใหม่ |
+| `409`       | `CONFLICT`         | รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ (`error.details.reason=POINT_CODE_RELEASE_BLOCKED`) | ให้เจ้าหน้าที่ตรวจการจองและการใช้รหัสก่อนส่งแบบใหม่ |
+
+สองเหตุผลหลังคืน `error.details.path = "measurementPoints"` และ `requestId`; `POINT_CODE_RELEASE_BLOCKED` อาจคืน `pointCode` เพิ่มเติม ไม่มีการลบจุด คืนรหัส หรือเปลี่ยนสถานะบางส่วนเมื่อเกิดข้อขัดแย้ง
 
 ## `POST /api/v1/cems-wpms-requests/direct-connections`
 
@@ -860,7 +868,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 - actor ต้องผ่านข้อจำกัด role/scope ข้างต้น มิฉะนั้นตอบ `403`
 - ต้อง resolve active eligible factory ภายใน officer scope ได้ มิฉะนั้นตอบ `404`
 - `measurementPoints` ต้องมี exactly 1 row
-- `pointCode` ต้องไม่ว่าง, ยาวไม่เกิน 64, และต้องไม่ชนกับรหัสที่เคยจองไว้ในทะเบียนรหัสกลาง
+- `pointCode` ต้องไม่ว่าง, ยาวไม่เกิน 64, และต้องไม่ชนกับรหัสที่ยังจองอยู่ในทะเบียนรหัสกลาง
 - `submissionAction = CONNECT` map เป็น `status = CONNECTED`; `submissionAction = REQUEST_FACTORY_REVISION` map เป็น `status = WAITING_FACTORY_REVISION`
 - ถ้าไม่ส่งทั้ง `submissionAction` และ `status` backend ใช้ `CONNECTED` เพื่อคงพฤติกรรมเดิม
 - ถ้าส่ง `submissionAction` และ legacy `status` พร้อมกัน ค่าต้อง map ตรงกัน มิฉะนั้นตอบ `400 VALIDATION_ERROR` ที่ `submissionAction`
@@ -880,7 +888,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                                                                              | login ใหม่                       |
 | `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:direct_connect`                                                                                                                     | ซ่อน action สำหรับ user นี้      |
 | `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory ภายใน scope                                                                                                                     | ตรวจ identifier และสิทธิ์พื้นที่ |
-| `409`       | `CONFLICT`         | `pointCode` ซ้ำกับรหัสที่เคยจองไว้ ไม่ว่าจะรอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว                                                                       | เปลี่ยนรหัสจุดตรวจวัด            |
+| `409`       | `CONFLICT`         | `pointCode` ซ้ำกับรหัสที่ยังจองอยู่ ไม่ว่าจะรอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว                                                                       | เปลี่ยนรหัสจุดตรวจวัด            |
 
 ## Review Payloads ที่เกี่ยวข้องกับการส่งแบบแก้ไข
 
