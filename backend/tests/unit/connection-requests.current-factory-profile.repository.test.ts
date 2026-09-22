@@ -12,6 +12,8 @@ type Row = Record<string, unknown>;
 const mockedDb = db as unknown as { transaction: jest.Mock };
 const previousMode = env.FACTORY_PROFILE_MODE;
 const CONNECTED = 'cems_wpms_connected_measurement_points';
+const POINTS = 'cems_wpms_measurement_points';
+const REGISTRY = 'cems_wpms_point_code_registry';
 
 // Exercise the real repository with persisted rows; this adapter models query
 // operations only and does not decide which factory profile is authoritative.
@@ -32,6 +34,8 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
       },
     ],
     [CONNECTED]: structuredClone(connectedRows),
+    [REGISTRY]: [],
+    device_connection_configs: [],
   };
   if (canonical) {
     env.FACTORY_PROFILE_MODE = 'canonical';
@@ -74,6 +78,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
     tables.cems_wpms_request_status_history = [];
   }
   const locks: string[] = [];
+  const beforeRegistryDelete = jest.fn<() => void>();
   const trx = Object.assign(
     (queryTable: string) => {
       const table =
@@ -83,7 +88,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
       let columns: string[] = [];
       let counted = false;
       let ordering: [string, string] | undefined;
-      const rows = () => {
+      const rows = (): Row[] => {
         const sourceRows =
           queryTable === 'current_eligible_factories as ef'
             ? tables[table].map((row) => ({
@@ -142,6 +147,9 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
               orWhere(field: string, operatorOrValue: unknown, operand?: unknown) {
                 return add(compare(field, operatorOrValue, operand), true);
               },
+              whereNull(field: string) {
+                return add((row) => row[field.split('.').at(-1) ?? field] == null);
+              },
               whereIn(field: string, values: unknown[]) {
                 return add((row) => values.includes(row[field.split('.').at(-1) ?? field]));
               },
@@ -167,13 +175,46 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
         leftJoin() {
           return builder;
         },
-        whereRaw(sql: string) {
+        whereRaw(sql: string, bindings: unknown[] = []) {
           if (sql === '1 = 0') predicates.push(() => false);
+          const normalizedMatch = sql.match(/^UPPER\(LTRIM\(RTRIM\((\w+)\)\)\) = \?$/i);
+          if (normalizedMatch) {
+            predicates.push(
+              (row) =>
+                String(row[normalizedMatch[1]] ?? '')
+                  .trim()
+                  .toUpperCase() === bindings[0],
+            );
+          }
           return builder;
         },
         whereIn(column: string, values: unknown[]) {
           predicates.push((row) => values.includes(row[column.split('.').at(-1) ?? column]));
           return builder;
+        },
+        whereNotIn(column: string, values: unknown[]) {
+          predicates.push((row) => !values.includes(row[column.split('.').at(-1) ?? column]));
+          return builder;
+        },
+        async del() {
+          const matched = rows();
+          if (table === REGISTRY) {
+            beforeRegistryDelete();
+            for (const entry of matched) {
+              if (
+                tables[POINTS].some(
+                  (point) =>
+                    point.id === entry.source_measurement_point_id && point.deleted_at == null,
+                )
+              ) {
+                throw new Error(
+                  'Registry reservation cannot be removed while its source point is active',
+                );
+              }
+            }
+          }
+          tables[table] = tables[table].filter((row) => !matched.includes(row));
+          return matched.length;
         },
         count() {
           counted = true;
@@ -197,6 +238,18 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
           return matched.length;
         },
         insert(input: Row | Row[]) {
+          const inputs = Array.isArray(input) ? input : [input];
+          if (table === REGISTRY) {
+            const codes = new Set(tables[table].map((row) => row.normalized_point_code));
+            for (const row of inputs) {
+              if (codes.has(row.normalized_point_code)) {
+                throw Object.assign(new Error('uq_cems_wpms_point_code_registry_normalized'), {
+                  number: 2627,
+                });
+              }
+              codes.add(row.normalized_point_code);
+            }
+          }
           const inserted = (Array.isArray(input) ? input : [input]).map((row, index) => ({
             id: 900 + tables[table].length + index,
             connection_due_at: null,
@@ -221,12 +274,40 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
       };
       return builder;
     },
-    { fn: { now: () => '2026-09-11T00:00:00.000Z' } },
+    {
+      fn: { now: () => '2026-09-11T00:00:00.000Z' },
+      async raw(sql: string, [requestId, actorUserId]: unknown[]) {
+        if (!sql.includes('ranked_points')) throw new Error('Unsupported fixture raw query');
+        const points = tables[POINTS].filter(
+          (row) => row.request_id === requestId && row.deleted_at == null,
+        ).sort(
+          (a, b) => Number(!a.point_code) - Number(!b.point_code) || Number(a.id) - Number(b.id),
+        );
+        const names = new Set<string>();
+        for (const point of points) {
+          const name = String(point.point_name).trim().toLowerCase();
+          if (names.has(name)) {
+            Object.assign(point, {
+              deleted_at: '2026-09-11T00:00:00.000Z',
+              updated_by: actorUserId,
+            });
+          }
+          names.add(name);
+        }
+      },
+    },
   );
-  mockedDb.transaction.mockImplementation(async (callback: unknown) =>
-    (callback as (trx: unknown) => Promise<unknown>)(trx),
-  );
-  return { tables, locks };
+  mockedDb.transaction.mockImplementation(async (callback: unknown) => {
+    const before = structuredClone(tables);
+    try {
+      return await (callback as (trx: unknown) => Promise<unknown>)(trx);
+    } catch (error) {
+      for (const table of Object.keys(tables)) delete tables[table];
+      Object.assign(tables, before);
+      throw error;
+    }
+  });
+  return { tables, locks, beforeRegistryDelete };
 }
 
 function currentPoint(): Row {
@@ -300,6 +381,52 @@ function expectCurrentGeneral(actual: Row) {
   ]) {
     expect({ [field]: actual[field] }).toEqual({ [field]: current[field] });
   }
+}
+
+function resubmissionFixture() {
+  const fixture = fixtureDatabase([], true);
+  Object.assign(fixture.tables.cems_wpms_connection_requests[0], {
+    id: 10037,
+    status: 'WAITING_FACTORY_REVISION',
+    updated_at: '2026-09-13T00:00:00.000Z',
+    system_type: 'CEMS',
+    factory_id: 'FID-17',
+    factory_registration_no: 'REG-17',
+    created_by: 99,
+  });
+  fixture.tables[POINTS].push({
+    id: 10041,
+    request_id: 10037,
+    point_name: 'ปล่องเดิม',
+    point_code: 'S0527',
+    point_code_assignment_mode: 'OFFICER_DIRECT',
+    parameters_json: '[]',
+    deleted_at: null,
+  });
+  fixture.tables[REGISTRY].push({
+    id: 17,
+    point_code: 'S0527',
+    normalized_point_code: 'S0527',
+    assignment_mode: 'OFFICER_DIRECT',
+    source_request_id: 10037,
+    source_measurement_point_id: 10041,
+  });
+  const input = {
+    ...oldRequest('NEW_CONNECTION'),
+    systemType: 'CEMS',
+    contactName: 'ผู้ประสานงาน',
+    contactPhone: '0812345678',
+    measurementPoints: [{ pointName: 'ปล่องเดิม', pointType: 'STACK', parameters: [] }],
+  };
+  const resubmit = () =>
+    connectionRequestsRepository.replaceForm(
+      10037,
+      input as never,
+      7,
+      'REVISED_PENDING_DESIGN_REVIEW',
+      { actorUserId: 7, scope: 'ALL', expectedUpdatedAt: '2026-09-13T00:00:00.000Z' },
+    );
+  return { ...fixture, input, resubmit };
 }
 
 describe('connection profile persistence with a stale submitted factory', () => {
@@ -547,6 +674,159 @@ describe('connection profile persistence with a stale submitted factory', () => 
       expect(result.measurementPoints).toHaveLength(1);
     },
   );
+
+  it.each([null, '2026-09-21T14:15:33.600Z'])(
+    'resubmits the same point then approves S0527 without a stale reservation conflict (deleted: %s)',
+    async (deletedAt) => {
+      const fixture = resubmissionFixture();
+      fixture.tables[POINTS][0].deleted_at = deletedAt;
+      const resubmitted = await fixture.resubmit();
+      const newPointId = resubmitted.measurementPoints[0].id;
+      const approved = await connectionRequestsRepository.updateStatus(
+        10037,
+        'WAITING_CONNECTION',
+        7,
+        { officerNote: 'แบบถูกต้อง' },
+        {
+          pointCodeAssignments: [
+            {
+              measurementPointId: newPointId,
+              assignmentMode: 'MANUAL_LEGACY',
+              pointCode: 'S0527',
+              reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+            },
+          ],
+        },
+      );
+      expect(approved.measurementPoints[0]).toMatchObject({ id: newPointId, pointCode: 'S0527' });
+      expect(fixture.tables[POINTS].map((point) => point.id)).toEqual([newPointId]);
+      expect(fixture.tables[REGISTRY]).toEqual([
+        expect.objectContaining({
+          normalized_point_code: 'S0527',
+          source_request_id: 10037,
+          source_measurement_point_id: newPointId,
+        }),
+      ]);
+    },
+  );
+
+  it('removes old ADD_PARAMETER snapshots while preserving the connected point owner and reservation', async () => {
+    const fixture = resubmissionFixture();
+    fixture.input.requestType = 'ADD_PARAMETER';
+    Object.assign(fixture.input.measurementPoints[0], { pointCode: 'S0527' });
+    Object.assign(fixture.tables[REGISTRY][0], {
+      source_request_id: 55,
+      source_measurement_point_id: 51,
+    });
+    fixture.tables[CONNECTED].push({ ...currentPoint(), point_code: 'S0527' });
+    const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+    const connectedBefore = structuredClone(fixture.tables[CONNECTED]);
+
+    const resubmitted = await fixture.resubmit();
+    const approved = await connectionRequestsRepository.updateStatus(
+      10037,
+      'WAITING_CONNECTION',
+      7,
+      {},
+    );
+
+    expect(approved.measurementPoints[0].pointCode).toBe('S0527');
+    expect(fixture.tables[POINTS].map((point) => point.id)).toEqual([
+      resubmitted.measurementPoints[0].id,
+    ]);
+    expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+    expect(fixture.tables[CONNECTED]).toEqual(connectedBefore);
+  });
+
+  it.each([null, '2026-09-21T14:15:33.600Z'])(
+    'rejects resubmission and preserves all data when a connected row references a snapshot (deleted: %s)',
+    async (deletedAt) => {
+      const fixture = resubmissionFixture();
+      fixture.tables[CONNECTED].push({
+        ...currentPoint(),
+        source_measurement_point_id: 10041,
+        deleted_at: deletedAt,
+      });
+      const before = structuredClone(fixture.tables);
+
+      await expect(fixture.resubmit()).rejects.toMatchObject({
+        statusCode: 409,
+        details: { reason: 'REQUEST_POINTS_ALREADY_CONNECTED' },
+      });
+
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each([
+    'connected code',
+    'retired connected code',
+    'connected name alias',
+    'other active snapshot',
+    'live device configuration',
+    'mismatched registry owner',
+  ])('keeps the entire request unchanged if release conflicts with %s', async (conflict) => {
+    const fixture = resubmissionFixture();
+    switch (conflict) {
+      case 'connected code':
+      case 'retired connected code':
+        fixture.tables[CONNECTED].push({
+          ...currentPoint(),
+          point_code: ' s0527 ',
+          deleted_at: conflict === 'retired connected code' ? '2026-09-21T14:15:33.600Z' : null,
+        });
+        break;
+      case 'connected name alias':
+        fixture.tables[CONNECTED].push({ ...currentPoint(), point_name: ' s0527 ' });
+        break;
+      case 'other active snapshot':
+        fixture.tables[POINTS].push({
+          id: 22,
+          request_id: 44,
+          point_code: ' s0527 ',
+          deleted_at: null,
+        });
+        break;
+      case 'live device configuration':
+        fixture.tables.device_connection_configs.push({
+          id: 1,
+          request_id: null,
+          station_id: ' s0527 ',
+          deleted_at: null,
+        });
+        break;
+      case 'mismatched registry owner':
+        fixture.tables[REGISTRY][0].source_request_id = 44;
+        break;
+    }
+    const before = structuredClone(fixture.tables);
+
+    await expect(fixture.resubmit()).rejects.toMatchObject({
+      statusCode: 409,
+      details: { reason: 'POINT_CODE_RELEASE_BLOCKED' },
+    });
+
+    expect(fixture.tables).toEqual(before);
+  });
+
+  it('rolls back temporary retirement when the database rejects releasing a reservation', async () => {
+    const fixture = resubmissionFixture();
+    const before = structuredClone(fixture.tables);
+    fixture.beforeRegistryDelete.mockImplementationOnce(() => {
+      expect(fixture.tables[POINTS][0].deleted_at).not.toBeNull();
+      throw Object.assign(new Error('Point code is now referenced'), {
+        originalError: { info: { number: 51096 } },
+      });
+    });
+
+    await expect(fixture.resubmit()).rejects.toMatchObject({
+      statusCode: 409,
+      details: { reason: 'POINT_CODE_RELEASE_BLOCKED' },
+    });
+
+    expect(fixture.beforeRegistryDelete).toHaveBeenCalledTimes(1);
+    expect(fixture.tables).toEqual(before);
+  });
 
   it.each([
     { status: 'REVISED_PENDING_DESIGN_REVIEW', updatedAt: '2026-09-13T00:00:00.000Z' },

@@ -26,6 +26,7 @@ import {
   NotFoundError,
 } from '../../shared/errors/AppError';
 import { withProvinceInFactoryAddress } from '../eligible-factories/factory-address';
+import { removeUnconnectedRequestPoints } from './connection-request-point-cleanup';
 import {
   deriveHasEiaFromAssessment,
   resolveStoredConnectionRequestEia,
@@ -1264,6 +1265,7 @@ export const connectionRequestsRepository = {
         trx,
         input.eligibleFactoryId,
       );
+      await removeUnconnectedRequestPoints(trx, id);
       await trx('cems_wpms_connection_requests')
         .where('id', id)
         .whereNull('deleted_at')
@@ -1274,15 +1276,6 @@ export const connectionRequestsRepository = {
           status: nextStatus,
           revision_reason: null,
           officer_note: null,
-          updated_by: actorUserId,
-          updated_at: trx.fn.now(),
-        });
-
-      await trx('cems_wpms_measurement_points')
-        .where('request_id', id)
-        .whereNull('deleted_at')
-        .update({
-          deleted_at: trx.fn.now(),
           updated_by: actorUserId,
           updated_at: trx.fn.now(),
         });

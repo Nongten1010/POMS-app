@@ -20,6 +20,7 @@
 - [ข้อมูลทั่วไปโรงงานเข้าข่ายและ POMS ชุดเดียวกัน: โครงสร้างและการเปิดใช้](./factory-profile-consistency-rollout.md)
 
 - [ล้างข้อมูลทดสอบด้วย SQL](./test-data-cleanup.md)
+- [ล้างจุดที่ยังไม่เชื่อมต่อและคืนรหัสค้าง: กรณี S0527](./cleanup-unconnected-point-code.md)
 
 ## Integrations
 
