@@ -6078,7 +6078,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create BOD/COD result notice',
       operationId: 'createBodCodResultNotice',
       description:
-        'ต้องมี view + approve และผ่านทั้งสอง data scope; เฉพาะ monitoring_kpm/admin ที่ไม่ใช่ OWN_FACTORY และ WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
+        'ต้องมี view + approve และผ่านทั้งสอง data scope; เฉพาะ monitoring_kpm/monitoring_5_centers/admin ที่ไม่ใช่ OWN_FACTORY และ WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodResultNoticeRequest'), {
         reportCorrectness: 'ถูกต้องครบถ้วน',
@@ -6103,7 +6103,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Update BOD/COD result notice',
       operationId: 'updateBodCodResultNotice',
       description:
-        'ต้องมี view + approve และผ่านทั้งสอง data scope; เฉพาะ monitoring_kpm/admin ที่ไม่ใช่ OWN_FACTORY และ WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
+        'ต้องมี view + approve และผ่านทั้งสอง data scope; เฉพาะ monitoring_kpm/monitoring_5_centers/admin ที่ไม่ใช่ OWN_FACTORY และ WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodResultNoticeRequest'), {
         reportCorrectness: 'ไม่ถูกต้องครบถ้วน',

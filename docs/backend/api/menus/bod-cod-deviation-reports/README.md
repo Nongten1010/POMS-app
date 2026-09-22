@@ -65,7 +65,8 @@ curl --request POST \
 | ขั้น | Role ที่ใช้ได้ |
 | --- | --- |
 | `INSPECTOR` | `monitoring_kpm`, `monitoring_5_centers`, `admin` |
-| `RESULT_NOTICE` รวมบันทึกแบบแจ้งผล | `monitoring_kpm`, `admin` |
+| `RESULT_NOTICE` สำหรับ workflow action | `monitoring_kpm`, `admin` |
+| บันทึกแบบแจ้งผลผ่าน `POST`/`PUT /:id/result-notice` | `monitoring_kpm`, `monitoring_5_centers`, `admin` |
 | `REVIEWER` | `kpm_director` |
 | `APPROVER` | `center_director`, `kwp_director` |
 
@@ -400,6 +401,8 @@ Resubmit ทำได้เฉพาะผู้ประกอบการเ�
 ### แบบแจ้งผล
 
 `POST` และ `PUT /api/v1/bod-cod-deviation-reports/:id/result-notice` เป็น upsert alias ที่มี behavior เดียวกัน และบันทึกได้เฉพาะ current step `RESULT_NOTICE`
+
+อนุญาต role `monitoring_kpm`, `monitoring_5_centers` หรือ `admin` ที่มี `bod_cod_errors:view` + `bod_cod_errors:approve` และผ่าน data scope ทั้งสองสิทธิ์ โดย scope ต้องไม่เป็น `OWN_FACTORY`; รายงานต้องอยู่สถานะ `WAITING_RESULT_NOTICE` และ current step เป็น `RESULT_NOTICE` / `PENDING` การบันทึกไม่เปลี่ยนขั้น workflow และสิทธิ์ workflow action ยังเป็นไปตามตารางข้างต้น
 
 `id` เป็น path parameter ชนิด positive integer
 

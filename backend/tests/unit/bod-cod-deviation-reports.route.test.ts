@@ -874,6 +874,37 @@ describe('BOD/COD deviation report routes', () => {
     });
   });
 
+  it.each(['post', 'put'] as const)(
+    'lets monitoring_5_centers save a result notice with %s',
+    async (method) => {
+      const token = signAccessToken({
+        sub: '77',
+        userType: 'officer',
+        roles: ['monitoring_5_centers'],
+        scopes: { 'bod_cod_errors:view': 'IN_REGION', 'bod_cod_errors:approve': 'IN_REGION' },
+        regionalAccess: { regions: ['ภาคเหนือ'] },
+      });
+      const payload: UpsertBodCodResultNoticeDTO = {
+        ...resultNoticePayload(),
+        checkedParameters: ['COD'],
+        comment: 'ทดสอบแบบแจ้งผล',
+        inspectorName: '',
+        inspectorPosition: '',
+      };
+      const response = await request(createApp())
+        [method]('/api/v1/bod-cod-deviation-reports/13/result-notice')
+        .set('Authorization', `Bearer ${token}`)
+        .send(payload);
+      expect(response.status).toBe(200);
+      expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(13, payload, {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION' },
+        viewScope: { scope: 'IN_REGION' },
+        regionalAccess: { regions: ['ภาคเหนือ'] },
+        roles: ['monitoring_5_centers'],
+      });
+    },
+  );
   it('lets officers save the BOD/COD result notice form when inspector signature fields are blank', async () => {
     const app = createApp();
     const payload: UpsertBodCodResultNoticeDTO = {

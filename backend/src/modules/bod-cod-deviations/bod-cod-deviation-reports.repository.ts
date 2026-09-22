@@ -1103,10 +1103,12 @@ async function assertCanUpsertResultNotice(
 ): Promise<EditableReportRow> {
   if (
     scopeValue(access.scope) === 'OWN_FACTORY' ||
-    !(access.roles ?? []).some((role) => ['monitoring_kpm', 'admin'].includes(role))
+    !(access.roles ?? []).some((role) =>
+      ['monitoring_kpm', 'monitoring_5_centers', 'admin'].includes(role),
+    )
   ) {
     throw new ForbiddenError(
-      'Only monitoring_kpm or admin officers can save BOD/COD result notices',
+      'Only monitoring_kpm, monitoring_5_centers or admin officers can save BOD/COD result notices',
     );
   }
 

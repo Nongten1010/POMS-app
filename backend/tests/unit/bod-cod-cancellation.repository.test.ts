@@ -153,23 +153,80 @@ describe('BOD/COD cancellation and mutation serialization', () => {
     expect(h.writes).toEqual([]);
   });
 
-  it('rejects result-notice writes from monitoring_5_centers even with approve scope', async () => {
+  it.each([
+    ['monitoring_5_centers', 'ALL'],
+    ['monitoring_5_centers', 'IN_REGION'],
+    ['monitoring_kpm', 'ALL'],
+    ['admin', 'ALL'],
+  ])('saves result notices for %s with %s approve scope', async (role, scope) => {
     const h = harness('WAITING_RESULT_NOTICE');
+    h.row.current_step_role_code = 'RESULT_NOTICE';
     await expect(
       repository.upsertResultNotice(
         9,
         {
           reportCorrectness: 'ถูกต้องครบถ้วน',
-          checkedParameters: ['BOD'],
+          checkedParameters: ['COD'],
           reviewResult: 'เห็นควรแจ้งผลการตรวจสอบ',
+          comment: 'ทดสอบแบบแจ้งผล',
           inspectorName: '',
           inspectorPosition: '',
         },
-        { actorUserId: 77, scope: 'ALL', roles: ['monitoring_5_centers'] },
+        {
+          actorUserId: 77,
+          scope,
+          viewScope: scope,
+          roles: [role],
+          regionalAccess: { regions: ['ภาคเหนือ'] },
+        },
       ),
-    ).rejects.toMatchObject({ statusCode: 403 });
-    expect(h.writes).toEqual([]);
+    ).resolves.toMatchObject({
+      statusCode: 'WAITING_RESULT_NOTICE',
+      resultNotice: {
+        checkedParameters: ['COD'],
+        comment: 'ทดสอบแบบแจ้งผล',
+        inspectorName: '',
+        inspectorPosition: '',
+      },
+    });
+    expect(h.writes).toEqual([
+      { table: 'bod_cod_result_notices', values: expect.objectContaining({ updated_by: 77 }) },
+    ]);
   });
+
+  it.each([
+    ['provincial_industry', 'ALL', 'WAITING_RESULT_NOTICE', true, 403],
+    ['monitoring_5_centers', 'OWN_FACTORY', 'WAITING_RESULT_NOTICE', true, 403],
+    ['monitoring_5_centers', 'IN_REGION', 'WAITING_RESULT_NOTICE', false, 404],
+    ['monitoring_5_centers', 'ALL', 'CANCELLED', true, 409],
+    ['monitoring_5_centers', 'ALL', 'WAITING_REVIEW', true, 409],
+  ] as const)(
+    'denies result notice for %s / %s / %s / visible=%s',
+    async (role, scope, status, visible, statusCode) => {
+      const h = harness(status, visible);
+      h.row.current_step_role_code = 'RESULT_NOTICE';
+      await expect(
+        repository.upsertResultNotice(
+          9,
+          {
+            reportCorrectness: 'ถูกต้องครบถ้วน',
+            checkedParameters: ['COD'],
+            reviewResult: 'เห็นควรแจ้งผลการตรวจสอบ',
+            inspectorName: '',
+            inspectorPosition: '',
+          },
+          {
+            actorUserId: 77,
+            scope,
+            viewScope: scope,
+            roles: [role],
+            regionalAccess: { regions: ['ภาคเหนือ'] },
+          },
+        ),
+      ).rejects.toMatchObject({ statusCode });
+      expect(h.writes).toEqual([]);
+    },
+  );
 });
 
 function harness(status: BodCodDeviationReportStatus, visible = true) {
@@ -195,6 +252,7 @@ function harness(status: BodCodDeviationReportStatus, visible = true) {
   };
   const calls: string[] = [];
   const writes: { table: string; values: unknown }[] = [];
+  let notice: Record<string, unknown> | undefined;
   const raw = jest.fn(async (_sql: string, _bindings: unknown[]) => {
     calls.push('lock');
   });
@@ -216,6 +274,7 @@ function harness(status: BodCodDeviationReportStatus, visible = true) {
         as: next,
         first: async () => {
           calls.push('read');
+          if (table === 'bod_cod_result_notices') return notice;
           return table === 'bod_cod_deviation_reports as r' && visible ? row : undefined;
         },
         update: async (values: unknown) => {
@@ -224,6 +283,7 @@ function harness(status: BodCodDeviationReportStatus, visible = true) {
         },
         insert: async (values: unknown) => {
           writes.push({ table, values });
+          if (table === 'bod_cod_result_notices') notice = { id: 1, ...(values as object) };
           return 1;
         },
         then: (resolve: (value: unknown[]) => unknown) => Promise.resolve([]).then(resolve),

@@ -170,6 +170,19 @@ function validationFields(documentation: JsonObject): JsonObject[] {
 }
 
 describe('POMS OpenAPI contract', () => {
+  it.each(['post', 'put'])('documents monitoring_5_centers result-notice access for %s', (method) => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const paths = asObject(document.paths, 'paths');
+    const endpoint = asObject(
+      paths['/bod-cod-deviation-reports/{id}/result-notice'],
+      'result notice',
+    );
+    const operation = asObject(endpoint[method], method);
+    expect(operation.description).toContain('monitoring_kpm/monitoring_5_centers/admin');
+    expect(operation.description).toContain('view + approve');
+    expect(operation.description).toContain('WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING');
+  });
+
   it('documents request table monitoring point code and name in the runtime response', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
