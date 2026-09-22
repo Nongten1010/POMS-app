@@ -74,6 +74,17 @@ describe('collaborative resubmission contract', () => {
       details: { path: 'measurementPoints', requestId: 101 },
     },
     {
+      name: 'pointCodeReservationMismatch',
+      reason: 'POINT_CODE_RESERVATION_MISMATCH',
+      message: 'Measurement point code reservation does not match its source point',
+      details: {
+        path: 'measurementPoints.0.pointCode',
+        requestId: 101,
+        measurementPointId: 201,
+        pointCode: 'S1054',
+      },
+    },
+    {
       name: 'pointCodeReleaseBlocked',
       reason: 'POINT_CODE_RELEASE_BLOCKED',
       message: 'Measurement point code is still referenced and cannot be released',
@@ -92,5 +103,60 @@ describe('collaborative resubmission contract', () => {
     expect(obj(schemas.ResubmitConnectionRequest).description).toEqual(
       expect.stringContaining(reason),
     );
+  });
+
+  it.each([
+    {
+      name: 'pointCodeReadOnly',
+      reason: 'POINT_CODE_READ_ONLY',
+      message: 'Assigned measurement point codes cannot be changed during resubmission',
+      path: 'measurementPoints.0.pointCode',
+    },
+    {
+      name: 'pointCodeIdentityRequired',
+      reason: 'POINT_CODE_IDENTITY_REQUIRED',
+      message: 'Existing point codes are required to identify renamed measurement points',
+      path: 'measurementPoints',
+    },
+  ])('publishes the read-only identity error $reason', ({ name, reason, message, path }) => {
+    const response = obj(obj(operation.responses)['400']);
+    const media = obj(obj(response.content)['application/json']);
+    expect(media.schema).toEqual({ $ref: '#/components/schemas/ErrorEnvelope' });
+    expect(obj(obj(media.examples)[name]).value).toEqual({
+      success: false,
+      error: { code: 'BAD_REQUEST', message, details: { path, reason } },
+    });
+    for (const description of [
+      response.description,
+      operation.description,
+      obj(schemas.ResubmitConnectionRequest).description,
+    ]) {
+      expect(description).toEqual(expect.stringContaining(reason));
+    }
+  });
+
+  it('keeps assigned point identity and limits new approval assignments to unassigned points', () => {
+    for (const description of [
+      operation.description,
+      obj(schemas.ResubmitConnectionRequest).description,
+    ]) {
+      for (const value of [
+        'ID เดิม',
+        'pointCode เดิม',
+        'assignment metadata',
+        'ลำดับ array',
+        'สลับหรือวนชื่อ',
+      ]) {
+        expect(description).toEqual(expect.stringContaining(value));
+      }
+    }
+    for (const path of ['/cems-wpms-requests/{id}/review', '/cems-wpms-requests/{id}/status']) {
+      const approval = obj(obj(obj(pomsOpenApiDocument.paths)[path]).post);
+      const media = obj(obj(obj(approval.requestBody).content)['application/json']);
+      const branches = obj(media.schema).oneOf as Obj[];
+      const assignment = obj(obj(branches[0].properties).pointCodeAssignments);
+      expect(assignment.description).toEqual(expect.stringContaining('เฉพาะจุดที่ยังไม่มีรหัส'));
+      expect(assignment.description).toEqual(expect.stringContaining('จุดที่มีรหัสแล้ว'));
+    }
   });
 });

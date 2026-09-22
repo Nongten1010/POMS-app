@@ -1298,15 +1298,11 @@ export const connectionRequestsService = {
     }
     const effectiveInput = effectiveInputResult.data;
     ensureRequestFormSections(effectiveInput, effectiveInput.requestType);
-    const formInput =
-      effectiveInput.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER
-        ? effectiveInput
-        : clearPendingPointCodes(effectiveInput);
-    const eligibleFactory = await requireActiveEligibleFactory(formInput);
+    const eligibleFactory = await requireActiveEligibleFactory(effectiveInput);
 
     return connectionRequestsRepository.replaceForm(
       id,
-      { ...formInput, eligibleFactoryId: eligibleFactory.id },
+      { ...effectiveInput, eligibleFactoryId: eligibleFactory.id },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
       { ...access, expectedUpdatedAt: input.expectedUpdatedAt ?? request.updatedAt },

@@ -204,7 +204,7 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 - รหัสเดิมรูปแบบอื่น เช่น `Wxxxx`, `CEMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` ยังอ่านเป็น opaque identifier ได้ แต่ไม่ถูกนำมาคำนวณเลขใหม่.
 - คำขอ `ADD_PARAMETER` ใช้รหัสจุดเดิมและไม่ออกรหัสใหม่.
 - `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับรหัสจุดนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`; รหัสดังกล่าวถูกจองในทะเบียนกลางและห้ามใช้ซ้ำขณะที่ยังมีการจองอยู่.
-- เมื่อส่งแบบแก้ไขผ่าน `PUT /:id/form` ระบบลบแถวจุดเดิมที่ยังไม่เคยเชื่อมต่ออย่างถาวร และคืนเฉพาะการจองรหัสที่เป็นของจุดนั้นในคำขอนั้น ภายใต้ [กติกาการแทนที่จุดและคืนรหัส](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform). ไม่เก็บแถวจุดที่ถูกแทนที่เป็นประวัติ แต่ยังเก็บประวัติสถานะคำขอ; รหัสที่มีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้ว จะไม่ถูกคืน.
+- เมื่อส่งแบบแก้ไขผ่าน `PUT /:id/form` จุด active ที่มีรหัสและยังอยู่ในฟอร์มคง ID, `pointCode`, assignment metadata และเจ้าของการจองเดิม ผู้ประกอบการแก้รายละเอียดได้แต่เปลี่ยนรหัสเองไม่ได้; ใช้รหัสเดิมจาก `GET /:id/form` ระบุจุด โดยไม่อาศัยลำดับ array. จุดที่มีรหัสซึ่งตัดออกจริงหรือ soft-delete เก่าจะถูกลบถาวรและคืนการจองหลังตรวจการอ้างอิง ส่วน snapshot ของจุดที่ยังไม่มีรหัสยังถูกแทนที่และได้รับ ID ใหม่ตาม flow เดิม แม้ยังอยู่ในฟอร์ม; `ADD_PARAMETER` ยังแทนที่ snapshot ของคำขอแต่คงรหัสและเจ้าของการจองที่จุดต้นทาง ภายใต้ [กติกาการรักษาจุดเดิมและคืนรหัส](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform). ไม่เก็บแถวจุดที่ลบเป็นประวัติ แต่ยังเก็บประวัติสถานะคำขอ; รหัสที่มีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้ว จะไม่ถูกคืน.
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
 
 เพื่อรองรับข้อมูลที่เคยมี `/` อยู่ในรหัสจุด:
@@ -670,7 +670,7 @@ Request fields:
 | ---------------------- | -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `decision`             | string         | yes      | ต้องเป็น `APPROVE_DESIGN` สำหรับ flow นี้                                                                                                  |
 | `officerNote`          | string \| null | no       | ข้อความที่ trim แล้ว สูงสุด 1000 ตัวอักษร                                                                                                  |
-| `pointCodeAssignments` | array          | no       | ถ้าไม่ส่ง backend ถือว่าทุกจุดเป็น `AUTO`; ถ้าส่งแต่ละรายการต้องอ้าง `measurementPointId` ของจุดในคำขอและเลือก `AUTO` หรือ `MANUAL_LEGACY` |
+| `pointCodeAssignments` | array          | no       | ถ้าไม่ส่ง backend ใช้ `AUTO` เฉพาะจุดที่ยังไม่มีรหัส; ถ้าส่งแต่ละรายการต้องอ้าง `measurementPointId` ของจุดในคำขอและเลือก `AUTO` หรือ `MANUAL_LEGACY` |
 
 Minimal request:
 
@@ -704,13 +704,13 @@ Minimal request:
 
 กติกา `pointCodeAssignments`
 
-- omission หรือไม่ส่ง field นี้ หมายถึง `AUTO` ทุกจุดและยัง backward compatible กับ client เดิม
+- omission หรือไม่ส่ง field นี้ หมายถึง `AUTO` เฉพาะจุดที่ยังไม่มีรหัส จุดที่มีรหัสแล้วคงรหัสเดิมและไม่ต้องส่ง assignment ซ้ำ
 - ถ้าส่ง array ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน; ไม่รับ array บางส่วน
 - `assignmentMode = "AUTO"` ให้ระบบออกรหัสใหม่ตาม Point-code Contract ช่วง `S/P2001-9999`
 - `assignmentMode = "MANUAL_LEGACY"` ใช้ได้เฉพาะรหัสเดิมรูปแบบ `^[SP]\\d{4}$`, ค่าตัวเลขช่วง `0001-1999` และ prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = P`)
 - เมื่อเป็น `MANUAL_LEGACY` ต้องส่งทั้ง `pointCode` และ `reason` โดย `reason` ต้องยาวไม่เกิน 500 ตัวอักษร
 - รหัสที่ยังจองอยู่ห้ามนำกลับมาใช้ซ้ำ ทั้งจุดที่รอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว; ถ้าชนกันระบบตอบ `409 CONFLICT` พร้อม `error.details.reason = "POINT_CODE_ALREADY_ASSIGNED"`
-- รหัส legacy ที่คืนการจองแล้วหลังส่งแบบแก้ไขและลบจุดเดิมที่ยังไม่เคยเชื่อมต่อ สามารถกำหนดให้จุดใหม่ด้วย `MANUAL_LEGACY` ในการอนุมัติครั้งถัดไป โดยต้องยังว่างและผ่านกฎช่วงรหัสเดิม ดู [Point-code Contract](#point-code-contract)
+- รหัส legacy ที่คืนการจองแล้วหลังส่งแบบแก้ไขและลบจุดที่ตัดออกจริงหรือ soft-delete เก่า ซึ่งยังไม่เคยเชื่อมต่อ สามารถกำหนดให้จุดใหม่ด้วย `MANUAL_LEGACY` ในการอนุมัติครั้งถัดไป โดยต้องยังว่างและผ่านกฎช่วงรหัสเดิม ดู [Point-code Contract](#point-code-contract)
 
 Relevant response fields (`200 OK`):
 
@@ -755,7 +755,7 @@ Request fields สำหรับ approve branch:
 | ---------------------- | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `action`               | string         | yes      | ต้องเป็น `APPROVE_FORM`                                                                                                    |
 | `officerNote`          | string \| null | no       | ข้อความที่ trim แล้ว สูงสุด 1000 ตัวอักษร                                                                                  |
-| `pointCodeAssignments` | array          | no       | omission = `AUTO` ทุกจุด; ถ้าส่ง `MANUAL_LEGACY` ต้องมี `pointCode` กับ `reason` และรหัสต้องอยู่ช่วง legacy `S/P0001-1999` |
+| `pointCodeAssignments` | array          | no       | omission = `AUTO` เฉพาะจุดที่ยังไม่มีรหัส; ถ้าส่ง `MANUAL_LEGACY` ต้องมี `pointCode` กับ `reason` และรหัสต้องอยู่ช่วง legacy `S/P0001-1999` |
 
 Minimal request:
 
@@ -1046,6 +1046,6 @@ Minimal response:
 | Tests                            | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connection-requests.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`connection-point-monitoring-status-migration.test.ts`](../../../../../backend/tests/unit/connection-point-monitoring-status-migration.test.ts), [`wpms-request-number-migration.test.ts`](../../../../../backend/tests/unit/wpms-request-number-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
 | Evidence                         | [Fully exempted active point TDD](../../../evidence/connection-requests/fully-exempted-active-point.tdd.md), [Add-measurement-point submission action TDD](../../../evidence/connection-requests/add-measurement-point-submission-action.tdd.md), [Request-number format TDD](../../../evidence/connection-requests/request-number-full-year-format.tdd.md), [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
-การแทนที่จุดเมื่อส่งแบบแก้ไขและคืนรหัส: ดู `removeUnconnectedRequestPoints` ใน [โมดูลลบจุดที่ยังไม่เคยเชื่อมต่อ](../../../../../backend/src/modules/connection-requests/connection-request-point-cleanup.ts) ซึ่งถูกเรียกจาก [repository](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts), [migration ตรวจการคืนรหัส](../../../../../backend/src/db/migrations/0126_allow_unconnected_point_code_release.ts), [repository regression tests](../../../../../backend/tests/unit/connection-requests.current-factory-profile.repository.test.ts) และ [runtime OpenAPI tests](../../../../../backend/tests/unit/connection-requests.resubmit.openapi.test.ts).
+การส่งแบบแก้ไขคง ID และรหัสของจุดเดิมที่ได้รับรหัสแล้วด้วย `planResubmittedMeasurementPoints` ใน repository ส่วนจุดที่ตัดออกหรือ snapshot ที่ต้องแทนที่ตามกติกาข้างต้นถูกลบด้วย `removeUnconnectedRequestPoints` ใน [โมดูลลบจุดที่ยังไม่เคยเชื่อมต่อ](../../../../../backend/src/modules/connection-requests/connection-request-point-cleanup.ts) ซึ่งถูกเรียกจาก [repository](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts), [migration ตรวจการคืนรหัส](../../../../../backend/src/db/migrations/0126_allow_unconnected_point_code_release.ts), [repository regression tests](../../../../../backend/tests/unit/connection-requests.current-factory-profile.repository.test.ts) และ [runtime OpenAPI tests](../../../../../backend/tests/unit/connection-requests.resubmit.openapi.test.ts).
 
 กรณีทะเบียนยังผูกกับจุดเก่าที่ถูกแทนที่ก่อนใช้พฤติกรรมใหม่นี้ ดู [คู่มือล้างจุดที่ยังไม่เชื่อมต่อและคืนรหัสค้าง](../../../guides/cleanup-unconnected-point-code.md) สำหรับสคริปต์ตรวจและล้างเฉพาะ `S0527` โดยคงจุดปัจจุบันและประวัติสถานะคำขอ.

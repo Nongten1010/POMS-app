@@ -6121,14 +6121,7 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.replaceForm).toHaveBeenCalledWith(
       1,
-      {
-        ...normalizedPayload,
-        eligibleFactoryId: 9,
-        measurementPoints: normalizedPayload.measurementPoints.map((point) => ({
-          ...point,
-          pointCode: null,
-        })),
-      },
+      { ...normalizedPayload, eligibleFactoryId: 9 },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
       {
@@ -6137,6 +6130,47 @@ describe('connectionRequestsService', () => {
         regionalAccess: undefined,
         expectedUpdatedAt: now.toISOString(),
       },
+    );
+  });
+
+  it('preserves an officer-assigned point code when resubmitting a direct request', async () => {
+    const assignedPoint: ConnectionRequestDTO['measurementPoints'][number] = {
+      id: 10041,
+      pointName: 'ปล่องระบาย A',
+      pointCode: 'S0527',
+      pointCodeAssignmentMode: 'OFFICER_DIRECT',
+      pointType: 'STACK',
+      latitude: null,
+      longitude: null,
+      parameters: [],
+      description: null,
+    };
+    const current = requestDto({
+      id: 10037,
+      submissionSource: 'OFFICER_DIRECT_API',
+      status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+      measurementPoints: [assignedPoint],
+    });
+    const revisedPayload = {
+      ...payload,
+      measurementPoints: [{ ...payload.measurementPoints[0], pointCode: 'S0527' }],
+    };
+    mockedRepository.findById.mockResolvedValue(current);
+    mockedRepository.replaceForm.mockResolvedValue({
+      ...current,
+      status: CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+    });
+
+    await connectionRequestsService.resubmit(10037, revisedPayload, actorUserId);
+
+    expect(mockedRepository.replaceForm).toHaveBeenCalledWith(
+      10037,
+      expect.objectContaining({
+        measurementPoints: [expect.objectContaining({ pointCode: 'S0527' })],
+      }),
+      actorUserId,
+      CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+      expect.objectContaining({ expectedUpdatedAt: current.updatedAt }),
     );
   });
 

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readPomsManagedStatuses } from '../poms-factories/poms-status-management.state';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
@@ -1265,7 +1266,12 @@ export const connectionRequestsRepository = {
         trx,
         input.eligibleFactoryId,
       );
-      await removeUnconnectedRequestPoints(trx, id);
+      const pointPlan = await planResubmittedMeasurementPoints(trx, id, input);
+      await removeUnconnectedRequestPoints(
+        trx,
+        id,
+        pointPlan.flatMap(({ existingId }) => (existingId === undefined ? [] : [existingId])),
+      );
       await trx('cems_wpms_connection_requests')
         .where('id', id)
         .whereNull('deleted_at')
@@ -1280,7 +1286,25 @@ export const connectionRequestsRepository = {
           updated_at: trx.fn.now(),
         });
 
-      await insertMeasurementPoints(trx, id, input.measurementPoints, actorUserId);
+      await stageResubmittedPointNames(trx, id, pointPlan);
+
+      for (const { point, existingId } of pointPlan) {
+        if (existingId === undefined) {
+          await insertMeasurementPoints(trx, id, [point], actorUserId);
+        } else {
+          // Keep the source ID, code, creator and assignment metadata owned by the server.
+          const { request_id, point_code, created_by, ...editable } = toMeasurementPointInsertRow(
+            id,
+            point,
+            actorUserId,
+          );
+          await trx('cems_wpms_measurement_points')
+            .where('id', existingId)
+            .where('request_id', id)
+            .whereNull('deleted_at')
+            .update({ ...editable, updated_at: trx.fn.now() });
+        }
+      }
       await upsertFactorySnapshot(trx, id, input, actorUserId);
       const changedFields = Object.entries(toRequestRow(input))
         .filter(
@@ -3123,6 +3147,152 @@ function toFactorySnapshotInsertRow(
     created_by: actorUserId,
     updated_by: actorUserId,
   };
+}
+
+interface ResubmittedPointPlan {
+  point: MeasurementPointInput;
+  existingId?: number;
+  existingName?: string;
+}
+
+/** Resolve read-only codes against persisted ownership while the request is locked. */
+async function planResubmittedMeasurementPoints(
+  trx: Knex.Transaction,
+  requestId: number,
+  input: CreateConnectionRequestInput,
+): Promise<ResubmittedPointPlan[]> {
+  if (input.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) {
+    return input.measurementPoints.map((point) => ({ point }));
+  }
+  const current = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
+    .where('request_id', requestId)
+    .whereNull('deleted_at')
+    .forUpdate()
+    .select('id', 'point_name', 'point_code', 'point_code_assignment_mode');
+  const assigned = current.filter((point) => point.point_code?.trim());
+  if (assigned.length === 0) {
+    return input.measurementPoints.map((point) => ({ point: { ...point, pointCode: null } }));
+  }
+
+  const usedIds = new Set<number>();
+  const plan: ResubmittedPointPlan[] = [];
+  for (const [index, point] of input.measurementPoints.entries()) {
+    const code = normalizePointCode(point.pointCode ?? '');
+    let matches = code
+      ? assigned.filter((stored) => normalizePointCode(stored.point_code ?? '') === code)
+      : assigned.filter(
+          (stored) =>
+            stored.point_name.trim().toLowerCase() === point.pointName.trim().toLowerCase(),
+        );
+    if (
+      !code &&
+      matches.length === 0 &&
+      current.length === 1 &&
+      input.measurementPoints.length === 1
+    ) {
+      matches = assigned;
+    }
+    if (
+      (code && matches.length !== 1) ||
+      matches.length > 1 ||
+      (matches.length === 1 && usedIds.has(Number(matches[0].id)))
+    ) {
+      throw new BadRequestError(
+        'Assigned measurement point codes cannot be changed during resubmission',
+        {
+          path: `measurementPoints.${index}.pointCode`,
+          reason: 'POINT_CODE_READ_ONLY',
+        },
+      );
+    }
+    const stored = matches[0];
+    if (!stored) {
+      plan.push({ point: { ...point, pointCode: null } });
+      continue;
+    }
+    const existingId = Number(stored.id);
+    const storedCode = normalizePointCode(stored.point_code ?? '');
+    const reservation = await trx('cems_wpms_point_code_registry')
+      .where('normalized_point_code', storedCode)
+      .forUpdate()
+      .first('source_request_id', 'source_measurement_point_id', 'assignment_mode');
+    if (
+      !reservation ||
+      Number(reservation.source_request_id) !== requestId ||
+      Number(reservation.source_measurement_point_id) !== existingId ||
+      (stored.point_code_assignment_mode &&
+        reservation.assignment_mode !== stored.point_code_assignment_mode)
+    ) {
+      throw new ConflictError(
+        'Measurement point code reservation does not match its source point',
+        {
+          path: `measurementPoints.${index}.pointCode`,
+          reason: 'POINT_CODE_RESERVATION_MISMATCH',
+          requestId,
+          measurementPointId: existingId,
+          pointCode: storedCode,
+        },
+      );
+    }
+    usedIds.add(existingId);
+    plan.push({
+      existingId,
+      existingName: stored.point_name,
+      point: { ...point, pointCode: stored.point_code },
+    });
+  }
+  // Known unassigned points may remain while an assigned point is explicitly removed.
+  // Only unmatched new names are ambiguous with a renamed assigned point.
+  const hasUnidentifiedPoint = plan.some(
+    ({ existingId, point }) =>
+      existingId === undefined &&
+      !current.some(
+        (stored) =>
+          !stored.point_code?.trim() &&
+          stored.point_name.trim().toLowerCase() === point.pointName.trim().toLowerCase(),
+      ),
+  );
+  if (usedIds.size < assigned.length && hasUnidentifiedPoint) {
+    throw new BadRequestError(
+      'Existing point codes are required to identify renamed measurement points',
+      {
+        path: 'measurementPoints',
+        reason: 'POINT_CODE_IDENTITY_REQUIRED',
+      },
+    );
+  }
+  return plan;
+}
+
+/** Free renamed points' names before final writes can reuse them in any order. */
+async function stageResubmittedPointNames(
+  trx: Knex.Transaction,
+  requestId: number,
+  plan: ResubmittedPointPlan[],
+): Promise<void> {
+  const submittedNames = new Set(plan.map(({ point }) => point.pointName.trim().toLowerCase()));
+  for (const { point, existingId, existingName } of plan) {
+    if (existingId === undefined || point.pointName === existingName) continue;
+
+    // SQL Server enforces the active-name unique index on each statement. Keep
+    // temporary names within the locked transaction; IDs and reservations stay intact.
+    let temporaryName: string;
+    do {
+      temporaryName = `__poms_resubmit_${randomUUID()}_${existingId}`;
+    } while (
+      submittedNames.has(temporaryName.toLowerCase()) ||
+      (await trx('cems_wpms_measurement_points')
+        .where('request_id', requestId)
+        .where('point_name', temporaryName)
+        .whereNull('deleted_at')
+        .first('id'))
+    );
+    await trx('cems_wpms_measurement_points')
+      .where('id', existingId)
+      .where('request_id', requestId)
+      .whereNull('deleted_at')
+      .update({ point_name: temporaryName });
+  }
 }
 
 async function insertMeasurementPoints(
