@@ -49,6 +49,7 @@ import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasurementMethodOptions.json'
 import { createKwpFormPdf } from '../utils/kwpFormPdf'
+import { isCancelledOrRejectedRequest } from '../utils/requestProcessStatus.mjs'
 import {
   canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata,
   getKwpReportPeriod, getKwpAttachmentValidationError, getKwpLink, readKwpApiResponse,
@@ -461,7 +462,7 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
 
 function RequestActions({ row, isOperator, isAdmin = false, canApprove = false, onOpenDocument, onCancelRequest }) {
   const rowStatuses = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
-  const cannotProcess = rowStatuses.some((status) => (
+  const cannotProcess = isCancelledOrRejectedRequest(row) || rowStatuses.some((status) => (
     ['ผ่านการพิจารณา', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(status)
   ))
   const canEdit = canEditKwpRequest(row, { isOperator, isAdmin })
@@ -5145,6 +5146,10 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
 
   const openRequestDocument = useCallback(async (row, mode) => {
     if (mode === 'review' && !canApprove) return
+    if (mode === 'review' && isCancelledOrRejectedRequest(row)) {
+      setRequestsError('ไม่สามารถดำเนินการคำขอที่ยกเลิกหรือไม่อนุมัติได้')
+      return
+    }
     if (mode === 'edit') {
       if (!canEditKwpRequest(row, { isOperator, isAdmin })) return
       setRequestsError('')
@@ -5196,13 +5201,14 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
 
     try {
       const detail = await fetchKwpSubmissionDetail(row)
-
+      const previewData = buildKwpRequestPreviewDataFromDetail(detail, row)
+      const blockedReview = mode === 'review' && isCancelledOrRejectedRequest(previewData)
       setRequestDocument({
-        mode,
+        mode: blockedReview ? 'view' : mode,
         row,
-        data: buildKwpRequestPreviewDataFromDetail(detail, row),
+        data: previewData,
         loading: false,
-        error: '',
+        error: blockedReview ? 'สถานะคำขอเปลี่ยนเป็นยกเลิกหรือไม่อนุมัติแล้ว เปิดดูได้เท่านั้น' : '',
       })
     } catch (requestError) {
       setRequestDocument({

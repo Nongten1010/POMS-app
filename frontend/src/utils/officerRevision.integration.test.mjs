@@ -34,6 +34,8 @@ test('officers reuse request actions to edit revisions without gaining creation 
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
           return `${code}\nexport { getPageRequestColumns, canSubmitMasterDataForm, isFactoryRequestAwaitingRevision };`
         }
+        if (id.endsWith('/src/pages/KwpFormsPage.jsx')) return `${code}\nexport { RequestActions };`
+        if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions };`
       },
     }],
   })
@@ -43,6 +45,35 @@ test('officers reuse request actions to edit revisions without gaining creation 
     const { default: MasterDataPage, getPageRequestColumns, canSubmitMasterDataForm, isFactoryRequestAwaitingRevision } = await server.ssrLoadModule('/src/pages/MasterDataPage.jsx')
     if (originalWindow === undefined) delete globalThis.window
     else globalThis.window = originalWindow
+
+    await t.test('all four menus disable process for cancelled or rejected requests while preserving view', async () => {
+      const kwp = await server.ssrLoadModule('/src/pages/KwpFormsPage.jsx')
+      const bod = await server.ssrLoadModule('/src/pages/BodCodReportPage.jsx')
+      const permissions = { bod_cod_errors: { view: true, approve: true, edit: true } }
+      const masterColumn = getPageRequestColumns(() => {}, () => {}, null, true, { isOfficer: true })
+        .find(({ field }) => field === 'actions')
+      for (const status of ['CANCELED', 'CANCELLED', 'REJECTED', 'ยกเลิก', 'ไม่อนุมัติ', 'ไม่ผ่านการพิจารณา']) {
+        for (const field of ['statusCode', 'status', 'statusLabel']) {
+          const row = { id: 1, [field]: status, allowedActions: ['APPROVE', 'REQUEST_REVISION'],
+            currentStep: { roleCode: 'INSPECTOR', isCurrent: true, status: 'PENDING' } }
+          if (field === 'statusCode') row.status = 'รอพิจารณา'
+          const menus = {
+            connection: buttons(OfficerRequestActions({ row, canProcessRequest: true, onOpenRequestDocument: () => {}, onOpenRequestProcess: () => {} })),
+            master: buttons(masterColumn.renderCell({ row })),
+            kwp: buttons(kwp.RequestActions({ row, isOperator: false, isAdmin: true, canApprove: true, onOpenDocument: () => {} })),
+            bod: buttons(bod.ReportActions({ row, mode: 'officer', actionContext: { userType: 'officer', roleCode: 'monitoring_kpm', permissions } })),
+          }
+          for (const [menu, actions] of Object.entries(menus)) {
+            const process = actions.find((button) => button.props.children === 'ดำเนินการ')
+            assert.ok(process, `${menu}/${field}/${status}: process remains visible`)
+            assert.equal(process.props.disabled, true, `${menu}/${field}/${status}`)
+            assert.equal(Boolean(actions[0].props.disabled), false, `${menu}: view remains enabled`)
+            const html = renderToStaticMarkup(process)
+            assert.match(html, /disabled=""/)
+          }
+        }
+      }
+    })
 
     await t.test('connection actions keep view, process, edit, settings order and independent permissions', () => {
       for (const requestType of ['ADD_MEASUREMENT_POINT', 'ADD_PARAMETER']) {

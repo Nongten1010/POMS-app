@@ -60,6 +60,7 @@ import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
 import { buildPreviousConnectionRequestPrefill, loadPreviousConnectionRequest } from '../utils/previousConnectionRequest.mjs'
 import { canCancelConnectionRequest } from '../utils/connectionRequestCancellation.mjs'
+import { isCancelledOrRejectedRequest } from '../utils/requestProcessStatus.mjs'
 import { buildEligibleFactoryAddRequestDraft } from '../utils/eligibleFactoryAddRequest.mjs'
 import { isModbusParameterRow } from '../utils/modbusAddress.mjs'
 import { getAddParameterGroups } from '../utils/addParameterPrefill.mjs'
@@ -2554,6 +2555,7 @@ function OfficerRequestActions({ row, canProcessRequest = false, canEditRequest 
   const statuses = getRequestActionStatuses(row)
   const isRevisionRequested = statuses.some((status) => ['รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION'].includes(status))
   const isProcessDisabled = !canProcessRequest
+    || isCancelledOrRejectedRequest(row)
     || statuses.some((status) => [
       'รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION',
       'รอเชื่อมต่อ', 'WAITING_CONNECTION',
@@ -8292,6 +8294,10 @@ function ConnectionRequestPage({
     [canViewFactoryTable, handleOpenNewRequestForm, isOperator, openIntentDialog],
   )
   const handleOpenRequestDocument = useCallback(async (row, mode = 'view') => {
+    if (mode === 'process' && isCancelledOrRejectedRequest(row)) {
+      setRequestTableError('ไม่สามารถดำเนินการคำขอที่ยกเลิกหรือไม่อนุมัติได้')
+      return
+    }
     clearRequestDocumentPdf()
     setRequestDocument(row)
     setRequestDocumentMode(mode)
@@ -8326,6 +8332,13 @@ function ConnectionRequestPage({
 
       const detailedRequest = mapRequestDetailRow(payload?.data ?? {}, row)
       setRequestDocument(detailedRequest)
+      if (mode === 'process' && isCancelledOrRejectedRequest(detailedRequest)) {
+        setRequestDocumentMode('view')
+        setRequestDocumentError('สถานะคำขอเปลี่ยนเป็นยกเลิกหรือไม่อนุมัติแล้ว เปิดดูได้เท่านั้น')
+        setRequestDocumentLoading(false)
+        await generateRequestDocumentPdf(detailedRequest)
+        return
+      }
       setRequestDocumentError('')
       setRequestDocumentLoading(false)
       await generateRequestDocumentPdf(detailedRequest)

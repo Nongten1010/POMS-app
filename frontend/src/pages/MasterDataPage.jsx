@@ -35,6 +35,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestDocumentDialog, RequestFormBottomSheet } from './ConnectionRequestPage'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
+import { isCancelledOrRejectedRequest } from '../utils/requestProcessStatus.mjs'
 import { getContactComparison, getMeasurementPointComparisonPair, getMeasurementPointComparisonPairs } from '../utils/contactComparison.mjs'
 import {
   FACTORY_BASIC_INFO_EIA_OPTIONS,
@@ -819,7 +820,7 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, is
               <Button
                 size="small"
                 variant="contained"
-                disabled={!isAdmin || !actionableRequestStatuses.includes(params.row.status)}
+                disabled={!isAdmin || isCancelledOrRejectedRequest(params.row) || !actionableRequestStatuses.includes(params.row.status)}
                 onClick={() => onEditRequest?.(params.row)}
               >
                 ดำเนินการ
@@ -2661,7 +2662,13 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     setActionLoading(true)
     setTableError('')
     try {
+      if (review && isCancelledOrRejectedRequest(request)) {
+        throw new Error('ไม่สามารถดำเนินการคำขอที่ยกเลิกหรือไม่อนุมัติได้')
+      }
       const detail = await loadRequestDetail(request)
+      if (review && isCancelledOrRejectedRequest(detail)) {
+        throw new Error('สถานะคำขอเปลี่ยนเป็นยกเลิกหรือไม่อนุมัติแล้ว กรุณาโหลดรายการใหม่')
+      }
       if (review) {
         setReviewingRequest(detail)
       } else {
