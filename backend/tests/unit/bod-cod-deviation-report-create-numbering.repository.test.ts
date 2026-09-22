@@ -281,7 +281,8 @@ function createReportHarness(
       ],
     ],
     ['bod_cod_deviation_measurements', [{ insert: measurementInsert }]],
-    ['bod_cod_approval_steps', [{ insert: approvalStepInsert }, thenableBuilder(approvalSteps)]],
+    ['bod_cod_approval_steps', [{ insert: approvalStepInsert }]],
+    ['bod_cod_approval_steps as s', [thenableBuilder(approvalSteps)]],
   ]);
 
   const trx = Object.assign(

@@ -343,6 +343,17 @@ Resubmit ทำได้เฉพาะผู้ประกอบการเ�
 
 `id` เป็น path parameter ชนิด positive integer และต้องเป็นรายงานที่ผู้ใช้เข้าถึงได้ตาม data scope
 
+ข้อมูลผู้ดำเนินการในแต่ละขั้นตอน:
+
+| Field | Type | ความหมาย |
+| --- | --- | --- |
+| `steps[].actorUserId` | integer \| null | รหัสผู้ดำเนินการของขั้นตอนนั้น |
+| `steps[].actorName` | string \| null | ชื่อผู้อนุมัติหรือผู้ดำเนินการของขั้นตอนนั้น ใช้ชื่อที่บันทึกไว้ก่อน หากว่างจะอ่านคำนำหน้า ชื่อ และนามสกุลจาก `users` ตาม `actorUserId`; trim แต่ละส่วนและเชื่อมด้วยช่องว่าง หากไม่มีชื่อใช้ `username` |
+| `steps[].status` | string | สถานะขั้นตอน เช่น `APPROVED`, `PENDING` หรือ `WAITING` |
+| `steps[].decidedAt` | string \| null | วันเวลาที่ดำเนินการ รูปแบบ ISO 8601 |
+
+`actorName` มี key เสมอและคืน `null` เมื่อยังไม่มีผู้ดำเนินการ หรือไม่มีทั้งชื่อที่บันทึกไว้และชื่อผู้ใช้ที่ค้นหาได้ โดยยังคง step และ `actorUserId` เดิม รายงานเก่าที่มี `actorUserId` แต่ไม่มีชื่อจะอ่านชื่อได้ทันทีโดยไม่ต้องอนุมัติซ้ำ ชื่อที่อ่านจาก `users` อาจเปลี่ยนตามข้อมูลผู้ใช้ ส่วน `currentStep` ใช้ข้อมูลเดียวกับสมาชิกของ `steps[]`
+
 ```json
 {
   "success": true,
@@ -354,7 +365,7 @@ Resubmit ทำได้เฉพาะผู้ประกอบการเ�
     "reportYear": 2569,
     "selectedParameterCode": "BOD",
     "selectedParameterLabel": "BOD (mg/l)",
-    "statusCode": "SUBMITTED",
+    "statusCode": "WAITING_RESULT_NOTICE",
     "measurements": [
       {
         "parameterCode": "BOD",
@@ -370,8 +381,52 @@ Resubmit ทำได้เฉพาะผู้ประกอบการเ�
     ],
     "attachments": [],
     "resultNotice": null,
-    "currentStep": null,
-    "steps": [],
+    "currentStep": {
+      "id": 2,
+      "stepNo": 2,
+      "roleCode": "RESULT_NOTICE",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)",
+      "status": "PENDING",
+      "actorUserId": null,
+      "actorName": null,
+      "decidedAt": null,
+      "isCurrent": true
+    },
+    "steps": [
+      {
+        "id": 1,
+        "stepNo": 1,
+        "roleCode": "INSPECTOR",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)",
+        "status": "APPROVED",
+        "actorUserId": 77,
+        "actorName": "นาย สมชาย ใจดี",
+        "decidedAt": "2026-09-01T10:00:00.000Z",
+        "isCurrent": false
+      },
+      {
+        "id": 2,
+        "stepNo": 2,
+        "roleCode": "RESULT_NOTICE",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)",
+        "status": "PENDING",
+        "actorUserId": null,
+        "actorName": null,
+        "decidedAt": null,
+        "isCurrent": true
+      },
+      {
+        "id": 3,
+        "stepNo": 3,
+        "roleCode": "APPROVER",
+        "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
+        "status": "WAITING",
+        "actorUserId": null,
+        "actorName": null,
+        "decidedAt": null,
+        "isCurrent": false
+      }
+    ],
     "allowedActions": []
   }
 }

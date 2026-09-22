@@ -187,6 +187,10 @@ interface ApprovalStepRow {
   status: BodCodApprovalStepStatus;
   actor_user_id: number | string | null;
   actor_name: string | null;
+  actor_prename_th: string | null;
+  actor_first_name: string | null;
+  actor_last_name: string | null;
+  actor_username: string | null;
   actor_position: string | null;
   decision: string | null;
   comment: string | null;
@@ -1844,25 +1848,30 @@ async function listApprovalSteps(
   reportId: number,
   connection: Knex | Knex.Transaction = db,
 ): Promise<BodCodWorkflowStepDTO[]> {
-  const rows = await connection<ApprovalStepRow>('bod_cod_approval_steps')
-    .where('report_id', reportId)
-    .whereNull('deleted_at')
+  const rows = await connection<ApprovalStepRow>('bod_cod_approval_steps as s')
+    .leftJoin('users as u', 'u.id', 's.actor_user_id')
+    .where('s.report_id', reportId)
+    .whereNull('s.deleted_at')
     .select(
-      'id',
-      'step_no',
-      'track',
-      'role_code',
-      'role_label',
-      'status',
-      'actor_user_id',
-      'actor_name',
-      'actor_position',
-      'decision',
-      'comment',
-      'decided_at',
-      'is_current',
+      's.id',
+      's.step_no',
+      's.track',
+      's.role_code',
+      's.role_label',
+      's.status',
+      's.actor_user_id',
+      's.actor_name',
+      'u.prename_th as actor_prename_th',
+      'u.first_name as actor_first_name',
+      'u.last_name as actor_last_name',
+      'u.username as actor_username',
+      's.actor_position',
+      's.decision',
+      's.comment',
+      's.decided_at',
+      's.is_current',
     )
-    .orderBy('step_no', 'asc');
+    .orderBy('s.step_no', 'asc');
   return rows.map(toApprovalStepDTO);
 }
 
@@ -2065,7 +2074,14 @@ function toApprovalStepDTO(row: ApprovalStepRow): BodCodWorkflowStepDTO {
     roleLabel: approvalStepRoleLabel(row.track, Number(row.step_no)) ?? row.role_label,
     status: row.status,
     actorUserId: toNumberOrNull(row.actor_user_id),
-    actorName: row.actor_name,
+    actorName:
+      row.actor_name?.trim() ||
+      displayUserName({
+        prename: row.actor_prename_th?.trim() || null,
+        firstName: row.actor_first_name?.trim() || null,
+        lastName: row.actor_last_name?.trim() || null,
+        username: row.actor_username?.trim() || null,
+      }),
     actorPosition: row.actor_position,
     decision: row.decision,
     comment: row.comment,
