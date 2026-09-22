@@ -423,7 +423,7 @@ criteria normalization สำคัญ
 
 | Field                                       | Location | Required    | Type   | Validation และ behavior                                                                                           |
 | ------------------------------------------- | -------- | ----------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
-| `pointCodeAssignments`                      | body     | No          | array  | omission = `AUTO` ทุกจุด; ถ้าส่งได้ 1-100 รายการ                                                                  |
+| `pointCodeAssignments`                      | body     | No          | array  | omission = `AUTO` เฉพาะจุดที่ยังไม่มีรหัส; ถ้าส่งได้ 1-100 รายการ                                                                  |
 | `pointCodeAssignments[].measurementPointId` | body     | Yes         | number | ต้องเป็น id ของ measurement point ภายในคำขอที่กำลังอนุมัติ                                                        |
 | `pointCodeAssignments[].assignmentMode`     | body     | Yes         | enum   | `AUTO` หรือ `MANUAL_LEGACY`                                                                                       |
 | `pointCodeAssignments[].pointCode`          | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; ต้อง match `^[SP]\\d{4}$` และค่าตัวเลขต้องอยู่ช่วง `0001-1999` |
@@ -431,14 +431,14 @@ criteria normalization สำคัญ
 
 ### Business rules
 
-- ถ้าไม่ส่ง `pointCodeAssignments` backend ใช้ behavior เดิมและถือว่าทุกจุดเป็น `AUTO`
+- ถ้าไม่ส่ง `pointCodeAssignments` backend ใช้ `AUTO` เฉพาะจุดที่ยังไม่มีรหัส จุดที่มีรหัสแล้วคงรหัสเดิมและไม่ต้องส่ง assignment ซ้ำ
 - ถ้าส่ง array ต้องระบุทุก measurement point ที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน
 - `AUTO` ออกเลขใหม่ช่วง `S/P2001-9999`
 - `MANUAL_LEGACY` ใช้เฉพาะกรณีจุดตรวจวัดเก่าที่ต้อง reuse รหัสเดิม
 - `MANUAL_LEGACY` ต้องส่งทั้ง `pointCode` และ `reason`; prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = P`)
 - ถ้าส่ง `measurementPointId` ที่ไม่อยู่ในคำขอ ระบบตอบ `400 BAD_REQUEST`
 - ถ้ารหัสยังจองอยู่ในคำขอที่รอเชื่อมต่อ จุดที่เชื่อมต่ออยู่ หรือประวัติที่เลิกใช้งานแล้ว ระบบตอบ `409 CONFLICT` พร้อม `error.details.reason = "POINT_CODE_ALREADY_ASSIGNED"` และไม่ reuse รหัสนั้น
-- รหัสที่คืนการจองอย่างปลอดภัยแล้วเมื่อ [ส่งแบบแก้ไข](#put-apiv1cems-wpms-requestsidform) และลบจุดเดิมที่ยังไม่เคยเชื่อมต่อ สามารถใช้ `MANUAL_LEGACY` ตอนอนุมัติจุดใหม่ได้ หากรหัสยังว่างและผ่านกฎช่วง legacy เดิม
+- รหัสที่คืนการจองอย่างปลอดภัยแล้วเมื่อ [ส่งแบบแก้ไข](#put-apiv1cems-wpms-requestsidform) และลบจุดที่ตัดออกจริงหรือ soft-delete เก่า ซึ่งยังไม่เคยเชื่อมต่อ สามารถใช้ `MANUAL_LEGACY` ตอนอนุมัติจุดใหม่ได้ หากรหัสยังว่างและผ่านกฎช่วง legacy เดิม
 
 หมายเหตุ: schema/รูปแบบข้อมูลที่ไม่ถูกต้องตอบ `400 VALIDATION_ERROR`; business validation ที่ต้องตรวจจากข้อมูลคำขอ เช่น prefix ไม่ตรงระบบ, รายการไม่ครบ หรือ id ไม่อยู่ในคำขอ ตอบ `400 BAD_REQUEST`.
 
@@ -637,6 +637,7 @@ criteria normalization สำคัญ
 | `id`              | path     | Yes                   | No                  | integer | ต้องเป็นจำนวนเต็ม >= 1                                        |
 | `requestType`     | body     | No                    | No                  | enum    | ถ้าส่งมาและไม่ตรงกับ `request.requestType` เดิม ระบบตอบ `400` |
 | `expectedUpdatedAt` | body     | No                    | No                  | string (date-time) | ค่าจาก GET form; ไม่ตรงรุ่นปัจจุบันตอบ `409 CONFLICT` พร้อม `reason=REQUEST_CHANGED` |
+| `measurementPoints[].pointCode` | body | ตามเงื่อนไข | Yes | string | จุดที่มีรหัสให้ส่งรหัสเดิมจาก GET form เพื่อระบุจุด; เปลี่ยนรหัสเองไม่ได้ จุดใหม่ไม่ส่งหรือส่ง `null` |
 | other body fields | body     | ตาม request type เดิม | ตาม shared contract | object  | backend inject `requestType` เดิมเข้า validation อีกครั้ง     |
 
 ### Minimal Valid Request
@@ -718,10 +719,17 @@ criteria normalization สำคัญ
 - `GET /:id/form` คืน `expectedUpdatedAt`; ส่งค่านี้กลับโดยไม่เปลี่ยนเพื่อป้องกันฟอร์มเก่าข้ามรอบแก้ไข หากไม่ส่ง backend ยังตรวจการเปลี่ยนระหว่างประมวลผล แต่ไม่ทราบรุ่นที่ client เปิดอ่าน
 - request เดิมต้องอยู่สถานะ `WAITING_FACTORY_REVISION`
 - backend ใช้ `requestType` เดิมของคำขอมา validate body อีกครั้ง แม้ body จะ omit field นี้
-- ถ้าเป็น add-parameter ระบบ preserve `pointCode`; ถ้าเป็น new connection หรือ add-point ระบบ clear pending point codes ของจุดใหม่ก่อน replace form
-- การแทนที่ฟอร์มลบแถวจุดเดิมที่ยังไม่เคยเชื่อมต่ออย่างถาวร รวมแถวที่ถูก soft-delete ในรอบแก้ไขก่อน ไม่เก็บแถวที่ถูกแทนที่เป็นประวัติ และคืนเฉพาะการจองรหัสใน `cems_wpms_point_code_registry` ที่ผูกกับ `source_request_id` และ `source_measurement_point_id` ของจุดที่ลบจริง ไม่คืนการจองของจุดอื่นหรือคำขออื่น เช่น จุดต้นทางของ `ADD_PARAMETER`
-- ก่อนลบและคืนรหัส backend ตรวจข้อมูลใน transaction เดียวกัน: หากจุดเดิมมีแถวใน `cems_wpms_connected_measurement_points` อ้างอิงอยู่ รวมแถวที่เลิกใช้งานแล้ว ตอบ `409 CONFLICT` พร้อม `reason = "REQUEST_POINTS_ALREADY_CONNECTED"`; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ `reason = "POINT_CODE_RELEASE_BLOCKED"` โดยปฏิเสธทั้งรายการและไม่บันทึกบางส่วน
-- การส่งกลับไม่ลบตัวคำขอหรือ `statusHistory`; จุดใหม่มี ID ใหม่ ให้โหลด detail/response ล่าสุดก่อนส่ง `pointCodeAssignments` ในรอบอนุมัติถัดไป รหัส legacy ที่คืนแล้วอาจกำหนดให้จุดใหม่ด้วย `MANUAL_LEGACY` ได้หากยังว่าง
+- สำหรับ new connection และ add-point จุด active ที่มีรหัสและยังอยู่ในฟอร์มคง ID, `pointCode`, assignment mode/reason/ผู้กำหนด/เวลากำหนด และเจ้าของการจองเดิม เปลี่ยนเฉพาะรายละเอียดจุด โดยไม่ลบแล้วสร้างใหม่
+- จับคู่จุดด้วย `pointCode` เดิมหลัง trim และเทียบโดยไม่แยกตัวพิมพ์ โดยคงค่ารหัสที่บันทึกบน server; ถ้าไม่ส่งรหัสหรือส่ง `null` ใช้ชื่อเดิมหลัง trim และเทียบโดยไม่แยกตัวพิมพ์ หากคำขอและ payload มีจุดเดียว สามารถเปลี่ยนชื่อโดยไม่ส่งรหัสได้ ไม่มีการจับคู่ตามลำดับ array
+- เมื่อส่ง `pointCode` เดิมเพื่อระบุแต่ละจุด สามารถสลับหรือวนชื่อ `pointName` ระหว่างจุดที่มีรหัสแล้วได้ หากชื่อสุดท้ายใน payload ไม่ซ้ำกัน ระบบบันทึกทั้งชุดใน transaction เดียว และคง ID รหัส และทะเบียนจองเดิม
+- เมื่อมีจุดที่ได้รับรหัสแล้ว รหัสที่ส่งทุกตัวต้องตรงกับรหัสของจุดนั้นในคำขอ รหัสอื่นหรือการอ้างจุดเดิมซ้ำจากการจับคู่ตอบ `400 BAD_REQUEST` พร้อม `reason = "POINT_CODE_READ_ONLY"` ที่ `measurementPoints.i.pointCode`; กฎ duplicate fields ใน shared validation ยังคงเดิม
+- หากมีจุดเดิมที่มีรหัสจับคู่ไม่ได้ พร้อมกับ input ที่ไม่มีรหัสและไม่ตรงชื่อเดิม ระบบไม่เดาว่าเป็นการเปลี่ยนชื่อหรือเพิ่มจุด แต่ตอบ `400 BAD_REQUEST` พร้อม `reason = "POINT_CODE_IDENTITY_REQUIRED"` ที่ `measurementPoints` ให้ส่งรหัสเดิมจาก GET form เพื่อระบุจุด เมื่อจับคู่ input ทุกจุดได้แล้ว จุดเดิมที่ไม่ได้ส่งกลับถือว่าถูกตัดออกจริง
+- ตรวจทะเบียนของจุดที่จะเก็บใน transaction: ต้องมีการจองที่ตรงกับ request ID, measurement point ID และ assignment mode เดิม มิฉะนั้นตอบ `409 CONFLICT` พร้อม `reason = "POINT_CODE_RESERVATION_MISMATCH"` โดยไม่เปลี่ยนข้อมูล
+- จุดใหม่ในคำขอที่มีการกำหนดรหัสแล้วต้องไม่ส่งรหัสหรือส่ง `null`; ถ้าคำขอยังไม่มีจุดที่ได้รับรหัส ระบบยังล้าง client `pointCode` ตาม flow เดิม และรอออกเลขหรือให้เจ้าหน้าที่กำหนดในขั้นอนุมัติ
+- การแทนที่ฟอร์มลบถาวรจุดที่ตัดออกจริง แถว soft-delete เก่า และ snapshot ของจุดที่ยังไม่มีรหัส ซึ่งยังถูกลบแล้วสร้างใหม่ตาม flow เดิมแม้ยังอยู่ในฟอร์ม ไม่เก็บแถวที่ลบเป็นประวัติ และคืนเฉพาะการจองใน `cems_wpms_point_code_registry` ที่ผูกกับ `source_request_id` และ `source_measurement_point_id` ของจุดที่ลบจริง จุดเดิมที่มีรหัสและยังอยู่ไม่ถูกลบหรือคืนการจอง
+- ก่อนลบและคืนรหัส backend ตรวจข้อมูลใน transaction เดียวกัน: หากจุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ใน `cems_wpms_connected_measurement_points` รวมแถวที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้ ตอบ `409 CONFLICT` พร้อม `reason = "REQUEST_POINTS_ALREADY_CONNECTED"`; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ `reason = "POINT_CODE_RELEASE_BLOCKED"` โดยปฏิเสธทั้งรายการและไม่บันทึกบางส่วน
+- การส่งกลับไม่ลบตัวคำขอหรือ `statusHistory`; จุดที่สร้างใหม่หรือ snapshot ที่ถูกแทนที่มี ID ใหม่ ให้ใช้ detail/response ล่าสุดก่อนอนุมัติ และส่ง `pointCodeAssignments` เฉพาะจุดที่ยังไม่มีรหัส จุดที่คงรหัสเดิมไม่ต้องกำหนดซ้ำ รหัส legacy ที่คืนจากการลบจริงอาจกำหนดให้จุดใหม่ด้วย `MANUAL_LEGACY` ได้หากยังว่าง
+- `ADD_PARAMETER` คง flow เดิม: แทนที่ snapshot ของจุดในคำขอและได้รับ ID ใหม่ แต่ใช้ `pointCode` ของจุดต้นทางและไม่คืนการจองที่เป็นของจุดหรือคำขออื่น
 - หลังผ่าน validation จะเปลี่ยนสถานะเป็น `REVISED_PENDING_DESIGN_REVIEW`
 
 ### Errors
@@ -732,14 +740,17 @@ criteria normalization สำคัญ
 | ----------- | ------------------ | --------------------------------------------------------------------------- | ----------------------------------- |
 | `400`       | `VALIDATION_ERROR` | body ไม่ผ่านกฎของ request type เดิม                                         | แก้ field ตาม `issues[].pathString` |
 | `400`       | `BAD_REQUEST`      | พยายามเปลี่ยน identity/`systemType`/`requestType` หรือคำขอไม่อยู่สถานะ `WAITING_FACTORY_REVISION` | reload detail/status ของคำขอเดิม        |
+| `400`       | `BAD_REQUEST`      | เปลี่ยนรหัสเดิมหรืออ้างจุดเดิมซ้ำ (`error.details.reason=POINT_CODE_READ_ONLY`) | ใช้รหัสเดิมจาก GET form; จุดใหม่ไม่ส่งรหัส |
+| `400`       | `BAD_REQUEST`      | ระบุจุดเดิมไม่ได้เมื่อหลายจุดถูกเปลี่ยนชื่อ (`error.details.reason=POINT_CODE_IDENTITY_REQUIRED`) | ส่งรหัสเดิมของแต่ละจุดเพื่อระบุตัวตน |
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                            | login ใหม่                          |
 | `403`       | `FORBIDDEN`        | ไม่มี edit permission หรือคำขออยู่นอก edit scope/assignment                                       | ซ่อนการแก้ไข                            |
 | `404`       | `NOT_FOUND`        | ไม่พบคำขอ หรือหา active eligible factory ใหม่ไม่เจอ                         | refresh รายการคำขอ                  |
 | `409`       | `CONFLICT`         | ข้อมูลหรือสถานะเปลี่ยนระหว่างแก้ไข (`error.details.reason=REQUEST_CHANGED`)                       | โหลดฟอร์มล่าสุดและตรวจข้อมูลก่อนส่งใหม่ |
-| `409`       | `CONFLICT`         | จุดเดิมมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้ว (`error.details.reason=REQUEST_POINTS_ALREADY_CONNECTED`) | ให้เจ้าหน้าที่ตรวจจุดที่เชื่อมต่อก่อนส่งแบบใหม่ |
+| `409`       | `CONFLICT`         | ทะเบียนจุดที่จะเก็บหายหรือเจ้าของ/assignment mode ไม่ตรง (`error.details.reason=POINT_CODE_RESERVATION_MISMATCH`) | ให้เจ้าหน้าที่ตรวจทะเบียนก่อนส่งแบบใหม่ |
+| `409`       | `CONFLICT`         | จุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้ (`error.details.reason=REQUEST_POINTS_ALREADY_CONNECTED`) | ให้เจ้าหน้าที่ตรวจจุดที่เชื่อมต่อก่อนส่งแบบใหม่ |
 | `409`       | `CONFLICT`         | รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ (`error.details.reason=POINT_CODE_RELEASE_BLOCKED`) | ให้เจ้าหน้าที่ตรวจการจองและการใช้รหัสก่อนส่งแบบใหม่ |
 
-สองเหตุผลหลังคืน `error.details.path = "measurementPoints"` และ `requestId`; `POINT_CODE_RELEASE_BLOCKED` อาจคืน `pointCode` เพิ่มเติม ไม่มีการลบจุด คืนรหัส หรือเปลี่ยนสถานะบางส่วนเมื่อเกิดข้อขัดแย้ง
+`POINT_CODE_READ_ONLY` คืน `path = "measurementPoints.i.pointCode"`; `POINT_CODE_IDENTITY_REQUIRED` คืน `path = "measurementPoints"`. `POINT_CODE_RESERVATION_MISMATCH` คืน `path = "measurementPoints.i.pointCode"`, `requestId`, `measurementPointId` และ `pointCode`. สองเหตุผลการลบ/คืนรหัสหลังสุดคืน `error.details.path = "measurementPoints"` และ `requestId`; `POINT_CODE_RELEASE_BLOCKED` อาจคืน `pointCode` เพิ่มเติม ไม่มีการลบจุด คืนรหัส หรือเปลี่ยนสถานะบางส่วนเมื่อเกิดข้อขัดแย้ง
 
 ## `POST /api/v1/cems-wpms-requests/direct-connections`
 

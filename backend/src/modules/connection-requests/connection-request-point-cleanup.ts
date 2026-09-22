@@ -12,17 +12,18 @@ interface PointCodeReservation {
 export async function removeUnconnectedRequestPoints(
   trx: Knex.Transaction,
   requestId: number,
+  retainedPointIds: number[] = [],
 ): Promise<void> {
   const points = await trx('cems_wpms_measurement_points')
     .where('request_id', requestId)
     .forUpdate()
     .select('id');
-  const pointIds = points.map((point) => Number(point.id));
-  if (pointIds.length === 0) return;
+  const allPointIds = points.map((point) => Number(point.id));
+  if (allPointIds.length === 0) return;
 
   // Even a retired connected row still refers to the source point by foreign key.
   const connectedReference = await trx('cems_wpms_connected_measurement_points')
-    .whereIn('source_measurement_point_id', pointIds)
+    .whereIn('source_measurement_point_id', allPointIds)
     .first('id');
   if (connectedReference) {
     throw new ConflictError('Connected measurement points cannot be removed by resubmission', {
@@ -31,6 +32,10 @@ export async function removeUnconnectedRequestPoints(
       requestId,
     });
   }
+
+  const retained = new Set(retainedPointIds);
+  const pointIds = allPointIds.filter((id) => !retained.has(id));
+  if (pointIds.length === 0) return;
 
   const reservations = await trx<PointCodeReservation>('cems_wpms_point_code_registry')
     .whereIn('source_measurement_point_id', pointIds)

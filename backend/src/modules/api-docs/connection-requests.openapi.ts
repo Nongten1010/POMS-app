@@ -104,7 +104,7 @@ const connectionProfileConflictResponse: OpenApiObject = {
 const requestEditAccessDescription =
   'Permission: cems_wpms_requests:edit ตาม scope และ regionalAccess. OWN_FACTORY ใช้ assignment ผ่าน user_juristics หรือ user_factory_access; ผู้ทำรายการไม่ต้องตรงกับ createdBy และผู้สร้างเดิมก็ต้องผ่าน scope. เก็บ createdBy เดิมและบันทึกผู้ทำรายการจริง. ';
 const resubmitPointReplacementDescription =
-  'เมื่อแทนที่ฟอร์ม ลบแถวจุดเดิมที่ยังไม่เคยเชื่อมต่ออย่างถาวร รวมแถวที่ถูก soft-delete ในรอบก่อน และคืนเฉพาะการจองรหัสที่เป็นของจุดนั้นในคำขอนั้น; ไม่เก็บแถวจุดเก่า แต่ยังเก็บตัวคำขอและ statusHistory. ADD_PARAMETER คง pointCode เดิมและไม่คืนการจองของจุดต้นทาง. จุดใหม่มี ID ใหม่ ให้ใช้ detail/response ล่าสุดในการอนุมัติ; รหัส legacy ที่คืนแล้วสามารถกำหนดใหม่ด้วย MANUAL_LEGACY หากยังว่างและผ่าน validation เดิม. หากจุดเดิมมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้ว ตอบ 409 CONFLICT พร้อม reason REQUEST_POINTS_ALREADY_CONNECTED; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ reason POINT_CODE_RELEASE_BLOCKED. ทั้งสองกรณีมี details.path = measurementPoints และ requestId; POINT_CODE_RELEASE_BLOCKED อาจมี pointCode. ไม่มี partial update';
+  'เมื่อส่งแบบแก้ไข จุด active ที่มีรหัสและยังอยู่ในฟอร์มคง ID เดิม, pointCode เดิม, assignment metadata และเจ้าของการจองเดิม; แก้เฉพาะรายละเอียดจุด. จับคู่ด้วย pointCode เดิมโดย trim และไม่แยกตัวพิมพ์ หรือชื่อเดิมเมื่อไม่ส่งรหัส; หากคำขอและ payload มีจุดเดียวสามารถเปลี่ยนชื่อโดยไม่ส่งรหัสได้. ไม่จับคู่ตามลำดับ array. เมื่อส่งรหัสเดิมเพื่อระบุแต่ละจุด สามารถสลับหรือวนชื่อ pointName ระหว่างจุดได้หากชื่อสุดท้ายไม่ซ้ำกัน โดยบันทึกทั้งชุดใน transaction เดียว. เมื่อคำขอมีจุดที่ได้รับรหัสแล้ว รหัสที่ส่งต้องเป็นรหัสเดิมของจุดในคำขอเท่านั้น; รหัสอื่นหรืออ้างจุดเดิมซ้ำตอบ 400 BAD_REQUEST พร้อม reason POINT_CODE_READ_ONLY และ path measurementPoints.i.pointCode. หากหลายจุดจับคู่ไม่ได้และยังมีจุดเดิมที่มีรหัสเหลืออยู่ ตอบ POINT_CODE_IDENTITY_REQUIRED ที่ path measurementPoints ให้ส่งรหัสเดิมเพื่อระบุจุด. หากทะเบียนของจุดที่จะเก็บหายหรือเจ้าของ/assignment mode ไม่ตรง ตอบ 409 CONFLICT พร้อม reason POINT_CODE_RESERVATION_MISMATCH, path measurementPoints.i.pointCode, requestId, measurementPointId และ pointCode. จุดใหม่ต้องไม่กำหนดรหัสเอง; คำขอที่ยังไม่มีจุดได้รับรหัสจะล้าง client pointCode ตามเดิม. จุดที่มีรหัสซึ่งตัดออกจริงหรือแถว soft-delete เก่าจะถูกลบถาวรและคืนการจองหลังตรวจการอ้างอิง; จุดเดิมที่มีรหัสและยังอยู่ไม่ถูกลบหรือคืนรหัส. snapshot ของจุดที่ยังไม่มีรหัสยังถูกลบแล้วสร้างใหม่และได้รับ ID ใหม่ตาม flow เดิม แม้ยังอยู่ในฟอร์ม. ไม่เก็บแถวจุดที่ลบเป็นประวัติ แต่ยังเก็บตัวคำขอและ statusHistory. ADD_PARAMETER ยังคงแทนที่ snapshot ในคำขอและได้รับ ID ใหม่ แต่คง pointCode เดิมและไม่คืนการจองของจุดต้นทาง. จุดที่สร้างใหม่มี ID ใหม่ ให้ใช้ response ล่าสุดในการอนุมัติและส่ง pointCodeAssignments เฉพาะจุดที่ยังไม่มีรหัส; จุดที่มีรหัสแล้วไม่ต้องกำหนดซ้ำ. หากจุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้ ตอบ REQUEST_POINTS_ALREADY_CONNECTED; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ POINT_CODE_RELEASE_BLOCKED. สองเหตุผลหลังเป็น 409 CONFLICT และมี details.path = measurementPoints และ requestId; POINT_CODE_RELEASE_BLOCKED อาจมี pointCode. ไม่มี partial update';
 const currentDeviceConfigDescription =
   'อ่านพารามิเตอร์จาก active connected point หลังตรวจสิทธิ์; คง mapping เดิมที่ยังอยู่, ซ่อนช่องที่ถอดออก, เพิ่ม mapping ว่างสำหรับพารามิเตอร์ใหม่. rawConfigs แสดงเฉพาะค่าที่บันทึกจริง; request-specific device-configs ยังคง snapshot เดิม';
 
@@ -1338,7 +1338,14 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: {
       ...pomsManagedStatusProperties,
       pointName: { type: 'string', minLength: 1, maxLength: 255 },
-      pointCode: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
+      pointCode: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        nullable: true,
+        description:
+          'เมื่อส่ง PUT /:id/form ให้ส่งรหัสเดิมจาก GET form เพื่อระบุจุดที่ได้รับรหัสแล้ว โดย backend คงรหัสและเจ้าของเดิม ผู้ประกอบการเปลี่ยนรหัสเองไม่ได้; จุดใหม่ให้ไม่ส่งหรือส่ง null',
+      },
       pointType: {
         ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels),
         description: 'Required หาก backend infer จาก monitoringPointKind หรือ legacy type ไม่ได้',
@@ -1760,7 +1767,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
           MANUAL_LEGACY: pointCodeAssignmentModeLabels.MANUAL_LEGACY,
         }),
         description:
-          'ถ้าเป็น `AUTO` หรือไม่ส่งทั้ง array ระบบจะออกรหัสใหม่ตามลำดับ S/P2001-9999; ถ้าเป็น `MANUAL_LEGACY` ต้องส่ง pointCode และ reason',
+          'ถ้าเป็น `AUTO` หรือไม่ส่งทั้ง array ระบบจะออกรหัสใหม่ตามลำดับ S/P2001-9999 เฉพาะจุดที่ยังไม่มีรหัส; จุดที่มีรหัสแล้วคงรหัสเดิมและไม่ต้องส่ง assignment ซ้ำ; ถ้าเป็น `MANUAL_LEGACY` ต้องส่ง pointCode และ reason',
       },
       pointCode: {
         type: 'string',
@@ -1801,7 +1808,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         minLength: 1,
         maxLength: 64,
         description:
-          'ห้ามซ้ำกับรหัสที่ยังจองอยู่ในทะเบียนกลาง รวมจุดที่เลิกใช้งานแล้ว; การส่งแบบแก้ไขคืนได้เฉพาะการจองของจุดเดิมที่ยังไม่เคยเชื่อมต่อและผ่านการตรวจการใช้งานก่อนลบถาวร',
+          'ห้ามซ้ำกับรหัสที่ยังจองอยู่ในทะเบียนกลาง รวมจุดที่เลิกใช้งานแล้ว; การส่งแบบแก้ไขคงรหัสของจุดเดิมที่ยังอยู่ในฟอร์ม คืนได้เฉพาะการจองของจุดที่ตัดออกจริงหรือ soft-delete เก่า ซึ่งยังไม่เคยเชื่อมต่อและผ่านการตรวจการใช้งานก่อนลบถาวร',
       },
       pointType: {
         ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels),
@@ -2605,9 +2612,50 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       successDescription: 'ส่งแบบแก้ไขแล้วและเปลี่ยนเป็น REVISED_PENDING_DESIGN_REVIEW',
       successSchema: schemaRef('ConnectionRequestResponse'),
       extraResponses: {
+        '400': {
+          description:
+            'VALIDATION_ERROR เมื่อ body ไม่ผ่าน schema. BAD_REQUEST เมื่อเปลี่ยน identity ของคำขอหรือสถานะไม่อนุญาต. POINT_CODE_READ_ONLY: รหัสไม่ตรงจุดที่ได้รับรหัสแล้วหรืออ้างจุดเดิมซ้ำ; ใช้ pointCode เดิมจาก GET form. POINT_CODE_IDENTITY_REQUIRED: มีหลายจุดและจับคู่ชื่อไม่ได้; ส่งรหัสเดิมของแต่ละจุดเพื่อยืนยันตัวตน ไม่กำหนดรหัสใหม่เอง',
+          content: {
+            'application/json': {
+              schema: schemaRef('ErrorEnvelope'),
+              examples: {
+                pointCodeReadOnly: {
+                  summary: 'ผู้ประกอบการเปลี่ยนรหัสที่กำหนดแล้วไม่ได้',
+                  value: {
+                    success: false,
+                    error: {
+                      code: 'BAD_REQUEST',
+                      message:
+                        'Assigned measurement point codes cannot be changed during resubmission',
+                      details: {
+                        path: 'measurementPoints.0.pointCode',
+                        reason: 'POINT_CODE_READ_ONLY',
+                      },
+                    },
+                  },
+                },
+                pointCodeIdentityRequired: {
+                  summary: 'ส่งรหัสเดิมเพื่อระบุจุดที่เปลี่ยนชื่อในฟอร์มหลายจุด',
+                  value: {
+                    success: false,
+                    error: {
+                      code: 'BAD_REQUEST',
+                      message:
+                        'Existing point codes are required to identify renamed measurement points',
+                      details: {
+                        path: 'measurementPoints',
+                        reason: 'POINT_CODE_IDENTITY_REQUIRED',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         '409': {
           description:
-            'REQUEST_CHANGED: คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่. REQUEST_POINTS_ALREADY_CONNECTED: มีข้อมูลเชื่อมต่ออ้างอิงจุดเดิม รวมรายการที่เลิกใช้งานแล้ว. POINT_CODE_RELEASE_BLOCKED: รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้; ให้เจ้าหน้าที่ตรวจข้อมูลอ้างอิงก่อนส่งใหม่. reason อยู่ใน error.details; สองกรณีหลังมี path = measurementPoints และ requestId และอาจมี pointCode เมื่อคืนรหัสไม่ได้. ไม่มี partial update',
+            'REQUEST_CHANGED: คำขอเปลี่ยนแล้ว ให้โหลดฟอร์มล่าสุดก่อนส่งใหม่. POINT_CODE_RESERVATION_MISMATCH: ทะเบียนของจุดที่จะเก็บหายหรือเจ้าของ/assignment mode ไม่ตรง ให้เจ้าหน้าที่ตรวจทะเบียน; มี path = measurementPoints.i.pointCode, requestId, measurementPointId และ pointCode. REQUEST_POINTS_ALREADY_CONNECTED: จุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้. POINT_CODE_RELEASE_BLOCKED: รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้; ให้เจ้าหน้าที่ตรวจข้อมูลอ้างอิงก่อนส่งใหม่. reason อยู่ใน error.details; สองกรณีหลังมี path = measurementPoints และ requestId และอาจมี pointCode เมื่อคืนรหัสไม่ได้. ไม่มี partial update',
           content: {
             'application/json': {
               schema: schemaRef('ErrorEnvelope'),
@@ -2625,7 +2673,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
                   },
                 },
                 pointsAlreadyConnected: {
-                  summary: 'มีข้อมูลเชื่อมต่ออ้างอิงจุดเดิม จึงลบถาวรไม่ได้',
+                  summary: 'จุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ จึงส่งแบบแก้ไขไม่ได้',
                   value: {
                     success: false,
                     error: {
@@ -2635,6 +2683,23 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
                         path: 'measurementPoints',
                         reason: 'REQUEST_POINTS_ALREADY_CONNECTED',
                         requestId: 101,
+                      },
+                    },
+                  },
+                },
+                pointCodeReservationMismatch: {
+                  summary: 'ทะเบียนรหัสไม่ตรงกับจุดเดิมที่ต้องเก็บ',
+                  value: {
+                    success: false,
+                    error: {
+                      code: 'CONFLICT',
+                      message: 'Measurement point code reservation does not match its source point',
+                      details: {
+                        path: 'measurementPoints.0.pointCode',
+                        reason: 'POINT_CODE_RESERVATION_MISMATCH',
+                        requestId: 101,
+                        measurementPointId: 201,
+                        pointCode: 'S1054',
                       },
                     },
                   },
@@ -2686,7 +2751,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
                   maxItems: 100,
                   items: schemaRef('PointCodeAssignment'),
                   description:
-                    'Optional; omission = AUTO ทุกจุด. ถ้าส่ง ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน โดยเลือก AUTO หรือ MANUAL_LEGACY ตอน APPROVE_DESIGN',
+                    'Optional; omission = AUTO เฉพาะจุดที่ยังไม่มีรหัส. จุดที่มีรหัสแล้วคงรหัสเดิมและไม่ต้องส่ง assignment ซ้ำ. ถ้าส่ง ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน โดยเลือก AUTO หรือ MANUAL_LEGACY ตอน APPROVE_DESIGN',
                 },
               },
             },
@@ -2749,7 +2814,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
                   maxItems: 100,
                   items: schemaRef('PointCodeAssignment'),
                   description:
-                    'Optional; omission = AUTO ทุกจุด. ถ้าส่ง ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน โดยเลือก AUTO หรือ MANUAL_LEGACY ตอน APPROVE_FORM',
+                    'Optional; omission = AUTO เฉพาะจุดที่ยังไม่มีรหัส. จุดที่มีรหัสแล้วคงรหัสเดิมและไม่ต้องส่ง assignment ซ้ำ. ถ้าส่ง ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน โดยเลือก AUTO หรือ MANUAL_LEGACY ตอน APPROVE_FORM',
                 },
               },
             },

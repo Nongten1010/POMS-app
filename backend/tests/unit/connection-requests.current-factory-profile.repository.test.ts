@@ -7,6 +7,7 @@ jest.mock('../../src/config/database', () => ({
 import { db } from '../../src/config/database';
 import { env } from '../../src/config/env';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
+import type { MeasurementPointInput } from '../../src/modules/connection-requests/connection-requests.types';
 
 type Row = Record<string, unknown>;
 const mockedDb = db as unknown as { transaction: jest.Mock };
@@ -79,6 +80,24 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
   }
   const locks: string[] = [];
   const beforeRegistryDelete = jest.fn<() => void>();
+  const beforeHistoryInsert = jest.fn<() => void>();
+  const checkActivePointNames = (points: Row[]) => {
+    const namesByRequest = new Map<unknown, Set<string>>();
+    for (const point of points) {
+      if (point.deleted_at != null) continue;
+      const name = String(point.point_name ?? '')
+        .trimEnd()
+        .toLowerCase();
+      const names = namesByRequest.get(point.request_id) ?? new Set<string>();
+      if (names.has(name)) {
+        throw Object.assign(new Error('ux_cems_wpms_points_active_request_name'), {
+          number: 2601,
+        });
+      }
+      names.add(name);
+      namesByRequest.set(point.request_id, names);
+    }
+  };
   const trx = Object.assign(
     (queryTable: string) => {
       const table =
@@ -234,11 +253,17 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
         },
         async update(patch: Row) {
           const matched = rows();
+          if (table === POINTS) {
+            checkActivePointNames(
+              tables[table].map((row) => (matched.includes(row) ? { ...row, ...patch } : row)),
+            );
+          }
           for (const row of matched) Object.assign(row, patch);
           return matched.length;
         },
         insert(input: Row | Row[]) {
           const inputs = Array.isArray(input) ? input : [input];
+          if (table === 'cems_wpms_request_status_history') beforeHistoryInsert();
           if (table === REGISTRY) {
             const codes = new Set(tables[table].map((row) => row.normalized_point_code));
             for (const row of inputs) {
@@ -260,6 +285,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
             changed_at: '2026-09-11T00:00:00.000Z',
             ...row,
           }));
+          if (table === POINTS) checkActivePointNames([...tables[table], ...inserted]);
           tables[table].push(...inserted);
           return {
             returning: async () => inserted.map((row) => ({ id: row.id })),
@@ -307,7 +333,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
       throw error;
     }
   });
-  return { tables, locks, beforeRegistryDelete };
+  return { tables, locks, beforeRegistryDelete, beforeHistoryInsert };
 }
 
 function currentPoint(): Row {
@@ -416,7 +442,9 @@ function resubmissionFixture() {
     systemType: 'CEMS',
     contactName: 'ผู้ประสานงาน',
     contactPhone: '0812345678',
-    measurementPoints: [{ pointName: 'ปล่องเดิม', pointType: 'STACK', parameters: [] }],
+    measurementPoints: [
+      { pointName: 'ปล่องเดิม', pointType: 'STACK', parameters: [] },
+    ] as MeasurementPointInput[],
   };
   const resubmit = () =>
     connectionRequestsRepository.replaceForm(
@@ -675,8 +703,341 @@ describe('connection profile persistence with a stale submitted factory', () => 
     },
   );
 
-  it.each([null, '2026-09-21T14:15:33.600Z'])(
-    'resubmits the same point then approves S0527 without a stale reservation conflict (deleted: %s)',
+  it('preserves the officer-assigned point and registry through resubmission and approval', async () => {
+    const fixture = resubmissionFixture();
+    Object.assign(fixture.tables.cems_wpms_connection_requests[0], {
+      submission_source: 'OFFICER_DIRECT_API',
+    });
+    Object.assign(fixture.input.measurementPoints[0], {
+      pointCode: 'S0527',
+      pointName: 'ปล่องที่แก้ไขชื่อแล้ว',
+    });
+    const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+
+    const resubmitted = await fixture.resubmit();
+    expect(resubmitted.measurementPoints[0]).toMatchObject({
+      id: 10041,
+      pointName: 'ปล่องที่แก้ไขชื่อแล้ว',
+      pointCode: 'S0527',
+      pointCodeAssignmentMode: 'OFFICER_DIRECT',
+    });
+    expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+    const approved = await connectionRequestsRepository.updateStatus(
+      10037,
+      'WAITING_CONNECTION',
+      7,
+      { officerNote: 'แบบถูกต้อง' },
+    );
+    expect(approved.measurementPoints[0]).toMatchObject({ id: 10041, pointCode: 'S0527' });
+    expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+  });
+
+  it.each([undefined, null, '', ' s0527 '])(
+    'keeps server-owned code and assignment metadata for a renamed single point (input: %s)',
+    async (pointCode) => {
+      const fixture = resubmissionFixture();
+      Object.assign(fixture.tables[POINTS][0], {
+        created_by: 31,
+        point_code_assigned_by: 31,
+        point_code_assigned_at: '2026-09-03T13:54:11.703Z',
+        point_code_assignment_reason: 'รหัสจุดเดิม',
+      });
+      Object.assign(fixture.input.measurementPoints[0], {
+        pointName: 'ชื่อที่แก้ใหม่',
+        pointCode,
+        description: 'รายละเอียดที่แก้แล้ว',
+      });
+      const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+      await fixture.resubmit();
+      expect(fixture.tables[POINTS]).toEqual([
+        expect.objectContaining({
+          id: 10041,
+          point_name: 'ชื่อที่แก้ใหม่',
+          point_code: 'S0527',
+          point_code_assignment_mode: 'OFFICER_DIRECT',
+          point_code_assigned_by: 31,
+          point_code_assigned_at: '2026-09-03T13:54:11.703Z',
+          point_code_assignment_reason: 'รหัสจุดเดิม',
+          created_by: 31,
+          updated_by: 7,
+          description: 'รายละเอียดที่แก้แล้ว',
+          deleted_at: null,
+        }),
+      ]);
+      expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+      expect(fixture.beforeRegistryDelete).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['S0999', 'P0527'])(
+    'rejects replacing an assigned code with %s without partial writes',
+    async (pointCode) => {
+      const fixture = resubmissionFixture();
+      Object.assign(fixture.input.measurementPoints[0], { pointCode });
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.resubmit()).rejects.toMatchObject({
+        statusCode: 400,
+        details: { reason: 'POINT_CODE_READ_ONLY', path: 'measurementPoints.0.pointCode' },
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each(['missing', 'other request', 'other point', 'different mode'])(
+    'rejects retaining a code whose registry has %s ownership',
+    async (conflict) => {
+      const fixture = resubmissionFixture();
+      if (conflict === 'missing') fixture.tables[REGISTRY] = [];
+      if (conflict === 'other request') fixture.tables[REGISTRY][0].source_request_id = 99;
+      if (conflict === 'other point') fixture.tables[REGISTRY][0].source_measurement_point_id = 99;
+      if (conflict === 'different mode') fixture.tables[REGISTRY][0].assignment_mode = 'AUTO';
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.resubmit()).rejects.toMatchObject({
+        statusCode: 409,
+        details: {
+          reason: 'POINT_CODE_RESERVATION_MISMATCH',
+          requestId: 10037,
+          measurementPointId: 10041,
+          pointCode: 'S0527',
+        },
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it('does not attach a client-supplied code to a previously unassigned request point', async () => {
+    const fixture = resubmissionFixture();
+    Object.assign(fixture.tables[POINTS][0], {
+      point_code: null,
+      point_code_assignment_mode: null,
+    });
+    fixture.tables[REGISTRY] = [];
+    Object.assign(fixture.input.measurementPoints[0], { pointCode: 'S0527' });
+    const updated = await fixture.resubmit();
+    expect(updated.measurementPoints[0].pointCode).toBeNull();
+    expect(fixture.tables[REGISTRY]).toEqual([]);
+  });
+
+  it('matches reordered points by reserved code and preserves both registry owners', async () => {
+    const fixture = resubmissionFixture();
+    fixture.tables[POINTS].push({
+      ...fixture.tables[POINTS][0],
+      id: 10042,
+      point_name: 'ปล่องสอง',
+      point_code: 'S0528',
+      point_code_assignment_mode: 'AUTO',
+    });
+    fixture.tables[REGISTRY].push({
+      ...fixture.tables[REGISTRY][0],
+      id: 18,
+      point_code: 'S0528',
+      normalized_point_code: 'S0528',
+      assignment_mode: 'AUTO',
+      source_measurement_point_id: 10042,
+    });
+    fixture.input.measurementPoints = [
+      { ...fixture.input.measurementPoints[0], pointName: 'ปล่องสองแก้ชื่อ', pointCode: 'S0528' },
+      { ...fixture.input.measurementPoints[0], pointName: 'ปล่องแรกแก้ชื่อ', pointCode: 'S0527' },
+    ];
+    const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+    await fixture.resubmit();
+    expect(fixture.tables[POINTS]).toEqual([
+      expect.objectContaining({ id: 10041, point_name: 'ปล่องแรกแก้ชื่อ', point_code: 'S0527' }),
+      expect.objectContaining({ id: 10042, point_name: 'ปล่องสองแก้ชื่อ', point_code: 'S0528' }),
+    ]);
+    expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+  });
+
+  it.each([
+    ['two-point swap', ['Stack B', 'Stack A']],
+    ['three-point cycle', ['Stack B', 'Stack C', 'Stack A']],
+  ] as const)(
+    'preserves assigned identities and reservations during a %s',
+    async (_, finalNames) => {
+      const fixture = resubmissionFixture();
+      const pointTemplate = fixture.tables[POINTS][0];
+      const registryTemplate = fixture.tables[REGISTRY][0];
+      fixture.tables[POINTS] = finalNames.map((_, index) => ({
+        ...pointTemplate,
+        id: 10041 + index,
+        point_name: `Stack ${String.fromCharCode(65 + index)}`,
+        point_code: `S0${527 + index}`,
+        created_by: 31,
+        point_code_assigned_by: 31,
+        point_code_assigned_at: '2026-09-03T13:54:11.703Z',
+        point_code_assignment_reason: 'รหัสจุดเดิม',
+      }));
+      fixture.tables[REGISTRY] = fixture.tables[POINTS].map((point, index) => ({
+        ...registryTemplate,
+        id: 17 + index,
+        point_code: point.point_code,
+        normalized_point_code: point.point_code,
+        source_measurement_point_id: point.id,
+      }));
+      fixture.input.measurementPoints = finalNames.map((pointName, index) => ({
+        pointName,
+        pointCode: String(fixture.tables[POINTS][index].point_code),
+        pointType: 'STACK',
+        parameters: ['CO'],
+      }));
+      const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+      const identitiesBefore = fixture.tables[POINTS].map((point) => ({
+        id: point.id,
+        request_id: point.request_id,
+        point_code: point.point_code,
+        point_code_assignment_mode: point.point_code_assignment_mode,
+        point_code_assigned_by: point.point_code_assigned_by,
+        point_code_assigned_at: point.point_code_assigned_at,
+        point_code_assignment_reason: point.point_code_assignment_reason,
+        created_by: point.created_by,
+      }));
+
+      const updated = await fixture.resubmit();
+
+      expect(fixture.tables[POINTS]).toEqual(
+        identitiesBefore.map((point, index) =>
+          expect.objectContaining({ ...point, point_name: finalNames[index], deleted_at: null }),
+        ),
+      );
+      expect(
+        updated.measurementPoints.map(({ id, pointName, pointCode }) => ({
+          id,
+          pointName,
+          pointCode,
+        })),
+      ).toEqual(
+        finalNames.map((pointName, index) => ({
+          id: 10041 + index,
+          pointName,
+          pointCode: fixture.input.measurementPoints[index].pointCode,
+        })),
+      );
+      expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+      expect(fixture.beforeRegistryDelete).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rolls back renamed points and reservations when saving status history fails', async () => {
+    const fixture = resubmissionFixture();
+    Object.assign(fixture.input.measurementPoints[0], {
+      pointCode: 'S0527',
+      pointName: 'ชื่อจุดหลังแก้ไข',
+    });
+    const before = structuredClone(fixture.tables);
+    const failure = new Error('Status history could not be saved');
+    fixture.beforeHistoryInsert.mockImplementationOnce(() => {
+      expect(fixture.tables[POINTS][0]).toMatchObject({
+        id: 10041,
+        point_name: 'ชื่อจุดหลังแก้ไข',
+        point_code: 'S0527',
+        deleted_at: null,
+      });
+      throw failure;
+    });
+
+    await expect(fixture.resubmit()).rejects.toThrow(failure);
+
+    expect(fixture.beforeHistoryInsert).toHaveBeenCalledTimes(1);
+    expect(fixture.tables).toEqual(before);
+  });
+
+  it('allows removing the assigned point while retaining a known unassigned point by name', async () => {
+    const fixture = resubmissionFixture();
+    fixture.tables[POINTS].push({
+      id: 10042,
+      request_id: 10037,
+      point_name: 'ปล่องสอง',
+      point_code: null,
+      deleted_at: null,
+    });
+    fixture.input.measurementPoints = [
+      { pointName: 'ปล่องสอง', pointType: 'STACK', parameters: [] },
+    ];
+    const updated = await fixture.resubmit();
+    expect(updated.measurementPoints).toEqual([
+      expect.objectContaining({ pointName: 'ปล่องสอง', pointCode: null }),
+    ]);
+    expect(fixture.tables[POINTS].some((point) => point.id === 10041)).toBe(false);
+    expect(fixture.tables[REGISTRY]).toEqual([]);
+  });
+
+  it('rejects ambiguous renamed points when their existing codes are omitted', async () => {
+    const fixture = resubmissionFixture();
+    fixture.tables[POINTS].push({
+      id: 10042,
+      request_id: 10037,
+      point_name: 'ปล่องสอง',
+      point_code: null,
+      deleted_at: null,
+    });
+    fixture.input.measurementPoints[0].pointName = 'ชื่อใหม่ที่จับคู่ไม่ได้';
+    const before = structuredClone(fixture.tables);
+    await expect(fixture.resubmit()).rejects.toMatchObject({
+      statusCode: 400,
+      details: { reason: 'POINT_CODE_IDENTITY_REQUIRED' },
+    });
+    expect(fixture.tables).toEqual(before);
+  });
+
+  it('rejects referencing the same assigned point once by code and again by name', async () => {
+    const fixture = resubmissionFixture();
+    fixture.input.measurementPoints.unshift({
+      ...fixture.input.measurementPoints[0],
+      pointName: 'ชื่อใหม่',
+      pointCode: 'S0527',
+    } as never);
+    const before = structuredClone(fixture.tables);
+    await expect(fixture.resubmit()).rejects.toMatchObject({
+      statusCode: 400,
+      details: { reason: 'POINT_CODE_READ_ONLY' },
+    });
+    expect(fixture.tables).toEqual(before);
+  });
+
+  it('keeps the assigned point while adding a new unassigned point', async () => {
+    const fixture = resubmissionFixture();
+    Object.assign(fixture.input.measurementPoints[0], { pointCode: 'S0527' });
+    fixture.input.measurementPoints.push({
+      pointName: 'ปล่องใหม่',
+      pointType: 'STACK',
+      parameters: [],
+    });
+    const registryBefore = structuredClone(fixture.tables[REGISTRY]);
+    await fixture.resubmit();
+    expect(fixture.tables[POINTS]).toHaveLength(2);
+    expect(fixture.tables[POINTS][0]).toMatchObject({ id: 10041, point_code: 'S0527' });
+    expect(fixture.tables[POINTS][1]).toMatchObject({ point_name: 'ปล่องใหม่', point_code: null });
+    expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+  });
+
+  it('releases only an explicitly removed point while preserving the remaining point and reservation', async () => {
+    const fixture = resubmissionFixture();
+    fixture.tables[POINTS].push({
+      ...fixture.tables[POINTS][0],
+      id: 10042,
+      point_name: 'ปล่องสอง',
+      point_code: 'S0528',
+    });
+    fixture.tables[REGISTRY].push({
+      ...fixture.tables[REGISTRY][0],
+      id: 18,
+      point_code: 'S0528',
+      normalized_point_code: 'S0528',
+      source_measurement_point_id: 10042,
+    });
+    fixture.input.measurementPoints = [
+      { ...fixture.input.measurementPoints[0], pointName: 'ปล่องสอง', pointCode: 'S0528' },
+    ];
+    const keptReservation = structuredClone(fixture.tables[REGISTRY][1]);
+    await fixture.resubmit();
+    expect(fixture.tables[POINTS]).toEqual([
+      expect.objectContaining({ id: 10042, point_code: 'S0528' }),
+    ]);
+    expect(fixture.tables[REGISTRY]).toEqual([keptReservation]);
+  });
+
+  it.each(['2026-09-21T14:15:33.600Z'])(
+    'resubmits after retiring the old point then approves S0527 without a stale reservation conflict (deleted: %s)',
     async (deletedAt) => {
       const fixture = resubmissionFixture();
       fixture.tables[POINTS][0].deleted_at = deletedAt;
@@ -767,6 +1128,7 @@ describe('connection profile persistence with a stale submitted factory', () => 
     'mismatched registry owner',
   ])('keeps the entire request unchanged if release conflicts with %s', async (conflict) => {
     const fixture = resubmissionFixture();
+    fixture.tables[POINTS][0].deleted_at = '2026-09-21T14:15:33.600Z';
     switch (conflict) {
       case 'connected code':
       case 'retired connected code':
@@ -809,8 +1171,9 @@ describe('connection profile persistence with a stale submitted factory', () => 
     expect(fixture.tables).toEqual(before);
   });
 
-  it('rolls back temporary retirement when the database rejects releasing a reservation', async () => {
+  it('rolls back cleanup when the database rejects releasing a retired reservation', async () => {
     const fixture = resubmissionFixture();
+    fixture.tables[POINTS][0].deleted_at = '2026-09-21T14:15:33.600Z';
     const before = structuredClone(fixture.tables);
     fixture.beforeRegistryDelete.mockImplementationOnce(() => {
       expect(fixture.tables[POINTS][0].deleted_at).not.toBeNull();
