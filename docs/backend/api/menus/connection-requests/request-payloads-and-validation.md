@@ -483,6 +483,12 @@ criteria normalization สำคัญ
 
 สร้างคำขอ `ADD_PARAMETER` ให้จุดตรวจวัดเดิม
 
+จุดต้นทางต้องเป็น active row ใน `cems_wpms_connected_measurement_points` ของโรงงานเดียวกับคำขอ โดยเทียบ `eligible_factory_id` ที่บันทึกไว้และ `systemType` ต้องตรงกัน ต้องพบเพียงหนึ่งจุดจากรหัสนั้นหลัง trim และเทียบโดยไม่แยกตัวพิมพ์ เมื่อสร้างหรือส่งแบบแก้ไข backend บันทึก `pointCode` ตามค่าที่เก็บจริงในจุดต้นทาง
+
+หากรหัสไม่พบ เหลือเฉพาะจุดที่ถูกลบ พบหลาย active rows รหัสเดียวกัน เป็นจุดของโรงงาน/ระบบอื่น หรือจุดต้นทางไม่มี `eligible_factory_id` ที่ยืนยันเจ้าของได้ จะตอบ `409 CONFLICT` พร้อม `ADD_PARAMETER_POINT_OWNERSHIP_INVALID` โดยไม่ใช้ชื่อโรงงานหรือเลขทะเบียนเดาเจ้าของ และไม่เปิดเผยรายละเอียดจุดของผู้อื่น การตรวจว่าโรงงานของคำขอเป็น active eligible factory ยังคงใช้ข้อผิดพลาดเดิมก่อนตรวจเจ้าของจุด
+
+กติกานี้ตรวจตอนสร้างคำขอ ส่งแบบแก้ไข อนุมัติ ยืนยัน และเชื่อมต่อจริง โดยตรวจซ้ำภายใน transaction ก่อนเปลี่ยนข้อมูล จึงครอบคลุมคำขอเก่าที่เคยบันทึกรหัสไม่ถูกต้องไว้ด้วย เมื่อไม่ผ่านจะไม่บันทึกสถานะ ประวัติ หรือข้อมูลจุดบางส่วน `source_request_id` และ `source_measurement_point_id` ของจุดต้นทางต่างจากคำขอเพิ่มพารามิเตอร์ได้ หากเจ้าของโรงงานและระบบตรงกัน
+
 เมื่อคำขอเชื่อมต่อสำเร็จ (`CONNECTED`) backend รวมพารามิเตอร์จากคำขอนี้กับรายการของจุด active ปัจจุบัน โดยเก็บรายการเดิมก่อนและเพิ่มรายการใหม่ต่อท้าย ไม่ใช้รายการใหม่แทนทั้งชุด และไม่เพิ่มชื่อซ้ำเมื่อแตกต่างเพียงตัวพิมพ์เล็ก/ใหญ่หรือช่องว่างหัวท้าย; หน่วยที่ต่างกันยังเป็นคนละพารามิเตอร์ การยื่นคำขอเพียงอย่างเดียวยังไม่เปลี่ยนข้อมูลจุดปัจจุบัน
 
 ข้อมูลเครื่องมือเดิมของพารามิเตอร์ที่ยังอยู่ในจุดปัจจุบันจะถูกรักษาไว้ แม้คำขอส่งเครื่องมือเฉพาะตัวใหม่ หรือละ/ส่ง `null` ตามสิทธิ์เจ้าหน้าที่ หากส่งพารามิเตอร์เดิมซ้ำ ระบบรวมข้อมูลเครื่องมือโดยใช้ค่าที่ส่งมาใหม่เฉพาะ field ที่ระบุ (รวม `null` ที่ส่งชัดเจน) และเก็บ field เดิมที่ไม่ได้ส่ง; ไม่ดึงเครื่องมือของพารามิเตอร์ที่ถูกนำออกจากจุดปัจจุบันกลับมาเอง
@@ -501,7 +507,7 @@ criteria normalization สำคัญ
 | -------------------------------------------- | -------- | -------- | -------- | ------ | ------------------------------------------------- |
 | `requestType`                                | body     | No       | No       | -      | backend จะ stamp เป็น `ADD_PARAMETER`             |
 | `measurementPoints`                          | body     | Yes      | No       | array  | ต้องมี exactly 1 point                            |
-| `measurementPoints[].pointCode`              | body     | Yes      | No       | string | ต้องเป็นรหัสจุดเดิมของ point ที่จะเพิ่ม parameter |
+| `measurementPoints[].pointCode`              | body     | Yes      | No       | string | trim 1-64; ต้องอ้าง active point เพียงจุดเดียวของ `eligible_factory_id` และ `systemType` เดียวกับคำขอ |
 | `measurementPoints[].details` | body | ตามผู้ยื่น | เฉพาะเจ้าหน้าที่ | object | เจ้าหน้าที่ละ field หรือส่ง `null` ได้; ผู้ประกอบการต้องส่ง object ที่ไม่ว่าง; object ที่ส่งมาต้องผ่านกฎเดิม |
 | `measurementPoints[].measurementInstruments` | body | ตามผู้ยื่น | เฉพาะเจ้าหน้าที่ | object | เจ้าหน้าที่ละ field หรือส่ง `null` ได้; ผู้ประกอบการต้องส่ง object; ข้อมูลที่ส่งมายังตรวจรูปแบบเดิม |
 | `measurementPoints[].documentsAndImages`     | body     | No       | No       | array  | ไม่บังคับ แม้เป็น `CEMS`                          |
@@ -600,6 +606,7 @@ criteria normalization สำคัญ
 
 - ต้องมี exactly 1 measurement point
 - `pointCode` ต้องมี เพราะ flow นี้อ้างถึงจุดเดิม
+- เลือกจุดจากรายการปัจจุบันของโรงงานและระบบที่จะยื่นคำขอ ใช้ [parameter-form](./README.md#add-parameter-prefill) โหลดข้อมูลจุดเดิม; การมีรหัสอยู่ในทะเบียนหรือคำขอเก่าเพียงอย่างเดียวไม่ยืนยันเจ้าของจุดปัจจุบัน
 - เฉพาะเจ้าหน้าที่ตามเงื่อนไขข้างต้น ละ `details` และ/หรือ `measurementInstruments` หรือส่ง `null` ได้; ผู้ประกอบการยังต้องส่งทั้งสองส่วน
 - `details` ที่ส่งเป็น object ต้องไม่ว่าง; เจ้าหน้าที่สามารถส่ง `stackShape: null`, `stackShape: ""` หรือละ `stackShape` ได้ เพื่อรองรับ prefill ของจุดเดิมที่ยังไม่มีรูปทรงปล่อง แม้มี `requestedParameters` หรือข้อมูลส่วนอื่นอยู่ใน object
 - เมื่อเจ้าหน้าที่ระบุรูปทรงปล่อง ต้องส่งขนาดหรือคำอธิบายของรูปทรงนั้นตามกฎเดิม; ผู้ประกอบการยังต้องระบุรูปทรงปล่อง CEMS เสมอ และเครื่องมือที่ส่งมาต้องผ่าน schema เดิม
@@ -619,6 +626,25 @@ criteria normalization สำคัญ
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                              | login ใหม่                       |
 | `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:edit`                                                                               | ซ่อนปุ่มส่งคำขอ                  |
 | `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory                                                                                 | refresh ข้อมูลโรงงานก่อนส่งใหม่  |
+| `409`       | `CONFLICT`         | จุดต้นทางไม่เป็น active point เพียงจุดเดียวของโรงงานและระบบที่ระบุ หรือไม่มี stable owner (`error.details.reason=ADD_PARAMETER_POINT_OWNERSHIP_INVALID`) | โหลดรายการจุดใหม่ เลือกโรงงาน ระบบ และจุดให้ตรงกันก่อนส่งใหม่ |
+
+ตัวอย่างข้อผิดพลาดเดียวกันสำหรับการสร้าง ส่งแบบแก้ไข อนุมัติ ยืนยัน และเชื่อมต่อคำขอ `ADD_PARAMETER` ที่อ้างจุดไม่ถูกต้อง:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "CONFLICT",
+    "message": "Add parameter point must reference an active point owned by this factory and system",
+    "details": {
+      "path": "measurementPoints.0.pointCode",
+      "reason": "ADD_PARAMETER_POINT_OWNERSHIP_INVALID"
+    }
+  }
+}
+```
+
+`path` ระบุ index ของจุดในคำขอ ไม่มี factory ID หรือรายละเอียดเจ้าของจุดอื่นใน error นี้ หากจุดเดิมไม่มีข้อมูลเจ้าของที่ยืนยันได้ ให้เจ้าหน้าที่ตรวจและแก้ข้อมูลต้นทางก่อนส่งใหม่
 
 ## `PUT /api/v1/cems-wpms-requests/:id/form`
 
@@ -730,6 +756,7 @@ criteria normalization สำคัญ
 - ก่อนลบและคืนรหัส backend ตรวจข้อมูลใน transaction เดียวกัน: หากจุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ใน `cems_wpms_connected_measurement_points` รวมแถวที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้ ตอบ `409 CONFLICT` พร้อม `reason = "REQUEST_POINTS_ALREADY_CONNECTED"`; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ `reason = "POINT_CODE_RELEASE_BLOCKED"` โดยปฏิเสธทั้งรายการและไม่บันทึกบางส่วน
 - การส่งกลับไม่ลบตัวคำขอหรือ `statusHistory`; จุดที่สร้างใหม่หรือ snapshot ที่ถูกแทนที่มี ID ใหม่ ให้ใช้ detail/response ล่าสุดก่อนอนุมัติ และส่ง `pointCodeAssignments` เฉพาะจุดที่ยังไม่มีรหัส จุดที่คงรหัสเดิมไม่ต้องกำหนดซ้ำ รหัส legacy ที่คืนจากการลบจริงอาจกำหนดให้จุดใหม่ด้วย `MANUAL_LEGACY` ได้หากยังว่าง
 - `ADD_PARAMETER` คง flow เดิม: แทนที่ snapshot ของจุดในคำขอและได้รับ ID ใหม่ แต่ใช้ `pointCode` ของจุดต้นทางและไม่คืนการจองที่เป็นของจุดหรือคำขออื่น
+- การส่งแบบแก้ไข `ADD_PARAMETER` ต้องผ่าน [กฎเจ้าของจุดต้นทางเดียวกับตอนสร้าง](#post-apiv1cems-wpms-requestsparameters); backend ตรวจ active point โรงงานและระบบซ้ำภายใน transaction ก่อนแทนที่ snapshot และบันทึกรหัสตามค่าที่เก็บจริงในจุดต้นทาง
 - หลังผ่าน validation จะเปลี่ยนสถานะเป็น `REVISED_PENDING_DESIGN_REVIEW`
 
 ### Errors
@@ -749,6 +776,7 @@ criteria normalization สำคัญ
 | `409`       | `CONFLICT`         | ทะเบียนจุดที่จะเก็บหายหรือเจ้าของ/assignment mode ไม่ตรง (`error.details.reason=POINT_CODE_RESERVATION_MISMATCH`) | ให้เจ้าหน้าที่ตรวจทะเบียนก่อนส่งแบบใหม่ |
 | `409`       | `CONFLICT`         | จุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้ (`error.details.reason=REQUEST_POINTS_ALREADY_CONNECTED`) | ให้เจ้าหน้าที่ตรวจจุดที่เชื่อมต่อก่อนส่งแบบใหม่ |
 | `409`       | `CONFLICT`         | รหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ (`error.details.reason=POINT_CODE_RELEASE_BLOCKED`) | ให้เจ้าหน้าที่ตรวจการจองและการใช้รหัสก่อนส่งแบบใหม่ |
+| `409`       | `CONFLICT`         | คำขอ `ADD_PARAMETER` อ้างจุดที่ไม่ผ่านกฎเจ้าของโรงงานและระบบ (`error.details.reason=ADD_PARAMETER_POINT_OWNERSHIP_INVALID`) | โหลดรายการจุดของโรงงานและระบบที่เลือกใหม่ ใช้รหัสจากจุดปัจจุบัน |
 
 `POINT_CODE_READ_ONLY` คืน `path = "measurementPoints.i.pointCode"`; `POINT_CODE_IDENTITY_REQUIRED` คืน `path = "measurementPoints"`. `POINT_CODE_RESERVATION_MISMATCH` คืน `path = "measurementPoints.i.pointCode"`, `requestId`, `measurementPointId` และ `pointCode`. สองเหตุผลการลบ/คืนรหัสหลังสุดคืน `error.details.path = "measurementPoints"` และ `requestId`; `POINT_CODE_RELEASE_BLOCKED` อาจคืน `pointCode` เพิ่มเติม ไม่มีการลบจุด คืนรหัส หรือเปลี่ยนสถานะบางส่วนเมื่อเกิดข้อขัดแย้ง
 
