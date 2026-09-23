@@ -36,7 +36,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
           return `${code}\nexport { renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
         }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
+          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
         }
       },
     }],
@@ -46,7 +46,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
       RequestFormBottomSheet, validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody,
       syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload,
       MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow,
-      OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
+      OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, getAssignedRequestPointCodes,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
 
     await t.test('PDF instrument headers use IEE/EIA/HEIA and fit both CEMS and WPMS columns', async () => {
@@ -221,6 +221,18 @@ test('add-parameter form and payload preserve live groups without affecting othe
       const oldWaterPoint = { requestType: 'ADD_PARAMETER', systemType: 'WPMS', measurementPoints: [{ id: 2, pointCode: 'W0123' }] }
       assert.deepEqual(buildRequestApprovalPayload(oldWaterPoint, 'EXISTING', 'W0123'), expected)
       assert.equal(oldWaterPoint.measurementPoints[0].pointCode, 'W0123')
+
+      for (const [systemType, pointCodes] of [['CEMS', ['S0647']], ['WPMS', ['P0155', 'P0527']]]) {
+        const assignedRequest = {
+          requestType: 'ADD_MEASUREMENT_POINT',
+          systemType,
+          measurementPoints: pointCodes.map((pointCode, index) => ({ id: index + 1, pointCode })),
+        }
+        assert.deepEqual(getAssignedRequestPointCodes(assignedRequest), pointCodes)
+        assert.deepEqual(buildRequestApprovalPayload(assignedRequest, 'EXISTING', pointCodes[0]), expected)
+        assert.equal('pointCodeAssignments' in buildRequestApprovalPayload(assignedRequest, 'EXISTING', pointCodes[0]), false)
+      }
+      assert.deepEqual(getAssignedRequestPointCodes({ measurementPoints: [{ pointCode: 'S0647' }, { pointCode: null }] }), [])
     })
 
     await t.test('manual approval accepts only S/P legacy ranges and does not assign AUTO codes in frontend', async () => {

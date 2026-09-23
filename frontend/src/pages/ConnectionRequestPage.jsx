@@ -179,13 +179,22 @@ const getUnassignedMeasurementPoints = (request = {}) => {
   const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
   return points.filter((point) => !String(point?.pointCode ?? '').trim())
 }
+const getAssignedRequestPointCodes = (request = {}) => {
+  const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
+  if (!points.length || points.some((point) => !String(point?.pointCode ?? '').trim())) return []
+  return points.map((point) => String(point.pointCode).trim().toUpperCase())
+}
 const isAddParameterRequest = (request) => request?.requestType
   ? request.requestType === 'ADD_PARAMETER'
   : request?.form === 'เพิ่มพารามิเตอร์'
 
 function buildRequestApprovalPayload(request, pointCodeMode, existingPointCode = '') {
   const payload = { action: 'APPROVE_FORM', officerNote: 'แบบถูกต้อง' }
-  if (isAddParameterRequest(request) || pointCodeMode !== 'EXISTING') return payload
+  if (
+    isAddParameterRequest(request)
+    || getAssignedRequestPointCodes(request).length
+    || pointCodeMode !== 'EXISTING'
+  ) return payload
 
   const normalizedPointCode = existingPointCode.trim().toUpperCase()
   const unassignedPoints = getUnassignedMeasurementPoints(request)
@@ -8035,6 +8044,7 @@ function ConnectionRequestPage({
   const [approvePointCodeMode, setApprovePointCodeMode] = useState(approvePointCodeModeOptions[0].value)
   const [approveExistingPointCode, setApproveExistingPointCode] = useState('')
   const [approvePointCodeError, setApprovePointCodeError] = useState('')
+  const usesAssignedPointCodes = getAssignedRequestPointCodes(requestDocument).length > 0
   const [verifyConnectionConfirmOpen, setVerifyConnectionConfirmOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
@@ -8475,15 +8485,16 @@ function ConnectionRequestPage({
   const closeRequestDocumentDialog = useCallback(() => {
     setRequestDocumentOpen(false)
   }, [])
-  const resetApprovePointCodeForm = useCallback(() => {
-    setApprovePointCodeMode(approvePointCodeModeOptions[0].value)
-    setApproveExistingPointCode('')
+  const resetApprovePointCodeForm = useCallback((request = null) => {
+    const assignedPointCodes = getAssignedRequestPointCodes(request)
+    setApprovePointCodeMode(assignedPointCodes.length ? 'EXISTING' : approvePointCodeModeOptions[0].value)
+    setApproveExistingPointCode(assignedPointCodes.join(', '))
     setApprovePointCodeError('')
   }, [])
   const openApproveConfirmDialog = useCallback(() => {
-    resetApprovePointCodeForm()
+    resetApprovePointCodeForm(requestDocument)
     setApproveConfirmOpen(true)
-  }, [resetApprovePointCodeForm])
+  }, [requestDocument, resetApprovePointCodeForm])
   const closeApproveConfirmDialog = useCallback(() => {
     if (requestDocumentApproving) {
       return
@@ -9206,6 +9217,7 @@ function ConnectionRequestPage({
             >
               {approvePointCodeModeOptions.map((option) => {
                 const selected = option.value === approvePointCodeMode
+                const optionDisabled = usesAssignedPointCodes && option.value !== 'EXISTING'
                 const selectedColor = option.color === 'success' ? 'success.main' : 'primary.main'
                 const selectedBg = option.color === 'success' ? '#f0fdf4' : '#eff6ff'
 
@@ -9214,7 +9226,8 @@ function ConnectionRequestPage({
                     key={option.value}
                     component="label"
                     sx={{
-                      cursor: 'pointer',
+                      cursor: optionDisabled ? 'not-allowed' : 'pointer',
+                      opacity: optionDisabled ? 0.55 : 1,
                       p: 2,
                       minHeight: 138,
                       border: 1,
@@ -9233,6 +9246,7 @@ function ConnectionRequestPage({
                         <Radio
                           value={option.value}
                           checked={selected}
+                          disabled={optionDisabled}
                           sx={{
                             p: 0.25,
                             color: selectedColor,
@@ -9261,13 +9275,17 @@ function ConnectionRequestPage({
                           label="รหัสจุดตรวจวัดเดิม"
                           value={approveExistingPointCode}
                           onChange={(event) => {
+                            if (usesAssignedPointCodes) return
                             setApproveExistingPointCode(event.target.value.toUpperCase())
                             setApprovePointCodeError('')
                           }}
                           placeholder="เช่น S0001 หรือ P0001"
                           error={Boolean(approvePointCodeError)}
-                          helperText={approvePointCodeError || 'กรอกได้เฉพาะช่วง S0001-S1999 หรือ P0001-P1999'}
+                          helperText={approvePointCodeError || (usesAssignedPointCodes
+                            ? 'ใช้รหัสจุดตรวจวัดที่บันทึกอยู่ในคำขอ'
+                            : 'กรอกได้เฉพาะช่วง S0001-S1999 หรือ P0001-P1999')}
                           disabled={requestDocumentApproving}
+                          slotProps={{ input: { readOnly: usesAssignedPointCodes } }}
                           fullWidth
                           size="small"
                           onClick={(event) => event.stopPropagation()}
