@@ -672,6 +672,11 @@ function mapOperatorFactory(row, index) {
   const lon = toFiniteNumber(row.longitude)
   const lat = toFiniteNumber(row.latitude)
   const systems = getFactorySystems(row)
+  const industrialEstateCode = row.industrialEstateCode ?? ''
+  const industrialEstateName = row.industrialEstateName ?? ''
+  const industrialAreaType =
+    row.industrialAreaType ??
+    (industrialEstateCode || industrialEstateName ? 'INDUSTRIAL_ESTATE' : 'OUTSIDE_INDUSTRIAL_ESTATE')
 
   return {
     id: row.factoryId ?? row.id ?? row.newRegistrationNo ?? `factory-${index}`,
@@ -682,8 +687,9 @@ function mapOperatorFactory(row, index) {
     oldRegistrationNo: row.oldRegistrationNo ?? row.factoryRegistrationNo ?? '',
     address: row.address ?? '',
     province: row.province ?? '',
-    industrialEstateCode: row.industrialEstateCode ?? '',
-    industrialEstateName: row.industrialEstateName ?? '',
+    industrialAreaType,
+    industrialEstateCode,
+    industrialEstateName,
     industryMainOrder: row.industryMainOrder ?? '',
     industryMainOrderLabel: row.industryMainOrderLabel ?? '',
     systems,
@@ -899,10 +905,14 @@ function HomePage({ accessToken = '', permissions }) {
         factoryType === 'all' || factory.systems.some((system) => system.toLowerCase() === factoryType)
       const matchesFactoryOrder =
         factoryOrderFilter === 'all' || factory.industryMainOrder === factoryOrderFilter
+      const isIndustrialEstate =
+        factory.industrialAreaType === 'INDUSTRIAL_ESTATE' ||
+        (factory.industrialAreaType !== 'OUTSIDE_INDUSTRIAL_ESTATE' &&
+          Boolean(factory.industrialEstateCode || factory.industrialEstateName))
       const matchesIndustrialEstate =
         industrialEstateFilter === 'all' ||
-        (industrialEstateFilter === 'industrial-estate' && Boolean(factory.industrialEstateCode)) ||
-        (industrialEstateFilter === 'outside-industrial-estate' && !factory.industrialEstateCode)
+        (industrialEstateFilter === 'industrial-estate' && isIndustrialEstate) ||
+        (industrialEstateFilter === 'outside-industrial-estate' && !isIndustrialEstate)
       const matchesIndustrialEstateName =
         industrialEstateNameFilter === 'all' || factory.industrialEstateName === industrialEstateNameFilter
       const matchesRegion = regionFilter === 'all' || getRegionByProvince(factory.province) === regionFilter
