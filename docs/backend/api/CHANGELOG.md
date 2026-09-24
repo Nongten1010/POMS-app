@@ -1,5 +1,15 @@
 # API Breaking Changes
 
+<a id="home-hourly-handoff-20260923"></a>
+
+## 2026-09-23 — หน้าหลักใช้ชั่วโมงที่จบแล้วและแยกข้อมูลส่งช้า
+
+- **Affected canonical docs:** [หน้าหลัก](./menus/home/README.md#กติกาข้อมูลหน้าหลัก), [สถิติและปฏิทินหน้าหลัก](./shared/connected-measurement-points/README.md#home-measurement-rules), [เมนูสถิติ](./menus/statistics/README.md)
+- **Impact:** dashboard/public map และสถิติ/ปฏิทินทั้งสาม endpoint รวม annual aliases กรองรายการซ่อนและจุดที่ยกเว้นทั้งหมดก่อนคืนค่าและสรุปผล ใช้ `ctime` จัดชั่วโมงและ `utime` ตรวจส่งทันเวลา วันปัจจุบันไม่นับชั่วโมงที่ยังไม่จบ เพิ่ม `lateData` โดย `warning`/`exceeded` มีลำดับสูงกว่า `lowDataDays` เปลี่ยนเป็นช่วงต่อเนื่องล่าสุด และ `exceededDays` สะสมเฉพาะต้นปีถึงวันสิ้นสุดที่เลือก
+- **Migration:** client รองรับ `lateData` และเปอร์เซ็นต์/สถานะความครบถ้วนที่เป็น `null` เมื่อยังไม่มีชั่วโมงที่จบแล้ว ใช้ `data.summary.exceededDays` เป็นจำนวนวันรวมของจุดแทนการบวก counters รายพารามิเตอร์ ส่ง `endDate` เดียวกันให้ calendar และ details เพื่อให้ drill-down ตรงกับจำนวนวันที่เลือก; ใช้ `latestMeasurement` สำหรับ popup และรองรับ `noData` รายพารามิเตอร์ ไม่ใช้ `parameters: []` อนุมานว่าจุดได้รับยกเว้นทั้งหมด และยอมรับว่าโรงงานที่ไม่เหลือจุดหลังกรองถูกตัดออก ใช้ `industrialAreaType` เป็นหลักและไม่ตีความรหัสนิคมว่างว่าอยู่นอกนิคม
+- **Unchanged:** `operator-factories`, CSV export, API ขอเชื่อมต่อ/ข้อมูลพื้นฐาน/กวภ./BOD-COD/รายงาน และเมนูจัดการแสดง-ซ่อนยังใช้ contract เดิม ไม่มี endpoint ใหม่หรือการแก้ข้อมูลตรวจวัดย้อนหลัง
+- **Breaking change:** yes — enum/nullability ผลเปอร์เซ็นต์ ช่วงนับวัน และรายการที่แสดงเปลี่ยนตาม requirement หน้าหลัก ต้องประสาน frontend ก่อน release และตรวจ runtime OpenAPI หลัง deploy; ผลตรวจใน repository ไม่ใช่หลักฐานว่า production ใช้กติกาใหม่แล้ว
+
 <a id="bod-cod-annual-submission-policy"></a>
 
 ## 2026-09-20 — รอบยื่นรายงาน BOD/COD เลขครั้งรายปีและสิทธิ์พิจารณา

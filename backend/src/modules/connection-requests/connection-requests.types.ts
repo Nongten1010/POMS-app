@@ -4,6 +4,7 @@ import type {
 } from '../poms-factories/poms-status-management.types';
 import type { ConnectionRequestEiaAssessment } from './connection-request-eia';
 import type { MonitoringPointStatus } from '../monitoring-point-forms/monitoring-point-forms.types';
+import type { MeasurementStatisticValueDTO } from '../parameter-values/parameter-values.types';
 
 export const CONNECTION_REQUEST_STATUS = {
   PENDING_DESIGN_REVIEW: 'PENDING_DESIGN_REVIEW',
@@ -627,6 +628,11 @@ export interface OperatorFactoryMeasurementPointDTO extends Partial<PomsManagedS
   monitoringPointStatus?: MonitoringPointStatus | null;
   parameterStandards: OperatorFactoryParameterStandardDTO[];
   data: Record<string, unknown>[];
+  latestMeasurement?: {
+    date: string;
+    time: string;
+    values: Record<string, MeasurementStatisticValueDTO>;
+  };
 }
 
 export interface OperatorFactoryParameterStandardDTO {
@@ -649,11 +655,21 @@ export interface OperatorFactoryMeasurementCriteriaRowDTO {
 
 export type PublicFactoryMapPointDTO = Omit<OperatorFactoryDashboardRowDTO, 'isFavorite'>;
 
+/** Internal home projection; management menus retain the complete connected point. */
+export interface HomeMeasurementPointVisibility {
+  factoryVisible: boolean;
+  pointVisible: boolean;
+  fullyExempt: boolean;
+  parameters: string[];
+  measurementInstruments: MeasurementInstrumentsInput | null;
+}
+
 export interface CurrentFactoryMeasurementPointDTO extends Omit<
   OperatorFactoryMeasurementPointDTO,
   'parameterStandards'
 > {
   factoryStatus?: PomsDisplayStatus;
+  homeVisibility?: HomeMeasurementPointVisibility;
   connectedPointId?: number;
   sourceMeasurementPointId?: number;
   sourceRequestId?: number;

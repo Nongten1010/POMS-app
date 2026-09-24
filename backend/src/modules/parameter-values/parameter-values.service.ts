@@ -25,6 +25,7 @@ import {
   type ConnectionTestQuery,
   type ConnectionTestResultDTO,
   type HourlyMeasurementCutoff,
+  type HomeMeasurementSummaryDTO,
   type LatestHourlyParameterValuesResultDTO,
   type LatestParameterValueQuery,
   type LatestParameterValueResultDTO,
@@ -33,6 +34,8 @@ import {
   type MeasurementStatisticsEvaluationOptions,
   type MeasurementStatisticsQuery,
   type MeasurementStatisticsResultDTO,
+  type MeasurementStatisticValueDTO,
+  type ParameterEvaluationOptions,
   type MeasurementCsvExportQuery,
   type ParameterValueStatus,
   PARAMETER_VALUE_INTERVALS,
@@ -134,6 +137,7 @@ export const parameterValuesService = {
     stationId: string,
     access: ParameterValueAccessContext,
     cutoff?: HourlyMeasurementCutoff,
+    options?: { homeHour?: boolean },
   ): Promise<LatestHourlyParameterValuesResultDTO> {
     await ensureStationAccess(stationId, access);
 
@@ -147,14 +151,36 @@ export const parameterValuesService = {
     }
 
     const query = { stationId, interval } as const;
-    const result = cutoff
-      ? await parameterValuesRepository.latestRowsAtOrBeforeHour(query, cutoff)
-      : await parameterValuesRepository.latestRowsAtLatestTimestamp(query);
+    const result =
+      cutoff && options?.homeHour
+        ? await parameterValuesRepository
+            .listRows({
+              stationId,
+              interval,
+              startDate: cutoff.date,
+              endDate: cutoff.date,
+            })
+            .then((result) => ({
+              ...result,
+              rows: result.rows
+                .filter(
+                  (row) =>
+                    stringValue(row.cdate) === cutoff.date && parseHour(row.ctime) === cutoff.hour,
+                )
+                .sort(compareHomeMeasurementRows),
+            }))
+        : cutoff
+          ? await parameterValuesRepository.latestRowsAtOrBeforeHour(query, cutoff)
+          : await parameterValuesRepository.latestRowsAtLatestTimestamp(query);
     const registeredParameters = await parameterValuesRepository.listRegisteredParameters(
       stationId,
       access,
     );
-    const filtered = filterRowsByRegisteredParameters(result.rows, registeredParameters);
+    const filtered = filterRowsByRegisteredParameters(
+      result.rows,
+      registeredParameters,
+      options?.homeHour,
+    );
 
     return {
       data: filtered.rows,
@@ -228,20 +254,17 @@ export const parameterValuesService = {
       );
     }
 
-    const [result, registeredParameters] = await Promise.all([
-      parameterValuesRepository.listRows({
-        stationId: query.stationId,
-        interval,
-        startDate: query.date,
-        endDate: query.date,
-      }),
-      parameterValuesRepository.listRegisteredParameters(query.stationId, access),
-    ]);
-    const definitions = buildParameterDefinitions(
-      registeredParameters,
+    const current = toBangkokDateHour(new Date());
+    const loaded = await loadHomeMeasurementRows(query.stationId, query.date, access, options);
+    const { result, registeredParameters, definitions, expectedStartDate } = loaded;
+    const dailySummaries = buildDailySummaries(
       result.rows,
-      options?.parameterEvaluations,
+      definitions,
+      current,
+      expectedStartDate,
+      query.date,
     );
+    const selectedRows = result.rows.filter((row) => stringValue(row.cdate) === query.date);
 
     return {
       data: {
@@ -250,13 +273,14 @@ export const parameterValuesService = {
           date: query.date,
           valueDefinitions: measurementStatisticsValueDefinitions(),
         },
+        summary: buildHomeMeasurementSummary(dailySummaries, query.date),
         thresholds: definitions.map(toThreshold).filter(isMeasurementParameterThreshold),
         measurementPoints: [
           {
             pointCode: query.stationId,
             stationId: query.stationId,
             date: query.date,
-            rows: buildHourlyStatisticRows(query.date, result.rows, definitions),
+            rows: buildHourlyStatisticRows(query.date, selectedRows, definitions),
           },
         ],
       },
@@ -266,7 +290,7 @@ export const parameterValuesService = {
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
         date: query.date,
-        count: result.rows.length,
+        count: selectedRows.length,
         registeredParameters: canonicalizeRegisteredParameterLabels(registeredParameters),
       },
     };
@@ -294,46 +318,38 @@ export const parameterValuesService = {
       startDate: monthStartDate,
       endDate: monthEndDate,
     } = monthRange(query.month);
-    const { startDate, endDate } = yearRange(String(year));
-    const [result, registeredParameters] = await Promise.all([
-      parameterValuesRepository.listRows({
-        stationId: query.stationId,
-        interval,
-        startDate,
-        endDate,
-      }),
-      parameterValuesRepository.listRegisteredParameters(query.stationId, access),
-    ]);
-    const definitions = buildParameterDefinitions(
-      registeredParameters,
-      result.rows,
-      options?.parameterEvaluations,
-    );
-    const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
+    const current = toBangkokDateHour(new Date());
+    const endDate = resolveHomeEndDate(query.endDate, monthStartDate, monthEndDate, current);
+    const loaded = await loadHomeMeasurementRows(query.stationId, endDate, access, options);
+    const { result, registeredParameters, definitions, expectedStartDate } = loaded;
     const dailySummaries = buildDailySummaries(
       result.rows,
       definitions,
-      useConfiguredEvaluation,
-      toBangkokDateHour(new Date()),
+      current,
+      expectedStartDate,
+      endDate,
     );
-    // Calendar days and today's completeness stay month-scoped; the two counters use the full year.
     const requestedMonthSummaries = dailySummaries.filter(
       (summary) => summary.date >= monthStartDate && summary.date <= monthEndDate,
     );
+    const summaryPeriod = endDate < monthStartDate ? [] : dailySummaries;
 
     return {
       data: {
         metadata: {
           description: 'DateCalendar รายเดือนและตารางสรุปสถานะของปีที่เลือก',
           month: query.month,
+          endDate,
           valueDefinitions: calendarStatusValueDefinitions(),
         },
+        summary: buildHomeMeasurementSummary(summaryPeriod, endDate),
         calendar: {
           year,
           month,
           days: requestedMonthSummaries.map((summary) => ({
             date: summary.date,
             dataCompletenessPercent: summary.dataCompletenessPercent,
+            lateDataPercent: summary.lateDataPercent,
             dataCompletenessStatus: summary.dataCompletenessStatus,
             pollutionStatus: summary.pollutionStatus,
             display: {
@@ -343,13 +359,7 @@ export const parameterValuesService = {
           })),
         },
         monthlySummary: definitions.map((definition) =>
-          buildYearlyParameterSummary(
-            definition,
-            dailySummaries,
-            requestedMonthSummaries,
-            startDate,
-            endDate,
-          ),
+          buildYearlyParameterSummary(definition, summaryPeriod, endDate),
         ),
       },
       meta: {
@@ -358,6 +368,7 @@ export const parameterValuesService = {
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
         month: query.month,
+        endDate,
         count: result.rows.length,
         registeredParameters,
       },
@@ -380,44 +391,40 @@ export const parameterValuesService = {
       );
     }
 
-    const { year, startDate, endDate } = yearRange(query.year);
-    const [result, registeredParameters] = await Promise.all([
-      parameterValuesRepository.listRows({
-        stationId: query.stationId,
-        interval,
-        startDate,
-        endDate,
-      }),
-      parameterValuesRepository.listRegisteredParameters(query.stationId, access),
-    ]);
+    const { year, startDate, endDate: yearEndDate } = yearRange(query.year);
+    const current = toBangkokDateHour(new Date());
+    const endDate = resolveHomeEndDate(query.endDate, startDate, yearEndDate, current);
+    const loaded = await loadHomeMeasurementRows(query.stationId, endDate, access, options);
+    const { result, registeredParameters, definitions, expectedStartDate } = loaded;
     const annualRows = result.rows.filter((row) => {
       const date = stringValue(row.cdate);
       return date !== null && date >= startDate && date <= endDate;
     });
-    const definitions = buildParameterDefinitions(
-      registeredParameters,
-      annualRows,
-      options?.parameterEvaluations,
-    );
     const definition = resolveCalendarStatusDetailParameter(
       definitions,
       query.parameterCode,
       query.unit,
     );
-    const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
     const dailySummaries = buildDailySummaries(
-      annualRows,
+      result.rows,
       definitions,
-      useConfiguredEvaluation,
-      toBangkokDateHour(new Date()),
+      current,
+      expectedStartDate,
+      endDate,
     );
+    const detailSummaries =
+      endDate < startDate
+        ? []
+        : query.summaryType === 'lowData'
+          ? trailingLowDataSummaries(dailySummaries, endDate, definition.label)
+          : dailySummaries.filter((summary) => summary.date >= startDate);
     const exceededStandard = resolveExceededStandard(definition);
     const rowsByDate = groupRowsByDate(annualRows);
-    const rows = dailySummaries.flatMap((summary) =>
+    const rows = detailSummaries.flatMap((summary) =>
       buildCalendarStatusDetailRow(
         query.summaryType,
         summary,
-        rowsByDate.get(summary.date) ?? [],
+        completedRowsForDate(summary.date, rowsByDate.get(summary.date) ?? [], current),
         definition,
         exceededStandard,
       ),
@@ -428,6 +435,7 @@ export const parameterValuesService = {
         metadata: {
           description: 'รายละเอียดรายวันที่ใช้คำนวณตารางสรุปสถานะของปีที่เลือก',
           year,
+          endDate,
           summaryType: query.summaryType,
           valueDefinitions: calendarStatusDetailsValueDefinitions(),
         },
@@ -449,7 +457,8 @@ export const parameterValuesService = {
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
         year: query.year,
-        count: annualRows.length,
+        endDate,
+        count: result.rows.length,
         registeredParameters,
       },
     };
@@ -540,10 +549,15 @@ interface ParameterDefinition {
 
 interface DailySummary {
   date: string;
-  dataCompletenessPercent: number;
-  dataCompletenessStatus: 'lowData' | 'highData';
-  pollutionStatus: 'normal' | 'warning' | 'exceeded' | 'insufficient';
+  dataCompletenessPercent: number | null;
+  lateDataPercent: number | null;
+  dataCompletenessStatus: 'lowData' | 'highData' | null;
+  pollutionStatus: 'normal' | 'lateData' | 'warning' | 'exceeded' | 'insufficient';
   parameterStatuses: Map<string, ParameterValueStatus[]>;
+  parameterCompleteness: Map<
+    string,
+    { onTime: number | null; late: number | null; lowData: boolean | null }
+  >;
 }
 
 interface CriteriaRangeRow {
@@ -579,6 +593,170 @@ const CANONICAL_FLOW_RATE_PARAMETER = {
   name: 'Flow Rate',
   unit: 'm3/hr',
 } as const;
+
+async function loadHomeMeasurementRows(
+  stationId: string,
+  endDate: string,
+  access: ParameterValueAccessContext,
+  options?: ParameterEvaluationOptions,
+) {
+  const earliestMeasurementDate =
+    await parameterValuesRepository.earliestMeasurementDate(stationId);
+  const expectedStartDate =
+    [options?.expectedStartDate, earliestMeasurementDate]
+      .filter((date): date is string => Boolean(date))
+      .sort()[0] ?? null;
+  const yearStart = `${endDate.slice(0, 4)}-01-01`;
+  const startDate =
+    expectedStartDate && expectedStartDate < yearStart ? expectedStartDate : yearStart;
+  const [source, sourceRegisteredParameters] = await Promise.all([
+    parameterValuesRepository.listRows({ stationId, interval: '60m', startDate, endDate }),
+    parameterValuesRepository.listRegisteredParameters(stationId, access),
+  ]);
+  const registeredParameters = allowedHomeParameters(sourceRegisteredParameters, options);
+  const rows = source.rows.filter((row) => {
+    const date = timestampDate(row.cdate);
+    return date !== null && date >= startDate && date <= endDate;
+  });
+  const definitions = buildParameterDefinitions(
+    registeredParameters,
+    rows,
+    options?.parameterEvaluations,
+  );
+  return {
+    result: { ...source, rows },
+    registeredParameters,
+    definitions,
+    expectedStartDate: expectedStartDate ?? rows.map((row) => String(row.cdate)).sort()[0] ?? null,
+  };
+}
+
+function resolveHomeEndDate(
+  requestedEndDate: string | undefined,
+  periodStart: string,
+  periodEnd: string,
+  current: DateHour | null,
+): string {
+  if (requestedEndDate) {
+    if (
+      requestedEndDate < periodStart ||
+      requestedEndDate > periodEnd ||
+      (current && requestedEndDate > current.date)
+    ) {
+      throw new BadRequestError(
+        'endDate must be within the requested period and no later than today',
+      );
+    }
+    return requestedEndDate;
+  }
+  return current && current.date < periodEnd ? current.date : periodEnd;
+}
+
+function allowedHomeParameters(
+  parameters: string[],
+  options?: ParameterEvaluationOptions,
+): string[] {
+  if (!options?.allowedParameterLabels) return parameters;
+  const allowed = new Set(options.allowedParameterLabels.map(parameterIdentity));
+  return parameters.filter((parameter) => allowed.has(parameterIdentity(parameter)));
+}
+
+function parameterIdentity(parameter: string): string {
+  const parsed = canonicalParameterPresentation(parseParameterLabel(parameter), parameter);
+  return `${normalizeParameterName(parsed.name)}:${normalizeUnit(parsed.unit)}`;
+}
+
+/** Uses the same value and status rules as the home statistics table. */
+export function evaluateHomeMeasurementRow(
+  row: Record<string, unknown> | undefined,
+  parameters: string[],
+  options?: ParameterEvaluationOptions,
+): Record<string, MeasurementStatisticValueDTO> {
+  return evaluateHomeMeasurementRows(row ? [row] : [], parameters, options);
+}
+
+export function evaluateHomeMeasurementRows(
+  rows: Record<string, unknown>[],
+  parameters: string[],
+  options?: ParameterEvaluationOptions,
+): Record<string, MeasurementStatisticValueDTO> {
+  const definitions = buildParameterDefinitions(
+    allowedHomeParameters(parameters, options),
+    rows,
+    options?.parameterEvaluations,
+  );
+  const chronologicalRows = [...rows].sort(compareHomeMeasurementRows);
+  return Object.fromEntries(
+    definitions.map((definition) => {
+      const row = selectHomeParameterRow(chronologicalRows, definition);
+      const sourceStatus = row ? readPomsClientStatus(row, definition) : null;
+      const missingValue =
+        !row ||
+        (readParameterNumber(row, definition) === null &&
+          (!sourceStatus || sourceStatus.usesMeasurementValue));
+      return [
+        definition.label,
+        missingValue
+          ? { value: null, displayValue: '-', status: 'noData' as const }
+          : buildStatisticValue(
+              row,
+              definition,
+              row ? (readParameterCompletenessPercent(row, definition) ?? 100) : 0,
+            ),
+      ];
+    }),
+  );
+}
+
+function selectHomeParameterRow(
+  rows: Record<string, unknown>[],
+  definition: ParameterDefinition,
+): Record<string, unknown> | undefined {
+  return rows.find(
+    (row) => readParameterNumber(row, definition) !== null || readPomsClientStatus(row, definition),
+  );
+}
+
+/**
+ * cdate/ctime is the device measurement time; udate/utime is its send time.
+ * Both source pairs already use Asia/Bangkok. Compare their stored local dates
+ * and hours directly; applying another timezone offset would shift the deadline.
+ */
+export function homeMeasurementReceiptStatus(
+  row: Record<string, unknown>,
+): 'onTime' | 'late' | 'unknown' {
+  const measuredDate = timestampDate(row.cdate);
+  const measuredHour = receiptTimestampHour(row.ctime);
+  const sentDate = timestampDate(row.udate);
+  const sentHour = receiptTimestampHour(row.utime);
+  if (!measuredDate || measuredHour === null || !sentDate || sentHour === null) {
+    return 'unknown';
+  }
+  const measuredBucket = `${measuredDate} ${String(measuredHour).padStart(2, '0')}`;
+  const sentBucket = `${sentDate} ${String(sentHour).padStart(2, '0')}`;
+  return sentBucket <= measuredBucket ? 'onTime' : 'late';
+}
+
+function timestampDate(value: unknown): string | null {
+  const date = stringValue(value);
+  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+}
+
+function receiptTimestampHour(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/);
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59 || Number(match[3] ?? 0) > 59) {
+    return null;
+  }
+  return Number(match[1]);
+}
+
+function withHomeReceiptStatus(
+  status: ParameterValueStatus,
+  row: Record<string, unknown>,
+): ParameterValueStatus {
+  return status === 'normal' && homeMeasurementReceiptStatus(row) === 'late' ? 'lateData' : status;
+}
 
 function buildParameterDefinitions(
   registeredParameters: string[],
@@ -735,33 +913,50 @@ function buildHourlyStatisticRows(
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
 ) {
-  const rowsByHour = new Map<number, Record<string, unknown>>();
-  for (const row of rows) {
+  const rowsByHour = new Map<number, Record<string, unknown>[]>();
+  for (const row of [...rows].sort(compareHomeMeasurementRows)) {
     const rowDate = stringValue(row.cdate);
     const hour = parseHour(row.ctime);
-    if (rowDate === date && hour !== null && !rowsByHour.has(hour)) {
-      rowsByHour.set(hour, row);
+    if (rowDate === date && hour !== null) {
+      rowsByHour.set(hour, [...(rowsByHour.get(hour) ?? []), row]);
     }
   }
 
   return Array.from({ length: HOURS_PER_DAY }, (_, hour) => {
-    const row = rowsByHour.get(hour);
-    const dataCompletenessPercent = row
-      ? (readCompletenessPercent(row) ?? (hasAnyParameterValue(row, definitions) ? 100 : 0))
-      : 0;
+    const hourRows = rowsByHour.get(hour) ?? [];
+    const onTimeParameters = definitions.filter((definition) =>
+      hourRows.some(
+        (row) =>
+          readParameterNumber(row, definition) !== null &&
+          homeMeasurementReceiptStatus(row) === 'onTime',
+      ),
+    ).length;
+    const dataCompletenessPercent = percentOfExpected(onTimeParameters, definitions.length) ?? 0;
 
     return {
       time: hourLabel(hour),
       chartTime: chartHour(hour),
       dataCompletenessPercent,
       values: Object.fromEntries(
-        definitions.map((definition) => [
-          definition.label,
-          buildStatisticValue(row, definition, dataCompletenessPercent),
-        ]),
+        definitions.map((definition) => {
+          const row = selectHomeParameterRow(hourRows, definition) ?? hourRows[0];
+          const sourceCompleteness = row
+            ? (readParameterCompletenessPercent(row, definition) ?? 100)
+            : 0;
+          return [definition.label, buildStatisticValue(row, definition, sourceCompleteness)];
+        }),
       ),
     };
   });
+}
+
+function compareHomeMeasurementRows(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+): number {
+  const leftKey = `${String(left.cdate)} ${String(left.ctime)} ${String(left.udate)} ${String(left.utime)}`;
+  const rightKey = `${String(right.cdate)} ${String(right.ctime)} ${String(right.udate)} ${String(right.utime)}`;
+  return rightKey.localeCompare(leftKey);
 }
 
 function buildStatisticValue(
@@ -798,142 +993,165 @@ function buildStatisticValue(
   return {
     value,
     displayValue: formatMeasurementValue(value),
-    status: readParameterStatus(row, definition, value),
+    status: withHomeReceiptStatus(readParameterStatus(row, definition, value), row),
   };
 }
 
 function buildDailySummaries(
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
-  useParameterCompleteness: boolean,
-  currentBangkokDateHour: DateHour | null,
+  current: DateHour | null,
+  expectedStartDate: string | null,
+  endDate: string,
 ): DailySummary[] {
-  const rowsByDate = new Map<string, Record<string, unknown>[]>();
-  for (const row of rows) {
-    const date = stringValue(row.cdate);
-    if (!date) continue;
-    rowsByDate.set(date, [...(rowsByDate.get(date) ?? []), row]);
+  if (!expectedStartDate || expectedStartDate > endDate) return [];
+  const rowsByDate = groupRowsByDate(rows);
+  const summaries: DailySummary[] = [];
+  for (let date = expectedStartDate; date <= endDate; date = nextCalendarDate(date)) {
+    summaries.push(buildDailySummary(date, rowsByDate.get(date) ?? [], definitions, current));
   }
+  return summaries;
+}
 
-  return [...rowsByDate.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, dayRows]) =>
-      buildDailySummary(
-        date,
-        dayRows,
-        definitions,
-        useParameterCompleteness,
-        currentBangkokDateHour,
-      ),
-    );
+function completedRowsForDate(
+  date: string,
+  rows: Record<string, unknown>[],
+  current: DateHour | null,
+): Record<string, unknown>[] {
+  const hours = expectedHoursForDate(date, current);
+  return rows.filter((row) => {
+    const hour = parseHour(row.ctime);
+    return hour !== null && hour < hours;
+  });
 }
 
 function buildDailySummary(
   date: string,
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
-  useParameterCompleteness: boolean,
-  currentBangkokDateHour: DateHour | null,
+  current: DateHour | null,
 ): DailySummary {
-  const expectedHours = expectedHoursForDate(date, currentBangkokDateHour);
-  const completenessRows = rows.filter((row) => {
-    const hour = parseHour(row.ctime);
-    return hour === null || hour < expectedHours;
-  });
-  const dataCompletenessPercent = useParameterCompleteness
-    ? calculateLowestDailyParameterCompleteness(completenessRows, definitions, expectedHours)
-    : calculateDailyCompleteness(completenessRows, definitions, expectedHours);
-  const dataCompletenessStatus = dataCompletenessPercent < 80 ? 'lowData' : 'highData';
-  const parameterStatuses = new Map<string, ParameterValueStatus[]>(
-    definitions.map((definition) => [definition.code, []]),
-  );
-
-  for (const row of rows) {
-    for (const definition of definitions) {
+  const expectedHours = expectedHoursForDate(date, current);
+  const completedRows = completedRowsForDate(date, rows, current);
+  const parameterCompleteness = new Map<
+    string,
+    { onTime: number | null; late: number | null; lowData: boolean | null }
+  >();
+  const parameterStatuses = new Map<string, ParameterValueStatus[]>();
+  let totalOnTime = 0;
+  let totalLate = 0;
+  for (const definition of definitions) {
+    const onTimeHours = new Set<number>();
+    const lateHours = new Set<number>();
+    const statuses: ParameterValueStatus[] = [];
+    for (const row of completedRows) {
+      const hour = parseHour(row.ctime);
       const value = readParameterNumber(row, definition);
-      if (value === null || !hasNormalMeasurementStatus(row, definition)) continue;
+      if (hour === null || value === null) continue;
+      const receiptStatus = homeMeasurementReceiptStatus(row);
+      if (receiptStatus === 'onTime') onTimeHours.add(hour);
+      if (receiptStatus === 'late') lateHours.add(hour);
+      if (!hasNormalMeasurementStatus(row, definition)) continue;
       const completeness = readParameterCompletenessPercent(row, definition) ?? 100;
-      const statuses = parameterStatuses.get(definition.code) ?? [];
-      const status =
-        completeness < 80 ? 'insufficient' : evaluateParameterPollutionStatus(definition, value);
-      parameterStatuses.set(definition.code, [...statuses, status]);
+      statuses.push(
+        completeness < 80
+          ? 'insufficient'
+          : withHomeReceiptStatus(evaluateParameterPollutionStatus(definition, value), row),
+      );
     }
+    for (const hour of onTimeHours) lateHours.delete(hour);
+    totalOnTime += onTimeHours.size;
+    totalLate += lateHours.size;
+    parameterCompleteness.set(definition.label, {
+      onTime: percentOfExpected(onTimeHours.size, expectedHours),
+      late: percentOfExpected(lateHours.size, expectedHours),
+      lowData: expectedHours > 0 ? onTimeHours.size * 5 < expectedHours * 4 : null,
+    });
+    parameterStatuses.set(definition.label, statuses);
   }
-
-  const pollutionStatus = worstPollutionStatus([...parameterStatuses.values()].flat());
-
+  const denominator = expectedHours * definitions.length;
+  const dataCompletenessPercent = percentOfExpected(totalOnTime, denominator);
+  const lateDataPercent = percentOfExpected(totalLate, denominator);
   return {
     date,
     dataCompletenessPercent,
-    dataCompletenessStatus,
-    pollutionStatus,
+    lateDataPercent,
+    dataCompletenessStatus:
+      dataCompletenessPercent === null
+        ? null
+        : totalOnTime * 5 < denominator * 4
+          ? 'lowData'
+          : 'highData',
+    pollutionStatus: worstPollutionStatus([...parameterStatuses.values()].flat()),
     parameterStatuses,
+    parameterCompleteness,
   };
 }
 
-function calculateLowestDailyParameterCompleteness(
-  rows: Record<string, unknown>[],
-  definitions: ParameterDefinition[],
-  expectedHours: number,
-): number {
-  if (definitions.length === 0) {
-    return calculateDailyCompleteness(rows, definitions, expectedHours);
-  }
-
-  return Math.min(
-    ...definitions.map((definition) =>
-      calculateDailyParameterCompleteness(rows, definition, expectedHours),
-    ),
-  );
+function percentOfExpected(received: number, expected: number): number | null {
+  return expected > 0 ? clampPercent(Math.round((received / expected) * 10000) / 100) : null;
 }
 
-function calculateDailyParameterCompleteness(
-  rows: Record<string, unknown>[],
-  definition: ParameterDefinition,
-  expectedHours: number,
-): number {
-  const explicitCompleteness = rows
-    .map((row) => readParameterCompletenessPercent(row, definition))
-    .filter((value): value is number => value !== null);
-
-  if (explicitCompleteness.length > 0) {
-    return Math.round(
-      explicitCompleteness.reduce((sum, value) => sum + value, 0) / explicitCompleteness.length,
-    );
+function trailingLowDataSummaries(
+  summaries: DailySummary[],
+  endDate: string,
+  parameterLabel?: string,
+): DailySummary[] {
+  const byDate = new Map(summaries.map((summary) => [summary.date, summary]));
+  const streak: DailySummary[] = [];
+  for (let date = endDate; ; date = previousCalendarDate(date)) {
+    const summary = byDate.get(date);
+    if (!summary) break;
+    const lowData = parameterLabel
+      ? (summary.parameterCompleteness.get(parameterLabel)?.lowData ?? null)
+      : summary.dataCompletenessStatus === 'lowData';
+    if (lowData !== true) break;
+    streak.push(summary);
   }
+  return streak.reverse();
+}
 
-  const completeHours = new Set<number>();
-  for (const row of rows) {
-    const hour = parseHour(row.ctime);
-    if (hour !== null && readParameterNumber(row, definition) !== null) completeHours.add(hour);
-  }
-
-  return clampPercent(Math.round((completeHours.size / expectedHours) * 100));
+function buildHomeMeasurementSummary(
+  summaries: DailySummary[],
+  endDate: string,
+): HomeMeasurementSummaryDTO {
+  const selected = summaries.find((summary) => summary.date === endDate);
+  const yearStart = `${endDate.slice(0, 4)}-01-01`;
+  return {
+    exceededDays: summaries.filter(
+      (summary) =>
+        summary.date >= yearStart &&
+        summary.date <= endDate &&
+        summary.pollutionStatus === 'exceeded',
+    ).length,
+    lowDataDays: trailingLowDataSummaries(summaries, endDate).length,
+    todayDataCompletenessPercent: selected?.dataCompletenessPercent ?? null,
+    lateDataPercent: selected?.lateDataPercent ?? null,
+  };
 }
 
 function buildYearlyParameterSummary(
   definition: ParameterDefinition,
-  yearlySummaries: DailySummary[],
-  requestedMonthSummaries: DailySummary[],
-  startDate: string,
+  summaries: DailySummary[],
   endDate: string,
 ) {
-  const latestSummary = requestedMonthSummaries.at(-1);
-  const requestedYearSummaries = yearlySummaries.filter(
-    (summary) => summary.date >= startDate && summary.date <= endDate,
-  );
-
+  const selected = summaries.find((summary) => summary.date === endDate);
+  const yearStart = `${endDate.slice(0, 4)}-01-01`;
   return {
     parameterCode: definition.code,
     parameterName: definition.name,
+    parameterLabel: definition.label,
     unit: definition.unit,
-    exceededDays: requestedYearSummaries.filter((summary) =>
-      (summary.parameterStatuses.get(definition.code) ?? []).includes('exceeded'),
+    exceededDays: summaries.filter(
+      (summary) =>
+        summary.date >= yearStart &&
+        summary.date <= endDate &&
+        (summary.parameterStatuses.get(definition.label) ?? []).includes('exceeded'),
     ).length,
-    lowDataDays: requestedYearSummaries.filter(
-      (summary) => summary.dataCompletenessStatus === 'lowData',
-    ).length,
-    todayDataCompletenessPercent: latestSummary?.dataCompletenessPercent ?? null,
+    lowDataDays: trailingLowDataSummaries(summaries, endDate, definition.label).length,
+    todayDataCompletenessPercent:
+      selected?.parameterCompleteness.get(definition.label)?.onTime ?? null,
+    lateDataPercent: selected?.parameterCompleteness.get(definition.label)?.late ?? null,
   };
 }
 
@@ -994,12 +1212,13 @@ function buildCalendarStatusDetailRow(
   exceededStandard: CalendarStatusExceededStandardDTO,
 ): CalendarStatusDetailRowDTO[] {
   if (summaryType === 'lowData') {
-    if (summary.dataCompletenessStatus !== 'lowData') return [];
+    const completeness = summary.parameterCompleteness.get(definition.label)?.onTime ?? null;
+    if (summary.parameterCompleteness.get(definition.label)?.lowData !== true) return [];
 
     return [
       {
         date: summary.date,
-        dataCompletenessPercent: summary.dataCompletenessPercent,
+        dataCompletenessPercent: completeness,
       },
     ];
   }
@@ -1075,33 +1294,24 @@ function normalizeOccurrenceTime(value: unknown, fallbackHour: number): string {
   return [hour, minute, second].map((part) => String(part).padStart(2, '0')).join(':');
 }
 
-function calculateDailyCompleteness(
-  rows: Record<string, unknown>[],
-  definitions: ParameterDefinition[],
-  expectedHours: number,
-): number {
-  const explicitCompleteness = rows
-    .map(readCompletenessPercent)
-    .filter((value): value is number => value !== null);
-
-  if (explicitCompleteness.length > 0) {
-    return Math.round(
-      explicitCompleteness.reduce((sum, value) => sum + value, 0) / explicitCompleteness.length,
-    );
-  }
-
-  const completeHours = new Set<number>();
-  for (const row of rows) {
-    const hour = parseHour(row.ctime);
-    if (hour !== null && hasAnyParameterValue(row, definitions)) completeHours.add(hour);
-  }
-
-  return clampPercent(Math.round((completeHours.size / expectedHours) * 100));
+function expectedHoursForDate(date: string, current: DateHour | null): number {
+  if (!current) return HOURS_PER_DAY;
+  if (date > current.date) return 0;
+  return date === current.date ? current.hour : HOURS_PER_DAY;
 }
 
-function expectedHoursForDate(date: string, currentBangkokDateHour: DateHour | null): number {
-  if (!currentBangkokDateHour || date !== currentBangkokDateHour.date) return HOURS_PER_DAY;
-  return currentBangkokDateHour.hour + 1;
+function nextCalendarDate(date: string): string {
+  return shiftCalendarDate(date, 1);
+}
+
+function previousCalendarDate(date: string): string {
+  return shiftCalendarDate(date, -1);
+}
+
+function shiftCalendarDate(date: string, offset: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + offset);
+  return value.toISOString().slice(0, 10);
 }
 
 function toBangkokDateHour(date: Date): DateHour | null {
@@ -1114,13 +1324,6 @@ function toBangkokDateHour(date: Date): DateHour | null {
   if (!year || !month || !day || !Number.isInteger(hour) || hour < 0 || hour > 23) return null;
 
   return { date: `${year}-${month}-${day}`, hour };
-}
-
-function hasAnyParameterValue(
-  row: Record<string, unknown>,
-  definitions: ParameterDefinition[],
-): boolean {
-  return definitions.some((definition) => readParameterNumber(row, definition) !== null);
 }
 
 function readCompletenessPercent(row: Record<string, unknown>): number | null {
@@ -1268,9 +1471,10 @@ function normalizeSourceStatus(value: unknown): ParameterValueStatus | null {
 
 function worstPollutionStatus(
   statuses: ParameterValueStatus[],
-): 'normal' | 'warning' | 'exceeded' | 'insufficient' {
+): 'normal' | 'lateData' | 'warning' | 'exceeded' | 'insufficient' {
   if (statuses.includes('exceeded')) return 'exceeded';
   if (statuses.includes('warning')) return 'warning';
+  if (statuses.includes('lateData')) return 'lateData';
   if (statuses.includes('normal')) return 'normal';
   return 'insufficient';
 }
@@ -1454,6 +1658,7 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
   return {
     status: {
       normal: 'สีเขียว ปกติ ค่ามลพิษ <= normalMax',
+      lateData: 'ค่าปกติที่ Server ได้รับหลังสิ้นสุดชั่วโมงตาม ctime',
       warning: 'สีส้ม เฝ้าระวัง ค่ามลพิษ <= warningMax',
       exceeded: 'สีแดง เกินมาตรฐาน ค่ามลพิษ > warningMax',
       insufficient: 'สีเทา ข้อมูลไม่เพียงพอ',
@@ -1461,19 +1666,20 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
       invalid: 'สีเทา ข้อมูลผิดรูปแบบหรือสถานะอื่นๆ',
     },
     dataCompletenessPercent:
-      'ร้อยละการส่งข้อมูลในช่วงเวลานั้น ถ้าน้อยกว่า 80 ให้แสดงสีเทาหรือ status insufficient',
+      'ร้อยละ parameter-hour ที่มีค่าตัวเลขและได้รับภายในชั่วโมง ctime; ความครบถ้วนต้นทางที่ใช้ตัดสิน insufficient แยกจากเปอร์เซ็นต์ส่งทัน',
   };
 }
 
 function calendarStatusValueDefinitions(): Record<string, unknown> {
   return {
     summaryPeriod:
-      'calendar.days แสดงเฉพาะเดือนที่ขอ ส่วน monthlySummary.exceededDays และ lowDataDays นับทั้งปีของเดือนที่ขอ',
+      'calendar.days แสดงเดือนที่ขอถึง endDate; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคม ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี',
     dataCompletenessStatus: {
       lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
       highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
     },
     pollutionStatus: {
+      lateData: 'ค่าปกติที่ Server ได้รับหลังสิ้นสุดชั่วโมงตาม ctime',
       normal:
         'ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 อยู่ในเกณฑ์ปกติ ใช้เส้นขอบสีเขียว',
       warning:
@@ -1490,9 +1696,10 @@ function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
     summaryType: {
       exceeded:
         'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%',
-      lowData: 'คืนหนึ่งแถวต่อวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80% โดยไม่คืนเวลา',
+      lowData:
+        'คืนหนึ่งแถวต่อวันในช่วงข้อมูลส่งทันต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ ย้อนจาก endDate โดยไม่คืนเวลา',
     },
-    rows: 'เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวันของปีที่ขอ',
+    rows: 'เรียงวันที่จากเก่าไปใหม่ หนึ่งแถวต่อวัน; exceeded จำกัดปีที่ขอถึง endDate ส่วน lowData ต่อเนื่องข้ามปีได้',
     displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',
     value: 'ค่าตรวจวัด source status Normal, Ok หรือ code 1 รายการแรกของวันที่เกินมาตรฐาน',
     dataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData',
@@ -1502,8 +1709,21 @@ function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
 function filterRowsByRegisteredParameters(
   rows: Record<string, unknown>[],
   registeredParameters: string[],
+  preserveHomeCompleteness = false,
 ): { rows: Record<string, unknown>[]; returnedColumns: string[] } {
   const allowedColumns = getAllowedColumns(rows, registeredParameters);
+  if (preserveHomeCompleteness) {
+    for (const row of rows) {
+      for (const key of [
+        'data_completeness_percent',
+        'dataCompletenessPercent',
+        'completeness_percent',
+        'availability_percent',
+      ]) {
+        if (Object.hasOwn(row, key)) allowedColumns.add(key);
+      }
+    }
+  }
 
   return {
     rows: rows.map((row) =>

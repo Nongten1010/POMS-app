@@ -73,11 +73,26 @@ export const measurementStatisticsQuerySchema = z
   })
   .strict();
 
+const homeEndDateSchema = dateSchema
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, 'endDate must exist in the Gregorian calendar')
+  .refine(
+    (value) => value <= new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    'endDate must not be after today in Asia/Bangkok',
+  );
+
 export const calendarStatusQuerySchema = z
   .object({
     month: monthSchema,
+    endDate: homeEndDateSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((query) => !query.endDate || query.endDate.slice(0, 7) === query.month, {
+    message: 'endDate must be within the requested month',
+    path: ['endDate'],
+  });
 
 export const calendarStatusDetailsQuerySchema = z
   .object({
@@ -85,8 +100,13 @@ export const calendarStatusDetailsQuerySchema = z
     summaryType: z.enum(['exceeded', 'lowData']),
     parameterCode: z.string().trim().min(1).max(64),
     unit: z.string().trim().min(1).max(64).optional(),
+    endDate: homeEndDateSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((query) => !query.endDate || query.endDate.slice(0, 4) === query.year, {
+    message: 'endDate must be within the requested year',
+    path: ['endDate'],
+  });
 
 const exactExportDateSchema = dateSchema.refine(
   (value) => new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value,

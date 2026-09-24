@@ -37,6 +37,19 @@ curl --request GET \
 
 ## Contracts
 
+### กติกาข้อมูลหน้าหลัก
+
+กติกาส่วนนี้ใช้กับ `GET /api/v1/operator-factory-dashboard`, `GET /api/v1/public/factory-map-points` และ [สถิติ/ปฏิทินของหน้าหลัก](../../shared/connected-measurement-points/README.md#home-measurement-rules) รวม annual path aliases ของสถิติเท่านั้น `operator-factories`, CSV export, ข้อมูลสำหรับคำขอเชื่อมต่อ และเมนูอื่นใช้ contract ของตนเอง
+
+- ใช้ `Asia/Bangkok` และข้อมูลของชั่วโมงที่จบแล้วล่าสุด: เวลา `10:30` อ่านช่วง `09:00–09:59`; เวลา `00:30` อ่านช่วง `23:00–23:59` ของวันก่อนหน้า ใช้กฎเดียวกันสำหรับตารางและ popup แผนที่
+- `cdate`/`ctime` เป็นเวลาตรวจวัดหน้าเครื่องและกำหนดวัน/ชั่วโมงที่ข้อมูลเป็นของ ส่วน `udate`/`utime` เป็นเวลาที่เครื่องส่งข้อมูล ใช้เทียบกับสิ้นสุดชั่วโมงตรวจวัด ทั้งสองชุดเป็นเวลา `Asia/Bangkok` ที่ต้นทางปรับ timezone แล้ว Backend เปรียบเทียบค่าที่เก็บโดยตรงโดยไม่ชดเชย timezone ซ้ำ ข้อมูลที่ส่งช้าแสดงย้อนหลังในชั่วโมงเดิมได้ แต่ไม่เพิ่มเปอร์เซ็นต์การส่งทันเวลา
+- กรองการแสดงผลตามลำดับโรงงาน → จุดตรวจวัด → พารามิเตอร์ ก่อนสร้างรายการ ค่าตรวจวัด สถานะ จำนวนจุด และผลสรุป รายการที่ซ่อนไม่เป็นทั้งตัวตั้งและตัวหารของเปอร์เซ็นต์
+- จุด CEMS/WPMS ที่ `monitoringPointStatus` เป็น `ได้รับการยกเว้นทั้งหมด` ไม่ปรากฏในรายการจุด ผลตรวจวัด และแผนที่ และไม่รวมในจำนวนจุดหรือผลสรุป
+- หลังกรองทุกเงื่อนไขแล้ว หากโรงงานไม่เหลือจุดตรวจวัดที่แสดงผล ให้ตัด factory row ออกจาก dashboard/map และจำนวนโรงงานด้วย ไม่คืนแถวโรงงานที่มี `measurementPoints: []` ในสอง endpoint นี้
+- `industrialAreaType`, `industrialAreaTypeLabel`, `industrialEstateCode` และ `industrialEstateName` ต้องอธิบายพื้นที่เดียวกัน เมื่อมีรหัส ชื่อ หรือประเภทพื้นที่ที่ยืนยันว่าอยู่ในนิคม ให้เป็น `INDUSTRIAL_ESTATE` และจับคู่รหัส/ชื่อกับ master เมื่อทำได้ รหัสนิคมว่างเพียงอย่างเดียวไม่ใช่หลักฐานว่าโรงงานอยู่นอกนิคม หากไม่มีทั้งรหัส ชื่อ และประเภทที่ยืนยันว่าอยู่ในนิคม คง fallback เดิมเป็น `OUTSIDE_INDUSTRIAL_ESTATE`
+
+การแสดง `lateData`, สูตรปฏิทิน และการนับวันใช้ [สัญญาสถิติของหน้าหลัก](../../shared/connected-measurement-points/README.md#home-measurement-rules) เป็นจุดอ้างอิงเดียว
+
 ### `GET /api/v1/operator-factories`
 
 Endpoint สำหรับหน้าแรกผู้ประกอบการโดยเฉพาะ ต้อง login เป็น `userType: "operator"` และมี `dashboard:view`. ผู้ใช้ชนิดอื่นตอบ `403` แม้มี permission code เดียวกัน และ backend บังคับอ่านเฉพาะโรงงานของ actor ด้วย `OWN_FACTORY`.
@@ -180,20 +193,31 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].eligibleFactoryId`                                         | integer                  | `eligible_factories.id` ของโรงงาน current/live ที่เชื่อมต่ออยู่ใน POMS                                                                                                                                                                                    |
 | `data[].factoryId`                                                 | string                   | identifier หลักสำหรับหน้าและจุดตรวจวัด; eligible-only row ใช้เลขทะเบียนใหม่                                                                                                                                                                               |
 | `data[].factoryName`                                               | string                   | ชื่อโรงงานจาก current/live POMS point ล่าสุด; fallback เป็น active `eligible_factories` แล้วจึง factory master                                                                                                                                            |
+| `data[].industrialAreaType`                                        | enum | `INDUSTRIAL_ESTATE` เมื่อมีรหัส ชื่อ หรือประเภทพื้นที่ยืนยันว่าอยู่ในนิคม; เมื่อไม่มีหลักฐานดังกล่าวคง fallback เดิมเป็น `OUTSIDE_INDUSTRIAL_ESTATE` |
+| `data[].industrialAreaTypeLabel`                                   | string | label ของประเภทพื้นที่เดียวกับ `industrialAreaType` |
+| `data[].industrialEstateCode`                                      | string \| null | รหัสนิคมจากข้อมูลต้นทางหรือการจับคู่ master; เป็น `null` ได้แม้ทราบว่าอยู่ในนิคมแต่ยังจับคู่ไม่ได้ |
+| `data[].industrialEstateName`                                      | string \| null | ชื่อนิคมที่ตรงกับรหัสเมื่อจับคู่ได้ หรือชื่อจากต้นทางเมื่อยังจับคู่ไม่ได้ |
 | `data[].newRegistrationNo`                                         | string                   | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories`                                                                                                                                                                                                       |
 | `data[].isEligible`                                                | `true`                   | ทุก row บนหน้าหลักเป็นโรงงานเข้าข่ายที่มี active connected point                                                                                                                                                                                          |
 | `data[].eligibilityStatus`                                         | `เข้าข่าย`               | label สำหรับ UI ซึ่งสอดคล้องกับ `isEligible: true`                                                                                                                                                                                                        |
 | `data[].isFavorite`                                                | boolean                  | favorite ของผู้ใช้ปัจจุบัน                                                                                                                                                                                                                                |
-| `data[].hasLatestHourlyMeasurement`                                | boolean                  | `true` เมื่อทุก active connected point มี `measurementPoints[].data` อย่างน้อย 1 แถว และ `cdate` + ชั่วโมงของ `ctime` ตรงกับชั่วโมงที่คำนวณเสร็จแล้วล่าสุด ซึ่งคือชั่วโมงก่อนหน้าตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลหรือเป็นคนละชั่วโมงจะเป็น `false` |
-| `data[].monitoringPointCountBySystem`                              | array                    | จำนวน active point แยก `CEMS` และ `WPMS`                                                                                                                                                                                                                  |
-| `data[].measurementPoints`                                         | array                    | active connected points และค่ารายชั่วโมงที่อ่านได้ตาม scope                                                                                                                                                                                               |
+| `data[].hasLatestHourlyMeasurement`                                | boolean                  | `true` เมื่อทุกจุดที่ผ่าน visibility/exemption มี `measurementPoints[].data` ของชั่วโมงก่อนหน้าตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลของชั่วโมงเป้าหมายเป็น `false` ไม่ใช้ flag นี้แทนเปอร์เซ็นต์ส่งทันเวลา |
+| `data[].monitoringPointCountBySystem`                              | array                    | จำนวนจุดที่ผ่าน visibility/exemption แยก `CEMS` และ `WPMS` |
+| `data[].measurementPoints`                                         | array                    | connected points ที่อ่านได้ตาม scope และผ่าน visibility/exemption; มีอย่างน้อยหนึ่งจุดต่อ factory row |
 | `data[].measurementPoints[].parameters`                            | string[]                 | ชื่อพารามิเตอร์พร้อมหน่วย; `Flow` หน่วย `m3/hr` ใช้ชื่อมาตรฐาน `Flow Rate (m3/hr)` เพียงชื่อเดียว                                                                                                                                                         |
-| `data[].measurementPoints[].monitoringPointStatus`                 | string \| null           | สถานะระดับจุด; active point ที่ `ได้รับการยกเว้นทั้งหมด` มี `parameters: []` และยังแสดงบน dashboard                                                                                                                                                       |
+| `data[].measurementPoints[].monitoringPointStatus`                 | string \| null           | สถานะระดับจุด; จุดที่ `ได้รับการยกเว้นทั้งหมด` ถูกกรองออกก่อนสร้าง response และสรุปจำนวนจุด |
 | `data[].measurementPoints[].parameterStandards`                    | object[]                 | เกณฑ์มาตรฐานหนึ่งรายการต่อสมาชิกใน `parameters` และเรียงลำดับเดียวกัน                                                                                                                                                                                     |
 | `data[].measurementPoints[].parameterStandards[].parameter`        | string                   | ชื่อพารามิเตอร์พร้อมหน่วย                                                                                                                                                                                                                                 |
 | `data[].measurementPoints[].parameterStandards[].standardCriteria` | object \| null           | เกณฑ์ตามประกาศ อก. จาก connected-point instrument snapshot                                                                                                                                                                                                |
 | `data[].measurementPoints[].parameterStandards[].eiaCriteria`      | object \| null           | เกณฑ์ตาม EIA จาก connected-point instrument snapshot                                                                                                                                                                                                      |
 | `data[].measurementPoints[].data[].<parameter label>`              | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; ค่าตรวจวัดที่เป็นตัวเลขติดลบ (รวม numeric string) คืน `"ERROR"`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` และมีลำดับความสำคัญเหนือการตรวจค่าติดลบ                                         |
+| `data[].measurementPoints[].latestMeasurement`                     | object | ค่าของชั่วโมงล่าสุดที่จบแล้วสำหรับ popup; มี field นี้เสมอใน dashboard/map |
+| `data[].measurementPoints[].latestMeasurement.date`                | `YYYY-MM-DD` | วันที่ของชั่วโมงเป้าหมายตาม `Asia/Bangkok` |
+| `data[].measurementPoints[].latestMeasurement.time`                | `HH:00:00` | ชั่วโมงเป้าหมายเดียวกับตาราง |
+| `data[].measurementPoints[].latestMeasurement.values`              | object | key เป็นชื่อพารามิเตอร์พร้อมหน่วย มีทุกพารามิเตอร์ที่แสดงผลของจุด |
+| `data[].measurementPoints[].latestMeasurement.values.<label>.value` | number \| null | ค่าตรวจวัดที่ใช้ประเมินได้; `null` เมื่อไม่มีข้อมูลหรือแสดงเป็นสถานะ |
+| `data[].measurementPoints[].latestMeasurement.values.<label>.displayValue` | string | ค่าที่ format แล้ว ชื่อ operational status หรือ `-` เมื่อไม่มีค่าที่ใช้แสดง |
+| `data[].measurementPoints[].latestMeasurement.values.<label>.status` | enum | `normal`, `lateData`, `warning`, `exceeded`, `insufficient`, `noData` หรือ `invalid`; ใช้กฎเดียวกับสถิติ |
 | `data[].status`                                                    | `แสดง`                   | display status ของ row                                                                                                                                                                                                                                    |
 | `meta.total`                                                       | integer                  | จำนวนโรงงานหลังใช้ query filters                                                                                                                                                                                                                          |
 
@@ -214,8 +238,14 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
       "isFavorite": false,
       "hasLatestHourlyMeasurement": true,
       "monitoringPointCountBySystem": [
-        { "systemType": "CEMS", "count": 1 },
-        { "systemType": "WPMS", "count": 0 }
+        {
+          "systemType": "CEMS",
+          "count": 1
+        },
+        {
+          "systemType": "WPMS",
+          "count": 0
+        }
       ],
       "status": "แสดง",
       "measurementPoints": [
@@ -225,7 +255,9 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
           "pointCode": "S4010",
           "systemType": "CEMS",
           "monitoringPointStatus": "เชื่อมต่อครบแล้ว",
-          "parameters": ["CO (ppm)"],
+          "parameters": [
+            "CO (ppm)"
+          ],
           "parameterStandards": [
             {
               "parameter": "CO (ppm)",
@@ -244,12 +276,25 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
               "cdate": "2026-08-08",
               "ctime": "21:00:00"
             }
-          ]
+          ],
+          "latestMeasurement": {
+            "date": "2026-08-08",
+            "time": "21:00:00",
+            "values": {
+              "CO (ppm)": {
+                "value": 0.1,
+                "displayValue": "0.10",
+                "status": "normal"
+              }
+            }
+          }
         }
       ]
     }
   ],
-  "meta": { "total": 1 }
+  "meta": {
+    "total": 1
+  }
 }
 ```
 
@@ -260,7 +305,7 @@ Visibility and authorization:
 - ใช้ `eligibleFactoryId` เมื่อต้องอ้างอิง row ใน `eligible_factories`; อย่านำไปแทน `id` เพราะเป็น ID จากคนละตาราง. ใช้ `factoryId` สำหรับ path/query ที่รับ identifier ของโรงงาน.
 - `OWN_FACTORY` ต้องมีทั้ง active connected point และสิทธิ์ ownership ที่ผ่าน `user_juristics` หรือ `user_factory_access` ซึ่งอ้างถึง `factories`; ระบบไม่อนุมาน ownership จากเลขทะเบียน.
 - row ที่ `eligible_factories.deleted_at` หรือ connected point `deleted_at` ไม่เป็น `null` จะไม่แสดง.
-- โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวม points ใน `measurementPoints`.
+- โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวมเฉพาะ points/parameters ที่ผ่าน [กติกาข้อมูลหน้าหลัก](#กติกาข้อมูลหน้าหลัก) ใน `measurementPoints`; `monitoringPointCountBySystem` และ `hasLatestHourlyMeasurement` ใช้ชุดที่ผ่านการกรองเดียวกัน.
 - ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow (m3/hr)`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะถูกรวมเป็น `Flow Rate (m3/hr)` และค่าใน `measurementPoints[].data` อ่านจาก source `flow_value`.
 - `parameterStandards` มีเพียง `parameter`, `standardCriteria` และ `eiaCriteria`; เมื่อไม่มีเกณฑ์ที่บันทึกไว้ field เกณฑ์จะเป็น `null` และจะไม่ส่ง device/channel config อื่นใน array นี้.
 - ค่าพารามิเตอร์ใน `measurementPoints[].data` ที่เป็นตัวเลขติดลบ ทั้งชนิด number และ numeric string จะถูกแทนด้วย `"ERROR"`. การแปลงนี้ไม่ใช้กับ `station_id`, `cdate`, `ctime`, พิกัด หรือค่าเกณฑ์ และหาก StatusCode ระบุ operational status เช่น `Maintenance` หรือ `Shut Down` ระบบจะคืนชื่อสถานะนั้นตามเดิม.
@@ -278,6 +323,8 @@ Request body: ไม่มี
 
 Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` และ `measurementPoints` รูปแบบเดียวกับ dashboard รวมถึง `measurementPoints[].data` สำหรับข้อมูลล่าสุดรายชั่วโมงของแต่ละจุดวัด และคืน `hasLatestHourlyMeasurement` ตามกติกาเดียวกับ authenticated dashboard. Public API ไม่คืน field เฉพาะผู้ใช้คือ `isFavorite`. `data` เป็น array ว่างได้เมื่อยังไม่มีข้อมูลรายชั่วโมงล่าสุด.
 
+Popup อ่าน `measurementPoints[].latestMeasurement` ซึ่งแสดงทุกพารามิเตอร์ที่ผ่าน visibility ของจุด ใช้เฉพาะชั่วโมงล่าสุดที่จบแล้วเดียวกับตาราง พารามิเตอร์ที่ไม่มีข้อมูลในชั่วโมงนั้นคืน `{ "value": null, "displayValue": "-", "status": "noData" }`; ไม่ fallback ไปค่าชั่วโมงเก่าและไม่คืนประวัติหลายชั่วโมงสำหรับ popup ส่วน `measurementPoints[].data` คงรูปแบบเดิมแต่มีเฉพาะข้อมูลของชั่วโมงเป้าหมายเช่นกัน
+
 ตัวอย่างต่อไปนี้สมมติว่าเรียก API วันที่ `2026-08-07` ในช่วงเวลา `22:00-22:59` ตาม `Asia/Bangkok` และได้ข้อมูลรอบ `21:00` ซึ่งคำนวณเสร็จแล้ว จึงได้ `hasLatestHourlyMeasurement: true`.
 
 ```json
@@ -292,8 +339,14 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
       "newRegistrationNo": "40100007125560",
       "hasLatestHourlyMeasurement": true,
       "monitoringPointCountBySystem": [
-        { "systemType": "CEMS", "count": 1 },
-        { "systemType": "WPMS", "count": 0 }
+        {
+          "systemType": "CEMS",
+          "count": 1
+        },
+        {
+          "systemType": "WPMS",
+          "count": 0
+        }
       ],
       "status": "แสดง",
       "measurementPoints": [
@@ -302,7 +355,9 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
           "pointName": "ปล่องหลัก",
           "pointCode": "S4010",
           "systemType": "CEMS",
-          "parameters": ["CO (ppm)"],
+          "parameters": [
+            "CO (ppm)"
+          ],
           "parameterStandards": [
             {
               "parameter": "CO (ppm)",
@@ -321,12 +376,25 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
               "cdate": "2026-08-07",
               "ctime": "21:00:00"
             }
-          ]
+          ],
+          "latestMeasurement": {
+            "date": "2026-08-07",
+            "time": "21:00:00",
+            "values": {
+              "CO (ppm)": {
+                "value": null,
+                "displayValue": "Shut Down",
+                "status": "invalid"
+              }
+            }
+          }
         }
       ]
     }
   ],
-  "meta": { "total": 1 }
+  "meta": {
+    "total": 1
+  }
 }
 ```
 
@@ -393,6 +461,7 @@ Error responses ใช้ shared error envelope. Validation ผิดตอบ `
 
 - [ขอเชื่อมต่อและ Direct Connection](../connection-requests/README.md)
 - [โรงงานที่เข้าข่ายและข้อมูลที่ซิงก์](../eligible-factories/README.md)
+- [แผนและหลักฐานตรวจรับ handoff หน้าหลัก](../../../evidence/home/home-handoff-2026-09-23.md)
 
 ## Backend Maintainer Map
 

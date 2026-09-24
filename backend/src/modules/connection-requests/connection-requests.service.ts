@@ -2,6 +2,7 @@ import { deriveCurrentParameterDetails } from '../../shared/utils/current-parame
 import {
   approvedParameterLabel,
   alignPointInstruments,
+  parameterKey,
 } from '../poms-factories/poms-measurement-point-parameters';
 import {
   BadRequestError,
@@ -21,7 +22,10 @@ import type {
   DeviceConnectionConfigDTO,
 } from '../device-connections/device-connections.types';
 import { measurementDisplayValue } from '../parameter-values/parameter-status';
-import { parameterValuesService } from '../parameter-values/parameter-values.service';
+import {
+  evaluateHomeMeasurementRows,
+  parameterValuesService,
+} from '../parameter-values/parameter-values.service';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -380,6 +384,7 @@ export const connectionRequestsService = {
       scope: factoryViewScope,
       regionalAccess,
       connectedPomsOnly: query.connectedOnly === true,
+      homeDashboard: true,
     });
     const visibleFactories = factories.filter((factory) => factory.isActive !== false);
     const eligibleVisibleFactories = visibleFactories.filter(
@@ -410,8 +415,13 @@ export const connectionRequestsService = {
     );
 
     const data = visibleFactories
+      .filter((factory) =>
+        isHomeFactoryVisible(measurementPointsByFactory.get(factory.factoryId) ?? []),
+      )
       .map<OperatorFactoryDashboardRowDTO>((factory) => {
-        const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
+        const currentMeasurementPoints = homeMeasurementPoints(
+          measurementPointsByFactory.get(factory.factoryId) ?? [],
+        );
         const baseRow = toFactoryDashboardBaseRow(
           factory,
           currentMeasurementPoints,
@@ -429,6 +439,7 @@ export const connectionRequestsService = {
       data,
       actorUserId,
       factoryViewScope,
+      true,
     );
 
     return { data: dataWithLatestHourlyMeasurements, meta: { total: data.length } };
@@ -516,6 +527,7 @@ export const connectionRequestsService = {
       scope: 'ALL',
       regionalAccess: undefined,
       connectedPomsOnly: true,
+      homeDashboard: true,
     });
     const eligibleFactories = factories.filter(
       (factory) =>
@@ -544,17 +556,25 @@ export const connectionRequestsService = {
     );
 
     const data = eligibleFactories
+      .filter((factory) =>
+        isHomeFactoryVisible(measurementPointsByFactory.get(factory.factoryId) ?? []),
+      )
       .map<PublicFactoryMapPointDTO>((factory) => ({
         ...toFactoryDashboardBaseRow(
           factory,
-          measurementPointsByFactory.get(factory.factoryId) ?? [],
+          homeMeasurementPoints(measurementPointsByFactory.get(factory.factoryId) ?? []),
           factoryMainTypeLabels,
         ),
         hasLatestHourlyMeasurement: false,
       }))
       .filter((factory) => matchesPublicFactoryMapPointsQuery(factory, query));
 
-    const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(data, 0, 'ALL');
+    const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(
+      data,
+      0,
+      'ALL',
+      true,
+    );
 
     return { data: dataWithLatestHourlyMeasurements, meta: { total: data.length } };
   },
@@ -919,7 +939,7 @@ export const connectionRequestsService = {
     const result = await parameterValuesService.measurementStatistics(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
-      toParameterEvaluationOptions(point),
+      await toHomeParameterEvaluationOptions(stationId, point),
     );
 
     return {
@@ -953,7 +973,7 @@ export const connectionRequestsService = {
     const result = await parameterValuesService.calendarStatus(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
-      toParameterEvaluationOptions(point),
+      await toHomeParameterEvaluationOptions(stationId, point),
     );
 
     return {
@@ -981,7 +1001,7 @@ export const connectionRequestsService = {
     const result = await parameterValuesService.calendarStatusDetails(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
-      toParameterEvaluationOptions(point),
+      await toHomeParameterEvaluationOptions(stationId, point),
     );
 
     return {
@@ -2978,6 +2998,33 @@ function toOperatorFactoryOverviewBaseRow(
   };
 }
 
+function isHomeFactoryVisible(points: CurrentFactoryMeasurementPointDTO[]): boolean {
+  return !points.some(
+    (point) =>
+      point.homeVisibility?.factoryVisible === false ||
+      (!point.homeVisibility && point.factoryStatus === 'ซ่อน'),
+  );
+}
+
+function homeMeasurementPoints(
+  points: CurrentFactoryMeasurementPointDTO[],
+): CurrentFactoryMeasurementPointDTO[] {
+  return points
+    .filter((point) =>
+      point.homeVisibility
+        ? point.homeVisibility.factoryVisible &&
+          point.homeVisibility.pointVisible &&
+          !point.homeVisibility.fullyExempt
+        : point.monitoringPointStatus !== 'ได้รับการยกเว้นทั้งหมด' &&
+          point.effectiveVisibility !== 'HIDDEN' &&
+          point.effectiveConnectionStatus !== 'DISCONNECTED',
+    )
+    .map((point) => ({
+      ...point,
+      parameters: point.homeVisibility?.parameters ?? point.parameters,
+    }));
+}
+
 function toFactoryDashboardBaseRow(
   factory: FactorySummaryDTO,
   currentMeasurementPoints: CurrentFactoryMeasurementPointDTO[],
@@ -3019,9 +3066,11 @@ function toFactoryDashboardBaseRow(
     };
   }
 
-  const isInIndustrialEstate = Boolean(
-    factory.industrialEstateCode || factory.industrialEstateName,
-  );
+  const industrialEstateCode = factory.industrialEstateCode?.trim() || null;
+  const industrialEstateName = factory.industrialEstateName?.trim() || null;
+  const isInIndustrialEstate =
+    Boolean(industrialEstateCode || industrialEstateName) ||
+    factory.industrialAreaType === 'INDUSTRIAL_ESTATE';
 
   return {
     id: factory.id,
@@ -3051,14 +3100,10 @@ function toFactoryDashboardBaseRow(
     longitude: factory.longitude,
     districtCode: factory.districtCode ?? null,
     districtName: factory.districtName ?? null,
-    industrialAreaType:
-      factory.industrialAreaType ??
-      (isInIndustrialEstate ? 'INDUSTRIAL_ESTATE' : 'OUTSIDE_INDUSTRIAL_ESTATE'),
-    industrialAreaTypeLabel:
-      factory.industrialAreaTypeLabel ??
-      (isInIndustrialEstate ? 'ในนิคมอุตสาหกรรม' : 'นอกนิคมอุตสาหกรรม'),
-    industrialEstateCode: factory.industrialEstateCode ?? null,
-    industrialEstateName: factory.industrialEstateName ?? null,
+    industrialAreaType: isInIndustrialEstate ? 'INDUSTRIAL_ESTATE' : 'OUTSIDE_INDUSTRIAL_ESTATE',
+    industrialAreaTypeLabel: isInIndustrialEstate ? 'ในนิคมอุตสาหกรรม' : 'นอกนิคมอุตสาหกรรม',
+    industrialEstateCode,
+    industrialEstateName,
     isEligible: factory.isEligible ?? false,
     eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
     monitoringPointCountBySystem: countMeasurementPointsBySystem(currentMeasurementPoints),
@@ -3150,7 +3195,12 @@ function toStringOrNull(value: string | number | null | undefined): string | nul
 
 async function populateLatestHourlyMeasurements<
   TFactory extends { measurementPoints: OperatorFactoryMeasurementPointDTO[] },
->(factories: TFactory[], actorUserId: number, factoryViewScope: AccessScope): Promise<TFactory[]> {
+>(
+  factories: TFactory[],
+  actorUserId: number,
+  factoryViewScope: AccessScope,
+  homeDashboard = false,
+): Promise<TFactory[]> {
   const now = nowProvider();
   const latestCompletedBangkokHour = toBangkokDateHour(new Date(now.getTime() - 60 * 60 * 1000));
   const factoriesWithLatestMeasurements = await Promise.all(
@@ -3158,13 +3208,15 @@ async function populateLatestHourlyMeasurements<
       const measurementPoints = await Promise.all(
         factory.measurementPoints.map(async (point) => ({
           ...point,
-          data: await loadLatestHourlyMeasurementData(
+          ...(await loadLatestHourlyMeasurementData(
             point.stationId,
             actorUserId,
             factoryViewScope,
             point.parameters,
             latestCompletedBangkokHour,
-          ),
+            homeDashboard,
+            point.parameterStandards,
+          )),
         })),
       );
       const factoryWithLatestMeasurements = {
@@ -3251,8 +3303,31 @@ async function loadLatestHourlyMeasurementData(
   factoryViewScope: AccessScope,
   parameterDisplayNames: string[],
   cutoff: DateHour | null,
-): Promise<Record<string, unknown>[]> {
-  if (!stationId || !isSafeStationId(stationId) || !cutoff) return [];
+  strictParameters = false,
+  parameterStandards: OperatorFactoryParameterStandardDTO[] = [],
+): Promise<Pick<OperatorFactoryMeasurementPointDTO, 'data' | 'latestMeasurement'>> {
+  const project = (rows: Record<string, unknown>[]) => {
+    const selectedRows =
+      strictParameters && cutoff ? rows.filter((row) => isMeasurementRowInHour(row, cutoff)) : rows;
+    const data = selectedRows.map((row) =>
+      toDashboardMeasurementRow(row, parameterDisplayNames, strictParameters),
+    );
+    if (!strictParameters || !cutoff) return { data };
+    const options = {
+      parameterEvaluations: parameterStandards,
+      allowedParameterLabels: parameterDisplayNames,
+    };
+    const values = evaluateHomeMeasurementRows(selectedRows, parameterDisplayNames, options);
+    return {
+      data,
+      latestMeasurement: {
+        date: cutoff.date,
+        time: `${String(cutoff.hour).padStart(2, '0')}:00:00`,
+        values,
+      },
+    };
+  };
+  if (!stationId || !isSafeStationId(stationId) || !cutoff) return project([]);
 
   try {
     const result = await parameterValuesService.latestHourly(
@@ -3262,15 +3337,16 @@ async function loadLatestHourlyMeasurementData(
         scope: factoryViewScope,
       },
       cutoff,
+      ...(strictParameters ? [{ homeHour: true } as const] : []),
     );
-    return result.data.map((row) => toDashboardMeasurementRow(row, parameterDisplayNames));
+    return project(result.data);
   } catch (error) {
-    if (error instanceof NotFoundError || error instanceof ForbiddenError) return [];
+    if (error instanceof NotFoundError || error instanceof ForbiddenError) return project([]);
     logger.warn('[operator-factories] Failed to load latest hourly measurement values', {
       stationId,
       reason: error instanceof Error ? error.message : 'Unknown error',
     });
-    return [];
+    return project([]);
   }
 }
 
@@ -3350,6 +3426,7 @@ function resolveEffectiveRegionValues(
 function toDashboardMeasurementRow(
   row: Record<string, unknown>,
   parameterDisplayNames: string[],
+  strictParameters = false,
 ): Record<string, unknown> {
   const parametersByColumnPrefix = groupParametersByColumnPrefix(parameterDisplayNames);
   const result: Record<string, unknown> = Object.fromEntries(
@@ -3366,6 +3443,22 @@ function toDashboardMeasurementRow(
     if (!valueColumnMatch) return;
 
     const columnPrefix = valueColumnMatch[1].toLowerCase();
+    if (strictParameters && !parametersByColumnPrefix.has(columnPrefix)) return;
+    const candidates = parametersByColumnPrefix.get(columnPrefix) ?? [];
+    const sourceUnit =
+      typeof row[`${columnPrefix}_units`] === 'string'
+        ? normalizeParameterUnit(row[`${columnPrefix}_units`] as string)
+        : '';
+    if (
+      strictParameters &&
+      sourceUnit &&
+      candidates.every(
+        (candidate) =>
+          extractParameterUnit(candidate) &&
+          normalizeParameterUnit(extractParameterUnit(candidate)) !== sourceUnit,
+      )
+    )
+      return;
     const displayName = findDashboardParameterDisplayName(
       parametersByColumnPrefix.get(columnPrefix) ?? [],
       row[`${columnPrefix}_units`],
@@ -3458,7 +3551,7 @@ function matchesOperatorFactoryDashboardQuery(
   factory: OperatorFactoryDashboardRowDTO,
   query: ListOperatorFactoriesQuery,
 ): boolean {
-  if (query.connectedOnly && factory.measurementPoints.length === 0) return false;
+  if (factory.measurementPoints.length === 0) return false;
   if (
     query.systemType &&
     !factory.measurementPoints.some((point) => point.systemType === query.systemType)
@@ -3779,24 +3872,58 @@ function toMeasurementDetailFactory(point: ConnectedMeasurementPointDetailDTO): 
   };
 }
 
+async function toHomeParameterEvaluationOptions(
+  stationId: string,
+  point: ConnectedMeasurementPointDetailDTO,
+): Promise<ParameterEvaluationOptions> {
+  const visibility =
+    await connectionRequestsRepository.getHomeMeasurementPointVisibility(stationId);
+  if (
+    !visibility ||
+    !visibility.factoryVisible ||
+    !visibility.pointVisible ||
+    visibility.fullyExempt
+  ) {
+    throw new NotFoundError(`Connected measurement point ${stationId} not found`);
+  }
+  const visiblePoint = {
+    ...point,
+    point: {
+      ...point.point,
+      parameters: visibility.parameters,
+      measurementInstruments: alignPointInstruments(
+        visibility.measurementInstruments,
+        visibility.parameters,
+      ),
+    },
+  };
+  const connectedAt = point.connectedAt ? new Date(point.connectedAt) : null;
+  const expectedStartDate =
+    connectedAt && Number.isFinite(connectedAt.getTime())
+      ? toBangkokDateHour(connectedAt)?.date
+      : undefined;
+  return {
+    ...toParameterEvaluationOptions(visiblePoint),
+    allowedParameterLabels: visibility.parameters,
+    ...(expectedStartDate ? { expectedStartDate } : {}),
+  };
+}
+
 function toParameterEvaluationOptions(
   point: ConnectedMeasurementPointDetailDTO,
 ): ParameterEvaluationOptions {
   const instrumentParameters = point.point.measurementInstruments?.parameters ?? [];
   const instrumentsByParameter = new Map(
-    instrumentParameters.map((parameter) => [
-      toParameterColumnPrefix(parameter.parameter),
-      parameter,
-    ]),
+    instrumentParameters.map((parameter) => [parameterKey(parameter.parameter), parameter]),
   );
   const channelStatusesByParameter = buildChannelStatusesByParameter(point);
   const parameterNamesByKey = new Map<string, string>();
 
   for (const parameter of point.point.parameters) {
-    parameterNamesByKey.set(toParameterColumnPrefix(parameter), parameter);
+    parameterNamesByKey.set(parameterKey(parameter), parameter);
   }
   for (const parameter of instrumentParameters) {
-    parameterNamesByKey.set(toParameterColumnPrefix(parameter.parameter), parameter.parameter);
+    parameterNamesByKey.set(parameterKey(parameter.parameter), parameter.parameter);
   }
   for (const [key, channel] of channelStatusesByParameter) {
     parameterNamesByKey.set(key, channel.parameter);
@@ -3819,11 +3946,13 @@ function buildChannelStatusesByParameter(
 
   for (const config of point.deviceConfigs) {
     for (const channel of config.channels) {
-      const key = toParameterColumnPrefix(channel.dataType);
+      const parameter = approvedParameterLabel(channel.dataType, point.point.parameters);
+      if (!parameter) continue;
+      const key = parameterKey(parameter);
       const current = statuses.get(key);
       const nextStatus = channel.status ?? null;
       statuses.set(key, {
-        parameter: current?.parameter ?? channel.dataType,
+        parameter: current?.parameter ?? parameter,
         status: mergeChannelStatus(current?.status ?? null, nextStatus),
       });
     }

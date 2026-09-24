@@ -34,6 +34,7 @@ export interface MeasurementStatisticsQuery {
 export interface CalendarStatusQuery {
   stationId: string;
   month: string;
+  endDate?: string;
 }
 
 export type CalendarStatusSummaryType = 'exceeded' | 'lowData';
@@ -44,6 +45,7 @@ export interface CalendarStatusDetailsQuery {
   summaryType: CalendarStatusSummaryType;
   parameterCode: string;
   unit?: string;
+  endDate?: string;
 }
 
 export interface MeasurementCsvExportQuery {
@@ -63,6 +65,8 @@ export interface ParameterEvaluation {
 
 export interface ParameterEvaluationOptions {
   parameterEvaluations?: ParameterEvaluation[];
+  allowedParameterLabels?: string[];
+  expectedStartDate?: string;
 }
 
 export type CalendarStatusParameterEvaluation = ParameterEvaluation;
@@ -143,6 +147,7 @@ export interface ConnectionTestResultDTO {
 
 export type ParameterValueStatus =
   | 'normal'
+  | 'lateData'
   | 'warning'
   | 'exceeded'
   | 'insufficient'
@@ -176,6 +181,7 @@ export interface MeasurementStatisticsDTO {
     date: string;
     valueDefinitions: Record<string, unknown>;
   };
+  summary: HomeMeasurementSummaryDTO;
   thresholds: MeasurementParameterThresholdDTO[];
   measurementPoints: Array<{
     pointCode: string;
@@ -203,30 +209,42 @@ export interface MeasurementStatisticsResultDTO {
 
 export interface CalendarStatusDayDTO {
   date: string;
-  dataCompletenessPercent: number;
-  dataCompletenessStatus: 'lowData' | 'highData';
-  pollutionStatus: 'normal' | 'warning' | 'exceeded' | 'insufficient';
+  dataCompletenessPercent: number | null;
+  lateDataPercent: number | null;
+  dataCompletenessStatus: 'lowData' | 'highData' | null;
+  pollutionStatus: 'normal' | 'lateData' | 'warning' | 'exceeded' | 'insufficient';
   display: {
-    backgroundStatus: 'lowData' | 'highData';
-    borderStatus: 'normal' | 'warning' | 'exceeded' | 'insufficient';
+    backgroundStatus: 'lowData' | 'highData' | null;
+    borderStatus: 'normal' | 'lateData' | 'warning' | 'exceeded' | 'insufficient';
   };
 }
 
 export interface MonthlyParameterSummaryDTO {
   parameterCode: string;
   parameterName: string;
+  parameterLabel: string;
   unit: string;
   exceededDays: number;
   lowDataDays: number;
   todayDataCompletenessPercent: number | null;
+  lateDataPercent: number | null;
+}
+
+export interface HomeMeasurementSummaryDTO {
+  exceededDays: number;
+  lowDataDays: number;
+  todayDataCompletenessPercent: number | null;
+  lateDataPercent: number | null;
 }
 
 export interface CalendarStatusDTO {
   metadata: {
     description: string;
     month: string;
+    endDate: string;
     valueDefinitions: Record<string, unknown>;
   };
+  summary: HomeMeasurementSummaryDTO;
   calendar: {
     year: number;
     month: number;
@@ -243,6 +261,7 @@ export interface CalendarStatusResultDTO {
     schemaName: string;
     tableName: string;
     month: string;
+    endDate: string;
     count: number;
     registeredParameters: string[];
   };
@@ -271,7 +290,7 @@ export interface CalendarStatusExceededDetailRowDTO extends CalendarStatusExceed
 
 export interface CalendarStatusLowDataDetailRowDTO {
   date: string;
-  dataCompletenessPercent: number;
+  dataCompletenessPercent: number | null;
 }
 
 export type CalendarStatusDetailRowDTO =
@@ -282,6 +301,7 @@ export interface CalendarStatusDetailsDTO {
   metadata: {
     description: string;
     year: number;
+    endDate: string;
     summaryType: CalendarStatusSummaryType;
     valueDefinitions: Record<string, unknown>;
   };
@@ -306,6 +326,7 @@ export interface CalendarStatusDetailsResultDTO {
     schemaName: string;
     tableName: string;
     year: string;
+    endDate: string;
     count: number;
     registeredParameters: string[];
   };

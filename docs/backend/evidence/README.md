@@ -58,6 +58,7 @@
 
 ## Home
 
+- [แผนและหลักฐาน handoff หน้าหลัก 23 กันยายน 2026](./home/home-handoff-2026-09-23.md)
 - [โรงงานของผู้ประกอบการพร้อมสถานะ POMS](./home/operator-owned-factory-overview.tdd.md)
 - [โรงงานที่เจ้าหน้าที่เชื่อมต่อแสดงบนหน้าหลัก](./home/officer-direct-connected-dashboard.tdd.md)
 - [ชื่อโรงงานหน้าหลักใช้ข้อมูล current/live POMS](./home/operator-dashboard-current-factory-name.tdd.md)

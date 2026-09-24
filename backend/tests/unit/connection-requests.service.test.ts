@@ -22,6 +22,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     findFactoryGeneral: jest.fn(),
     findActiveEligibleFactoryReference: jest.fn(),
     listConnectedMeasurementPointsForFactories: jest.fn(),
+    getHomeMeasurementPointVisibility: jest.fn(),
     listPublicConnectedMeasurementPointsForFactories: jest.fn(),
     listOfficerNotificationEmailsForFactories: jest.fn(),
     listFavoriteFactoryIds: jest.fn(),
@@ -46,6 +47,9 @@ jest.mock('../../src/modules/device-connections/device-connections.service', () 
 }));
 
 jest.mock('../../src/modules/parameter-values/parameter-values.service', () => ({
+  evaluateHomeMeasurementRows: jest.requireActual<
+    typeof import('../../src/modules/parameter-values/parameter-values.service')
+  >('../../src/modules/parameter-values/parameter-values.service').evaluateHomeMeasurementRows,
   parameterValuesService: {
     calendarStatus: jest.fn(),
     calendarStatusDetails: jest.fn(),
@@ -226,6 +230,12 @@ describe('connectionRequestsService', () => {
     });
     mockedParameterValuesService.measurementStatistics.mockResolvedValue({
       data: {
+        summary: {
+          exceededDays: 0,
+          lowDataDays: 0,
+          todayDataCompletenessPercent: null,
+          lateDataPercent: null,
+        },
         metadata: {
           description: 'สถิติรายชั่วโมงสำหรับตารางสถิติข้อมูลและกราฟแนวโน้มสถานการณ์มลพิษ',
           date: '2026-06-09',
@@ -253,9 +263,16 @@ describe('connectionRequestsService', () => {
     });
     mockedParameterValuesService.calendarStatus.mockResolvedValue({
       data: {
+        summary: {
+          exceededDays: 0,
+          lowDataDays: 0,
+          todayDataCompletenessPercent: null,
+          lateDataPercent: null,
+        },
         metadata: {
           description: 'DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน',
           month: '2026-06',
+          endDate: '2026-06-09',
           valueDefinitions: {},
         },
         calendar: {
@@ -271,6 +288,7 @@ describe('connectionRequestsService', () => {
         schemaName: 'ingest',
         tableName: 'S0001_data_60m',
         month: '2026-06',
+        endDate: '2026-06-09',
         count: 0,
         registeredParameters: [],
       },
@@ -280,6 +298,7 @@ describe('connectionRequestsService', () => {
         metadata: {
           description: 'รายละเอียดรายวันที่ใช้คำนวณตารางสรุปสถานะของปีที่เลือก',
           year: 2026,
+          endDate: '2026-06-09',
           summaryType: 'exceeded',
           valueDefinitions: {},
         },
@@ -305,6 +324,7 @@ describe('connectionRequestsService', () => {
         schemaName: 'ingest',
         tableName: 'STACK-A_data_60m',
         year: '2026',
+        endDate: '2026-06-09',
         count: 0,
         registeredParameters: ['CO (ppm)'],
       },
@@ -1343,6 +1363,7 @@ describe('connectionRequestsService', () => {
       actorUserId,
       scope: 'OWN_FACTORY',
       connectedPomsOnly: false,
+      homeDashboard: true,
     });
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-001', '3-106-33/50สบ']),
@@ -1441,6 +1462,7 @@ describe('connectionRequestsService', () => {
       'S0001',
       { actorUserId, scope: 'OWN_FACTORY' },
       { date: '2026-02-25', hour: 21 },
+      { homeHour: true },
     );
     expect(result.data[0]).not.toHaveProperty('requestStatus');
     expect(result.data[0]).not.toHaveProperty('requestStatusCode');
@@ -1510,6 +1532,7 @@ describe('connectionRequestsService', () => {
       'S0001',
       { actorUserId, scope: 'OWN_FACTORY' },
       { date: '2026-08-08', hour: 20 },
+      { homeHour: true },
     );
     expect(result.data[0]?.measurementPoints[0]?.data[0]?.ctime).toBe('20:00:00');
     expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(true);
@@ -1536,6 +1559,7 @@ describe('connectionRequestsService', () => {
       'S0001',
       { actorUserId, scope: 'OWN_FACTORY' },
       { date: '2026-08-08', hour: 23 },
+      { homeHour: true },
     );
     expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(true);
   });
@@ -1686,10 +1710,12 @@ describe('connectionRequestsService', () => {
       stationId,
       { actorUserId, scope: 'OWN_FACTORY' },
       { date: '2026-05-27', hour: 16 },
+      { homeHour: true },
     );
   });
 
   it('keeps dashboard measurement values for registered parameters that share a base code', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-06-10T17:30:00.000Z'));
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({ factoryId: 'factory-001', factoryName: 'บริษัท ทดสอบ จำกัด' }),
     ]);
@@ -1853,6 +1879,7 @@ describe('connectionRequestsService', () => {
       scope: { scope: 'ALL' },
       regionalAccess: undefined,
       connectedPomsOnly: true,
+      homeDashboard: true,
     });
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['40100007125560']),
@@ -1942,7 +1969,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('keeps eligible visible factories without connected measurement points by default', async () => {
+  it('omits eligible factories without connected measurement points from the home dashboard', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({ factoryId: 'factory-connected', factoryName: 'โรงงานมีจุดตรวจวัด' }),
       factorySummary({ factoryId: 'factory-without-point', factoryName: 'โรงงานไม่มีจุดตรวจวัด' }),
@@ -1964,16 +1991,12 @@ describe('connectionRequestsService', () => {
       'OWN_FACTORY',
     );
 
-    expect(result.data).toHaveLength(2);
+    expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       id: 1,
       eligibleFactoryId: 17,
       factoryId: 'factory-connected',
       measurementPoints: [{ stationId: 'S0001' }],
-    });
-    expect(result.data[1]).toMatchObject({
-      factoryId: 'factory-without-point',
-      measurementPoints: [],
     });
   });
 
@@ -2165,6 +2188,7 @@ describe('connectionRequestsService', () => {
       scope: 'ALL',
       regionalAccess: undefined,
       connectedPomsOnly: true,
+      homeDashboard: true,
     });
     expect(mockedRepository.listPublicConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-connected', '3-106-33/50สบ']),
@@ -2176,6 +2200,7 @@ describe('connectionRequestsService', () => {
       'S0001',
       { actorUserId: 0, scope: 'ALL' },
       { date: '2026-06-10', hour: 22 },
+      { homeHour: true },
     );
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
@@ -4487,6 +4512,8 @@ describe('connectionRequestsService', () => {
       { stationId: 'STACK-A', month: '2026-06' },
       { actorUserId, scope: 'ALL' },
       {
+        allowedParameterLabels: ['CO (ppm)', 'NOx (ppm)'],
+        expectedStartDate: '2026-05-29',
         parameterEvaluations: [
           {
             parameter: 'CO (ppm)',
@@ -4531,6 +4558,8 @@ describe('connectionRequestsService', () => {
       },
       { actorUserId, scope: 'ALL' },
       {
+        allowedParameterLabels: ['CO (ppm)', 'NOx (ppm)'],
+        expectedStartDate: '2026-05-29',
         parameterEvaluations: [
           {
             parameter: 'CO (ppm)',
@@ -6632,6 +6661,20 @@ function selectedEligibleFactory(
 }
 
 function mockActivePointsForRequests(requests: ConnectionRequestDTO[]): void {
+  mockedRepository.getHomeMeasurementPointVisibility.mockImplementation(async (stationId) => {
+    const point = requests
+      .flatMap((request) => request.measurementPoints)
+      .find((candidate) => (candidate.pointCode ?? candidate.pointName) === stationId);
+    return point
+      ? {
+          factoryVisible: true,
+          pointVisible: true,
+          fullyExempt: false,
+          parameters: point.parameters,
+          measurementInstruments: point.measurementInstruments ?? null,
+        }
+      : null;
+  });
   mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue(
     requests.flatMap((request) =>
       request.measurementPoints.map((point) =>

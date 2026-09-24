@@ -179,6 +179,16 @@ export const parameterValuesRepository = {
     );
   },
 
+  async earliestMeasurementDate(stationId: string): Promise<string | null> {
+    const row = await parameterSourceDb
+      .withSchema(env.PARAMETER_DB_SCHEMA)
+      .from(this.tableName(stationId, '60m'))
+      .min({ cdate: 'cdate' })
+      .first();
+    const value = row ? serializeRow(row).cdate : null;
+    return typeof value === 'string' ? value.slice(0, 10) : null;
+  },
+
   async listRows(
     query: ListParameterValuesQuery,
   ): Promise<{ rows: Record<string, unknown>[]; tableName: string }> {

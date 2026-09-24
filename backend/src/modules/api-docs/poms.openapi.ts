@@ -24,6 +24,11 @@ import { connectionRequestsOpenApiDocument } from './connection-requests.openapi
 import { MENU_TAGS } from './openapi.shared';
 import { decorateWriteRequestValidationDocs } from './request-validation-docs';
 import { extendKwpHandoffSchemas } from './kwp-handoff.openapi';
+import {
+  buildHomeFactorySchemas,
+  decorateHomeHandoffPaths,
+  homeHandoffSchemas,
+} from './home-handoff.openapi';
 
 type OpenApiObject = Record<string, unknown>;
 
@@ -7124,6 +7129,8 @@ const components: OpenApiObject = {
   ...baseComponents,
   schemas: {
     ...componentSchemas,
+    ...buildHomeFactorySchemas(componentSchemas),
+    ...homeHandoffSchemas,
     ...statusManagementSchemas,
     ...baseSchemas,
     ...editRequestFormSchemas,
@@ -7157,10 +7164,12 @@ const components: OpenApiObject = {
 
 const paths = decorateWriteRequestValidationDocs(
   decorateOperations(
-    mergePathMaps(
-      (baseDocument.paths as Record<string, OpenApiObject>) ?? {},
-      extraPaths,
-      statusManagementPaths,
+    decorateHomeHandoffPaths(
+      mergePathMaps(
+        (baseDocument.paths as Record<string, OpenApiObject>) ?? {},
+        extraPaths,
+        statusManagementPaths,
+      ),
     ),
   ),
   components,

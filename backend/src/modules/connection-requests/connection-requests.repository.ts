@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { readPomsManagedStatuses } from '../poms-factories/poms-status-management.state';
+import {
+  approvedParameterLabel,
+  parameterKey,
+} from '../poms-factories/poms-measurement-point-parameters';
+import type { StoredFactoryStatus } from '../poms-factories/poms-status-management.types';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { env } from '../../config/env';
@@ -55,6 +60,7 @@ import {
   type FactoryFavoriteDTO,
   type FactoryGeneralDTO,
   type FactorySummaryDTO,
+  type HomeMeasurementPointVisibility,
   type MeasurementInstrumentsInput,
   type MeasurementPointDetailsInput,
   type ListConnectionRequestsQuery,
@@ -184,6 +190,7 @@ interface ConnectedFactoryProfileRow {
 
 interface CurrentFactoryMeasurementPointRow {
   management_state_json?: string | null;
+  factory_is_active?: boolean | number | null;
   id: number | string;
   source_request_id: number | string;
   point_type: MeasurementPointInput['pointType'];
@@ -314,6 +321,7 @@ interface FactoryAccess {
   scope: AccessScope;
   regionalAccess?: RegionalAccessDTO | null;
   connectedPomsOnly?: boolean;
+  homeDashboard?: boolean;
 }
 
 type AccessScope = string | null | undefined | PermissionScopeDetails;
@@ -970,6 +978,7 @@ export const connectionRequestsRepository = {
     return rows.map((row) => ({
       ...statuses.get(row)?.point,
       factoryStatus: statuses.get(row)?.factory.status,
+      homeVisibility: homeMeasurementPointVisibility(row),
       connectedPointId: Number(row.id),
       sourceMeasurementPointId: Number(row.source_measurement_point_id),
       sourceRequestId: Number(row.source_request_id),
@@ -1011,6 +1020,7 @@ export const connectionRequestsRepository = {
     return rows.map((row) => ({
       ...statuses.get(row)?.point,
       factoryStatus: statuses.get(row)?.factory.status,
+      homeVisibility: homeMeasurementPointVisibility(row),
       factoryId: row.factory_id,
       eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
       stationId: row.point_code ?? row.point_name,
@@ -1024,6 +1034,36 @@ export const connectionRequestsRepository = {
       documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
       data: [],
     }));
+  },
+
+  async getHomeMeasurementPointVisibility(
+    stationId: string,
+  ): Promise<HomeMeasurementPointVisibility | null> {
+    const source = factoryProfileReadTable('cems_wpms_connected_measurement_points');
+    const row = await db<CurrentFactoryMeasurementPointRow>(source)
+      .whereNull('deleted_at')
+      .where((query) => query.where('point_code', stationId).orWhere('point_name', stationId))
+      .select('id', 'parameters_json', 'monitoring_point_status', 'instruments_json')
+      .select(
+        db('poms_factory_status_management as fsm')
+          .select('fsm.state_json')
+          .whereRaw('?? = ??', ['fsm.eligible_factory_id', `${source}.eligible_factory_id`])
+          .as('management_state_json'),
+        db('factories as f')
+          .select('f.is_active')
+          .whereNull('f.deleted_at')
+          .where((query) =>
+            query
+              .whereRaw('?? = ??', ['f.fid', `${source}.factory_id`])
+              .orWhereRaw('?? = ??', ['f.code', `${source}.factory_id`]),
+          )
+          .orderBy('f.id', 'desc')
+          .first()
+          .as('factory_is_active'),
+      )
+      .orderBy('id', 'desc')
+      .first();
+    return row ? homeMeasurementPointVisibility(row) : null;
   },
 
   async create(
@@ -2093,7 +2133,7 @@ function buildFactoriesForAccessQuery(
       OUTER APPLY (
         SELECT TOP (1) ie_source.*
         FROM industrial_estates AS ie_source
-        WHERE ie_source.name_th = ef.industrial_estate_name
+        WHERE ${access.homeDashboard ? 'LTRIM(RTRIM(ie_source.name_th)) = LTRIM(RTRIM(ef.industrial_estate_name))' : 'ie_source.name_th = ef.industrial_estate_name'}
           OR (ef.id IS NULL AND ie_source.id = f.industrial_estate_id)
         ORDER BY ie_source.id
       ) AS ie
@@ -2197,9 +2237,11 @@ function buildConnectedFactoriesForAccessQuery(
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
     .leftJoin(
       'industrial_estates as ie',
-      isCanonicalFactoryProfilesEnabled()
-        ? db.raw('ie.name_th = ef.industrial_estate_name')
-        : db.raw('ie.id = f.industrial_estate_id'),
+      access.homeDashboard
+        ? db.raw('LTRIM(RTRIM(ie.name_th)) = LTRIM(RTRIM(ef.industrial_estate_name))')
+        : isCanonicalFactoryProfilesEnabled()
+          ? db.raw('ie.name_th = ef.industrial_estate_name')
+          : db.raw('ie.id = f.industrial_estate_id'),
     )
     .whereNull('ef.deleted_at')
     .whereExists(function activeConnectedPomsPoint() {
@@ -2233,7 +2275,7 @@ function buildConnectedFactoriesForAccessQuery(
         ? 'ef.province_name as province_name'
         : 'p.name_th as province_name',
       'ie.code as industrial_estate_code',
-      isCanonicalFactoryProfilesEnabled()
+      isCanonicalFactoryProfilesEnabled() || access.homeDashboard
         ? 'ef.industrial_estate_name as industrial_estate_name'
         : db.raw('COALESCE(ie.name_th, ef.industrial_estate_name) as industrial_estate_name'),
       'ef.factory_registration_no_old',
@@ -4301,6 +4343,57 @@ function currentPointStatuses(rows: CurrentFactoryMeasurementPointRow[]) {
       });
   }
   return result;
+}
+
+function homeMeasurementPointVisibility(
+  row: Pick<
+    CurrentFactoryMeasurementPointRow,
+    | 'id'
+    | 'parameters_json'
+    | 'instruments_json'
+    | 'monitoring_point_status'
+    | 'management_state_json'
+    | 'factory_is_active'
+  >,
+): HomeMeasurementPointVisibility {
+  const state = parseJsonObject<StoredFactoryStatus>(row.management_state_json ?? null);
+  const own = state?.measurementPoints?.[String(row.id)];
+  const registered = parseParameters(row.parameters_json);
+  const instruments = parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json);
+  const instrumentLabels = (instruments?.parameters ?? []).map((item) => item.parameter);
+  const factoryVisible =
+    row.factory_is_active !== false &&
+    row.factory_is_active !== 0 &&
+    state?.factory?.visibility !== 'HIDDEN' &&
+    state?.factory?.connectionStatus !== 'DISCONNECTED';
+  const savedParameters = Object.entries(own?.parameters ?? {});
+  const visibleParameters = registered.filter(
+    (parameter) =>
+      !savedParameters.some(
+        ([saved, visibility]) =>
+          visibility === 'HIDDEN' &&
+          (parameterKey(saved) === parameterKey(parameter) ||
+            approvedParameterLabel(saved, registered) === parameter),
+      ),
+  );
+  const pointVisible =
+    factoryVisible &&
+    own?.visibility !== 'HIDDEN' &&
+    own?.connectionStatus !== 'DISCONNECTED' &&
+    (registered.length === 0 || visibleParameters.length > 0);
+  return {
+    factoryVisible,
+    pointVisible,
+    fullyExempt: row.monitoring_point_status === 'ได้รับการยกเว้นทั้งหมด',
+    parameters: pointVisible
+      ? visibleParameters.map((parameter) =>
+          /\([^)]*\)/u.test(parameter)
+            ? parameter
+            : (approvedParameterLabel(parameter, instrumentLabels) ?? parameter),
+        )
+      : [],
+    measurementInstruments: instruments,
+  };
 }
 
 function buildConnectedMeasurementPointsQuery(

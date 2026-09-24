@@ -265,6 +265,12 @@ describe('connected measurement points route', () => {
     });
     mockedConnectionRequestsService.getMeasurementStatistics.mockResolvedValue({
       data: {
+        summary: {
+          exceededDays: 0,
+          lowDataDays: 0,
+          todayDataCompletenessPercent: null,
+          lateDataPercent: null,
+        },
         metadata: {
           description: 'สถิติรายชั่วโมงสำหรับตารางสถิติข้อมูลและกราฟแนวโน้มสถานการณ์มลพิษ',
           date: '2026-06-09',
@@ -300,9 +306,16 @@ describe('connected measurement points route', () => {
     });
     mockedConnectionRequestsService.getCalendarStatus.mockResolvedValue({
       data: {
+        summary: {
+          exceededDays: 0,
+          lowDataDays: 0,
+          todayDataCompletenessPercent: null,
+          lateDataPercent: null,
+        },
         metadata: {
           description: 'DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน',
           month: '2026-06',
+          endDate: '2026-06-09',
           valueDefinitions: {},
         },
         factory: {
@@ -323,6 +336,7 @@ describe('connected measurement points route', () => {
         schemaName: 'ingest',
         tableName: 'S0001_data_60m',
         month: '2026-06',
+        endDate: '2026-06-09',
         count: 0,
         registeredParameters: [],
       },
@@ -332,6 +346,7 @@ describe('connected measurement points route', () => {
         metadata: {
           description: 'รายละเอียดรายวันที่ใช้คำนวณตารางสรุปสถานะของปีที่เลือก',
           year: 2025,
+          endDate: '2025-12-31',
           summaryType: 'exceeded',
           valueDefinitions: {},
         },
@@ -374,6 +389,7 @@ describe('connected measurement points route', () => {
         schemaName: 'ingest',
         tableName: 'S0001_data_60m',
         year: '2025',
+        endDate: '2025-12-31',
         count: 20,
         registeredParameters: ['CO (ppm)'],
       },
@@ -871,6 +887,44 @@ describe('connected measurement points route', () => {
         month: '2026-06',
       },
     });
+  });
+
+  it('passes the selected endDate through calendar and detail routes', async () => {
+    const app = createApp();
+    const calendar = await request(app)
+      .get(
+        '/api/v1/connected-measurement-points/S0001/calendar-status?month=2025-08&endDate=2025-08-09',
+      )
+      .set('Authorization', `Bearer ${accessToken()}`);
+    const details = await request(app)
+      .get(
+        '/api/v1/connected-measurement-points/S0001/calendar-status/details?year=2025&summaryType=lowData&parameterCode=CO&endDate=2025-08-09',
+      )
+      .set('Authorization', `Bearer ${accessToken()}`);
+    expect(calendar.status).toBe(200);
+    expect(details.status).toBe(200);
+    expect(mockedConnectionRequestsService.getCalendarStatus).toHaveBeenCalledWith(
+      'S0001',
+      { month: '2025-08', endDate: '2025-08-09' },
+      42,
+      { scope: 'ALL' },
+    );
+    expect(mockedConnectionRequestsService.getCalendarStatusDetails).toHaveBeenCalledWith(
+      'S0001',
+      { year: '2025', endDate: '2025-08-09', summaryType: 'lowData', parameterCode: 'CO' },
+      42,
+      { scope: 'ALL' },
+    );
+  });
+
+  it('rejects an endDate outside the requested period without calling the service', async () => {
+    const response = await request(createApp())
+      .get(
+        '/api/v1/connected-measurement-points/S0001/calendar-status?month=2025-08&endDate=2025-09-01',
+      )
+      .set('Authorization', `Bearer ${accessToken()}`);
+    expect(response.status).toBe(400);
+    expect(mockedConnectionRequestsService.getCalendarStatus).not.toHaveBeenCalled();
   });
 
   it('exposes annual calendar summary details for a frontend drill-down', async () => {
