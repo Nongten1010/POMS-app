@@ -2034,8 +2034,11 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
 
     let isActive = true
     const month = selectedCalendarMonth.format('YYYY-MM')
+    const endDate = selectedDate.isSame(selectedCalendarMonth, 'month')
+      ? selectedDate.format('YYYY-MM-DD')
+      : undefined
 
-    fetch(getConnectedMeasurementPointApiUrl(activeStatisticPoint, 'calendar-status', { month }), {
+    fetch(getConnectedMeasurementPointApiUrl(activeStatisticPoint, 'calendar-status', { month, endDate }), {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -2064,7 +2067,7 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
     return () => {
       isActive = false
     }
-  }, [accessToken, activeStatisticPoint, open, selectedCalendarMonth])
+  }, [accessToken, activeStatisticPoint, open, selectedCalendarMonth, selectedDate])
 
   useEffect(() => {
     if (!open || !accessToken || !activeStatisticPoint) {
@@ -2924,6 +2927,7 @@ function FactoryStatisticPanel({
             <DatePicker
               value={selectedDate}
               format="DD-MM-YYYY"
+              disableFuture
               onChange={(nextDate) => {
                 if (nextDate) {
                   onDateChange(nextDate)
