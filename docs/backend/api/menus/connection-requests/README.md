@@ -944,17 +944,20 @@ Minimal response:
 
 เมื่อส่งคำขอเพิ่มพารามิเตอร์ ให้คงโรงงาน ระบบ และรหัสจุดให้ตรงกับจุดที่เลือก Backend ตรวจเจ้าของจุดด้วย `eligible_factory_id` เดียวกับโรงงานของคำขอและ `systemType` เดียวกัน โดยตรวจซ้ำในขั้นส่งแบบแก้ไข อนุมัติ ยืนยัน และเชื่อมต่อจริงด้วย หากตอบ `409` พร้อม `ADD_PARAMETER_POINT_OWNERSHIP_INVALID` ให้โหลดรายการจุดของโรงงานและระบบนั้นใหม่ก่อนเลือกและส่งอีกครั้ง ดู [รายละเอียดเงื่อนไขและ error example](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsparameters)
 
+สำหรับรูปโรงงาน `formDefaults.measurementPoints[0].documentsAndImages` รวมเอกสารอื่นของจุดปัจจุบันกับรูปหน้าโรงงานและโลโก้จากข้อมูลโรงงานปัจจุบัน โดยแทนที่รายการเดิมที่มี `title` ตรงกับ `ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน` หรือ `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท` ด้วยไฟล์ปัจจุบัน จึงไม่ซ้ำไฟล์โรงงาน `title`/URL เดียวกัน. Backend ปรับ `title` ของรูปโรงงานใน response เป็นสองชื่อดังกล่าวตามประเภท แม้ไฟล์ต้นทางใช้ชื่ออื่น โดยคง metadata อื่นทั้งหมด เช่น `description`, `link`, `fileName`, `fileUrl`, `fileType` และ `fileSize`. เมื่อรูปหน้าโรงงานเป็น `[]` หรือโลโก้เป็น `null` จะไม่นำไฟล์เก่าจากจุดหรือ request snapshot กลับมา; เอกสารอื่นยังคงอยู่ และคืน `[]` เมื่อไม่มีเอกสารหรือรูปเลย. ทั้งสอง endpoint ใช้ metadata ตาม [รูปแบบเอกสารแนบ](./request-payloads-and-validation.md#measurementpointsdocumentsandimages) เดิม โดยไม่เพิ่ม `factoryFrontPhotos`, `factoryLogo` หรือเอกสารในระดับ `data`/`formDefaults`
+
 canonical mode ใช้ข้อมูลทั่วไปโรงงานปัจจุบันร่วมกับเข้าข่าย ส่วนข้อมูลเฉพาะคำขอและผู้ติดต่อยังอ้างคำขอต้นทางตาม contract เดิม. รายการพารามิเตอร์ทั้ง 4 กลุ่มใช้กติกาเดียวกับ [ฟอร์มโรงงาน POMS](../master-data/factory-edit-requests.md): `eligibleParameters` จากรายละเอียดจุดปัจจุบัน; `connectedParameters` และ `requestedParameters` จาก active `cems_wpms_connected_measurement_points.parameters_json`; `pendingParameters` เป็น `eligibleParameters - connectedParameters` โดย normalize Unicode ตัวพิมพ์และช่องว่างในการเทียบ แต่คงชื่อพร้อมหน่วยและลำดับใน response. ไม่ใช้ device channel หรือสถานะเก่าจาก request snapshot ตัดสินการเชื่อมต่อ และไม่ลบ `exemptedParameters` ออกจาก `pendingParameters` เพิ่มเติม เพื่อให้ตรงกับฟอร์มโรงงาน
 
 รายการ `/connected-measurement-points`, alias `/cems-wpms-requests/connected-measurement-points` และรายการรายโรงงาน ใช้จุดปัจจุบันชุดเดียวกันและตัดจุด inactive ออกจากผลลัพธ์; รหัสจุดและรหัสคำขอใน response คงเดิม
 
-Response fields ที่เพิ่มเติมสำหรับเลขทะเบียนโรงงาน:
+Response fields สำหรับ prefill:
 
 | Field                                                                | Type           | Required | Description                                                                                |
 | -------------------------------------------------------------------- | -------------- | -------- | ------------------------------------------------------------------------------------------ |
 | `data.formDefaults.newRegistrationNo`                                | string         | yes      | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories`                                        |
 | `data.formDefaults.oldRegistrationNo`                                | string \| null | yes      | เลขทะเบียนโรงงานเดิมจาก active `eligible_factories`                                        |
 | `data.formDefaults.factoryRegistrationNo`                            | string         | yes      | compatibility alias สำหรับ client เดิม; ใช้เลขทะเบียนเดิมเมื่อมี มิฉะนั้นใช้เลขทะเบียนใหม่ |
+| `data.formDefaults.measurementPoints[0].documentsAndImages` | object[] | yes | เอกสารอื่นของจุดปัจจุบัน รวมรูปหน้าโรงงานและโลโก้ปัจจุบันด้วย `title` ตามกติกาข้างต้น; `[]` เมื่อไม่มีไฟล์ |
 | `data.formDefaults.measurementPoints[0].details.eligibleParameters` | string[] | yes | รายการเข้าข่ายจากรายละเอียดจุดปัจจุบัน; `[]` เมื่อไม่มี |
 | `data.formDefaults.measurementPoints[0].details.connectedParameters` | string[] | yes | รายการเดียวกับ `parameters` ของจุดที่เชื่อมต่ออยู่ปัจจุบัน แม้ยังไม่มี device channel |
 | `data.formDefaults.measurementPoints[0].details.pendingParameters` | string[] | yes | `eligibleParameters - connectedParameters`; `[]` เมื่อเชื่อมต่อครบ |
@@ -981,6 +984,20 @@ Minimal response:
         {
           "pointCode": "P0155",
           "parameters": ["COD (mg/l)", "Flow rate (m3/hr)", "Watt (kW/hr)"],
+          "documentsAndImages": [
+            {
+              "title": "ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน",
+              "fileName": "factory-front.jpg",
+              "fileUrl": "https://example.com/uploads/factory-front.jpg",
+              "fileType": "image/jpeg"
+            },
+            {
+              "title": "สัญลักษณ์ของโรงงานหรือโลโก้บริษัท",
+              "fileName": "factory-logo.png",
+              "fileUrl": "https://example.com/uploads/factory-logo.png",
+              "fileType": "image/png"
+            }
+          ],
           "details": {
             "eligibleParameters": ["Flow rate (m3/hr)", "Watt (kW/hr)", "COD (mg/l)"],
             "connectedParameters": ["COD (mg/l)", "Flow rate (m3/hr)", "Watt (kW/hr)"],

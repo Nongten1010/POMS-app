@@ -748,7 +748,7 @@ export const connectionRequestsService = {
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<AddParameterFormDetailDTO> {
-    const { request, point } = await loadLatestConnectedRequestForStation(
+    const { request, point, currentPoint } = await loadLatestConnectedRequestForStation(
       stationId,
       actorUserId,
       viewScope,
@@ -792,10 +792,15 @@ export const connectionRequestsService = {
     const inferredOldRegistrationNo =
       request.factoryRegistrationNo !== request.factoryId ? request.factoryRegistrationNo : null;
 
-    return toAddParameterFormDetail(currentRequest, point, stationId, {
-      newRegistrationNo: factoryReference?.factoryRegistrationNoNew ?? request.factoryId,
-      oldRegistrationNo: factoryReference?.factoryRegistrationNoOld ?? inferredOldRegistrationNo,
-    });
+    return toAddParameterFormDetail(
+      currentRequest,
+      withCurrentFactoryDocuments(point, currentPoint),
+      stationId,
+      {
+        newRegistrationNo: factoryReference?.factoryRegistrationNoNew ?? request.factoryId,
+        oldRegistrationNo: factoryReference?.factoryRegistrationNoOld ?? inferredOldRegistrationNo,
+      },
+    );
   },
 
   async getCurrentDeviceConfigFormDetail(
@@ -1847,7 +1852,11 @@ async function loadLatestConnectedRequestForStation(
   scope: AccessScope,
   useAssignedFactoryAccess: boolean,
   regionalAccess?: RegionalAccessDTO | null,
-): Promise<{ request: ConnectionRequestDTO; point: MeasurementPointDTO }> {
+): Promise<{
+  request: ConnectionRequestDTO;
+  point: MeasurementPointDTO;
+  currentPoint: CurrentFactoryMeasurementPointDTO;
+}> {
   const { rows } = await connectionRequestsRepository.list(
     {
       stationId,
@@ -1879,6 +1888,7 @@ async function loadLatestConnectedRequestForStation(
       if (!current) continue;
       const point = toCurrentMeasurementPoint(snapshot, current);
       return {
+        currentPoint: current,
         request: {
           ...request,
           measurementPoints: request.measurementPoints.map((item) =>
@@ -1891,6 +1901,40 @@ async function loadLatestConnectedRequestForStation(
   }
 
   throw new NotFoundError('Active connected measurement point not found');
+}
+
+function withCurrentFactoryDocuments(
+  point: MeasurementPointDTO,
+  current: CurrentFactoryMeasurementPointDTO,
+): MeasurementPointDTO {
+  // Current factory assets are authoritative, including explicit removals.
+  // Keep this merge local to parameter-form; history and other point reads stay unchanged.
+  const pointDocuments = (point.documentsAndImages ?? []).filter(
+    (document) =>
+      document.title !== CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_FRONT_PHOTO &&
+      document.title !== CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_LOGO,
+  );
+  const frontPhotos = [
+    ...new Map(
+      (current.factoryFrontPhotos ?? []).map((document) => [
+        document.fileUrl || document.link || JSON.stringify(document),
+        document,
+      ]),
+    ).values(),
+  ];
+  return {
+    ...point,
+    documentsAndImages: [
+      ...pointDocuments,
+      ...frontPhotos.map((document) => ({
+        ...document,
+        title: CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_FRONT_PHOTO,
+      })),
+      ...(current.factoryLogo
+        ? [{ ...current.factoryLogo, title: CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_LOGO }]
+        : []),
+    ],
+  };
 }
 
 function toAddParameterFormDetail(

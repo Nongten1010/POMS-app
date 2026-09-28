@@ -677,6 +677,7 @@ export interface CurrentFactoryMeasurementPointDTO extends Omit<
   details?: MeasurementPointDetailsInput | null;
   factoryId: string;
   eligibleFactoryId?: number | null;
+  factoryFrontPhotos?: RequestDocumentImageInput[];
   factoryLogo?: RequestDocumentImageInput | null;
   documentsAndImages?: RequestDocumentImageInput[];
   measurementInstruments?: MeasurementInstrumentsInput | null;

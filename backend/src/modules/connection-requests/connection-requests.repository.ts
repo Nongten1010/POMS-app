@@ -204,6 +204,7 @@ interface CurrentFactoryMeasurementPointRow {
   parameters_json: string;
   monitoring_point_status: MeasurementPointInput['monitoringPointStatus'];
   instruments_json: string | null;
+  factory_front_photos_json: string | null;
   factory_logo_json: string | null;
   documents_json: string | null;
 }
@@ -969,7 +970,7 @@ export const connectionRequestsRepository = {
     const rows = await query
       .select<
         CurrentFactoryMeasurementPointRow[]
-      >(['id', 'source_measurement_point_id', 'source_request_id', 'point_type', 'details_json', 'factory_id', 'eligible_factory_id', 'point_name', 'point_code', 'system_type', 'parameters_json', 'monitoring_point_status', 'instruments_json', 'factory_logo_json', 'documents_json'])
+      >(['id', 'source_measurement_point_id', 'source_request_id', 'point_type', 'details_json', 'factory_id', 'eligible_factory_id', 'point_name', 'point_code', 'system_type', 'parameters_json', 'monitoring_point_status', 'instruments_json', 'factory_front_photos_json', 'factory_logo_json', 'documents_json'])
       .orderBy('factory_id', 'asc')
       .orderBy('point_code', 'asc')
       .orderBy('point_name', 'asc');
@@ -993,6 +994,7 @@ export const connectionRequestsRepository = {
       parameters: parseParameters(row.parameters_json),
       monitoringPointStatus: row.monitoring_point_status ?? null,
       measurementInstruments: parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json),
+      factoryFrontPhotos: parseJsonArray<RequestDocumentImageInput>(row.factory_front_photos_json),
       factoryLogo: parseJsonObject<RequestDocumentImageInput>(row.factory_logo_json),
       documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
       data: [],
