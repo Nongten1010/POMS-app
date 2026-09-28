@@ -160,8 +160,15 @@ export const homeHandoffSchemas: Record<string, Schema> = {
       ...count,
       description: 'ช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์นี้สิ้นสุดที่ endDate',
     },
-    todayDataCompletenessPercent: nullablePercent,
-    lateDataPercent: nullablePercent,
+    todayDataCompletenessPercent: {
+      ...nullablePercent,
+      description:
+        'ร้อยละข้อมูลตรงเวลาของพารามิเตอร์นี้เฉพาะวันที่ endDate เลือกไว้ แม้ชื่อ field มี today; ตรวจวันที่ใช้จริงจาก meta.endDate',
+    },
+    lateDataPercent: {
+      ...nullablePercent,
+      description: 'ร้อยละข้อมูลมาช้าของพารามิเตอร์นี้เฉพาะวันที่ endDate เลือกไว้',
+    },
   }),
   HomeCalendarStatusResponse: response(
     object({
@@ -317,7 +324,7 @@ export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<
         in: 'query',
         required: false,
         schema: { ...date, pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-        description: `วันสิ้นสุดที่รวมในการสรุป ต้องเป็นวันจริงใน ${endDatePeriod} ที่ขอและไม่เกินวันนี้ตาม Asia/Bangkok; ไม่ส่งใช้วันที่น้อยกว่าระหว่างวันนี้กับวันสุดท้ายของ ${endDatePeriod}; ไม่ถูกต้องคืน 400 VALIDATION_ERROR`,
+        description: `วันสิ้นสุดที่รวมในการสรุป ต้องเป็นวันจริงใน ${endDatePeriod} ที่ขอและไม่เกินวันนี้ตาม Asia/Bangkok; ไม่ส่งใช้วันที่น้อยกว่าระหว่างวันนี้กับวันสุดท้ายของ ${endDatePeriod}; ไม่ถูกต้องคืน 400 VALIDATION_ERROR${endDatePeriod === 'month' ? '; เมื่อคลิกวันในปฏิทิน ต้องส่ง endDate ของวันนั้นพร้อม month เพื่อคำนวณ todayDataCompletenessPercent และ lateDataPercent ของวันที่เลือก' : ''}`,
         example: '2026-09-23',
       });
     }

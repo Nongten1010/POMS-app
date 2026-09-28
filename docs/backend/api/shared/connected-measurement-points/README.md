@@ -367,6 +367,14 @@ curl --request GET \
   --header 'Accept: application/json'
 ```
 
+เมื่อคลิกวันที่ในปฏิทิน ต้องส่งทั้ง `month` และ `endDate` ของวันที่เลือกทุกครั้ง เช่นเลือกวันที่ 27 กันยายน 2026 ของจุด `P0260`:
+
+```http
+GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&endDate=2026-09-27
+```
+
+`data.summary` และ `data.monthlySummary[]` จะคืน `todayDataCompletenessPercent` และ `lateDataPercent` ของวันที่ `2026-09-27` แม้ชื่อ field แรกยังมีคำว่า `today`; ตรวจวันที่ที่ใช้คำนวณได้จาก `meta.endDate` หรือ `data.metadata.endDate` หากส่งเพียง `month=2026-09` โดยเดือนนั้นเป็นเดือนปัจจุบัน API จะใช้วันนี้ จึงต้องส่ง `endDate` เมื่อเลือกวันย้อนหลัง
+
 #### Success Response Fields
 
 | Field | Type | Nullable | Description |
@@ -915,7 +923,7 @@ CSV ใช้ identity columns `date_time`, `factory_name`, `factory_registratio
 | CSV formatter | [`measurement-csv-export.ts`](../../../../../backend/src/modules/parameter-values/measurement-csv-export.ts) |
 | Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
-| Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`parameter-values.service.test.ts`](../../../../../backend/tests/unit/parameter-values.service.test.ts), [`measurement-csv-export.route.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.route.test.ts), [`measurement-csv-export.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.test.ts) |
+| Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`parameter-values.service.test.ts`](../../../../../backend/tests/unit/parameter-values.service.test.ts), [`calendar-status.selected-date.test.ts`](../../../../../backend/tests/unit/calendar-status.selected-date.test.ts), [`measurement-csv-export.route.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.route.test.ts), [`measurement-csv-export.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.test.ts) |
 
 ## สถานะบริหาร POMS ในรายการ current
 
