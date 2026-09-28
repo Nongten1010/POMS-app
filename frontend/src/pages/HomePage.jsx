@@ -327,50 +327,6 @@ function mapCalendarSummaryRows(rows) {
   }))
 }
 
-function hasSubmittedMeasurementValue(value) {
-  if (value === null || value === undefined) {
-    return false
-  }
-
-  const displayValue = String(value).trim()
-  return displayValue !== '' && displayValue !== '-'
-}
-
-function calculateTodayCompletenessPercent(rows, parameter) {
-  if (!Array.isArray(rows) || rows.length === 0 || !parameter) {
-    return '-'
-  }
-
-  const submittedRows = rows.filter((row) => hasSubmittedMeasurementValue(row.values?.[parameter])).length
-  return `${Math.round((submittedRows / rows.length) * 100).toLocaleString('th-TH')}%`
-}
-
-function getStatisticRowHour(row) {
-  const rawTime = row?.chartTime || row?.time || ''
-  const hourText = String(rawTime).match(/\d{1,2}/)?.[0]
-  const hour = Number(hourText)
-
-  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null
-}
-
-function getCompletenessRowsBySelectedDate(rows, selectedDate) {
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return []
-  }
-
-  if (!selectedDate || !dayjs(selectedDate).isSame(dayjs(), 'day')) {
-    return rows
-  }
-
-  const currentHour = dayjs().hour()
-  const availableRows = rows.filter((row) => {
-    const hour = getStatisticRowHour(row)
-    return hour === null ? true : hour <= currentHour
-  })
-
-  return availableRows.length > 0 ? availableRows : rows
-}
-
 function getCompletenessPercentColor(value) {
   const percent = toFiniteNumber(String(value).replace('%', '').replace(/,/g, ''))
 
@@ -387,32 +343,6 @@ function getCompletenessPercentColor(value) {
   }
 
   return 'inherit'
-}
-
-function mergeCalendarSummaryWithTodayCompleteness(summaryRows, statisticRows, parameters, selectedDate) {
-  const rowsForTodayCompleteness = getCompletenessRowsBySelectedDate(statisticRows, selectedDate)
-  const orderedParameters =
-    Array.isArray(parameters) && parameters.length > 0
-      ? parameters
-      : Array.from(new Set(summaryRows.map((row) => row.parameter).filter(Boolean)))
-  const summaryByParameter = summaryRows.reduce((result, row) => {
-    result[row.parameter] = row
-    return result
-  }, {})
-
-  return orderedParameters.map((parameter) => {
-    const summary = summaryByParameter[parameter]
-
-    return {
-      parameter,
-      parameterCode: summary?.parameterCode ?? '',
-      parameterName: summary?.parameterName ?? '',
-      unit: summary?.unit ?? '',
-      exceededDays: summary?.exceededDays ?? '0 วัน',
-      lowDataDays: summary?.lowDataDays ?? '0 วัน',
-      todayPercent: calculateTodayCompletenessPercent(rowsForTodayCompleteness, parameter),
-    }
-  })
 }
 
 function formatBuddhistDate(value) {
@@ -2085,10 +2015,7 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
   const statisticRows = measurementStatisticRows
   const activeStatisticParameters =
     measurementStatisticParameters.length > 0 ? measurementStatisticParameters : statisticParameters
-  const activeCalendarSummaryRows = useMemo(
-    () => mergeCalendarSummaryWithTodayCompleteness(calendarSummary, statisticRows, activeStatisticParameters, selectedDate),
-    [activeStatisticParameters, calendarSummary, selectedDate, statisticRows],
-  )
+  const activeCalendarSummaryRows = calendarSummary
   const activeTrendParameter = activeStatisticParameters.includes(selectedTrendParameter)
     ? selectedTrendParameter
     : activeStatisticParameters[0] ?? statisticParameters[0]
