@@ -92,8 +92,11 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
 };
 const currentConnectedPointDescription =
   'อ่าน pointName, pointCode, pointType, parameters, monitoringPointStatus, details, documentsAndImages และ measurementInstruments จาก active connected point ปัจจุบันตาม allowlist; null และ [] ที่ล้างแล้วไม่ดึงค่า snapshot เก่ากลับมา. รายการตัดจุด inactive ออก; endpoint ของสถานีที่ไม่ active หรือนอก scope ตอบ 404. canonical mode ใช้ข้อมูลทั่วไปโรงงานร่วมกับเข้าข่าย; ประวัติคำขอยังคง snapshot เดิม';
+const currentParameterFormAssetsDescription =
+  'formDefaults.measurementPoints[0].documentsAndImages รวมเอกสารอื่นของจุดปัจจุบันกับรูปหน้าโรงงานและโลโก้จากข้อมูลโรงงานปัจจุบัน โดยแทนที่รายการ title ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน และ สัญลักษณ์ของโรงงานหรือโลโก้บริษัท ด้วยไฟล์ปัจจุบันเท่านั้น; ปรับ title ของรูปโรงงานใน response เป็นสองชื่อดังกล่าวตามประเภท แม้ต้นทางใช้ชื่ออื่น โดยคง metadata อื่นทั้งหมด. ไม่คืนไฟล์เก่าจากจุดหรือ snapshot เมื่อรูปโรงงานถูกล้างเป็น null หรือ []; ไม่ซ้ำไฟล์โรงงาน title/URL เดียวกัน และคืน [] เมื่อไม่มีเอกสารหรือรูป';
 const currentParameterFormDescription =
-  'details ใช้กติกาเดียวกับ GET /poms-factories/{factoryId}/form?formType=MEASUREMENT_POINTS: eligibleParameters จากรายละเอียดจุดปัจจุบัน; connectedParameters และ requestedParameters จาก active cems_wpms_connected_measurement_points.parameters_json แม้ยังไม่มี device channel; pendingParameters = eligibleParameters - connectedParameters โดย normalize Unicode/ตัวพิมพ์/ช่องว่างในการเปรียบเทียบและคง label พร้อมหน่วยใน response. ไม่ลบ exemptedParameters ออกจาก pendingParameters เพิ่มเติม และไม่ใช้สถานะเก่าจาก request snapshot';
+  'details ใช้กติกาเดียวกับ GET /poms-factories/{factoryId}/form?formType=MEASUREMENT_POINTS: eligibleParameters จากรายละเอียดจุดปัจจุบัน; connectedParameters และ requestedParameters จาก active cems_wpms_connected_measurement_points.parameters_json แม้ยังไม่มี device channel; pendingParameters = eligibleParameters - connectedParameters โดย normalize Unicode/ตัวพิมพ์/ช่องว่างในการเปรียบเทียบและคง label พร้อมหน่วยใน response. ไม่ลบ exemptedParameters ออกจาก pendingParameters เพิ่มเติม และไม่ใช้สถานะเก่าจาก request snapshot. ' +
+  currentParameterFormAssetsDescription;
 const connectionProfileWriteDescription =
   'การเชื่อมต่อครั้งแรกปรับเฉพาะข้อมูลทั่วไปที่อนุญาต โดย canonical mode ตรวจ source revision ที่ backend เก็บเมื่อยื่น/ส่งกลับก่อนบันทึก; ถ้า revision หายหรือเปลี่ยนและคำขอมีข้อมูลทั่วไป ให้ส่งคำขอกลับมาใหม่. เมื่อมีจุดเชื่อมต่ออยู่แล้วใช้ข้อมูลโรงงานปัจจุบัน รวม null โดยไม่นำ snapshot เก่ามาเขียนทับ. Backend เก็บ revision ภายใน ผู้เรียกไม่ต้องส่ง field เพิ่ม';
 const connectionProfileConflictResponse: OpenApiObject = {
@@ -1495,10 +1498,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
                 maxItems: 1,
                 items: {
                   type: 'object',
-                  required: ['parameters', 'details'],
+                  required: ['parameters', 'details', 'documentsAndImages'],
                   properties: {
                     pointCode: { type: 'string', nullable: true },
                     parameters: { type: 'array', items: { type: 'string' } },
+                    documentsAndImages: {
+                      type: 'array',
+                      items: schemaRef('RequestDocumentImage'),
+                      description: currentParameterFormAssetsDescription,
+                    },
                     details: {
                       type: 'object',
                       required: [
@@ -1551,6 +1559,20 @@ const componentSchemas: Record<string, OpenApiObject> = {
             {
               pointCode: 'P0155',
               parameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+              documentsAndImages: [
+                {
+                  title: CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_FRONT_PHOTO,
+                  fileName: 'factory-front.jpg',
+                  fileUrl: 'https://example.com/uploads/factory-front.jpg',
+                  fileType: 'image/jpeg',
+                },
+                {
+                  title: CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_LOGO,
+                  fileName: 'factory-logo.png',
+                  fileUrl: 'https://example.com/uploads/factory-logo.png',
+                  fileType: 'image/png',
+                },
+              ],
               details: {
                 eligibleParameters: ['Flow rate (m3/hr)', 'Watt (kW/hr)', 'COD (mg/l)'],
                 connectedParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
