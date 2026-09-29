@@ -349,11 +349,11 @@ test('add-parameter form and payload preserve live groups without affecting othe
         const initialRequest = getParameterFormDefaultsFromPayload({ data: { formDefaults: {
           id: 1, factoryId: 'TEST', systemType,
           eia: 'อื่นๆ', eiaOther: 'Other assessment', projectName: 'Saved project', latitude: 13.5, longitude: 100.5,
-          documentsAndImages: [
-            { title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', fileName: 'front.jpg', fileUrl: 'https://example.com/front.jpg', fileType: 'image/jpeg' },
-            { title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', fileName: 'logo.jpg', fileUrl: 'https://example.com/logo.jpg', fileType: 'image/jpeg' },
-          ],
           measurementPoints: [{ pointCode: 'S123', pointName: 'Test point', details,
+            documentsAndImages: [
+              { title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', fileName: 'front.jpg', fileUrl: 'https://example.com/front.jpg', fileType: 'image/jpeg' },
+              { title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', fileName: 'logo.jpg', fileUrl: 'https://example.com/logo.jpg', fileType: 'image/jpeg' },
+            ],
             measurementInstruments: { parameters: [
               { parameter: connected, brand: 'Saved brand' }, { parameter: 'STALE', brand: 'Old brand' },
             ] } }],
@@ -363,7 +363,12 @@ test('add-parameter form and payload preserve live groups without affecting othe
           formType: mode === 'add-parameter' ? 'เพิ่มพารามิเตอร์' : 'เพิ่มจุดตรวจวัด',
           ...props,
         }))
+        const generalSection = (markup) => markup.slice(markup.indexOf('ข้อมูลทั่วไปของโรงงาน'), markup.indexOf('data-field-name="contactPersons"'))
         const html = render('add-parameter')
+        assert.equal(initialRequest.documentsAndImages, undefined)
+        assert.ok(generalSection(html).includes('front.jpg'))
+        assert.ok(generalSection(html).includes('logo.jpg'))
+        assert.ok(!generalSection(html).includes('aria-label="ลบไฟล์'))
         assert.deepEqual(hiddenValues(html, 'eligibleParameters'), [connected, additional])
         assert.deepEqual(hiddenValues(html, 'connectedParameters'), [connected])
         assert.deepEqual(hiddenValues(html, 'pendingParameters'), [additional])
@@ -380,7 +385,6 @@ test('add-parameter form and payload preserve live groups without affecting othe
         assert.ok(!fieldMarkup(edit, 'connectedParameters').includes('Mui-readOnly'))
         assert.ok(!render('create').includes('name="requestedParameters"'))
 
-        const generalSection = (markup) => markup.slice(markup.indexOf('ข้อมูลทั่วไปของโรงงาน'), markup.indexOf('data-field-name="contactPersons"'))
         const typeRadios = (markup) => (markup.match(/<input\b[^>]*>/g) ?? [])
           .filter((input) => input.includes('type="radio"') && /value="(?:CEMS|WPMS)"/.test(input))
         for (const isOperator of [true, false]) {
@@ -426,7 +430,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
 
         const lockedPayload = buildMeasurementPointRequestBody(initialRequest, systemType, new FormData(), [], [], {
           generalFactoryFieldsReadOnly: true,
-          existingDocuments: initialRequest.documentsAndImages,
+          existingDocuments: initialRequest.measurementPoints[0].documentsAndImages,
         })
         assert.equal(lockedPayload.eia, 'อื่นๆ')
         assert.equal(lockedPayload.eiaOther, 'Other assessment')
