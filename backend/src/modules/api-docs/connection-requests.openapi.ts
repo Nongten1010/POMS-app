@@ -1171,7 +1171,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     required: ['title'],
     description:
-      'แต่ละ row ต้องมี link หรือ fileUrl อย่างน้อยหนึ่งค่า; placeholder ที่ยังไม่มีไฟล์จะถูกละทิ้ง',
+      'แต่ละหัวข้อ/row มี link หรือ fileUrl อย่างใดอย่างหนึ่งก็พอ; ช่องที่ว่างหรือมีแต่ whitespace จะแปลงเป็น null; placeholder ที่ยังไม่มีไฟล์จะถูกละทิ้ง',
     example: {
       title: CONNECTION_REQUEST_DOCUMENT_TITLE.WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO,
       fileName: 'outside-factory-discharge-point.jpg',
@@ -1190,18 +1190,16 @@ const componentSchemas: Record<string, OpenApiObject> = {
       description: { type: 'string', maxLength: 1000, nullable: true },
       link: {
         type: 'string',
-        minLength: 1,
         maxLength: 2048,
         nullable: true,
-        description: 'รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
+        description: 'ข้อความว่างหรือ whitespace แปลงเป็น null; หากช่องนี้ว่าง ต้องมีค่าในอีกช่อง; รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
       },
       fileName: { type: 'string', maxLength: 255, nullable: true },
       fileUrl: {
         type: 'string',
-        minLength: 1,
         maxLength: 2048,
         nullable: true,
-        description: 'รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
+        description: 'ข้อความว่างหรือ whitespace แปลงเป็น null; หากช่องนี้ว่าง ต้องมีค่าในอีกช่อง; รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
       },
       fileType: { type: 'string', maxLength: 128, nullable: true },
       fileSize: {

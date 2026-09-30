@@ -4,6 +4,7 @@ import {
   addMeasurementPointRequestSchema,
   createConnectionRequestSchema,
   resubmitConnectionRequestSchema,
+  requestDocumentImageSchema,
 } from '../../src/modules/connection-requests/connection-requests.validator';
 
 const FIVE_MEBIBYTES = 5 * 1024 * 1024;
@@ -692,6 +693,64 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     if (result.success) {
       expect(result.data.measurementPoints[0].documentsAndImages[0][field as 'link' | 'fileUrl']).toBe(value);
     }
+  });
+
+  it.each(['', '   ', null, undefined])(
+    'accepts link-only rows with blank fileUrl %p',
+    (fileUrl) => {
+      const payload = createCemsPayload();
+      const result = addMeasurementPointRequestSchema.safeParse({
+        ...payload,
+        measurementPoints: [
+          {
+            ...payload.measurementPoints[0],
+            documentsAndImages: [
+              {
+                title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
+                link: ' https://example.com/photo ',
+                fileUrl,
+              },
+            ],
+          },
+        ],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.measurementPoints[0].documentsAndImages[0]).toMatchObject({
+          link: 'https://example.com/photo',
+          fileUrl: null,
+        });
+      }
+    },
+  );
+
+  it.each(['', '   ', null, undefined])('accepts file-only rows with blank link %p', (link) => {
+    const result = requestDocumentImageSchema.safeParse({
+      title: 'ภาพถ่าย',
+      fileUrl: ' https://example.com/photo ',
+      link,
+    });
+    expect(result.success).toBe(true);
+    if (result.success)
+      expect(result.data).toMatchObject({ link: null, fileUrl: 'https://example.com/photo' });
+  });
+
+  it('rejects document rows when both sources are blank', () => {
+    const result = requestDocumentImageSchema.safeParse({
+      title: 'ภาพถ่าย',
+      link: ' ',
+      fileUrl: '',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success)
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['fileUrl'],
+            message: 'Document must include link or fileUrl',
+          }),
+        ]),
+      );
   });
 
   it('rejects zero-byte document metadata', () => {

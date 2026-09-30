@@ -143,9 +143,9 @@ export const requestDocumentImageSchema = z
   .object({
     title: trimmedString(255),
     description: optionalNullableTrimmedString(1000),
-    link: trimmedString(2048).nullable().optional(),
+    link: optionalNullableTrimmedString(2048),
     fileName: optionalNullableTrimmedString(255),
-    fileUrl: trimmedString(2048).nullable().optional(),
+    fileUrl: optionalNullableTrimmedString(2048),
     fileType: optionalNullableTrimmedString(128),
     fileSize: z.number().int().min(1).max(MAX_DOCUMENT_FILE_SIZE_BYTES).nullable().optional(),
   })

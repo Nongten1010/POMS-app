@@ -147,15 +147,16 @@ curl --request POST \
 | ------------- | -------- | ----------- | -------- | ------- | -------------------------------------------------------------------------------- |
 | `title`       | body     | Yes         | No       | string  | trim 1-255; ช่องรูปจุดระบายน้ำทิ้ง WPMS ใช้ `ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน` |
 | `description` | body     | No          | Yes      | string  | trim <=1000                                                                      |
-| `link`        | body     | Conditional | Yes      | string  | ข้อความหลัง trim 1–2048 ตัวอักษร ไม่ตรวจ URL หรือบังคับ `http`/`https`                                       |
+| `link`        | body     | Conditional | Yes      | string  | ข้อความที่มีค่าหลัง trim 1–2048 ตัวอักษร; ค่าว่างแปลงเป็น `null` ไม่ตรวจ URL หรือบังคับ `http`/`https`                                       |
 | `fileName`    | body     | No          | Yes      | string  | trim <=255                                                                       |
-| `fileUrl`     | body     | Conditional | Yes      | string  | ข้อความหลัง trim 1–2048 ตัวอักษร ไม่ตรวจ URL หรือบังคับ `http`/`https`                                       |
+| `fileUrl`     | body     | Conditional | Yes      | string  | ข้อความที่มีค่าหลัง trim 1–2048 ตัวอักษร; ค่าว่างแปลงเป็น `null` ไม่ตรวจ URL หรือบังคับ `http`/`https`                                       |
 | `fileType`    | body     | No          | Yes      | string  | trim <=128                                                                       |
 | `fileSize`    | body     | No          | Yes      | integer | `1..5,242,880` bytes (5 MiB)                                                     |
 
 กฎร่วมของ document rows
 
-- แต่ละ row ต้องมีอย่างน้อย `link` หรือ `fileUrl`
+- แต่ละหัวข้อ/row มีไฟล์ (`fileUrl`) หรือลิงก์ (`link`) อย่างใดอย่างหนึ่งก็พอ ไม่ต้องมีทั้งสองอย่าง
+- ช่องที่ไม่ได้ใช้ส่ง `""`, whitespace, `null` หรือไม่ส่ง field ได้ โดย backend แปลงเป็น `null`; หากทั้งสองช่องว่างจะไม่ถือเป็นเอกสาร
 - รับข้อความใด ๆ โดยไม่ตรวจรูปแบบ URL หรือว่าลิงก์เปิดได้จริง หากเปิดไม่ได้ เจ้าหน้าที่สามารถตีกลับให้แก้ไข
 - row placeholder ที่มีเพียง `title`/`description` และ metadata อื่นว่างทั้งหมด จะถูกลบทิ้งก่อน validation หลัก
 - ถ้าส่ง metadata ของไฟล์ เช่น `fileName` แต่ไม่มี `link` หรือ `fileUrl` จะถูก reject
