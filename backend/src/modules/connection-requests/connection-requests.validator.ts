@@ -26,8 +26,6 @@ const optionalNullableRequestEmailSchema = z.preprocess(
   normalizeRequestEmail,
   z.string().email().max(255).nullable().optional(),
 );
-const httpUrl = (max: number) =>
-  z.string().trim().url().max(max).refine(isHttpUrl, { message: 'URL must use http or https' });
 const optionalNullableTrimmedString = (max: number) =>
   z
     .preprocess((value) => {
@@ -145,9 +143,9 @@ export const requestDocumentImageSchema = z
   .object({
     title: trimmedString(255),
     description: optionalNullableTrimmedString(1000),
-    link: httpUrl(2048).nullable().optional(),
+    link: trimmedString(2048).nullable().optional(),
     fileName: optionalNullableTrimmedString(255),
-    fileUrl: httpUrl(2048).nullable().optional(),
+    fileUrl: trimmedString(2048).nullable().optional(),
     fileType: optionalNullableTrimmedString(128),
     fileSize: z.number().int().min(1).max(MAX_DOCUMENT_FILE_SIZE_BYTES).nullable().optional(),
   })
@@ -1236,15 +1234,6 @@ function hasSameStringValues(left: string[], right: string[]): boolean {
     leftValues.length === rightValues.length &&
     leftValues.every((value) => rightValues.includes(value))
   );
-}
-
-function isHttpUrl(value: string): boolean {
-  try {
-    const protocol = new URL(value).protocol;
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
 }
 
 function validateConnectionDevice(

@@ -91,6 +91,28 @@ describe('connection request validators', () => {
     remarks: 'ขอเชื่อมต่อระบบใหม่',
   };
 
+  it.each(['example.com/เอกสาร', 'ข้อความอะไรก็ได้', 'ftp://example.com/file'])(
+    'accepts document link and fileUrl without HTTP validation: %s',
+    (value) => {
+      const result = createConnectionRequestSchema.safeParse({
+        ...validPayload,
+        measurementPoints: [
+          {
+            ...validPayload.measurementPoints[0],
+            documentsAndImages: [{ title: 'เอกสาร', link: value, fileUrl: value }],
+          },
+        ],
+      });
+      expect(result.success ? [] : result.error.issues).toEqual([]);
+      if (result.success) {
+        expect(result.data.measurementPoints[0].documentsAndImages[0]).toMatchObject({
+          link: value,
+          fileUrl: value,
+        });
+      }
+    },
+  );
+
   it('accepts a valid request form with measurement points', () => {
     const result = createConnectionRequestSchema.safeParse(validPayload);
 

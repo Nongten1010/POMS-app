@@ -1190,18 +1190,18 @@ const componentSchemas: Record<string, OpenApiObject> = {
       description: { type: 'string', maxLength: 1000, nullable: true },
       link: {
         type: 'string',
-        format: 'uri',
+        minLength: 1,
         maxLength: 2048,
         nullable: true,
-        description: 'รองรับเฉพาะ http/https',
+        description: 'รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
       },
       fileName: { type: 'string', maxLength: 255, nullable: true },
       fileUrl: {
         type: 'string',
-        format: 'uri',
+        minLength: 1,
         maxLength: 2048,
         nullable: true,
-        description: 'รองรับเฉพาะ http/https',
+        description: 'รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
       },
       fileType: { type: 'string', maxLength: 128, nullable: true },
       fileSize: {

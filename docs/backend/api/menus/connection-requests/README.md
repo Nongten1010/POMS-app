@@ -349,7 +349,7 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 - client ไม่ต้องส่งรายการของช่องแนบไฟล์ที่ยังว่าง;
 - เพื่อรองรับฟอร์มที่สร้างช่องเอกสารไว้ล่วงหน้า backend จะละทิ้งรายการที่มีเพียง `title`/`description` และมี `link`, `fileName`, `fileUrl`, `fileType`, `fileSize` เป็น `null`, ค่าว่าง หรือไม่ได้ส่ง;
-- เอกสารที่แนบจริงแต่ละรายการต้องมี `link` หรือ `fileUrl` แบบ `http`/`https`;
+- เอกสารที่แนบจริงแต่ละรายการต้องมี `link` หรือ `fileUrl` เป็นข้อความหลัง trim 1–2048 ตัวอักษร โดยไม่ตรวจรูปแบบ URL หรือบังคับ `http`/`https`; เจ้าหน้าที่ตรวจสอบและตีกลับให้แก้ไขได้;
 - object ที่มี metadata ของไฟล์ เช่น `fileName`, `fileType` หรือ `fileSize` แต่ไม่มี `link`/`fileUrl` ไม่ถือเป็นช่องว่างและระบบตอบ `400 VALIDATION_ERROR`.
 
 ### Email normalization

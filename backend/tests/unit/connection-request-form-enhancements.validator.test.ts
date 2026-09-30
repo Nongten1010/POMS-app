@@ -675,7 +675,7 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
   it.each([
     ['link', 'javascript:alert(1)'],
     ['fileUrl', 'data:text/html,<script>alert(1)</script>'],
-  ])('rejects unsafe %s URL schemes in submitted document metadata', (field, value) => {
+  ])('accepts arbitrary %s text in submitted document metadata', (field, value) => {
     const payload = createCemsPayload();
     const document = payload.measurementPoints[0].documentsAndImages[0];
     const result = addMeasurementPointRequestSchema.safeParse({
@@ -688,7 +688,10 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
       ],
     });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].documentsAndImages[0][field as 'link' | 'fileUrl']).toBe(value);
+    }
   });
 
   it('rejects zero-byte document metadata', () => {
