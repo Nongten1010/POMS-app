@@ -619,7 +619,11 @@ function mapCandidateFactory(row, index) {
 }
 
 function mapEligibleFactory(row, index) {
-  return mapFactoryRow(row, index, 'eligible')
+  return {
+    ...mapFactoryRow(row, index, 'eligible'),
+    monitoringPointFormId: row.monitoringPointFormId ?? row.formId ?? null,
+    saveWithMonitoringPointForm: true,
+  }
 }
 
 function mapEligibleFactoryAddRequest(row, index) {
