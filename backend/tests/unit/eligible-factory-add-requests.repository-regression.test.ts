@@ -95,7 +95,15 @@ describe('eligibleFactoriesRepository add-request contract regressions', () => {
       offset: jest.fn(),
       limit: jest.fn(),
       clone: jest.fn(),
-      then: jest.fn((resolve: (value: unknown[]) => unknown) => Promise.resolve(resolve(rows))),
+      then: jest.fn((resolve: (value: unknown[]) => unknown) =>
+        Promise.resolve(
+          resolve(
+            rows.map((row) =>
+              projectSelectedAddRequestColumns(row, baseQuery.select.mock.calls.flat()),
+            ),
+          ),
+        ),
+      ),
     };
     baseQuery.leftJoin.mockReturnValue(baseQuery);
     baseQuery.whereNull.mockReturnValue(baseQuery);
@@ -134,6 +142,40 @@ describe('eligibleFactoriesRepository add-request contract regressions', () => {
       ['ef.submitted_at', 'desc'],
       ['ef.id', 'desc'],
     ]);
+  });
+
+  it.each([
+    { status: 'PENDING_REVIEW', contactName: 'สมชาย ใจดี', contactPhone: '081-234-5678' },
+    { status: 'APPROVED', contactName: 'สมชาย ใจดี', contactPhone: '081-234-5678' },
+    { status: 'REJECTED', contactName: 'สมชาย ใจดี', contactPhone: '081-234-5678' },
+    { status: 'PENDING_REVIEW', contactName: 'สมชาย ใจดี', contactPhone: null },
+    { status: 'APPROVED', contactName: null, contactPhone: '+66 (81) 234-5678 ต่อ 9' },
+    { status: 'REJECTED', contactName: null, contactPhone: null },
+  ])('lists stored contacts using the query projection: %j', async (contacts) => {
+    const row = addRequestRow({
+      status: contacts.status,
+      contact_name: contacts.contactName,
+      contact_phone: contacts.contactPhone,
+    });
+    const selectedColumns: string[] = [];
+    const query = makeChain({});
+    Object.assign(query, {
+      select: jest.fn((...columns: string[]) => {
+        selectedColumns.push(...columns);
+        return query;
+      }),
+      orderBy: jest.fn(() => query),
+      then: (resolve: (rows: Record<string, unknown>[]) => unknown) =>
+        Promise.resolve([projectSelectedAddRequestColumns(row, selectedColumns)]).then(resolve),
+    });
+    mockedDb.mockImplementation((tableName: unknown) => {
+      if (tableName === 'eligible_factory_add_requests as ef') return query;
+      throw new Error(`Unexpected query for ${String(tableName)}`);
+    });
+
+    const result = await eligibleFactoriesRepository.listAddRequests({});
+
+    expect(result.rows[0]).toMatchObject(contacts);
   });
 
   it('approves by updating only the request status and keeps eligible_factory_id null', async () => {
@@ -291,6 +333,16 @@ describe('eligibleFactoriesRepository add-request contract regressions', () => {
     expect(createEligible).not.toHaveBeenCalled();
   });
 });
+
+function projectSelectedAddRequestColumns(row: Record<string, unknown>, columns: unknown[]) {
+  return Object.fromEntries(
+    columns.map((column) => {
+      const match = /^ef\.(\w+) as (\w+)$/.exec(String(column));
+      if (!match) throw new Error(`Unsupported selected column ${String(column)}`);
+      return [match[2], row[match[1]]];
+    }),
+  );
+}
 
 function makeChain(options: {
   first?: () => Promise<unknown>;

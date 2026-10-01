@@ -404,6 +404,8 @@ Primary response fields:
 | `data[].reviewNote` | string | yes | หมายเหตุจาก `officerNote` ตอนพิจารณา |
 | `meta.total` | integer | no | จำนวนผลลัพธ์ทั้งหมดหลัง search และ data scope; เท่ากับจำนวนสมาชิกใน `data` |
 
+`contactName` และ `contactPhone` อ่านจาก `eligible_factory_add_requests.contact_name` และ `contact_phone` ของแต่ละคำขอ และคืนค่าที่บันทึกไว้ในทุกสถานะ รวมถึงหลังอนุมัติหรือปฏิเสธ หากฟิลด์ใดไม่มีข้อมูลจึงคืน `null` เฉพาะฟิลด์นั้น โดยไม่เติมจากบัญชีผู้ใช้ ดู [หลักฐานทดสอบการอ่านข้อมูลผู้ติดต่อ](../../../evidence/eligible-factories/eligible-factory-requests.tdd.md#การอ่านข้อมูลผู้ติดต่อในรายการคำขอ)
+
 Minimal response (`200 OK`):
 
 ```json

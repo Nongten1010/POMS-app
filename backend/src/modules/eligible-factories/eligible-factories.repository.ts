@@ -590,6 +590,8 @@ function buildEligibleFactoryAddRequestsBaseQuery(
     'ef.has_eia as has_eia',
     'ef.project_name as project_name',
     'ef.reason as reason',
+    'ef.contact_name as contact_name',
+    'ef.contact_phone as contact_phone',
     'ef.status as status',
     'ef.is_open as is_open',
     'ef.factory_snapshot_json as factory_snapshot_json',

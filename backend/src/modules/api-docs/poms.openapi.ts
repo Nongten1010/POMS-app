@@ -5330,7 +5330,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List eligible-factory add requests',
       operationId: 'listEligibleFactoryAddRequests',
       description:
-        'Permission: eligible_factories:view. คืนคำขอทุกสถานะตาม data scope โดยไม่แบ่งหน้า รองรับเฉพาะ optional search และเรียง submittedAt DESC, id DESC; query status, page และ perPage ไม่อยู่ใน contract และถูกปฏิเสธด้วย 400',
+        'Permission: eligible_factories:view. คืนคำขอทุกสถานะตาม data scope โดยไม่แบ่งหน้า รองรับเฉพาะ optional search และเรียง submittedAt DESC, id DESC; query status, page และ perPage ไม่อยู่ใน contract และถูกปฏิเสธด้วย 400. contactName และ contactPhone คืนค่าที่บันทึกในคำขอทุกสถานะ รวมถึงหลังอนุมัติหรือปฏิเสธ; null เฉพาะฟิลด์ที่ไม่ได้บันทึกข้อมูลผู้ติดต่อ',
       parameters: [
         {
           name: 'search',
