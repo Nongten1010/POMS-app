@@ -85,7 +85,9 @@ test('builds factory edit review payloads and requires a revision reason', () =>
   assert.deepEqual(buildFactoryEditReviewPayload('APPROVE'), {
     decision: 'APPROVE', revisionReason: null, officerNote: null,
   })
-  assert.throws(() => buildFactoryEditReviewPayload('REJECT', { officerNote: ' \n ' }), /กรุณากรอกเหตุผลที่ไม่อนุมัติ/)
+  assert.deepEqual(buildFactoryEditReviewPayload('REJECT', { officerNote: ' \n ' }), {
+    decision: 'REJECT', revisionReason: null, officerNote: null,
+  })
   assert.throws(() => buildFactoryEditReviewPayload('REJECT', { officerNote: 'ก'.repeat(1001) }), /1,000/)
   assert.throws(() => buildFactoryEditReviewPayload('REQUEST_REVISION'), /กรุณากรอกเหตุผล/)
 })

@@ -1032,6 +1032,7 @@ function ReportPreviewDialog({
   onClose,
   onSubmit,
   onRequestRevision,
+  onReject,
   onApprove,
   actionContext,
 }) {
@@ -1041,6 +1042,7 @@ function ReportPreviewDialog({
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
   const [revisionSubmitting, setRevisionSubmitting] = useState(false)
   const [revisionError, setRevisionError] = useState('')
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
   const [pdfUrl, setPdfUrl] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState('')
@@ -1094,6 +1096,7 @@ function ReportPreviewDialog({
   }, [open, report])
 
   const closePreviewDialog = () => {
+    setRejectConfirmOpen(false)
     setStatusHistoryAnchorEl(null)
     setAttachmentAnchorEl(null)
     setPdfLoading(false)
@@ -1339,6 +1342,9 @@ function ReportPreviewDialog({
                 <Button variant="outlined" color="warning" disabled={submitting || !report || !actions.requestRevision} onClick={() => setRevisionDialogOpen(true)}>
                   แจ้งแก้ไข
                 </Button>
+                <Button variant="outlined" color="error" disabled={submitting || !report || !actions.reject || typeof onReject !== 'function'} onClick={() => setRejectConfirmOpen(true)}>
+                  ไม่อนุมัติ
+                </Button>
                 <Button variant="contained" disabled={submitting || !report || !actions.approve} onClick={() => onApprove?.(report)}>
                   {submitting
                     ? isWaitingApproval
@@ -1370,6 +1376,28 @@ function ReportPreviewDialog({
             ) : null}
           </DialogActions>
         )}
+      </Dialog>
+      <Dialog open={rejectConfirmOpen} onClose={submitting ? undefined : () => setRejectConfirmOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>ยืนยันการไม่อนุมัติ</DialogTitle>
+        <DialogContent dividers>
+          <Typography>ยืนยันไม่อนุมัติรายงาน{report?.reportNo ? ` เลขที่ ${report.reportNo}` : ''} ใช่หรือไม่?</Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={submitting} onClick={() => setRejectConfirmOpen(false)}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={submitting || !report || !actions.reject}
+            onClick={() => {
+              setRejectConfirmOpen(false)
+              onReject?.(report)
+            }}
+          >
+            {submitting ? 'กำลังบันทึก' : 'ยืนยันไม่อนุมัติ'}
+          </Button>
+        </DialogActions>
       </Dialog>
       <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
         <DialogTitle>แจ้งแก้ไขรายงาน</DialogTitle>
@@ -3035,7 +3063,13 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
       throw Object.assign(new Error('ขั้นตอนของคำขอเปลี่ยนไป กรุณาตรวจสอบข้อมูลล่าสุด'), { status: 409 })
     }
     const actions = getBodCodActions(latest, actionContext)
-    const allowed = action === 'REQUEST_REVISION' ? actions.requestRevision : notice ? actions.fillNotice : actions.approve
+    const allowed = action === 'REQUEST_REVISION'
+      ? actions.requestRevision
+      : action === 'REJECT'
+        ? actions.reject
+        : notice
+          ? actions.fillNotice
+          : actions.approve
     if (!allowed) throw Object.assign(new Error('สิทธิ์หรือสถานะล่าสุดไม่อนุญาตให้ดำเนินการ'), { status: 409 })
     if (!accessToken) {
       throw new Error('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อดำเนินการ')
@@ -3046,9 +3080,10 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
     }
 
     const note = String(officerNote ?? '').trim()
-    const payload = {
-      action,
-      officerNote: note || (action === 'APPROVE' ? 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ' : ''),
+    const payload = { action }
+
+    if (note || action === 'APPROVE') {
+      payload.officerNote = note || 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ'
     }
 
     if (action === 'REQUEST_REVISION') {
@@ -3064,7 +3099,14 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
       },
       body: JSON.stringify(payload),
     })
-    await readBodCodApiResponse(result, action === 'REQUEST_REVISION' ? 'แจ้งแก้ไขไม่สำเร็จ' : 'ผ่านการพิจารณาไม่สำเร็จ')
+    await readBodCodApiResponse(
+      result,
+      action === 'REQUEST_REVISION'
+        ? 'แจ้งแก้ไขไม่สำเร็จ'
+        : action === 'REJECT'
+          ? 'ไม่อนุมัติรายงานไม่สำเร็จ'
+          : 'ผ่านการพิจารณาไม่สำเร็จ',
+    )
   }
   const requestReportRevision = async (report, officerNote) => {
     setPreviewSubmitError('')
@@ -3090,6 +3132,22 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
     } catch (error) {
       await refreshWorkflowConflict(error, report)
       setPreviewSubmitError(error instanceof Error ? error.message : 'ผ่านการพิจารณาไม่สำเร็จ')
+    } finally {
+      setPreviewSubmitting(false)
+    }
+  }
+  const rejectReport = async (report) => {
+    setPreviewSubmitting(true)
+    setPreviewSubmitError('')
+
+    try {
+      await submitWorkflowAction(report, 'REJECT')
+      setPreviewReport(null)
+      setPreviewMode('view')
+      await loadReportRows()
+    } catch (error) {
+      await refreshWorkflowConflict(error, report)
+      setPreviewSubmitError(error instanceof Error ? error.message : 'ไม่อนุมัติรายงานไม่สำเร็จ')
     } finally {
       setPreviewSubmitting(false)
     }
@@ -3257,6 +3315,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
         }}
         onSubmit={submitPreviewReport}
         onRequestRevision={requestReportRevision}
+        onReject={rejectReport}
         onApprove={approveReport}
         actionContext={actionContext}
       />

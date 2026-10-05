@@ -240,9 +240,6 @@ export function buildFactoryEditReviewPayload(decision, { revisionReason = '', o
   if (normalizedReason.length > 1000) {
     throw new Error('เหตุผลต้องไม่เกิน 1,000 ตัวอักษร')
   }
-  if (decision === 'REJECT' && !normalizedOfficerNote) {
-    throw new Error('กรุณากรอกเหตุผลที่ไม่อนุมัติ')
-  }
   if (normalizedOfficerNote.length > 1000) {
     throw new Error('เหตุผลต้องไม่เกิน 1,000 ตัวอักษร')
   }
@@ -250,7 +247,7 @@ export function buildFactoryEditReviewPayload(decision, { revisionReason = '', o
   return {
     decision,
     revisionReason: decision === 'REQUEST_REVISION' ? normalizedReason : null,
-    officerNote: decision === 'REJECT' ? normalizedOfficerNote : null,
+    officerNote: decision === 'REJECT' ? normalizedOfficerNote || null : null,
   }
 }
 

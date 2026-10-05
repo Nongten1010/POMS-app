@@ -41,6 +41,17 @@ test('permissions and allowedActions only narrow existing processing conditions'
   assert.equal(actions.process, true)
   assert.equal(actions.approve, false)
   assert.equal(actions.requestRevision, true)
+  assert.equal(actions.reject, false)
+  const rejectActions = getBodCodActions({ ...submitted, allowedActions: ['REJECT'] }, officer)
+  assert.equal(rejectActions.process, true)
+  assert.equal(rejectActions.approve, false)
+  assert.equal(rejectActions.requestRevision, false)
+  assert.equal(rejectActions.reject, true)
+  for (const statusCode of ['APPROVED', 'REJECTED', 'CANCELLED']) {
+    const terminalActions = getBodCodActions({ statusCode, allowedActions: ['REJECT'] }, officer)
+    assert.equal(terminalActions.process, false, statusCode)
+    assert.equal(terminalActions.reject, false, statusCode)
+  }
   assert.equal(getBodCodActions({ statusCode: 'WAITING_APPROVAL', allowedActions: ['APPROVE'] }, officer).approve, false)
 })
 

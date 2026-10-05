@@ -35,7 +35,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestDocumentDialog, RequestFormBottomSheet } from './ConnectionRequestPage'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
-import { isCancelledOrRejectedRequest } from '../utils/requestProcessStatus.mjs'
+import { isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
 import { getContactComparison, getMeasurementPointComparisonPair, getMeasurementPointComparisonPairs } from '../utils/contactComparison.mjs'
 import {
   FACTORY_BASIC_INFO_EIA_OPTIONS,
@@ -820,7 +820,7 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, is
               <Button
                 size="small"
                 variant="contained"
-                disabled={!isAdmin || isCancelledOrRejectedRequest(params.row) || !actionableRequestStatuses.includes(params.row.status)}
+                disabled={!isAdmin || isTerminalProcessRequest(params.row) || !actionableRequestStatuses.includes(params.row.status)}
                 onClick={() => onEditRequest?.(params.row)}
               >
                 ดำเนินการ
@@ -2662,12 +2662,12 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     setActionLoading(true)
     setTableError('')
     try {
-      if (review && isCancelledOrRejectedRequest(request)) {
-        throw new Error('ไม่สามารถดำเนินการคำขอที่ยกเลิกหรือไม่อนุมัติได้')
+      if (review && isTerminalProcessRequest(request)) {
+        throw new Error('ไม่สามารถดำเนินการคำขอที่สิ้นสุดแล้วได้')
       }
       const detail = await loadRequestDetail(request)
-      if (review && isCancelledOrRejectedRequest(detail)) {
-        throw new Error('สถานะคำขอเปลี่ยนเป็นยกเลิกหรือไม่อนุมัติแล้ว กรุณาโหลดรายการใหม่')
+      if (review && isTerminalProcessRequest(detail)) {
+        throw new Error('สถานะคำขอเปลี่ยนเป็นสถานะสิ้นสุดแล้ว กรุณาโหลดรายการใหม่')
       }
       if (review) {
         setReviewingRequest(detail)
@@ -3091,13 +3091,12 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
             </Typography>
             {reviewDecision === 'REJECT' ? (
               <TextField
-                label="เหตุผลที่ไม่อนุมัติ"
+                label="เหตุผลที่ไม่อนุมัติ (ไม่บังคับ)"
                 value={rejectionReason}
                 onChange={(event) => {
                   setRejectionReason(event.target.value)
                   setReviewConfirmError('')
                 }}
-                required
                 multiline
                 minRows={4}
                 fullWidth
@@ -3120,7 +3119,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
           <Button
             variant="contained"
             color={reviewDecision === 'REJECT' ? 'error' : 'primary'}
-            disabled={actionLoading || (reviewDecision === 'REJECT' && !rejectionReason.trim())}
+            disabled={actionLoading}
             startIcon={actionLoading ? <CircularProgress size={16} color="inherit" /> : null}
             onClick={() => reviewEditRequest(reviewDecision, rejectionReason)}
           >

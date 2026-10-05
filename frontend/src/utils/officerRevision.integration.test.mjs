@@ -46,13 +46,13 @@ test('officers reuse request actions to edit revisions without gaining creation 
     if (originalWindow === undefined) delete globalThis.window
     else globalThis.window = originalWindow
 
-    await t.test('all four menus disable process for cancelled or rejected requests while preserving view', async () => {
+    await t.test('all four menus disable process for terminal requests while preserving view', async () => {
       const kwp = await server.ssrLoadModule('/src/pages/KwpFormsPage.jsx')
       const bod = await server.ssrLoadModule('/src/pages/BodCodReportPage.jsx')
       const permissions = { bod_cod_errors: { view: true, approve: true, edit: true } }
       const masterColumn = getPageRequestColumns(() => {}, () => {}, null, true, { isOfficer: true })
         .find(({ field }) => field === 'actions')
-      for (const status of ['CANCELED', 'CANCELLED', 'REJECTED', 'ยกเลิก', 'ไม่อนุมัติ', 'ไม่ผ่านการพิจารณา']) {
+      for (const status of ['CANCELED', 'CANCELLED', 'REJECTED', 'APPROVED', 'ยกเลิก', 'ไม่อนุมัติ', 'ไม่ผ่านการพิจารณา', 'อนุมัติ', 'ผ่านการพิจารณา']) {
         for (const field of ['statusCode', 'status', 'statusLabel']) {
           const row = { id: 1, [field]: status, allowedActions: ['APPROVE', 'REQUEST_REVISION'],
             currentStep: { roleCode: 'INSPECTOR', isCurrent: true, status: 'PENDING' } }

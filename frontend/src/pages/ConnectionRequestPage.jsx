@@ -60,7 +60,7 @@ import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
 import { buildPreviousConnectionRequestPrefill, loadPreviousConnectionRequest } from '../utils/previousConnectionRequest.mjs'
 import { canCancelConnectionRequest } from '../utils/connectionRequestCancellation.mjs'
-import { isCancelledOrRejectedRequest } from '../utils/requestProcessStatus.mjs'
+import { isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
 import { buildEligibleFactoryAddRequestDraft } from '../utils/eligibleFactoryAddRequest.mjs'
 import { isModbusParameterRow } from '../utils/modbusAddress.mjs'
 import { getAddParameterGroups } from '../utils/addParameterPrefill.mjs'
@@ -2560,7 +2560,7 @@ function OfficerRequestActions({ row, canProcessRequest = false, canEditRequest 
   const statuses = getRequestActionStatuses(row)
   const isRevisionRequested = statuses.some((status) => ['รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION'].includes(status))
   const isProcessDisabled = !canProcessRequest
-    || isCancelledOrRejectedRequest(row)
+    || isTerminalProcessRequest(row)
     || statuses.some((status) => [
       'รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION',
       'รอเชื่อมต่อ', 'WAITING_CONNECTION',
@@ -3292,6 +3292,7 @@ export function RequestDocumentDialog({
   error,
   approving,
   onApprove,
+  onReject,
   onVerifyConnection,
   onRequestRevision,
   onClose,
@@ -3305,6 +3306,7 @@ export function RequestDocumentDialog({
 }) {
   const canReview = mode === 'process' && isPendingDesignReview(request)
   const canVerifyConnection = mode === 'process' && isConnectionConfirmed(request)
+  const canReject = mode === 'process' && !isTerminalProcessRequest(request) && typeof onReject === 'function'
   const [statusHistoryAnchorEl, setStatusHistoryAnchorEl] = useState(null)
   const [attachmentAnchorEl, setAttachmentAnchorEl] = useState(null)
   const statusHistory = Array.isArray(request?.statusHistory) ? request.statusHistory : []
@@ -3564,25 +3566,25 @@ export function RequestDocumentDialog({
           <Button variant="outlined" color="inherit" disabled={approving} onClick={onClose}>
             ปิด
           </Button>
+          {canReview || canVerifyConnection ? (
+            <Button variant="outlined" disabled={approving || loading} onClick={onRequestRevision}>
+              แจ้งแก้ไข
+            </Button>
+          ) : null}
+          {canReject ? (
+            <Button variant="outlined" color="error" disabled={approving || loading} onClick={onReject}>
+              ไม่อนุมัติ
+            </Button>
+          ) : null}
           {canReview ? (
-            <>
-              <Button variant="outlined" disabled={approving || loading} onClick={onRequestRevision}>
-                แจ้งแก้ไข
-              </Button>
-              <Button variant="contained" disabled={approving || loading} onClick={onApprove}>
-                {approving ? 'กำลังอนุมัติ' : 'อนุมัติ'}
-              </Button>
-            </>
+            <Button variant="contained" disabled={approving || loading} onClick={onApprove}>
+              {approving ? 'กำลังอนุมัติ' : 'อนุมัติ'}
+            </Button>
           ) : null}
           {canVerifyConnection ? (
-            <>
-              <Button variant="outlined" disabled={approving || loading} onClick={onRequestRevision}>
-                แจ้งแก้ไข
-              </Button>
-              <Button variant="contained" disabled={approving || loading} onClick={onVerifyConnection}>
-                {approving ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
-              </Button>
-            </>
+            <Button variant="contained" disabled={approving || loading} onClick={onVerifyConnection}>
+              {approving ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
+            </Button>
           ) : null}
         </DialogActions>
       )}
@@ -8056,6 +8058,7 @@ function ConnectionRequestPage({
   const [approveExistingPointCode, setApproveExistingPointCode] = useState('')
   const [approvePointCodeError, setApprovePointCodeError] = useState('')
   const usesAssignedPointCodes = getAssignedRequestPointCodes(requestDocument).length > 0
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
   const [verifyConnectionConfirmOpen, setVerifyConnectionConfirmOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
@@ -8311,8 +8314,8 @@ function ConnectionRequestPage({
     [canViewFactoryTable, handleOpenNewRequestForm, isOperator, openIntentDialog],
   )
   const handleOpenRequestDocument = useCallback(async (row, mode = 'view') => {
-    if (mode === 'process' && isCancelledOrRejectedRequest(row)) {
-      setRequestTableError('ไม่สามารถดำเนินการคำขอที่ยกเลิกหรือไม่อนุมัติได้')
+    if (mode === 'process' && isTerminalProcessRequest(row)) {
+      setRequestTableError('ไม่สามารถดำเนินการคำขอที่สิ้นสุดแล้วได้')
       return
     }
     clearRequestDocumentPdf()
@@ -8349,9 +8352,9 @@ function ConnectionRequestPage({
 
       const detailedRequest = mapRequestDetailRow(payload?.data ?? {}, row)
       setRequestDocument(detailedRequest)
-      if (mode === 'process' && isCancelledOrRejectedRequest(detailedRequest)) {
+      if (mode === 'process' && isTerminalProcessRequest(detailedRequest)) {
         setRequestDocumentMode('view')
-        setRequestDocumentError('สถานะคำขอเปลี่ยนเป็นยกเลิกหรือไม่อนุมัติแล้ว เปิดดูได้เท่านั้น')
+        setRequestDocumentError('สถานะคำขอเปลี่ยนเป็นสถานะสิ้นสุดแล้ว เปิดดูได้เท่านั้น')
         setRequestDocumentLoading(false)
         await generateRequestDocumentPdf(detailedRequest)
         return
@@ -8521,12 +8524,58 @@ function ConnectionRequestPage({
     setRequestDocumentLoading(false)
     setRequestDocumentApproving(false)
     setApproveConfirmOpen(false)
+    setRejectConfirmOpen(false)
     resetApprovePointCodeForm()
     setVerifyConnectionConfirmOpen(false)
     setRevisionDialogOpen(false)
     setRevisionOfficerNote('')
     clearRequestDocumentPdf()
   }, [clearRequestDocumentPdf, resetApprovePointCodeForm])
+  const closeRejectConfirmDialog = useCallback(() => {
+    if (requestDocumentApproving) return
+    setRejectConfirmOpen(false)
+  }, [requestDocumentApproving])
+  const rejectRequestDocument = useCallback(() => {
+    if (!requestDocument?.id) {
+      setRequestDocumentError('ไม่พบรหัสคำขอสำหรับไม่อนุมัติ')
+      return
+    }
+    if (!accessToken) {
+      setRequestDocumentError('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อไม่อนุมัติคำขอ')
+      return
+    }
+    if (isTerminalProcessRequest(requestDocument)) {
+      setRejectConfirmOpen(false)
+      setRequestDocumentMode('view')
+      setRequestDocumentError('สถานะคำขอเปลี่ยนเป็นสถานะสิ้นสุดแล้ว เปิดดูได้เท่านั้น')
+      return
+    }
+
+    setRequestDocumentApproving(true)
+    setRequestDocumentError('')
+    fetch(getRequestStatusApiUrl(requestDocument.id), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action: 'REJECT' }),
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+        if (!result.ok) {
+          throw new Error(payload?.error?.message || payload?.message || `ไม่อนุมัติคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+        await loadRequestTableRows()
+        setRejectConfirmOpen(false)
+        setRequestDocumentOpen(false)
+      })
+      .catch((error) => {
+        setRejectConfirmOpen(false)
+        setRequestDocumentError(error instanceof Error ? error.message : 'ไม่อนุมัติคำขอไม่สำเร็จ')
+      })
+      .finally(() => setRequestDocumentApproving(false))
+  }, [accessToken, loadRequestTableRows, requestDocument])
   const approveRequestDocument = useCallback(() => {
     if (!requestDocument?.id) {
       setRequestDocumentError('ไม่พบรหัสคำขอสำหรับอนุมัติ')
@@ -9180,6 +9229,7 @@ function ConnectionRequestPage({
         onExited={handleRequestDocumentExited}
         approving={requestDocumentApproving}
         onApprove={openApproveConfirmDialog}
+        onReject={() => setRejectConfirmOpen(true)}
         onVerifyConnection={() => setVerifyConnectionConfirmOpen(true)}
         onRequestRevision={openRevisionDialog}
       />
@@ -9320,6 +9370,20 @@ function ConnectionRequestPage({
             onClick={approveRequestDocument}
           >
             {requestDocumentApproving ? 'กำลังอนุมัติ' : 'ยืนยันอนุมัติ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={rejectConfirmOpen} onClose={closeRejectConfirmDialog} fullWidth maxWidth="sm">
+        <DialogTitle>ยืนยันการไม่อนุมัติ</DialogTitle>
+        <DialogContent dividers>
+          <Typography>ยืนยันไม่อนุมัติคำขอ{requestDocument?.requestNo ? ` เลขที่ ${requestDocument.requestNo}` : ''} ใช่หรือไม่?</Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={requestDocumentApproving} onClick={closeRejectConfirmDialog}>
+            ยกเลิก
+          </Button>
+          <Button color="error" variant="contained" disabled={requestDocumentApproving} onClick={rejectRequestDocument}>
+            {requestDocumentApproving ? 'กำลังบันทึก' : 'ยืนยันไม่อนุมัติ'}
           </Button>
         </DialogActions>
       </Dialog>

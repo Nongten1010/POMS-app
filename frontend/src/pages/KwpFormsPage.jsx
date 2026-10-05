@@ -49,7 +49,7 @@ import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasurementMethodOptions.json'
 import { createKwpFormPdf } from '../utils/kwpFormPdf'
-import { isCancelledOrRejectedRequest } from '../utils/requestProcessStatus.mjs'
+import { isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
 import {
   canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata,
   getKwpReportPeriod, getKwpAttachmentValidationError, getKwpLink, readKwpApiResponse,
@@ -461,10 +461,7 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
 }
 
 function RequestActions({ row, isOperator, isAdmin = false, canApprove = false, onOpenDocument, onCancelRequest }) {
-  const rowStatuses = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
-  const cannotProcess = isCancelledOrRejectedRequest(row) || rowStatuses.some((status) => (
-    ['ผ่านการพิจารณา', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(status)
-  ))
+  const cannotProcess = isTerminalProcessRequest(row)
   const canEdit = canEditKwpRequest(row, { isOperator, isAdmin })
 
   if (isOperator) {
@@ -1919,6 +1916,7 @@ function getKwpDetailCommonData(detail, row = {}) {
     status: detail.status ?? row.status ?? '',
     statusCode: detail.statusCode ?? row.statusCode ?? '',
     statusLabel: detail.statusLabel ?? row.statusLabel ?? '',
+    allowedActions: detail.allowedActions ?? row.allowedActions,
     statusHistory: buildKwpStatusHistory({ ...row, submittedDate: detail.submittedAt ?? row.submittedDate }),
   }
 }
@@ -2976,6 +2974,7 @@ function Kwp01PreviewDialog({
   onClose,
   onSubmit,
   onRequestRevision,
+  onReject,
   onApprove,
 }) {
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
@@ -2984,6 +2983,7 @@ function Kwp01PreviewDialog({
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
   const [revisionSubmitting, setRevisionSubmitting] = useState(false)
   const [approveSubmitting, setApproveSubmitting] = useState(false)
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
   const [revisionError, setRevisionError] = useState('')
   const [pdfPreviewState, setPdfPreviewState] = useState({ key: '', url: '', error: '' })
   const pdfPreviewUrlRef = useRef('')
@@ -3003,6 +3003,10 @@ function Kwp01PreviewDialog({
     'ส่งแก้ไข',
     'รอโรงงานแก้ไข',
   ])
+  const canReject = mode === 'review'
+    && !isTerminalProcessRequest(data)
+    && typeof onReject === 'function'
+    && (!Array.isArray(data?.allowedActions) || data.allowedActions.includes('REJECT'))
   const previewFormNo =
     data?.formType === 'kwp04'
       ? 'กวภ.04'
@@ -3117,6 +3121,7 @@ function Kwp01PreviewDialog({
       return
     }
 
+    setRejectConfirmOpen(false)
     setStatusHistoryOpen(false)
     setAttachmentAnchorEl(null)
     clearPdfPreview()
@@ -3127,6 +3132,17 @@ function Kwp01PreviewDialog({
 
     try {
       await onApprove?.()
+      setApproveSubmitting(false)
+    } catch {
+      setApproveSubmitting(false)
+    }
+  }
+  const rejectDocument = async () => {
+    setRejectConfirmOpen(false)
+    setApproveSubmitting(true)
+
+    try {
+      await onReject?.()
       setApproveSubmitting(false)
     } catch {
       setApproveSubmitting(false)
@@ -3355,6 +3371,11 @@ function Kwp01PreviewDialog({
                   แจ้งแก้ไข
                 </Button>
               ) : null}
+              {canReject ? (
+                <Button variant="outlined" color="error" disabled={approveSubmitting} onClick={() => setRejectConfirmOpen(true)}>
+                  ไม่อนุมัติ
+                </Button>
+              ) : null}
               {canApprove ? (
                 <Button variant="contained" disabled={approveSubmitting || !data} onClick={approveDocument}>
                   {approveSubmitting ? 'กำลังผ่านการพิจารณา' : 'ผ่านการพิจารณา'}
@@ -3397,6 +3418,20 @@ function Kwp01PreviewDialog({
         history={data?.statusHistory ?? []}
         onClose={() => setStatusHistoryOpen(false)}
       />
+      <Dialog open={rejectConfirmOpen} onClose={approveSubmitting ? undefined : () => setRejectConfirmOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>ยืนยันการไม่อนุมัติ</DialogTitle>
+        <DialogContent dividers>
+          <Typography>ยืนยันไม่อนุมัติคำขอ {data?.requestNo ?? '-'} ใช่หรือไม่?</Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={approveSubmitting} onClick={() => setRejectConfirmOpen(false)}>
+            ยกเลิก
+          </Button>
+          <Button variant="contained" color="error" disabled={approveSubmitting} onClick={rejectDocument}>
+            {approveSubmitting ? 'กำลังบันทึก' : 'ยืนยันไม่อนุมัติ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
         <DialogTitle>แจ้งแก้ไขแบบฟอร์ม</DialogTitle>
         <DialogContent dividers>
@@ -5146,8 +5181,8 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
 
   const openRequestDocument = useCallback(async (row, mode) => {
     if (mode === 'review' && !canApprove) return
-    if (mode === 'review' && isCancelledOrRejectedRequest(row)) {
-      setRequestsError('ไม่สามารถดำเนินการคำขอที่ยกเลิกหรือไม่อนุมัติได้')
+    if (mode === 'review' && isTerminalProcessRequest(row)) {
+      setRequestsError('ไม่สามารถดำเนินการคำขอที่สิ้นสุดแล้วได้')
       return
     }
     if (mode === 'edit') {
@@ -5202,13 +5237,13 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
     try {
       const detail = await fetchKwpSubmissionDetail(row)
       const previewData = buildKwpRequestPreviewDataFromDetail(detail, row)
-      const blockedReview = mode === 'review' && isCancelledOrRejectedRequest(previewData)
+      const blockedReview = mode === 'review' && isTerminalProcessRequest(previewData)
       setRequestDocument({
         mode: blockedReview ? 'view' : mode,
         row,
         data: previewData,
         loading: false,
-        error: blockedReview ? 'สถานะคำขอเปลี่ยนเป็นยกเลิกหรือไม่อนุมัติแล้ว เปิดดูได้เท่านั้น' : '',
+        error: blockedReview ? 'สถานะคำขอเปลี่ยนเป็นสถานะสิ้นสุดแล้ว เปิดดูได้เท่านั้น' : '',
       })
     } catch (requestError) {
       setRequestDocument({
@@ -5294,6 +5329,40 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
       throw requestError
     }
   }, [accessToken, canApprove, loadRequestRows, requestDocument?.row?.id])
+
+  const rejectKwpDocument = useCallback(async () => {
+    if (!canApprove) throw new Error('ไม่มีสิทธิ์ดำเนินการพิจารณาคำขอ')
+    const requestId = requestDocument?.row?.id
+
+    try {
+      if (!requestId) throw new Error('ไม่พบรหัสคำขอสำหรับไม่อนุมัติ')
+      if (!accessToken) throw new Error('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อไม่อนุมัติแบบฟอร์ม')
+      if (isTerminalProcessRequest(requestDocument?.data)) {
+        throw new Error('สถานะคำขอเปลี่ยนเป็นสถานะสิ้นสุดแล้ว กรุณาโหลดรายการใหม่')
+      }
+
+      setRequestDocument((current) => ({ ...current, error: '' }))
+      const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${requestId}/workflow-actions`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'REJECT' }),
+      })
+
+      await readKwpApiResponse(result, 'ไม่อนุมัติแบบฟอร์มไม่สำเร็จ')
+      setRequestDocument(null)
+      loadRequestRows()
+    } catch (requestError) {
+      setRequestDocument((current) => ({
+        ...current,
+        error: requestError instanceof Error ? requestError.message : 'ไม่อนุมัติแบบฟอร์มไม่สำเร็จ',
+      }))
+      throw requestError
+    }
+  }, [accessToken, canApprove, loadRequestRows, requestDocument?.data, requestDocument?.row?.id])
 
   const closeMonitoringPointDialog = useCallback(() => {
     setMonitoringPointRows([])
@@ -5452,10 +5521,10 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
               showCellVerticalBorder
               showColumnVerticalBorder
               label={table.title}
-              pageSizeOptions={[10, 25, 50]}
+              pageSizeOptions={[25, 50, 100]}
               initialState={{
                 pagination: {
-                  paginationModel: { page: 0, pageSize: 10 },
+                  paginationModel: { page: 0, pageSize: 25 },
                 },
               }}
               localeText={{
@@ -5548,6 +5617,7 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
         submitError={requestDocument?.error ?? ''}
         onClose={() => setRequestDocument(null)}
         onRequestRevision={requestKwpDocumentRevision}
+        onReject={rejectKwpDocument}
         onApprove={approveKwpDocument}
       />
     </>

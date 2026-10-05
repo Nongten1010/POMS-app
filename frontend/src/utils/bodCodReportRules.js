@@ -1,4 +1,4 @@
-import { isCancelledOrRejectedRequest } from './requestProcessStatus.mjs'
+import { isTerminalProcessRequest } from './requestProcessStatus.mjs'
 
 export function getBodCodPeriod(now = new Date()) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
@@ -89,7 +89,7 @@ export function getBodCodActions(row = {}, { userType, roleCode, roleCodes = [],
   const atStep = (role) => row.currentStep === undefined || (row.currentStep?.roleCode === role
     && row.currentStep.status === 'PENDING' && row.currentStep.isCurrent === true)
   const hasRole = (allowed) => allowed.some((role) => roles.has(role))
-  const processStage = !isCancelledOrRejectedRequest(row) && ((hasRole(['monitoring_kpm', 'monitoring_5_centers', 'admin'])
+  const processStage = !isTerminalProcessRequest(row) && ((hasRole(['monitoring_kpm', 'monitoring_5_centers', 'admin'])
       && ['SUBMITTED', 'REVISED_PENDING_REVIEW'].includes(status) && atStep('INSPECTOR'))
     || (roles.has('kpm_director') && status === 'WAITING_REVIEW' && atStep('REVIEWER'))
     || (hasRole(['center_director', 'kwp_director']) && status === 'WAITING_APPROVAL' && atStep('APPROVER')))
@@ -99,9 +99,10 @@ export function getBodCodActions(row = {}, { userType, roleCode, roleCodes = [],
     create: edit && (operator || (officer && roles.has('admin'))),
     edit: edit && operator && status === 'REVISION_REQUESTED',
     cancel: edit && operator && Boolean(status) && !['APPROVED', 'CANCELLED'].includes(status) && serverAllows('CANCEL'),
-    process: approve && officer && processStage && (serverAllows('APPROVE') || serverAllows('REQUEST_REVISION')),
+    process: approve && officer && processStage && (serverAllows('APPROVE') || serverAllows('REQUEST_REVISION') || serverAllows('REJECT')),
     approve: approve && officer && processStage && serverAllows('APPROVE'),
     requestRevision: approve && officer && processStage && serverAllows('REQUEST_REVISION'),
+    reject: approve && officer && processStage && serverAllows('REJECT'),
     viewNotice: view && (status === 'APPROVED' || (operator && status === 'REJECTED') || (officer && ['WAITING_REVIEW', 'WAITING_APPROVAL'].includes(status))),
     // Let regional inspectors submit notices for server-side authorization even if allowedActions omits APPROVE.
     fillNotice: approve && officer && noticeStage && (roles.has('monitoring_5_centers') || serverAllows('APPROVE')),

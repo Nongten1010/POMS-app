@@ -3,8 +3,20 @@ const blockedStatuses = new Set([
   'ยกเลิก', 'ไม่อนุมัติ', 'ไม่ผ่านการพิจารณา',
 ])
 
-export function isCancelledOrRejectedRequest(request) {
+const terminalProcessStatuses = new Set([
+  ...blockedStatuses,
+  'APPROVED', 'อนุมัติ', 'ผ่านการพิจารณา',
+])
+
+function getRequestStatuses(request) {
   const statusCode = String(request?.statusCode ?? '').trim()
-  const statuses = statusCode ? [statusCode] : [request?.status, request?.statusLabel]
-  return statuses.some((status) => blockedStatuses.has(String(status ?? '').trim().toUpperCase()))
+  return statusCode ? [statusCode] : [request?.status, request?.statusLabel]
+}
+
+export function isCancelledOrRejectedRequest(request) {
+  return getRequestStatuses(request).some((status) => blockedStatuses.has(String(status ?? '').trim().toUpperCase()))
+}
+
+export function isTerminalProcessRequest(request) {
+  return getRequestStatuses(request).some((status) => terminalProcessStatuses.has(String(status ?? '').trim().toUpperCase()))
 }
