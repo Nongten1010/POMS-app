@@ -3806,7 +3806,18 @@ function ConnectionParameterTable({ deviceCodeOptions, connectionForms = [], row
   }
   const columns = [
     { label: 'รหัสอุปกรณ์', width: 170 },
-    { label: 'Address ID', width: 124 },
+    {
+      key: 'addressId',
+      label: (
+        <>
+          Address ID
+          <Box component="span" sx={{ display: 'block', fontSize: '0.7rem', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
+            (เลขช่องสัญญาณ)
+          </Box>
+        </>
+      ),
+      width: 124,
+    },
     { label: 'พารามิเตอร์', width: 144 },
     { label: 'สถานะ', width: 170 },
     { label: 'Test Mode', width: 112 },
@@ -3829,7 +3840,7 @@ function ConnectionParameterTable({ deviceCodeOptions, connectionForms = [], row
           <TableHead>
             <TableRow>
               {columns.map((column) => (
-                <TableCell key={column.label} sx={{ width: column.width, minWidth: column.width, fontWeight: 700, bgcolor: 'neutral.50' }}>
+                <TableCell key={column.key ?? column.label} sx={{ width: column.width, minWidth: column.width, fontWeight: 700, bgcolor: 'neutral.50' }}>
                   {column.label}
                 </TableCell>
               ))}

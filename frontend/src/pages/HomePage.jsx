@@ -16,6 +16,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Slide,
   Stack,
   Tab,
   Table,
@@ -105,6 +106,15 @@ const measurementValueStatusColors = {
   warning: '#f59e0b',
   critical: '#ef4444',
   invalid: '#ef4444',
+}
+const latestMeasurementStatusColors = {
+  normal: '#46b529',
+  lateData: '#2563eb',
+  warning: '#f59e0b',
+  exceeded: '#ef4444',
+  insufficient: '#9ca3af',
+  noData: '#9ca3af',
+  invalid: '#9ca3af',
 }
 const factorySystemChipStatusColors = {
   normal: {
@@ -655,6 +665,16 @@ function isSameFactory(firstFactory, secondFactory) {
   return identityPairs.some(([firstValue, secondValue]) => Boolean(firstValue) && Boolean(secondValue) && firstValue === secondValue)
 }
 
+function getFactoryIdentity(factory) {
+  return String(
+    factory?.factoryId ??
+      factory?.newRegistrationNo ??
+      factory?.sourceId ??
+      factory?.id ??
+      '',
+  )
+}
+
 function isNotInPomsFactory(factory) {
   return factory?.pomsMembershipStatus === 'NOT_IN_POMS'
 }
@@ -1022,7 +1042,12 @@ function HomePage({ accessToken = '', permissions }) {
           onFactoryFocus={setFocusedFactory}
           onFavoriteToggle={handleFavoriteToggle}
         />
-        <FactoryMap factories={filteredFactories} focusedFactory={focusedFactory} />
+        <FactoryMap
+          factories={filteredFactories}
+          focusedFactory={focusedFactory}
+          canViewDetails={Boolean(accessToken)}
+          onFactorySelect={setSelectedFactory}
+        />
       </Box>
 
       <AdvancedSearchDialog
@@ -1855,6 +1880,164 @@ function MeasurementTable({ table, sx }) {
   )
 }
 
+function getLatestMeasurementTable(factory, systemType) {
+  const measurementPoints = Array.isArray(factory?.measurementPoints)
+    ? factory.measurementPoints.filter((point) => point?.systemType === systemType)
+    : []
+  const parameters = Array.from(
+    new Set(
+      measurementPoints.flatMap((point) => {
+        const latestValues = point?.latestMeasurement?.values
+
+        if (latestValues && typeof latestValues === 'object') {
+          return Object.keys(latestValues)
+        }
+
+        return getMeasurementPointParameters(point)
+      }),
+    ),
+  )
+  const rows = measurementPoints.map((point, pointIndex) => {
+    const latestMeasurement = point?.latestMeasurement
+    const latestValues = latestMeasurement?.values
+    const fallbackRow = Array.isArray(point?.data) ? point.data[0] : null
+
+    return {
+      key: `${point.stationId ?? point.pointCode ?? 'point'}-${latestMeasurement?.date ?? fallbackRow?.cdate ?? pointIndex}`,
+      cells: [
+        createMeasurementCell(point.pointName ?? point.pointCode ?? point.stationId ?? fallbackRow?.station_id ?? '-'),
+        createMeasurementCell(latestMeasurement?.date ?? fallbackRow?.cdate ?? '-'),
+        createMeasurementCell(latestMeasurement?.time ?? fallbackRow?.ctime ?? '-'),
+        ...parameters.map((parameter) => {
+          const latestValue = latestValues?.[parameter]
+
+          if (latestValue && typeof latestValue === 'object') {
+            return {
+              displayValue: latestValue.displayValue ?? formatMeasurementValue(latestValue.value),
+              color: latestMeasurementStatusColors[latestValue.status] ?? statisticStatusColors.unavailable,
+            }
+          }
+
+          return createMeasurementValueCell(fallbackRow?.[parameter], point, parameter)
+        }),
+      ],
+    }
+  })
+
+  return {
+    columns: ['จุดตรวจวัด', 'วันที่', 'เวลา', ...parameters],
+    rows,
+  }
+}
+
+function FactoryMapResultCard({ factory, canViewDetails = false, onSelect, onClose }) {
+  const systems = Array.isArray(factory?.systems) ? factory.systems : []
+  const [activeSystem, setActiveSystem] = useState(() => systems[0] ?? '')
+  const selectedSystem = systems.includes(activeSystem) ? activeSystem : systems[0] ?? ''
+  const measurementTable = getLatestMeasurementTable(factory, selectedSystem)
+
+  return (
+    <Paper
+      elevation={6}
+      sx={{
+        width: '100%',
+        maxHeight: { xs: '70vh', md: '55vh' },
+        overflowY: 'auto',
+        p: 1.25,
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        bgcolor: 'background.paper',
+      }}
+    >
+      <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}>
+        <Box
+          sx={{
+            width: 56,
+            height: 56,
+            flex: '0 0 auto',
+            display: 'grid',
+            placeItems: 'center',
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: factory.logoUrl ? factory.logoBg : fallbackFactoryLogoBg,
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            component="img"
+            src={factory.logoUrl || diwLogo}
+            alt={factory.name || 'factory logo'}
+            sx={{
+              width: factory.logoUrl ? '100%' : '86%',
+              height: factory.logoUrl ? '100%' : '86%',
+              objectFit: factory.logoUrl ? 'cover' : 'contain',
+              display: 'block',
+            }}
+          />
+        </Box>
+
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 700, color: 'primary.900', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {factory.name}
+          </Typography>
+          <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {[factory.factoryId, factory.oldRegistrationNo ? `(${factory.oldRegistrationNo})` : ''].filter(Boolean).join(' ')}
+          </Typography>
+          <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {factory.address}
+          </Typography>
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mt: 0.5 }}>
+            {systems.map((system) => (
+              <FactorySystemChip
+                key={system}
+                factory={factory}
+                system={system}
+                active={selectedSystem === system}
+                onClick={() => setActiveSystem(system)}
+              />
+            ))}
+            <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 54, textAlign: 'right' }}>
+              {factory.distance === null ? '-' : `${factory.distance.toFixed(1)} กม.`}
+            </Typography>
+          </Stack>
+        </Box>
+
+        <Stack spacing={0.5} sx={{ flex: '0 0 auto', alignItems: 'center' }}>
+          <Tooltip title="ปิดการ์ด">
+            <IconButton
+              size="small"
+              aria-label="ปิดข้อมูลโรงงานบนแผนที่"
+              onClick={onClose}
+              sx={{ width: 36, height: 36, border: 1, borderColor: 'divider' }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          {canViewDetails ? (
+            <Tooltip title="ดูรายละเอียด">
+              <IconButton
+                size="small"
+                aria-label={`ดูรายละเอียด ${factory.name}`}
+                onClick={onSelect}
+                sx={{ width: 36, height: 36, color: 'neutral.400' }}
+              >
+                <ChevronRightIcon />
+              </IconButton>
+            </Tooltip>
+          ) : null}
+        </Stack>
+      </Stack>
+
+      <MeasurementTable table={measurementTable} sx={{ mt: 1 }} />
+    </Paper>
+  )
+}
+
 function getFactoryMapMarkerIcon(factory) {
   if (factory.logoUrl) {
     return getAbsoluteAssetUrl(factory.logoUrl)
@@ -1863,10 +2046,15 @@ function getFactoryMapMarkerIcon(factory) {
   return getAbsoluteAssetUrl(diwLogo)
 }
 
-function FactoryMap({ factories, focusedFactory = null }) {
+function FactoryMap({ factories, focusedFactory = null, canViewDetails = false, onFactorySelect }) {
   const placeholderRef = useRef(null)
   const mapRef = useRef(null)
   const [mapError, setMapError] = useState('')
+  const [selectedFactoryIdentity, setSelectedFactoryIdentity] = useState('')
+  const [mapCardOpen, setMapCardOpen] = useState(false)
+  const selectedMapFactory = factories.find(
+    (factory) => getFactoryIdentity(factory) === selectedFactoryIdentity,
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -1906,29 +2094,46 @@ function FactoryMap({ factories, focusedFactory = null }) {
 
     map.Overlays.clear()
     const factoriesWithCoordinates = factories.filter(hasFactoryCoordinate)
+    const markerFactoryMap = new Map()
 
     factoriesWithCoordinates.forEach((factory) => {
-      map.Overlays.add(
-        new longdo.Marker(
-          { lon: factory.lon, lat: factory.lat },
-          {
-            title: factory.name,
-            detail: `${factory.newRegistrationNo} (${factory.oldRegistrationNo})<br>${factory.address}`,
-            icon: {
-              url: getFactoryMapMarkerIcon(factory),
-              offset: { x: 24, y: 24 },
-              size: { width: 48, height: 48 },
-            },
-            weight: longdo.OverlayWeight.Top,
+      const marker = new longdo.Marker(
+        { lon: factory.lon, lat: factory.lat },
+        {
+          icon: {
+            url: getFactoryMapMarkerIcon(factory),
+            offset: { x: 24, y: 24 },
+            size: { width: 48, height: 48 },
           },
-        ),
+          weight: longdo.OverlayWeight.Top,
+        },
       )
+      markerFactoryMap.set(marker, factory)
+      map.Overlays.add(marker)
     })
+
+    const handleOverlayClick = (overlay) => {
+      const factory = markerFactoryMap.get(overlay)
+
+      if (!factory) {
+        return true
+      }
+
+      setSelectedFactoryIdentity(getFactoryIdentity(factory))
+      setMapCardOpen(true)
+      return false
+    }
+
+    map.Event.bind('overlayClick', handleOverlayClick)
 
     if (factoriesWithCoordinates.length > 0) {
       const firstFactory = factoriesWithCoordinates[0]
       map.location({ lon: firstFactory.lon, lat: firstFactory.lat }, true)
       map.zoom(factoriesWithCoordinates.length === 1 ? 13 : 10, true)
+    }
+
+    return () => {
+      map.Event.unbind('overlayClick', handleOverlayClick)
     }
   }, [factories])
 
@@ -1955,6 +2160,43 @@ function FactoryMap({ factories, focusedFactory = null }) {
       }}
     >
       <Box ref={placeholderRef} sx={{ width: '100%', height: '100%' }} />
+      {selectedMapFactory ? (
+        <Box
+          sx={{
+            position: 'absolute',
+            right: 0,
+            bottom: { xs: 12, md: 16 },
+            left: 0,
+            zIndex: 4,
+            display: 'flex',
+            justifyContent: 'center',
+            px: { xs: 1.5, sm: 2 },
+            pointerEvents: 'none',
+          }}
+        >
+          <Slide
+            direction="up"
+            in={mapCardOpen}
+            mountOnEnter
+            unmountOnExit
+            timeout={220}
+            onExited={() => setSelectedFactoryIdentity('')}
+          >
+            <Box sx={{ width: '100%', maxWidth: 640, pointerEvents: 'auto' }}>
+              <FactoryMapResultCard
+                key={selectedFactoryIdentity}
+                factory={selectedMapFactory}
+                canViewDetails={canViewDetails}
+                onSelect={() => {
+                  setMapCardOpen(false)
+                  onFactorySelect?.(selectedMapFactory)
+                }}
+                onClose={() => setMapCardOpen(false)}
+              />
+            </Box>
+          </Slide>
+        </Box>
+      ) : null}
       {mapError ? (
         <Box
           sx={{
