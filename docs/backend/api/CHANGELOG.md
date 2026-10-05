@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="alert-email-pdf-letter-contract"></a>
+
+## 2026-10-05 — ข้อความอีเมลทั้งหกแบบตรงแม่แบบ PDF
+
+- **Affected endpoints:** `POST /api/v1/alert-email-previews`, `GET /api/v1/alert-email-deliveries/:id`; [สัญญาอีเมลแจ้งเตือน](./menus/notifications/email-notifications.md), [คู่มือปฏิบัติการ](../guides/alert-email-operations.md)
+- **Impact:** `subject`, `text`, `html` ใช้จดหมายตามคอลัมน์อีเมลใน PDF ทั้ง 6 แบบ รวมจังหวัด ลำดับบริษัท/จุด ข้อความตรวจห้องปฏิบัติการและรายงาน กวภ.02 ในข้อ 4 และลายเซ็น/ข้อมูลติดต่อกรมโรงงานอุตสาหกรรม เรื่องใช้วันที่ข้อมูล `eventDate` แบบ `d-m-พ.ศ.` และรายชั่วโมงใช้เวลาเริ่มตรวจวัด `startedAt` แบบ `HH.mm` แทนรอบส่ง `scheduledAt`; จัดหน้าตาแบบการ์ดโดยคงข้อความเดิมตามที่ผู้ใช้ยืนยัน ตัด CTA และรายละเอียดที่ไม่มีในแม่แบบออก
+- **Abnormal duration:** ระยะเวลารวมข้อ 6 ใช้ `firstAbnormalAt` ถึง `endedAt` ของค่าผิดปกติล่าสุด ส่วน `confirmedAbnormalAt` เป็นเวลาที่ครบเงื่อนไขยืนยันและไม่ใช้แทนเวลาสิ้นสุด หากไม่ได้บันทึก `endedAt` แสดงระยะเวลาไม่ระบุ; timestamp ผิดรูปแบบหรือเวลาสิ้นสุดก่อนเวลาเริ่ม/เวลายืนยันตอบ `400 BAD_REQUEST`
+- **Validation:** preview ที่รวม `eventDate` ต่างกัน หรือเวลาเริ่มตรวจวัดรายชั่วโมงต่างกันตอบ `400 BAD_REQUEST`; แยกเป็นคำขอตามประเภท วัน และเวลาเริ่มตรวจวัดเดียวกัน
+- **Migration:** ไม่มี database migration หรือ field request/response ใหม่ Client ใช้ชื่อฟิลด์เดิมและแสดงข้อความจาก API โดยไม่ประกอบเรื่องจาก `scheduledAt` เอง แม่แบบใหม่มีผลกับ preview และ batch ใหม่; snapshot ที่จัดคิวเดิมคงข้อความเดิมและไม่ re-render หรือส่งซ้ำอัตโนมัติ ผู้รับ/CC เกณฑ์ รอบส่ง นโยบายและสถานะส่งคงเดิม
+- **Breaking change:** yes — client ที่คาดหวังเรื่อง/HTML แบบเดิมหรือรวม preview หลายวัน/เวลาเริ่มตรวจวัดต้องปรับตาม contract ใหม่ ตรวจตัวอย่างทั้งหกแบบด้วย [ชุดทดสอบในเครื่อง](../guides/alert-email-test.md)
+
 <a id="alert-email-presend-activation"></a>
 
 ## 2026-10-05 — ตรวจเงื่อนไขก่อนส่งและรักษาประวัติพารามิเตอร์

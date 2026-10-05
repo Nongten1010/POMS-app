@@ -4846,7 +4846,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       scheduledAt: {
         type: 'string',
         format: 'date-time',
-        description: 'วันที่จริงพร้อม Z หรือ offset; รอบต้องไม่ก่อนสิ้นสุดช่วงตรวจวัด',
+        description:
+          'วันที่จริงพร้อม Z หรือ offset; รอบต้องไม่ก่อนสิ้นสุดช่วงตรวจวัด; เป็นรอบส่งที่ขอ preview ไม่ใช่วันที่หรือเวลาที่แสดงในเรื่องอีเมล ซึ่งใช้ eventDate และ startedAt ของเหตุการณ์',
       },
     },
   },
@@ -4854,11 +4855,34 @@ const componentSchemas: Record<string, OpenApiObject> = {
     type: 'object',
     required: ['scheduledAt', 'eventCount', 'subject', 'text', 'html'],
     properties: {
-      scheduledAt: { type: 'string', format: 'date-time' },
-      eventCount: { type: 'integer', minimum: 1 },
-      subject: { type: 'string' },
-      text: { type: 'string' },
-      html: { type: 'string' },
+      scheduledAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'รอบส่งที่ขอ preview; ไม่ใช่เวลาเริ่มตรวจวัดในเรื่องอีเมล',
+        example: '2026-10-05T12:05:00+07:00',
+      },
+      eventCount: { type: 'integer', minimum: 1, example: 1 },
+      subject: {
+        type: 'string',
+        description:
+          'เรื่องตามแม่แบบ PDF ทั้ง 6 แบบ; วันที่ d-m-พ.ศ. ใช้ eventDate; รายชั่วโมงแสดง startedAt เวลาไทย HH.mm และจำนวนบริษัทในชุด ไม่ใช้ scheduledAt',
+        example:
+          'D-POMS แจ้งเตือนผลตรวจวัดมลพิษเกินค่ามาตรฐานกระทรวงอุตสาหกรรม ในวันที่ 5-10-2569 เวลา 11.00 น. จำนวน 1 บริษัท',
+      },
+      text: {
+        type: 'string',
+        description:
+          'จดหมายเรียน เจ้าหน้าที่ที่เกี่ยวข้อง; เรื่อง; บริษัท/ทะเบียน/จังหวัด; ลำดับจุด CEMS/WPMS; พารามิเตอร์; ข้อความดำเนินการ; ลายเซ็นและข้อมูลติดต่อกรมโรงงานอุตสาหกรรมตาม PDF ไม่มีปุ่มหรือลิงก์เพิ่มเติม; ระยะเวลารวมข้อ 6 ใช้ firstAbnormalAt ถึง endedAt ของค่าผิดปกติล่าสุด; confirmedAbnormalAt ใช้ยืนยันเงื่อนไข ไม่ใช่เวลาสิ้นสุด; ไม่มี endedAt แสดงระยะเวลาไม่ระบุ; หาก timestamp ผิดรูปแบบหรือ endedAt ก่อนเวลาเริ่ม/เวลายืนยัน ตอบ 400 BAD_REQUEST',
+        example:
+          'เรียน เจ้าหน้าที่ที่เกี่ยวข้อง\nเรื่อง D-POMS แจ้งเตือนผลตรวจวัดมลพิษเกินค่ามาตรฐานกระทรวงอุตสาหกรรม ในวันที่ 5-10-2569 เวลา 11.00 น. จำนวน 1 บริษัท\n\n1) บริษัท ตัวอย่าง จำกัด (01000000000001) จังหวัด ระยอง\n    1.1 Stack 1 (CEMS)\n        - SO2 = 250 ppm\n\n** โปรดดำเนินการตรวจสอบ และแก้ไขโดยเร็ว **\nขอแสดงความนับถือ\n--------------------------------------------------\nศูนย์เฝ้าระวังสิ่งแวดล้อมอุตสาหกรรม\nกองวิจัยและเตือนภัยมลพิษโรงงาน กรมโรงงานอุตสาหกรรม\nโทร. 02-430-6312 ต่อ 2109\nไปรษณีย์อิเล็กทรอนิกส์ : poms.support@diw.mail.go.th\nLine ID : @iemcdiw',
+      },
+      html: {
+        type: 'string',
+        description:
+          'อีเมล HTML แบบการ์ดสีขาวบนพื้นเทาอ่อน หัวเรื่องสีน้ำเงินเข้มและข้อความสีเข้ม แยกบริษัท/จุด/แถวค่าตรวจวัดให้อ่านง่าย เน้นข้อความดำเนินการเดิมด้วยพื้นสีอ่อน มี inline styles และ escape ข้อมูล คงข้อความ/ข้อมูลตาม PDF และเงื่อนไขที่ยืนยัน ไม่มี script ข้อความเพิ่มเติม หรือปุ่ม CTA',
+        example:
+          '<!DOCTYPE html><html lang="th"><body>เรียน เจ้าหน้าที่ที่เกี่ยวข้อง...</body></html>',
+      },
     },
   },
   AlertEmailDelivery: {
@@ -4908,9 +4932,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: { type: 'string', format: 'email' },
         description: 'รวม diw.iemc@gmail.com ทุกฉบับ',
       },
-      subject: { type: 'string' },
-      text: { type: 'string' },
-      html: { type: 'string' },
+      subject: {
+        type: 'string',
+        description:
+          'snapshot เรื่องอีเมล ณ เวลาจัดคิว; การเปลี่ยนแม่แบบ PDF ไม่สร้างข้อความใหม่หรือส่งซ้ำอัตโนมัติสำหรับ batch เดิม',
+      },
+      text: { type: 'string', description: 'snapshot จดหมาย plain text ณ เวลาจัดคิว' },
+      html: { type: 'string', description: 'snapshot จดหมาย HTML ณ เวลาจัดคิว' },
       eventIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
       status: {
         type: 'string',
@@ -6770,7 +6798,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Preview an alert email without sending',
       operationId: 'previewAlertEmail',
       description:
-        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; รายชั่วโมงต้องเป็น finite measuredValue > thresholdValue และ thresholdType ตรงประเภท มิฉะนั้น 400 BAD_REQUEST รวมข้อมูลเดิม; ไม่มี SMTP หรือการเข้าคิว',
+        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน, eventDate เดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; รายชั่วโมงต้อง startedAt เดียวกัน และเป็น finite measuredValue > thresholdValue พร้อม thresholdType ตรงประเภท; ผสมวัน/เวลาเริ่มตรวจวัดหรือข้อมูลไม่ผ่านตอบ 400 BAD_REQUEST รวมข้อมูลเดิม; เรื่องและจดหมายตามแม่แบบ PDF ทั้ง 6 แบบ แสดง eventDate แบบ d-m-พ.ศ. และ startedAt เวลาไทย HH.mm ไม่ใช้รอบส่ง scheduledAt; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; ไม่มี SMTP หรือการเข้าคิว',
       requestBody: jsonRequestBody(schemaRef('AlertEmailPreviewRequest'), {
         eventIds: [51],
         scheduledAt: '2026-10-05T12:05:00+07:00',

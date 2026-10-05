@@ -413,6 +413,20 @@ export async function runAlertEmailSimulation(
   const dependencies = {
     source: {
       listPoints: async () => points,
+      loadRenderContext: async (requested: AlertEventDTO[]) =>
+        Object.fromEntries(
+          requested.map((event) => {
+            const evidence = events.find((item) => item.event.id === event.id)?.evidence;
+            return [
+              event.id,
+              {
+                factoryProvinceName: 'ระยอง',
+                reportingStartedOn:
+                  typeof evidence?.startedOn === 'string' ? evidence.startedOn : null,
+              },
+            ];
+          }),
+        ),
       listEvents: async ({
         cadence,
         startAt,
@@ -567,7 +581,42 @@ export async function runAlertEmailSimulation(
     null,
     true,
     initialMails.every((mail) =>
-      mail.text.includes(mail.caseNumber === 5 ? 'BOD (mg/l)' : 'SO2 (ppm)'),
+      mail.caseNumber <= 2
+        ? mail.text.includes('- SO2 = 125 ppm')
+        : mail.text.includes(mail.caseNumber === 5 ? 'BOD (mg/l)' : 'SO2 (ppm)'),
+    ),
+  );
+  check(
+    'pdf-letter-copy',
+    'ข้อความอีเมลใช้คำขึ้นต้นและลายเซ็นตาม PDF ทุกแบบ',
+    null,
+    true,
+    initialMails.every(
+      (mail) =>
+        mail.text.startsWith('เรียน เจ้าหน้าที่ที่เกี่ยวข้อง') &&
+        mail.text.includes('เรื่อง D-POMS แจ้งเตือน') &&
+        mail.text.includes('ขอแสดงความนับถือ') &&
+        mail.text.includes('ศูนย์เฝ้าระวังสิ่งแวดล้อมอุตสาหกรรม') &&
+        mail.text.includes('poms.support@diw.mail.go.th') &&
+        mail.text.includes('Line ID : @iemcdiw'),
+    ),
+  );
+  check(
+    'pdf-factory-province',
+    'แสดงบริษัท ทะเบียนโรงงาน และจังหวัดจากข้อมูลจำลองที่ระบุ',
+    null,
+    true,
+    initialMails.every((mail) => mail.text.includes('จังหวัด ระยอง')),
+  );
+  check(
+    'pdf-no-extra-ui',
+    'ตัวอีเมลคงข้อความตาม PDF และไม่มีข้อความ ลิงก์ หรือปุ่มที่แต่งเพิ่ม',
+    null,
+    true,
+    initialMails.every(
+      (mail) =>
+        !/รอบแจ้งเตือน:|ดูรายละเอียดใน D-POMS|โปรดเข้าสู่ระบบ/.test(mail.text) &&
+        !/href=|<a\b|<button\b/i.test(mail.html),
     ),
   );
   const abnormalMail = initialMails.find((mail) => mail.caseNumber === 6);
@@ -576,7 +625,7 @@ export async function runAlertEmailSimulation(
     'อีเมลข้อ 6 มีหลักฐานค่านิ่ง ศูนย์ และติดลบครบ',
     6,
     true,
-    ['ค่านิ่ง', 'ค่าเป็นศูนย์', 'ค่าติดลบ'].every((label) => abnormalMail?.text.includes(label)),
+    ['ค่านิ่ง', 'ค่าเป็น 0', 'ค่าติดลบ'].every((label) => abnormalMail?.text.includes(label)),
   );
   prepared = await engine.run(now, SIMULATION_POLICY);
   await drain();

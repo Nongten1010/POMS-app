@@ -127,6 +127,61 @@ describe('alert email scheduled engine', () => {
       expect.objectContaining({ recipient: 'factory@example.com' }),
     );
   });
+
+  it('loads context only for pending events and freezes the rendered PDF content in the new batch', async () => {
+    const deps = dependencies([event(1), event(2)]);
+    deps.outbox.listBatchedEventIds.mockResolvedValue([1]);
+    const context = { 2: { factoryProvinceName: 'ระยอง', reportingStartedOn: null } };
+    const loadRenderContext = jest
+      .fn<(events: AlertEventDTO[]) => Promise<typeof context>>()
+      .mockResolvedValue(context);
+    await createAlertEmailEngine({ ...deps, source: { ...deps.source, loadRenderContext } }).run(
+      new Date('2026-10-02T12:05:00+07:00'),
+      policy,
+    );
+    expect(loadRenderContext).toHaveBeenCalledWith([event(2)]);
+    expect(deps.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [event(2)],
+        contextByEventId: context,
+      }),
+    );
+    expect(deps.outbox.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'subject',
+        text: 'text',
+        html: '<p>text</p>',
+        eventIds: [2],
+      }),
+    );
+  });
+  it('does not render or queue an email when real rendering metadata cannot be read', async () => {
+    const deps = dependencies();
+    const loadRenderContext = jest
+      .fn<(events: AlertEventDTO[]) => Promise<Record<number, never>>>()
+      .mockRejectedValue(new Error('metadata read failed'));
+    const result = await createAlertEmailEngine({
+      ...deps,
+      source: { ...deps.source, loadRenderContext },
+    }).run(new Date('2026-10-02T12:05:00+07:00'), policy);
+    expect(result).toMatchObject({ queued: 0, errors: 2 });
+    expect(deps.render).not.toHaveBeenCalled();
+    expect(deps.outbox.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('leaves an already queued batch immutable without reading fresh metadata or rendering', async () => {
+    const deps = dependencies();
+    deps.outbox.listBatchedEventIds.mockResolvedValue([1]);
+    const loadRenderContext =
+      jest.fn<(events: AlertEventDTO[]) => Promise<Record<number, never>>>();
+    await createAlertEmailEngine({ ...deps, source: { ...deps.source, loadRenderContext } }).run(
+      new Date('2026-10-02T12:05:00+07:00'),
+      policy,
+    );
+    expect(loadRenderContext).not.toHaveBeenCalled();
+    expect(deps.render).not.toHaveBeenCalled();
+    expect(deps.outbox.enqueue).not.toHaveBeenCalled();
+  });
   it('excludes future windows, daily rows from hourly batches and a different factory', async () => {
     const deps = dependencies([
       event(1, { endedAt: '2026-10-02T12:59:59+07:00' }),

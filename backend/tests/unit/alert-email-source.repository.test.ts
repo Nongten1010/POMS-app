@@ -18,7 +18,11 @@ jest.mock('../../src/config/database', () => {
           reject: (error: unknown) => unknown,
         ) {
           queries.push(query.toSQL());
-          return Promise.resolve(results.shift() ?? []).then(resolve, reject);
+          const result = results.shift() ?? [];
+          return (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)).then(
+            resolve,
+            reject,
+          );
         },
       });
       return query;
@@ -33,7 +37,9 @@ jest.mock('../../src/modules/factory-profiles/factory-profile-mode', () => ({
     const source =
       table === 'cems_wpms_connected_measurement_points'
         ? 'current_connected_measurement_points'
-        : table;
+        : table === 'eligible_factories'
+          ? 'current_eligible_factories'
+          : table;
     return alias ? `${source} as ${alias}` : source;
   }),
   isCanonicalFactoryProfilesEnabled: () => true,
@@ -421,5 +427,156 @@ describe('alert email source repository', () => {
   it('returns no recipients for a point no longer connected', async () => {
     database.__results.push(null);
     await expect(repository().findPointForEvent(event())).resolves.toBeNull();
+  });
+
+  function renderContextRow(overrides: Record<string, unknown> = {}) {
+    return {
+      event_id: 1001,
+      event_factory_id: 'factory-001',
+      event_system_type: 'CEMS',
+      event_station_id: 'S0001',
+      event_date: '2026-10-04',
+      event_alert_type: 'CONSECUTIVE_NO_REPORT',
+      point_factory_id: 'factory-001',
+      point_system_type: 'CEMS',
+      point_code: 'S0001',
+      factory_province_name: 'ระยอง',
+      evidence_json: JSON.stringify({
+        reportingDate: '2026-10-04',
+        startedOn: '2026-09-15',
+        endedOn: '2026-10-04',
+        exemptDayPolicy: 'PAUSE',
+        count: 15,
+      }),
+      ...overrides,
+    };
+  }
+
+  function reportingEvent(overrides: Partial<AlertEventDTO> = {}): AlertEventDTO {
+    return {
+      ...event(),
+      alertType: 'CONSECUTIVE_NO_REPORT',
+      eventDate: '2026-10-04',
+      consecutiveDays: 15,
+      sourcePayload: { provinceName: 'จังหวัดจาก payload ที่ไม่ควรใช้' },
+      ...overrides,
+    } as AlertEventDTO;
+  }
+
+  it('reads real eligible-factory province by the live point owner and persisted PAUSE start date', async () => {
+    database.__results.push([renderContextRow()]);
+    await expect(repository().loadRenderContext([reportingEvent()])).resolves.toEqual({
+      1001: { factoryProvinceName: 'ระยอง', reportingStartedOn: '2026-09-15' },
+    });
+    const query = database.__queries[0];
+    expect(query.sql).toContain('[current_connected_measurement_points] as [cp]');
+    expect(query.sql).toContain('left join [current_eligible_factories] as [eligible_factory]');
+    expect(query.sql).toContain('[eligible_factory].[id] = [cp].[eligible_factory_id]');
+    expect(query.sql).toContain('[eligible_factory].[deleted_at] is null');
+    expect(query.sql).toContain('[cp].[deleted_at] is null');
+    expect(query.sql).toContain('[ae].[deleted_at] is null');
+    expect(query.sql).toContain('[eligible_factory].[province_name] as [factory_province_name]');
+    expect(query.sql).not.toContain('[factories]');
+    expect(query.sql).not.toContain('factory-001');
+    expect(query.bindings).toEqual(expect.arrayContaining([1001, 'factory-001', 'CEMS', 'S0001']));
+  });
+
+  it('returns explicit missing context rather than estimating province or reporting start', async () => {
+    database.__results.push([
+      renderContextRow({ factory_province_name: null, evidence_json: null }),
+    ]);
+    await expect(repository().loadRenderContext([reportingEvent()])).resolves.toEqual({
+      1001: { factoryProvinceName: null, reportingStartedOn: null },
+    });
+  });
+
+  it.each([
+    { event_factory_id: 'another-factory' },
+    { point_factory_id: 'another-factory' },
+    { event_system_type: 'WPMS' },
+    { point_system_type: 'WPMS' },
+    { event_station_id: 'S0002' },
+    { point_code: 'S0002' },
+    { event_date: '2026-10-03' },
+  ])(
+    'fails closed for a mismatched event/current-point ownership snapshot: %j',
+    async (changed) => {
+      database.__results.push([renderContextRow(changed)]);
+      await expect(repository().loadRenderContext([reportingEvent()])).resolves.toEqual({
+        1001: { factoryProvinceName: null, reportingStartedOn: null },
+      });
+    },
+  );
+
+  it('does not choose a province when several active points match the same event identity', async () => {
+    database.__results.push([
+      renderContextRow(),
+      renderContextRow({ factory_province_name: 'ชลบุรี' }),
+    ]);
+    await expect(repository().loadRenderContext([reportingEvent()])).resolves.toEqual({
+      1001: { factoryProvinceName: null, reportingStartedOn: null },
+    });
+  });
+
+  it.each([
+    'broken-json',
+    '[]',
+    JSON.stringify({ reportingDate: '2026-10-04', startedOn: '2026-02-30', endedOn: '2026-10-04' }),
+    JSON.stringify({ reportingDate: '2026-10-04', startedOn: '2026-10-05', endedOn: '2026-10-04' }),
+    JSON.stringify({ reportingDate: '2026-10-03', startedOn: '2026-09-15', endedOn: '2026-10-04' }),
+    JSON.stringify({ reportingDate: '2026-10-04', startedOn: '2026-09-15', endedOn: '2026-10-03' }),
+    JSON.stringify({ reportingDate: '2026-10-04', endedOn: '2026-10-04', count: 15 }),
+  ])(
+    'never reconstructs the reporting start from a count or invalid evidence: %s',
+    async (evidence) => {
+      database.__results.push([renderContextRow({ evidence_json: evidence })]);
+      await expect(repository().loadRenderContext([reportingEvent()])).resolves.toEqual({
+        1001: { factoryProvinceName: 'ระยอง', reportingStartedOn: null },
+      });
+    },
+  );
+
+  it('does not read rendering metadata before receiving valid owned event identities', async () => {
+    await expect(repository().loadRenderContext([])).resolves.toEqual({});
+    await expect(
+      repository().loadRenderContext([reportingEvent({ factoryId: null })]),
+    ).resolves.toEqual({ 1001: { factoryProvinceName: null, reportingStartedOn: null } });
+    expect(database.__queries).toHaveLength(0);
+  });
+
+  it('chunks bound event identities below the SQL Server parameter limit', async () => {
+    const events = Array.from({ length: 401 }, (_, index) => reportingEvent({ id: index + 1 }));
+    await repository().loadRenderContext(events);
+    expect(database.__queries).toHaveLength(3);
+    expect(database.__queries.every((query) => query.bindings.length < 2100)).toBe(true);
+  });
+
+  it('propagates database failures rather than silently inventing rendering metadata', async () => {
+    database.__results.push(new Error('database read failed'));
+    await expect(repository().loadRenderContext([reportingEvent()])).rejects.toThrow(
+      'database read failed',
+    );
+  });
+  it('stops preparation instead of trusting a truncated ambiguous metadata result', async () => {
+    database.__results.push(Array.from({ length: 1001 }, () => renderContextRow()));
+    await expect(repository().loadRenderContext([reportingEvent()])).rejects.toThrow(
+      'metadata limit exceeded',
+    );
+  });
+  it('uses the SQL DATE field without applying a guessed timezone shift', async () => {
+    database.__results.push([
+      renderContextRow({ event_date: new Date('2026-10-04T00:00:00.000Z') }),
+    ]);
+    await expect(repository().loadRenderContext([reportingEvent()])).resolves.toMatchObject({
+      1001: { factoryProvinceName: 'ระยอง', reportingStartedOn: '2026-09-15' },
+    });
+  });
+  it('does not report a consecutive start date for another alert type', async () => {
+    database.__results.push([renderContextRow({ event_alert_type: 'DAILY_COMPLETENESS_LOW' })]);
+    await expect(
+      repository().loadRenderContext([reportingEvent({ alertType: 'DAILY_COMPLETENESS_LOW' })]),
+    ).resolves.toEqual({
+      1001: { factoryProvinceName: 'ระยอง', reportingStartedOn: null },
+    });
   });
 });

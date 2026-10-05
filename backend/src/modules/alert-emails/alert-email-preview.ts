@@ -10,6 +10,7 @@ import { createIntegrationAlertEventSchema } from '../alert-events/alert-events.
 import { normalizeAlertEventUnit } from '../alert-events/alert-event-identity';
 import type { AlertEventDTO } from '../alert-events/alert-events.types';
 import { renderAlertEmail } from './alert-email-template';
+import { alertEmailSourceRepository } from './alert-email-source.repository';
 
 export const alertEmailPreviewSchema = z
   .object({
@@ -41,9 +42,10 @@ export const alertEmailPreviewService = {
     if (events.some((event) => event.endedAt && Date.parse(event.endedAt) > scheduledAt)) {
       throw new BadRequestError('The measurement window must end before the email round');
     }
+    const contextByEventId = await alertEmailSourceRepository.loadRenderContext(events);
     try {
       return {
-        ...renderAlertEmail({ events, scheduledAt: parsed.scheduledAt }),
+        ...renderAlertEmail({ events, scheduledAt: parsed.scheduledAt, contextByEventId }),
         eventCount: events.length,
         scheduledAt: parsed.scheduledAt,
       };

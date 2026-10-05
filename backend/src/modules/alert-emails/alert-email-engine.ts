@@ -5,10 +5,12 @@ import type { ActiveAlertEmailPolicy, AlertEmailPolicy } from './alert-email-pol
 import type { AlertEmailPoint } from './alert-email-source.repository';
 import type { AlertEmailOutboxRepository } from './alert-email-outbox.repository';
 import { latestAlertEmailPeriods, type AlertEmailPeriod } from './alert-email-rules';
+import type { RenderAlertEmailInput, AlertEmailRenderContext } from './alert-email-template';
 import { normalizeAlertActivationStationIdentity } from './alert-parameter-activations';
 
 export interface AlertEmailEngineDependencies {
   source: {
+    loadRenderContext?(events: AlertEventDTO[]): Promise<Record<number, AlertEmailRenderContext>>;
     listPoints(): Promise<AlertEmailPoint[]>;
     listEvents(input: {
       cadence: 'HOURLY' | 'DAILY';
@@ -17,7 +19,7 @@ export interface AlertEmailEngineDependencies {
     }): Promise<AlertEventDTO[]>;
   };
   outbox: Pick<AlertEmailOutboxRepository, 'listBatchedEventIds' | 'enqueue'>;
-  render(input: { events: AlertEventDTO[]; scheduledAt: string }): {
+  render(input: RenderAlertEmailInput): {
     subject: string;
     text: string;
     html: string;
@@ -174,9 +176,13 @@ export function createAlertEmailEngine(dependencies: AlertEmailEngineDependencie
                 group.period.startAt,
                 eventIds,
               ]);
+              const contextByEventId = dependencies.source.loadRenderContext
+                ? await dependencies.source.loadRenderContext(pending)
+                : undefined;
               const content = dependencies.render({
                 events: pending,
                 scheduledAt: group.period.scheduledAt,
+                ...(contextByEventId ? { contextByEventId } : {}),
               });
               const batch = await dependencies.outbox.enqueue({
                 deduplicationKey: `email:v1:${createHash('sha256').update(identity).digest('hex')}`,
