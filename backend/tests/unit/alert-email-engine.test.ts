@@ -7,6 +7,7 @@ import type { AlertEventDTO } from '../../src/modules/alert-events/alert-events.
 import type { AlertEmailPoint } from '../../src/modules/alert-emails/alert-email-source.repository';
 import type { ActiveAlertEmailPolicy } from '../../src/modules/alert-emails/alert-email-policy';
 import type { AlertEmailBatchInput } from '../../src/modules/alert-emails/alert-email-outbox.repository';
+import { renderAlertEmail } from '../../src/modules/alert-emails/alert-email-template';
 
 const policy: ActiveAlertEmailPolicy = {
   enabled: true,
@@ -38,10 +39,21 @@ function event(id: number, changes: Partial<AlertEventDTO> = {}): AlertEventDTO 
     alertType: 'STANDARD_EXCEEDED',
     systemType: 'CEMS',
     factoryId: 'F1',
+    factoryName: 'Factory',
+    factoryRegistrationNo: 'REG1',
     stationId: 'S1',
+    pointName: 'Stack',
+    parameterCode: 'SO2',
+    parameterName: 'SO2',
+    parameterLabel: 'SO2 (ppm)',
+    unit: 'ppm',
+    measuredValue: 125,
+    thresholdValue: 120,
+    thresholdType: 'STANDARD',
     startedAt: '2026-10-02T11:00:00+07:00',
     endedAt: '2026-10-02T11:59:59+07:00',
     eventDate: '2026-10-02',
+    detectedAt: '2026-10-02T11:59:59+07:00',
     ...changes,
   } as AlertEventDTO;
 }
@@ -49,7 +61,15 @@ function dependencies(events = [event(1)]) {
   return {
     source: {
       listPoints: jest.fn<() => Promise<AlertEmailPoint[]>>().mockResolvedValue([point]),
-      listEvents: jest.fn<() => Promise<AlertEventDTO[]>>().mockImplementation(async () => events),
+      listEvents: jest
+        .fn<
+          (input: {
+            cadence: 'HOURLY' | 'DAILY';
+            startAt: string;
+            endAt: string;
+          }) => Promise<AlertEventDTO[]>
+        >()
+        .mockImplementation(async () => events),
     },
     outbox: {
       listBatchedEventIds: jest
@@ -197,6 +217,139 @@ describe('alert email scheduled engine', () => {
     await createAlertEmailEngine(deps).run(new Date('2026-10-02T12:05:00+07:00'), policy);
     expect(deps.outbox.enqueue).toHaveBeenCalledWith(expect.objectContaining({ eventIds: [2] }));
     expect(deps.render).toHaveBeenCalledWith(expect.objectContaining({ events: [event(2)] }));
+  });
+  it.each(['11:59:59', '12:01:00', '12:06:00', '12:59:59'])(
+    'keeps hourly events pending outside the zero-delay round at %s',
+    async (time) => {
+      const deps = dependencies();
+      await createAlertEmailEngine(deps).run(new Date(`2026-10-02T${time}+07:00`), {
+        ...policy,
+        hourlyDelayMinutes: 0,
+      });
+      expect(deps.outbox.enqueue).not.toHaveBeenCalled();
+      expect(deps.source.listEvents).not.toHaveBeenCalledWith(
+        expect.objectContaining({ cadence: 'HOURLY' }),
+      );
+    },
+  );
+  it.each(['12:00:00', '12:00:59'])(
+    'queues the completed measurement hour during the clock-hour round at %s',
+    async (time) => {
+      const deps = dependencies();
+      await createAlertEmailEngine(deps).run(new Date(`2026-10-02T${time}+07:00`), {
+        ...policy,
+        hourlyDelayMinutes: 0,
+      });
+      expect(deps.outbox.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scheduledAt: '2026-10-02T05:00:00.000Z',
+          periodStart: '2026-10-02T04:00:00.000Z',
+          periodEnd: '2026-10-02T05:00:00.000Z',
+          eventIds: [1],
+        }),
+      );
+    },
+  );
+  it.each([
+    undefined,
+    null,
+    '',
+    'invalid',
+    '2026-10-02',
+    '2026-10-02T11:59:59',
+    '2026-02-30T11:59:59+07:00',
+    '2026-10-02T12:00:01+07:00',
+  ])(
+    'does not include missing, invalid or post-boundary detection %s after a same-round restart',
+    async (detectedAt) => {
+      const deps = dependencies([event(1, { detectedAt: detectedAt as unknown as string })]);
+      await createAlertEmailEngine(deps).run(new Date('2026-10-02T12:00:30+07:00'), {
+        ...policy,
+        hourlyDelayMinutes: 0,
+      });
+      expect(deps.outbox.enqueue).not.toHaveBeenCalled();
+    },
+  );
+  it('includes an event detected exactly on the round boundary', async () => {
+    const deps = dependencies([event(1, { detectedAt: '2026-10-02T12:00:00+07:00' })]);
+    await createAlertEmailEngine(deps).run(new Date('2026-10-02T12:00:30+07:00'), {
+      ...policy,
+      hourlyDelayMinutes: 0,
+    });
+    expect(deps.outbox.enqueue).toHaveBeenCalledWith(expect.objectContaining({ eventIds: [1] }));
+  });
+  it('queues a late event only in the next clock-hour round without repeating prior events or changing measurement time', async () => {
+    const events = [event(1)];
+    const deps = dependencies(events);
+    const alreadyBatched = new Set<number>();
+    deps.outbox.listBatchedEventIds.mockImplementation(async (_recipient, _cadence, ids) =>
+      ids.filter((id) => alreadyBatched.has(id)),
+    );
+    deps.outbox.enqueue.mockImplementation(async (input) => {
+      input.eventIds.forEach((id) => alreadyBatched.add(id));
+      return { batchId: 1, deliveryId: 1, created: true };
+    });
+    const engine = createAlertEmailEngine({ ...deps, render: renderAlertEmail });
+    const hourlyPolicy: ActiveAlertEmailPolicy = {
+      ...policy,
+      recipientMode: 'POINT_OFFICERS',
+      hourlyDelayMinutes: 0,
+    };
+    expect((await engine.run(new Date('2026-10-02T12:00:00+07:00'), hourlyPolicy)).queued).toBe(1);
+    events.push(event(2, { detectedAt: '2026-10-02T12:06:00+07:00' }));
+    expect((await engine.run(new Date('2026-10-02T12:06:00+07:00'), hourlyPolicy)).queued).toBe(0);
+    expect((await engine.run(new Date('2026-10-02T13:00:00+07:00'), hourlyPolicy)).queued).toBe(1);
+    expect(deps.outbox.enqueue).toHaveBeenCalledTimes(2);
+    expect(deps.outbox.enqueue).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        scheduledAt: '2026-10-02T06:00:00.000Z',
+        periodStart: '2026-10-02T04:00:00.000Z',
+        periodEnd: '2026-10-02T05:00:00.000Z',
+        eventIds: [2],
+        subject: expect.stringContaining('เวลา 11.00 น.'),
+        text: expect.stringContaining('เวลา 11.00 น.'),
+      }),
+    );
+    expect((await engine.run(new Date('2026-10-02T13:00:30+07:00'), hourlyPolicy)).queued).toBe(0);
+  });
+  it('keeps an UNKNOWN delivery event batched while queuing only a late unbatched event in the next hourly round', async () => {
+    const eventWithUnknownDelivery = event(1);
+    const lateEvent = event(2, { detectedAt: '2026-10-02T12:06:00+07:00' });
+    const deps = dependencies([eventWithUnknownDelivery, lateEvent]);
+    // The persisted mapping remains present for UNKNOWN delivery outcomes.
+    deps.outbox.listBatchedEventIds.mockResolvedValue([eventWithUnknownDelivery.id]);
+    const render = jest.fn<typeof renderAlertEmail>().mockImplementation(renderAlertEmail);
+    const result = await createAlertEmailEngine({ ...deps, render }).run(
+      new Date('2026-10-02T13:00:00+07:00'),
+      { ...policy, recipientMode: 'POINT_OFFICERS', hourlyDelayMinutes: 0 },
+    );
+    expect(result.queued).toBe(1);
+    expect(deps.outbox.listBatchedEventIds).toHaveBeenCalledWith(
+      'officer@example.com',
+      'HOURLY',
+      [1, 2],
+    );
+    expect(render).toHaveBeenCalledWith(
+      expect.objectContaining({ events: [lateEvent], scheduledAt: '2026-10-02T06:00:00.000Z' }),
+    );
+    expect(deps.outbox.enqueue).toHaveBeenCalledTimes(1);
+    expect(deps.outbox.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventIds: [2],
+        scheduledAt: '2026-10-02T06:00:00.000Z',
+        periodStart: '2026-10-02T04:00:00.000Z',
+        subject: expect.stringContaining('เวลา 11.00 น.'),
+      }),
+    );
+  });
+  it('retains the configured five-minute delay while refusing hourly batches between rounds', async () => {
+    const deps = dependencies();
+    const engine = createAlertEmailEngine(deps);
+    expect((await engine.run(new Date('2026-10-02T12:04:00+07:00'), policy)).queued).toBe(0);
+    expect((await engine.run(new Date('2026-10-02T12:05:00+07:00'), policy)).queued).toBe(2);
+    const callsAtRound = deps.outbox.enqueue.mock.calls.length;
+    expect((await engine.run(new Date('2026-10-02T12:06:00+07:00'), policy)).queued).toBe(0);
+    expect(deps.outbox.enqueue.mock.calls).toHaveLength(callsAtRound);
   });
   it('prepares each point daily once after success and groups case 4/5 by system', async () => {
     const deps = dependencies([

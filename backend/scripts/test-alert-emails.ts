@@ -52,7 +52,7 @@ async function main(): Promise<void> {
       },
     });
     const captureValid =
-      sink.messages.length === 6 &&
+      sink.messages.length === 7 &&
       sink.messages.every(
         (mail) =>
           mail.recipients.includes('qa-officer@example.com') &&
@@ -60,9 +60,9 @@ async function main(): Promise<void> {
           /Content-Type: multipart\/alternative/i.test(mail.data.toString('utf8')),
       );
     report.checks.push({
-      id: 'loopback-six-mime-messages',
+      id: 'loopback-seven-mime-messages',
       caseNumber: null,
-      label: 'SMTP sink รับ MIME จริงครบ 6 ฉบับ พร้อม To/CC และ plain text/HTML',
+      label: 'SMTP sink รับ MIME จริง 7 ฉบับ: ครบ 6 แบบและข้อมูลมาช้ารอบ 13:00 พร้อม To/CC',
       passed: captureValid,
       expected: true,
       actual: captureValid,
@@ -96,9 +96,9 @@ async function main(): Promise<void> {
       });
     }
     const correlated =
-      captures.length === 6 &&
+      captures.length === 7 &&
       captures.every((capture) => capture.deliveryId !== null && capture.eventIds.length > 0) &&
-      new Set(captures.map((capture) => capture.deliveryId)).size === 6;
+      new Set(captures.map((capture) => capture.deliveryId)).size === 7;
     report.checks.push({
       id: 'mime-delivery-correlation',
       caseNumber: null,

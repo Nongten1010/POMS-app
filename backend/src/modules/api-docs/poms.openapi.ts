@@ -4847,7 +4847,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'string',
         format: 'date-time',
         description:
-          'วันที่จริงพร้อม Z หรือ offset; รอบต้องไม่ก่อนสิ้นสุดช่วงตรวจวัด; เป็นรอบส่งที่ขอ preview ไม่ใช่วันที่หรือเวลาที่แสดงในเรื่องอีเมล ซึ่งใช้ eventDate และ startedAt ของเหตุการณ์',
+          'วันที่จริงพร้อม Z หรือ offset; รอบต้องไม่ก่อนสิ้นสุดช่วงตรวจวัด; เป็นรอบส่งที่ขอ preview ไม่ใช่วันที่หรือเวลาที่แสดงในเรื่องอีเมล ซึ่งใช้ eventDate และ startedAt ของเหตุการณ์; preview ไม่บังคับนาทีตาม policy ของ worker และไม่ส่งหรือจัดคิวจริง',
       },
     },
   },
@@ -4858,8 +4858,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
       scheduledAt: {
         type: 'string',
         format: 'date-time',
-        description: 'รอบส่งที่ขอ preview; ไม่ใช่เวลาเริ่มตรวจวัดในเรื่องอีเมล',
-        example: '2026-10-05T12:05:00+07:00',
+        description:
+          'รอบส่งที่ขอ preview; ไม่ใช่เวลาเริ่มตรวจวัดในเรื่องอีเมล; เช่น ข้อมูลชั่วโมง 11:00 ขอรอบ 12:00 หรือรอบถัดไป 13:00 เรื่องยังแสดง 11.00',
+        example: '2026-10-05T12:00:00+07:00',
       },
       eventCount: { type: 'integer', minimum: 1, example: 1 },
       subject: {
@@ -4920,8 +4921,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
       cadence: { type: 'string', enum: ['HOURLY', 'DAILY'] },
       alertType: { type: 'string', enum: [...ALERT_EVENT_ALERT_TYPES] },
       systemType: { type: 'string', enum: systemTypeValues, nullable: true },
+      scheduledAt: {
+        type: 'string',
+        format: 'date-time',
+        description:
+          'รอบที่จัดคิวส่ง ไม่ใช่เวลาเริ่มตรวจวัด; batch รายชั่วโมงใหม่อิงนาทีรอบส่ง โดย delay 0 ใช้ต้นชั่วโมงและรวมเหตุการณ์ที่ detectedAt ไม่เกินเวลาเริ่มรอบ; callback ช้าหรืองานก่อนหน้ายังไม่จบให้เริ่มเมื่อพร้อมโดยคงรอบและ cutoff เดิม; ข้อมูลชั่วโมง 11:00 รับตอน 12:06 รอรอบ 13:00 แต่เรื่องยังแสดง 11.00; คิวเดิมเป็น immutable snapshot ไม่เปลี่ยนรอบย้อนหลัง; SMTP retry อาจเกิดระหว่างรอบและเวลา Inbox ขึ้นอยู่กับ SMTP',
+        example: '2026-10-05T13:00:00+07:00',
+      },
       ...Object.fromEntries(
-        ['scheduledAt', 'periodStart', 'periodEnd', 'createdAt', 'updatedAt'].map((field) => [
+        ['periodStart', 'periodEnd', 'createdAt', 'updatedAt'].map((field) => [
           field,
           { type: 'string', format: 'date-time' },
         ]),
@@ -6798,10 +6806,10 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Preview an alert email without sending',
       operationId: 'previewAlertEmail',
       description:
-        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน, eventDate เดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; รายชั่วโมงต้อง startedAt เดียวกัน และเป็น finite measuredValue > thresholdValue พร้อม thresholdType ตรงประเภท; ผสมวัน/เวลาเริ่มตรวจวัดหรือข้อมูลไม่ผ่านตอบ 400 BAD_REQUEST รวมข้อมูลเดิม; เรื่องและจดหมายตามแม่แบบ PDF ทั้ง 6 แบบ แสดง eventDate แบบ d-m-พ.ศ. และ startedAt เวลาไทย HH.mm ไม่ใช้รอบส่ง scheduledAt; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; ไม่มี SMTP หรือการเข้าคิว',
+        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน, eventDate เดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; รายชั่วโมงต้อง startedAt เดียวกัน และเป็น finite measuredValue > thresholdValue พร้อม thresholdType ตรงประเภท; ผสมวัน/เวลาเริ่มตรวจวัดหรือข้อมูลไม่ผ่านตอบ 400 BAD_REQUEST รวมข้อมูลเดิม; เรื่องและจดหมายตามแม่แบบ PDF ทั้ง 6 แบบ แสดง eventDate แบบ d-m-พ.ศ. และ startedAt เวลาไทย HH.mm ไม่ใช้รอบส่ง scheduledAt; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; preview ไม่บังคับนาทีตาม policy ของ worker; ไม่มี SMTP หรือการเข้าคิว',
       requestBody: jsonRequestBody(schemaRef('AlertEmailPreviewRequest'), {
         eventIds: [51],
-        scheduledAt: '2026-10-05T12:05:00+07:00',
+        scheduledAt: '2026-10-05T12:00:00+07:00',
       }),
       successSchema: schemaRef('AlertEmailPreviewResponse'),
     }),
@@ -6812,7 +6820,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get scoped alert email delivery evidence',
       operationId: 'getAlertEmailDelivery',
       description:
-        'ต้องมี notifications:view_status และเข้าถึงทุกเหตุการณ์ใน batch; นอก scope หรือไม่พบคืน 404; SMTP_ACCEPTED ไม่รับรองการเข้ากล่องปลายทาง; ไม่คืน lease หรือ key ภายใน; ไม่เปลี่ยนสถานะติดตามของเจ้าหน้าที่',
+        'ต้องมี notifications:view_status และเข้าถึงทุกเหตุการณ์ใน batch; นอก scope หรือไม่พบคืน 404; batch รายชั่วโมงใหม่อิงรอบที่กำหนด โดย delay 0 ตรงต้นชั่วโมง ข้อมูลที่รับหลังเริ่มรอบรอรอบถัดไปภายใน 24 ชั่วโมง และ scheduledAt แสดงรอบนั้นโดยคงเวลาตรวจวัดในเรื่อง; callback ช้าหรืองานก่อนหน้ายังไม่จบเริ่มเมื่อพร้อมโดยคงรอบและ cutoff เดิม; หนึ่งรอบอาจมีหลายฉบับตามประเภท/ผู้รับ/ช่วงตรวจวัด; คิวเดิม immutable และ retry คงเดิม; SMTP_ACCEPTED ไม่รับรองการเข้ากล่องปลายทาง; ไม่คืน lease หรือ key ภายใน; ไม่เปลี่ยนสถานะติดตามของเจ้าหน้าที่',
       parameters: [alertEventIdParameter],
       successSchema: schemaRef('AlertEmailDeliveryResponse'),
     }),

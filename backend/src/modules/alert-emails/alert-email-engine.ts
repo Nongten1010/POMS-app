@@ -1,12 +1,19 @@
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import type { AlertEventDTO } from '../alert-events/alert-events.types';
 import { MANDATORY_EMAIL_CC } from '../../shared/services/email-policy';
 import type { ActiveAlertEmailPolicy, AlertEmailPolicy } from './alert-email-policy';
 import type { AlertEmailPoint } from './alert-email-source.repository';
 import type { AlertEmailOutboxRepository } from './alert-email-outbox.repository';
-import { latestAlertEmailPeriods, type AlertEmailPeriod } from './alert-email-rules';
+import {
+  isAlertEmailHourlyRoundDue,
+  latestAlertEmailPeriods,
+  type AlertEmailPeriod,
+} from './alert-email-rules';
 import type { RenderAlertEmailInput, AlertEmailRenderContext } from './alert-email-template';
 import { normalizeAlertActivationStationIdentity } from './alert-parameter-activations';
+
+const timestampSchema = z.iso.datetime({ offset: true });
 
 export interface AlertEmailEngineDependencies {
   source: {
@@ -89,6 +96,9 @@ export function createAlertEmailEngine(dependencies: AlertEmailEngineDependencie
         }
       }
       for (const cadence of ['HOURLY', 'DAILY'] as const) {
+        // Persisted, unbatched events wait for the next configured clock-hour round.
+        if (cadence === 'HOURLY' && !isAlertEmailHourlyRoundDue(now, policy.hourlyDelayMinutes))
+          continue;
         const period = cadence === 'HOURLY' ? periods.hourly : periods.daily;
         const startAt =
           cadence === 'HOURLY'
@@ -115,10 +125,14 @@ export function createAlertEmailEngine(dependencies: AlertEmailEngineDependencie
           }
           let eventPeriod = period;
           if (cadence === 'HOURLY') {
+            const detection = timestampSchema.safeParse(event.detectedAt);
+            const detectedAt = detection.success ? Date.parse(detection.data) : NaN;
             const start = event.startedAt ? Date.parse(event.startedAt) : NaN;
             const end = start + 3_600_000;
             const measuredEnd = event.endedAt ? Date.parse(event.endedAt) : NaN;
             if (
+              !Number.isFinite(detectedAt) ||
+              detectedAt > Date.parse(period.scheduledAt) ||
               !Number.isFinite(start) ||
               !Number.isFinite(measuredEnd) ||
               start < Date.parse(startAt) ||
@@ -130,7 +144,7 @@ export function createAlertEmailEngine(dependencies: AlertEmailEngineDependencie
             eventPeriod = {
               startAt: new Date(start).toISOString(),
               endAt: new Date(end).toISOString(),
-              scheduledAt: new Date(end + policy.hourlyDelayMinutes * 60_000).toISOString(),
+              scheduledAt: period.scheduledAt,
             };
           } else if (
             event.eventDate !== date ||
