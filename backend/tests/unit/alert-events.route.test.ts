@@ -53,8 +53,7 @@ describe('alert events routes', () => {
     expect(response.status).toBe(200);
     expect(mockedAlertEventsService.createBatchFromIntegration).toHaveBeenCalledWith([
       expect.objectContaining({
-        idempotencyKey:
-          'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
+        idempotencyKey: expect.stringMatching(/^v2:[a-f0-9]{64}$/),
         alertType: 'STANDARD_EXCEEDED',
         displaySystemType: 'CEMS',
         thresholdType: 'STANDARD',
@@ -455,6 +454,27 @@ describe('alert events routes', () => {
     const app = createApp();
     const response = await request(app)
       .get('/api/v1/alert-events?dateFrom=2026-03-03&dateTo=2026-03-02')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.list).not.toHaveBeenCalled();
+  });
+
+  it('rejects impossible dates before accepting integration events', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send({ events: [{ ...integrationPayload(), eventDate: '2026-02-30' }] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it('rejects impossible calendar dates in list filters before database lookup', async () => {
+    const response = await request(createApp())
+      .get('/api/v1/alert-events?dateFrom=2026-04-31')
       .set('Authorization', `Bearer ${accessToken()}`);
 
     expect(response.status).toBe(400);

@@ -23,7 +23,7 @@ const mockedRepository = jest.mocked(alertEventsRepository);
 
 describe('alertEventsService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   it('enriches external events with trusted connected measurement point factory data', async () => {
@@ -85,11 +85,153 @@ describe('alertEventsService', () => {
     expect(mockedRepository.createFromIntegration).not.toHaveBeenCalled();
   });
 
+  it('returns legacy-key duplicates only when the stored unit matches the normalized incoming unit', async () => {
+    const input = { ...integrationPayload(), idempotencyKey: 'v2:new-key', unit: ' mg/L ' };
+    const legacyKey = 'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00';
+    const existing = alertEventFixture({ idempotencyKey: legacyKey, unit: 'mg/l' });
+    mockedRepository.findByIdempotencyKey.mockImplementation(async (key) =>
+      key === legacyKey ? existing : null,
+    );
+
+    const result = await alertEventsService.createFromIntegration(input);
+
+    expect(result).toEqual({ created: false, duplicate: true, event: existing });
+    expect(mockedRepository.findByIdempotencyKey).toHaveBeenNthCalledWith(1, 'v2:new-key');
+    expect(mockedRepository.findByIdempotencyKey).toHaveBeenNthCalledWith(2, legacyKey);
+    expect(mockedRepository.findConnectedMeasurementPointByStation).not.toHaveBeenCalled();
+    expect(mockedRepository.createFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it.each(['%', null])(
+    'creates a new unit-aware event when the legacy row unit is %s',
+    async (legacyUnit) => {
+      const input = { ...integrationPayload(), idempotencyKey: 'v2:new-key', unit: 'ppm' };
+      const legacyKey = 'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00';
+      mockedRepository.findByIdempotencyKey.mockImplementation(async (key) =>
+        key === legacyKey ? alertEventFixture({ unit: legacyUnit }) : null,
+      );
+      mockedRepository.findConnectedMeasurementPointByStation.mockResolvedValue(
+        connectedPointFixture(),
+      );
+      mockedRepository.createFromIntegration.mockResolvedValue(
+        alertEventFixture({ idempotencyKey: input.idempotencyKey }),
+      );
+
+      const result = await alertEventsService.createFromIntegration(input);
+
+      expect(result).toMatchObject({ created: true, duplicate: false });
+      expect(mockedRepository.createFromIntegration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idempotencyKey: 'v2:new-key',
+          unit: 'ppm',
+        }),
+      );
+    },
+  );
+
+  it.each([2601, 2627])(
+    'returns a concurrent unique-key insert collision %s as a duplicate',
+    async (number) => {
+      const input = { ...integrationPayload(), idempotencyKey: 'v2:new-key' };
+      const existing = alertEventFixture({ idempotencyKey: input.idempotencyKey });
+      mockedRepository.findByIdempotencyKey
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existing);
+      mockedRepository.findConnectedMeasurementPointByStation.mockResolvedValue(
+        connectedPointFixture(),
+      );
+      mockedRepository.createFromIntegration.mockRejectedValue(
+        Object.assign(new Error('duplicate'), { number }),
+      );
+
+      const result = await alertEventsService.createFromIntegration(input);
+
+      expect(result).toEqual({ created: false, duplicate: true, event: existing });
+      expect(mockedRepository.findByIdempotencyKey).toHaveBeenLastCalledWith('v2:new-key');
+    },
+  );
+
+  it('recognizes a unique-key error wrapped by the SQL Server driver', async () => {
+    const input = { ...integrationPayload(), idempotencyKey: 'v2:new-key' };
+    const existing = alertEventFixture({ idempotencyKey: input.idempotencyKey });
+    mockedRepository.findByIdempotencyKey
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(existing);
+    mockedRepository.findConnectedMeasurementPointByStation.mockResolvedValue(
+      connectedPointFixture(),
+    );
+    mockedRepository.createFromIntegration.mockRejectedValue({
+      originalError: { info: { number: 2627 } },
+    });
+
+    await expect(alertEventsService.createFromIntegration(input)).resolves.toEqual({
+      created: false,
+      duplicate: true,
+      event: existing,
+    });
+  });
+
+  it('creates exactly one event for two overlapping requests for the same identity', async () => {
+    const input = { ...integrationPayload(), idempotencyKey: 'v2:new-key' };
+    let inserted: AlertEventDTO | null = null;
+    mockedRepository.findByIdempotencyKey.mockImplementation(async (key) =>
+      key === input.idempotencyKey ? inserted : null,
+    );
+    mockedRepository.findConnectedMeasurementPointByStation.mockResolvedValue(
+      connectedPointFixture(),
+    );
+    mockedRepository.createFromIntegration.mockImplementation(async () => {
+      if (inserted) throw Object.assign(new Error('duplicate'), { number: 2627 });
+      inserted = alertEventFixture({ idempotencyKey: input.idempotencyKey });
+      return inserted;
+    });
+
+    const results = await Promise.all([
+      alertEventsService.createFromIntegration(input),
+      alertEventsService.createFromIntegration(input),
+    ]);
+
+    expect(results.filter((result) => result.created)).toHaveLength(1);
+    expect(results.filter((result) => result.duplicate)).toHaveLength(1);
+    expect(results[0].event.id).toBe(results[1].event.id);
+  });
+
+  it('propagates a unique-key failure when the expected event is absent', async () => {
+    mockedRepository.findByIdempotencyKey.mockResolvedValue(null);
+    mockedRepository.findConnectedMeasurementPointByStation.mockResolvedValue(
+      connectedPointFixture(),
+    );
+    const error = Object.assign(new Error('duplicate unrelated key'), { number: 2627 });
+    mockedRepository.createFromIntegration.mockRejectedValue(error);
+
+    await expect(alertEventsService.createFromIntegration(integrationPayload())).rejects.toBe(
+      error,
+    );
+  });
+
+  it('does not hide ordinary database insert errors as duplicate events', async () => {
+    mockedRepository.findByIdempotencyKey.mockResolvedValue(null);
+    mockedRepository.findConnectedMeasurementPointByStation.mockResolvedValue(
+      connectedPointFixture(),
+    );
+    const error = Object.assign(new Error('database unavailable'), { number: 4060 });
+    mockedRepository.createFromIntegration.mockRejectedValue(error);
+
+    await expect(alertEventsService.createFromIntegration(integrationPayload())).rejects.toBe(
+      error,
+    );
+    expect(mockedRepository.findByIdempotencyKey).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects new external events when station cannot be matched to a connected point', async () => {
     mockedRepository.findByIdempotencyKey.mockResolvedValue(null);
     mockedRepository.findConnectedMeasurementPointByStation.mockResolvedValue(null);
 
-    await expect(alertEventsService.createFromIntegration(integrationPayload())).rejects.toMatchObject({
+    await expect(
+      alertEventsService.createFromIntegration(integrationPayload()),
+    ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message: 'Alert event stationId must match a connected measurement point',
     });
@@ -98,10 +240,9 @@ describe('alertEventsService', () => {
   });
 
   it('creates a batch and reports created, duplicate, and failed rows separately', async () => {
-    mockedRepository.findByIdempotencyKey
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(alertEventFixture({ id: 1002, stationId: 'S0002' }))
-      .mockResolvedValueOnce(null);
+    mockedRepository.findByIdempotencyKey.mockImplementation(async (key) =>
+      key.includes('S0002') ? alertEventFixture({ id: 1002, stationId: 'S0002' }) : null,
+    );
     mockedRepository.findConnectedMeasurementPointByStation
       .mockResolvedValueOnce({
         id: 55,
@@ -149,6 +290,29 @@ describe('alertEventsService', () => {
         },
       ],
     });
+  });
+
+  it('redacts database details when an unexpected failure is reported for a batch item', async () => {
+    mockedRepository.findByIdempotencyKey.mockRejectedValue(
+      new Error('SQL diagnostic with private details'),
+    );
+
+    const result = await alertEventsService.createBatchFromIntegration([integrationPayload()]);
+
+    expect(result).toMatchObject({
+      total: 1,
+      created: 0,
+      duplicate: 0,
+      failed: 1,
+      results: [
+        {
+          index: 0,
+          success: false,
+          error: { code: 'INTERNAL_ERROR', message: 'Failed to create alert event' },
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain('SQL diagnostic');
   });
 
   it('passes notification scope and actor context into alert event listing', async () => {
@@ -274,7 +438,30 @@ describe('alertEventsService', () => {
       message: 'Alert event not found',
     });
   });
+
+  it('returns the acknowledged event after an in-scope status update', async () => {
+    const acknowledged = alertEventFixture({ notificationStatus: 'ACKNOWLEDGED' });
+    mockedRepository.updateStatus.mockResolvedValue(acknowledged);
+
+    await expect(
+      alertEventsService.updateStatus(1001, { notificationStatus: 'ACKNOWLEDGED' }, 42, {
+        scope: 'ALL',
+      }),
+    ).resolves.toBe(acknowledged);
+  });
 });
+
+function connectedPointFixture() {
+  return {
+    id: 55,
+    factoryId: 'real-factory-001',
+    factoryName: 'บริษัท จริง จำกัด',
+    factoryRegistrationNo: '3-106-33/50สบ',
+    pointCode: 'S0001',
+    pointName: 'Stack จริง',
+    pointType: 'STACK' as const,
+  };
+}
 
 function integrationPayload(): CreateIntegrationAlertEventInput {
   return {

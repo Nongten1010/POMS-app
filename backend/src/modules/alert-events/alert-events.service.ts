@@ -2,6 +2,10 @@ import { AppError, BadRequestError, NotFoundError } from '../../shared/errors/Ap
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { alertEventsRepository } from './alert-events.repository';
+import {
+  buildLegacyAlertEventIdempotencyKey,
+  normalizeAlertEventUnit,
+} from './alert-event-identity';
 import type {
   AlertEventDTO,
   CreateAlertEventBatchItemResult,
@@ -24,6 +28,17 @@ export const alertEventsService = {
         duplicate: true,
         event: existing,
       };
+    }
+
+    const legacyKey = buildLegacyAlertEventIdempotencyKey(input);
+    if (legacyKey !== input.idempotencyKey) {
+      const legacyEvent = await alertEventsRepository.findByIdempotencyKey(legacyKey);
+      if (
+        legacyEvent?.unit &&
+        normalizeAlertEventUnit(legacyEvent.unit) === normalizeAlertEventUnit(input.unit)
+      ) {
+        return { created: false, duplicate: true, event: legacyEvent };
+      }
     }
 
     const connectedPoint = await alertEventsRepository.findConnectedMeasurementPointByStation({
@@ -53,12 +68,22 @@ export const alertEventsService = {
       pointType: connectedPoint.pointType,
     };
 
-    const event = await alertEventsRepository.createFromIntegration(enrichedInput);
-    return {
-      created: true,
-      duplicate: false,
-      event,
-    };
+    try {
+      const event = await alertEventsRepository.createFromIntegration(enrichedInput);
+      return { created: true, duplicate: false, event };
+    } catch (error) {
+      // Another request may have inserted this identity after our initial lookup.
+      // Recover only a SQL Server unique constraint failure with the exact same key.
+      if (isSqlServerUniqueConstraintViolation(error)) {
+        const concurrentEvent = await alertEventsRepository.findByIdempotencyKey(
+          input.idempotencyKey,
+        );
+        if (concurrentEvent) {
+          return { created: false, duplicate: true, event: concurrentEvent };
+        }
+      }
+      throw error;
+    }
   },
 
   async createBatchFromIntegration(
@@ -150,6 +175,20 @@ export const alertEventsService = {
 };
 
 type AccessScope = string | null | undefined | PermissionScopeDetails;
+
+function isSqlServerUniqueConstraintViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as Record<string, unknown>;
+  if (value.number === 2601 || value.number === 2627) return true;
+  const original = value.originalError;
+  if (!original || typeof original !== 'object') return false;
+  const originalValue = original as Record<string, unknown>;
+  if (originalValue.number === 2601 || originalValue.number === 2627) return true;
+  const info = originalValue.info;
+  if (!info || typeof info !== 'object') return false;
+  const number = (info as Record<string, unknown>).number;
+  return number === 2601 || number === 2627;
+}
 
 function redactNotificationStatus(
   event: AlertEventDTO,

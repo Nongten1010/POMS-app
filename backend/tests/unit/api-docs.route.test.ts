@@ -164,7 +164,7 @@ describe('API documentation routes', () => {
     expect(operationCount).toBe(
       countOpenApiOperations(pomsOpenApiDocument as Record<string, unknown>),
     );
-    expect(operationCount).toBe(156);
+    expect(operationCount).toBe(158);
   });
 
   it('serves shared form schemas with the edit-request mixed-system variant', async () => {

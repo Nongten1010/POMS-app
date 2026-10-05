@@ -24,6 +24,8 @@ import {
   integrationsRoutes,
 } from './modules/integrations/integrations.routes';
 import { alertEventsRoutes } from './modules/alert-events/alert-events.routes';
+import { alertEmailPreviewRoutes } from './modules/alert-emails/alert-email-preview';
+import { alertEmailHistoryRoutes } from './modules/alert-emails/alert-email-history';
 import { emailTestRoutes } from './modules/email-test/email-test.routes';
 import { officerNotificationEmailRecipientsRoutes } from './modules/officer-notification-email-recipients/officer-notification-email-recipients.routes';
 import { monitoringPointFormsRoutes } from './modules/monitoring-point-forms/monitoring-point-forms.routes';
@@ -108,6 +110,8 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/kwp-form-submissions`, kwpFormSubmissionsRoutes);
   app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
   app.use(`${env.API_PREFIX}/alert-events`, alertEventsRoutes);
+  app.use(`${env.API_PREFIX}/alert-email-previews`, alertEmailPreviewRoutes);
+  app.use(`${env.API_PREFIX}/alert-email-deliveries`, alertEmailHistoryRoutes);
   app.use(`${env.API_PREFIX}/email-test`, emailTestRoutes);
   app.use(`${env.API_PREFIX}/laws`, lawsRoutes);
   app.use(`${env.API_PREFIX}/faqs`, faqsRoutes);

@@ -4823,6 +4823,126 @@ const componentSchemas: Record<string, OpenApiObject> = {
       note: { type: 'string', maxLength: 1000 },
     },
   },
+  AlertEmailPreviewRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['eventIds', 'scheduledAt'],
+    properties: {
+      eventIds: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 100,
+        uniqueItems: true,
+        items: { type: 'integer', minimum: 1 },
+      },
+      scheduledAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'วันที่จริงพร้อม Z หรือ offset; รอบต้องไม่ก่อนสิ้นสุดช่วงตรวจวัด',
+      },
+    },
+  },
+  AlertEmailPreview: {
+    type: 'object',
+    required: ['scheduledAt', 'eventCount', 'subject', 'text', 'html'],
+    properties: {
+      scheduledAt: { type: 'string', format: 'date-time' },
+      eventCount: { type: 'integer', minimum: 1 },
+      subject: { type: 'string' },
+      text: { type: 'string' },
+      html: { type: 'string' },
+    },
+  },
+  AlertEmailDelivery: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'batchId',
+      'cadence',
+      'alertType',
+      'systemType',
+      'scheduledAt',
+      'periodStart',
+      'periodEnd',
+      'recipient',
+      'cc',
+      'subject',
+      'text',
+      'html',
+      'eventIds',
+      'status',
+      'attempts',
+      'nextAttemptAt',
+      'messageId',
+      'errorCode',
+      'acceptedRecipients',
+      'rejectedRecipients',
+      'createdAt',
+      'updatedAt',
+      'completedAt',
+    ],
+    properties: {
+      id: { type: 'integer', minimum: 1 },
+      batchId: { type: 'integer', minimum: 1 },
+      cadence: { type: 'string', enum: ['HOURLY', 'DAILY'] },
+      alertType: { type: 'string', enum: [...ALERT_EVENT_ALERT_TYPES] },
+      systemType: { type: 'string', enum: systemTypeValues, nullable: true },
+      ...Object.fromEntries(
+        ['scheduledAt', 'periodStart', 'periodEnd', 'createdAt', 'updatedAt'].map((field) => [
+          field,
+          { type: 'string', format: 'date-time' },
+        ]),
+      ),
+      recipient: { type: 'string', format: 'email' },
+      cc: {
+        type: 'array',
+        items: { type: 'string', format: 'email' },
+        description: 'รวม diw.iemc@gmail.com ทุกฉบับ',
+      },
+      subject: { type: 'string' },
+      text: { type: 'string' },
+      html: { type: 'string' },
+      eventIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
+      status: {
+        type: 'string',
+        enum: [
+          'QUEUED',
+          'PROCESSING',
+          'SMTP_ACCEPTED',
+          'RETRY_PENDING',
+          'FAILED',
+          'UNKNOWN',
+          'SKIPPED',
+        ],
+        description:
+          'SMTP_ACCEPTED หมายถึง SMTP รับแล้ว; UNKNOWN ต้องตรวจสอบก่อนส่งซ้ำ; แยกจาก notificationStatus',
+      },
+      attempts: { type: 'integer', minimum: 0, maximum: 5 },
+      nextAttemptAt: { type: 'string', format: 'date-time', nullable: true },
+      completedAt: { type: 'string', format: 'date-time', nullable: true },
+      messageId: { type: 'string', nullable: true },
+      errorCode: { type: 'string', nullable: true },
+      acceptedRecipients: { type: 'array', items: { type: 'string', format: 'email' } },
+      rejectedRecipients: { type: 'array', items: { type: 'string', format: 'email' } },
+    },
+  },
+  AlertEmailPreviewResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('AlertEmailPreview'),
+    },
+  },
+  AlertEmailDeliveryResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('AlertEmailDelivery'),
+    },
+  },
   EmailTestRequest: {
     type: 'object',
     additionalProperties: false,
@@ -6552,6 +6672,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Integrations',
       summary: 'Submit integration alert events',
       operationId: 'createIntegrationAlertEvents',
+      description: 'รับเหตุการณ์รายชั่วโมงจาก integration; eventDate ต้องเป็นวันที่จริง; backend สร้าง opaque idempotencyKey รวมหน่วยเพื่อกันซ้ำและรองรับ concurrent requests โดยไม่สร้างรายการซ้ำ; client ใช้ event.id อ้างอิงและห้ามพึ่งรูปแบบ key เดิม; รายการเก่ายังคง key เดิม ไม่มีการส่งอีเมลทันที',
       requestBody: jsonRequestBody(
         schemaRef('IntegrationAlertEventBatchRequest'),
         alertEventBatchExample,
@@ -6627,6 +6748,31 @@ const extraPaths: Record<string, OpenApiObject> = {
       description: 'ส่งอีเมลทดสอบผ่าน SMTP โดย backend เพิ่ม diw.iemc@gmail.com เป็น CC อัตโนมัติ',
       operationId: 'sendEmailTest',
       requestBody: jsonRequestBody(schemaRef('EmailTestRequest'), emailTestExample),
+    }),
+  },
+  '/alert-email-previews': {
+    post: securedOperation({
+      tag: 'Notifications',
+      summary: 'Preview an alert email without sending',
+      operationId: 'previewAlertEmail',
+      description:
+        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; ไม่มี SMTP หรือการเข้าคิว',
+      requestBody: jsonRequestBody(schemaRef('AlertEmailPreviewRequest'), {
+        eventIds: [51],
+        scheduledAt: '2026-10-05T12:05:00+07:00',
+      }),
+      successSchema: schemaRef('AlertEmailPreviewResponse'),
+    }),
+  },
+  '/alert-email-deliveries/{id}': {
+    get: securedOperation({
+      tag: 'Notifications',
+      summary: 'Get scoped alert email delivery evidence',
+      operationId: 'getAlertEmailDelivery',
+      description:
+        'ต้องมี notifications:view_status และเข้าถึงทุกเหตุการณ์ใน batch; นอก scope หรือไม่พบคืน 404; SMTP_ACCEPTED ไม่รับรองการเข้ากล่องปลายทาง; ไม่คืน lease หรือ key ภายใน; ไม่เปลี่ยนสถานะติดตามของเจ้าหน้าที่',
+      parameters: [alertEventIdParameter],
+      successSchema: schemaRef('AlertEmailDeliveryResponse'),
     }),
   },
   '/officer-notification-email-recipients': {
@@ -6770,6 +6916,7 @@ function menuTagForPath(path: string): string {
   if (path.startsWith('/bod-cod-deviation-reports')) return MENU_TAGS.BOD_COD_REPORTS;
   if (
     path.startsWith('/alert-events') ||
+    path.startsWith('/alert-email-') ||
     path.startsWith('/officer-notification-email-recipients')
   ) {
     return MENU_TAGS.NOTIFICATIONS;
@@ -6933,6 +7080,12 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
       : { permissions: ['kwp_forms:edit'], mode: 'any' };
   }
 
+  if (path.startsWith('/alert-email-previews')) {
+    return { permissions: ['notifications:edit'], mode: 'any' };
+  }
+  if (path.startsWith('/alert-email-deliveries')) {
+    return { permissions: ['notifications:view_status'], mode: 'any' };
+  }
   if (path.startsWith('/alert-events')) {
     return method === 'get'
       ? { permissions: ['notifications:view'], mode: 'any' }
@@ -7181,13 +7334,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.4.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 144 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 153 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 149 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 158 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 144,
+  'x-poms-canonical-operation-count': 149,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

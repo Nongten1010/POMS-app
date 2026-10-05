@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+<a id="alert-event-identity-unit-aware"></a>
+
+## 2026-10-05 — Identity เหตุการณ์แจ้งเตือนแยกตามหน่วย
+
+- **Affected canonical docs:** [Integration Alert Events](./integrations/alert-events/README.md), [อีเมลแจ้งเตือน](./menus/notifications/email-notifications.md)
+- **Impact:** `idempotencyKey` ของเหตุการณ์ใหม่เปลี่ยนจาก string ที่ประกอบข้อมูลเป็น opaque `v2:<SHA256>` และรวมหน่วย เพื่อแยก `CO (ppm)` กับ `CO (%)`; คำขอที่แข่ง insert เหตุการณ์เดียวกันคืนผล duplicate ข้อมูลเดิมยังคง key เดิมและอ่านได้
+- **Migration:** Client ใช้ `event.id` อ้างอิงและปฏิบัติต่อ `idempotencyKey` เป็น opaque string หยุดแยกองค์ประกอบหรือสร้าง key เอง การส่งซ้ำใช้ payload เดิมพร้อม `unit`; backend รองรับ key เก่าเมื่อหน่วยตรงกัน ไม่มีการเขียน key ย้อนหลัง การเปิดคิวอีเมลต้องใช้ migration `0127_create_alert_email_outbox.ts` และเลือกนโยบายตาม [คู่มือเปิดใช้](../guides/alert-email-operations.md) ก่อนเปิด worker
+- **Breaking change:** yes — client ที่พึ่งรูปแบบหรือองค์ประกอบ string ของ key ต้องปรับ; endpoint ใหม่สำหรับ preview/ผล SMTP เป็นส่วนเพิ่มและไม่เปิดส่งอัตโนมัติ
+
 <a id="home-hourly-handoff-20260923"></a>
 
 ## 2026-09-23 — หน้าหลักใช้ชั่วโมงที่จบแล้วและแยกข้อมูลส่งช้า

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
+import { buildAlertEventIdempotencyKey } from './alert-event-identity';
 import {
   ALERT_EVENT_ALERT_TYPES,
   ALERT_EVENT_DISPLAY_SYSTEM_TYPES,
@@ -22,7 +23,10 @@ const monitoringPointCodeSchema = z
     'stationId must be a legacy safe identifier or an annual monitoring point code',
   );
 const unitSchema = z.string().trim().min(1).max(64);
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const isoDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isRealCalendarDate, 'date must be a valid calendar date in YYYY-MM-DD format');
 const hourlyTimeSchema = z
   .string()
   .regex(/^([01]\d|2[0-3]):00$/, 'time must use HH:00 for an hourly alert');
@@ -50,13 +54,11 @@ export const createIntegrationAlertEventSchema = z
 
     return {
       ...value,
-      idempotencyKey: [
-        value.systemType,
-        value.stationId,
-        value.parameterCode,
+      idempotencyKey: buildAlertEventIdempotencyKey({
+        ...value,
         alertType,
         startedAt,
-      ].join(':'),
+      }),
       displaySystemType: displaySystemTypeFor(value.systemType),
       alertType,
       pointName: value.pointCode ?? value.stationId,
@@ -83,6 +85,12 @@ function displaySystemTypeFor(systemType: (typeof ALERT_EVENT_SYSTEM_TYPES)[numb
 
 function alertTypeFor(thresholdType: AlertEventThresholdType): IntegrationAlertEventAlertType {
   return thresholdType === 'STANDARD' ? 'STANDARD_EXCEEDED' : 'EIA_EXCEEDED';
+}
+
+function isRealCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 export const listAlertEventsQuerySchema = z

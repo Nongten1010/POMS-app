@@ -26,3 +26,7 @@
 
 - [คู่มือการเชื่อมโยง Integration Device Config API (PDF)](./integrations/integration-device-config-api-user-guide.pdf)
 - [คู่มือการเชื่อมโยง Integration Alert Events API และผลทดสอบ Production (PDF)](./integrations/integration-alert-events-production-test-guide.pdf)
+
+## Notifications
+
+- [อีเมลแจ้งเตือนมลพิษ: รอบ ผู้รับ นโยบาย และผล SMTP](./alert-email-operations.md)
