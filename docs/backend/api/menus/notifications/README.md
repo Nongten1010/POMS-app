@@ -21,7 +21,7 @@ curl --request POST \
   --url '<BASE_URL>/api/v1/alert-email-previews' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
-  --data '{"eventIds":[1001],"scheduledAt":"2026-10-05T12:05:00+07:00"}'
+  --data '{"eventIds":[1001],"scheduledAt":"2026-10-05T12:00:00+07:00"}'
 ```
 
 ## Endpoint Summary

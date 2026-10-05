@@ -159,3 +159,41 @@ Breaking change: yes — [ผลกระทบและขั้นตอนย
 `npm test -- --runInBand` ผ่าน 284 suites / 3,515 tests; build, typecheck, strict TypeScript ของ CLI, Prettier และ diff check ผ่าน ESLint ของ source/tests ที่เปลี่ยน 0 errors / 0 warnings ลิงก์ relative ที่เพิ่มใหม่ 11 ลิงก์ผ่าน และ canonical docs ที่แก้ทั้ง 5 หน้าเข้าถึงได้จาก backend hub ชุดจำลองจาก source release ใน `/private/tmp/poms-alert-email-test-pdf-release/` ผ่าน 49/49 checks รับ MIME ครบ 6 ฉบับเฉพาะ SMTP loopback
 
 ส่ง release ผ่าน feature branch/PR เพื่อ merge เข้า `main` และใช้ workflow deploy เดิม หลัง deploy ต้องยืนยัน Action SHA, service health และ runtime OpenAPI schema/operations ของอีเมลเทียบกับ source นี้ก่อนจบ release การตรวจนี้ไม่ส่งอีเมลทดสอบจริงหรือเปลี่ยนการตั้งค่าผู้รับ/worker
+
+## หลักฐานการคุมรอบส่งตรงต้นชั่วโมง
+
+ผู้ใช้กำหนดข้อ 1–2 ให้เริ่มส่งตามรอบ 12:00, 13:00, 14:00 น. จึงใช้ `ALERT_EMAIL_HOURLY_DELAY_MINUTES=0` และจัดคิวรายชั่วโมงใหม่อิงเวลาเริ่มรอบ โดยเลือกเหตุการณ์ที่ `detectedAt` ไม่เกินเวลาเริ่มรอบ ข้อมูลที่เข้าหลังเริ่มรอบรอรอบถัดไปภายในขอบเขตย้อนหลัง 24 ชั่วโมง `scheduledAt` ของ batch ใหม่เป็นรอบที่จัดคิวส่ง แต่วันและเวลาตรวจวัดในจดหมาย PDF คงเดิม
+
+กรณีตรวจรับของ [`alert-email-engine.test.ts`](../../../../backend/tests/unit/alert-email-engine.test.ts) และ [`alert-email-worker.test.ts`](../../../../backend/tests/unit/alert-email-worker.test.ts) ครอบคลุม:
+
+- ช่วงข้อมูล 11:00–11:59 ไม่จัดคิวก่อน 12:00 และจัดคิวเมื่อถึงรอบ 12:00
+- เหตุการณ์ใหม่ของช่วง 11:00 ที่รับตอน 12:06 ไม่จัดคิวระหว่างรอบ; รอ 13:00 และเรื่องยังแสดง `11.00`
+- เหตุการณ์ที่เข้าหลังเวลาเริ่มรอบ แม้ยังอยู่ในนาทีรอบเดียวกัน ต้องไม่ถูกเติมในชุดของรอบนั้น
+- การตรวจซ้ำในนาทีเดียวกัน รอบถัดไป และการสร้าง engine ใหม่ไม่จัดเหตุการณ์เดิมซ้ำ รวม batch ที่ยังมีสถานะ `UNKNOWN`
+- Timer เริ่มจากเวลาที่มีวินาที/มิลลิวินาทีและตรวจที่ต้นนาทีถัดไป รักษาการไม่ทำงานซ้อนและหยุด timer เมื่อ stop
+- หาก callback ทำงานช้า ยังคงเวลารอบที่ timer กำหนด; หากงานก่อนหน้ายังทำอยู่ เก็บรอบรายชั่วโมงล่าสุดและเริ่มเมื่อว่างโดยคง cutoff เดิม การเริ่มส่งจริงจึงอาจช้ากว่ารอบและไม่ยืนยันเวลาเข้า Inbox
+- รายวันยังใช้รอบ 09:00 และ retry ยังคง backoff เดิม รอบหนึ่งแยกหลายฉบับตามประเภท ผู้รับ และช่วงตรวจวัดได้
+
+Runtime OpenAPI และ canonical contract แยกการ preview ออกจากการจัดคิวของ worker: preview ยังคงรับ timestamp ที่ถูกต้องหลังสิ้นสุดช่วงตรวจวัด ไม่บังคับนาทีของ policy และไม่ส่งอีเมล ผลตรวจเฉพาะ runtime OpenAPI ผ่าน 1 suite / 6 tests พร้อม Prettier ของ source และ `git diff --check`
+
+ข้อความตัวอย่าง `subject` และ `text` ใน runtime OpenAPI คงเดิมทุกตัวอักษร เปลี่ยนเฉพาะคำอธิบายและตัวอย่างรอบส่ง แม่แบบและข้อมูลเพิ่มเติมในอีเมลไม่ได้ถูกเปลี่ยน
+
+ชุด loopback สุดท้ายที่ `/private/tmp/poms-alert-email-test-hourly-zero-final/` ผ่าน **56/56 checks** และรับ MIME **7 ฉบับ** เฉพาะ `127.0.0.1` ได้แก่แม่แบบครบ 6 แบบและเหตุการณ์รายชั่วโมงที่มาช้าอีก 1 ฉบับ เก็บ `report.json`, `report.html` และ `message-01.eml` ถึง `message-07.eml` เปรียบเทียบ 6 ฉบับเดิมกับ `/private/tmp/poms-alert-email-test-pdf-release/report.json` ยืนยัน `subject`, `text` และ `html` ตรงกัน 6/6 แบบ ชุดนี้ไม่อ่าน `.env` ไม่เชื่อมฐานข้อมูล และไม่ส่งต่อไปยัง To/CC จริง รายงานแสดงรอบส่งเป็นเวลาไทยควบคู่ ISO timestamp
+
+TDD ของ engine เริ่มจาก RED 11 failed / 14 passed จาก 25 tests; เพิ่มกรณี timestamp แล้ว RED อีก 3 จาก 28 ก่อน GREEN 29/29 รวมกรณี `UNKNOWN` ตัวตั้งเวลาเริ่มจาก RED ที่ยังไม่ตรงขอบนาที และกรณี replay รอบที่ติดงานเดิม RED 5 failed / 7 passed จาก 12 tests ก่อน GREEN รวม worker/rules/runtime 55/55 ชุดจำลองเพิ่ม RED 2 failed / 1 passed ก่อน GREEN 3/3 หลักฐานเก็บใน `/private/tmp/poms-hourly-engine-*.log`, `/private/tmp/poms-hourly-clock-replay-*.log` และ `/private/tmp/poms-hourly-simulation-red.log`
+
+การตรวจสุดท้าย `npm test -- --runInBand` ผ่าน **284 suites / 3,545 tests** เมื่อใช้ environment จำลองที่ตรง fixtures (`PUBLIC_BASE_URL=http://d-poms.diw.go.th`, `PARAMETER_DB_SCHEMA=ingest`); การตรวจครั้งแรกที่ไม่ได้กำหนดสองค่านี้มี 10 failures ใน 3 suites ที่ไม่เกี่ยวกับ change นี้ และไม่ได้แก้ application code ของ suites ดังกล่าว ชุดแจ้งเตือน/OpenAPI ที่ระบุ path ใต้ `/tests/unit/` ผ่าน **29 suites / 530 tests** พร้อม coverage ของ engine/rules/worker: lines 98.63%, statements 98.05%, branches 96.21%, functions 100% หลักฐานอยู่ใน `/private/tmp/poms-hourly-backend-tests.log` และ `/private/tmp/poms-hourly-focused-coverage.log`
+
+Build, typecheck, strict TypeScript ของ CLI, Prettier ของ TypeScript ทั้ง 10 ไฟล์, ESLint ของ source/tests ที่เปลี่ยน (0 errors / 0 warnings), `git diff --check` และ review รอบที่ติดงานเดิมผ่าน Markdown รักษารูปแบบเดิมของ canonical docs ไม่จัดรูปแบบใหม่ทั้งไฟล์ ชุดแก้นี้ยังไม่ได้ commit, push หรือ deploy และไม่มีการแก้ `.env` จริงหรือส่ง SMTP ภายนอก
+
+การตรวจในเครื่องและ fake timers ไม่ยืนยันเวลาใน Inbox จริง คิวที่สร้างไว้ก่อนเปลี่ยนกติกายังเป็น immutable snapshot โดยไม่มี migration แก้ `scheduledAt` หรือสถานะ จึงต้องทบทวนคิวเดิมก่อน cutover ตาม [คู่มือปฏิบัติการ](../../guides/alert-email-operations.md) และเปลี่ยนค่า `.env` จริงจาก delay 5 เป็น 0 พร้อม restart backend เพื่อใช้รอบต้นชั่วโมง
+
+Docs impact: updated
+
+Canonical docs: [สัญญาอีเมล](../../api/menus/notifications/email-notifications.md), [คู่มือปฏิบัติการ](../../guides/alert-email-operations.md), [คู่มือทดลอง](../../guides/alert-email-test.md)
+
+Reason: แก้การจัดคิวให้ตรงสัญญารายชั่วโมงที่ตั้งใจไว้ และอธิบายรอบของข้อมูลมาช้าโดยคงข้อความตรวจวัดเดิม
+
+Client impact: frontend
+
+Breaking change: no — ไม่มีการเปลี่ยนฟิลด์ request/response, authentication หรือ permission; เวลา `scheduledAt` ของ batch ใหม่ที่มีข้อมูลมาช้าอิงรอบจัดคิวที่แก้ให้ตรงกติกา

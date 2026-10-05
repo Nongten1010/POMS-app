@@ -28,12 +28,32 @@ describe('safe alert email simulation', () => {
     expect(new Set(report.emails.map((email) => email.caseNumber))).toEqual(
       new Set([1, 2, 3, 4, 5, 6]),
     );
-    expect(report.emails).toHaveLength(6);
-    expect(messages).toHaveLength(6);
+    expect(report.policy.hourlyDelayMinutes).toBe(0);
+    expect(report.emails).toHaveLength(7);
+    expect(messages).toHaveLength(7);
     expect(messages.every((message) => message.cc.includes('diw.iemc@gmail.com'))).toBe(true);
     expect(report.checks.find((check) => check.id === 'hourly-before-due')?.passed).toBe(true);
     expect(report.checks.find((check) => check.id === 'daily-before-nine')?.passed).toBe(true);
     expect(report.checks.find((check) => check.id === 'restart-no-duplicate')?.passed).toBe(true);
+    for (const id of [
+      'hourly-round-cutoff',
+      'hourly-same-round-restart',
+      'hourly-late-between-rounds',
+      'hourly-late-before-next-round',
+      'hourly-late-next-round',
+      'hourly-late-measurement-time',
+      'hourly-next-round-no-duplicate',
+    ]) {
+      expect(report.checks.find((check) => check.id === id)?.passed).toBe(true);
+    }
+    const lateEmail = report.emails.find(
+      (email) => email.scheduledAt === '2026-10-05T06:00:00.000Z',
+    );
+    expect(lateEmail).toMatchObject({ caseNumber: 1, status: 'SMTP_ACCEPTED' });
+    expect(lateEmail?.eventIds).toHaveLength(2);
+    expect(lateEmail?.subject).toContain('เวลา 11.00 น.');
+    expect(lateEmail?.text).toContain('- CO = 126 ppm');
+    expect(lateEmail?.text).toContain('- NOX = 129 ppm');
     expect(report.checks.find((check) => check.id === 'legacy-invalid-job')?.passed).toBe(true);
     expect(report.limitations.join(' ')).toMatch(/ต้นทาง/);
     expect(report.limitations.join(' ')).toMatch(/SQL/);
@@ -57,7 +77,8 @@ describe('safe alert email simulation', () => {
     expect(html).toContain('diw.iemc@gmail.com');
     expect(html).toContain('SQL');
     expect(html).not.toMatch(/<script|<link|<img/i);
-    expect(html.match(/<iframe/g)).toHaveLength(6);
+    expect(html.match(/<iframe/g)).toHaveLength(7);
+    expect(html).toContain('13:00');
     expect(html).toContain('sandbox=""');
   });
 });

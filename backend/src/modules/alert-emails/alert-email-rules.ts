@@ -161,11 +161,7 @@ export interface AlertEmailPeriod {
   scheduledAt: string;
 }
 
-/** Latest due windows; a durable batch key handles restarts without repeat delivery. */
-export function latestAlertEmailPeriods(
-  now: Date,
-  hourlyDelayMinutes: number,
-): { hourly: AlertEmailPeriod; daily: AlertEmailPeriod } {
+function validateAlertEmailDispatchTime(now: Date, hourlyDelayMinutes: number): void {
   if (
     !Number.isFinite(now.getTime()) ||
     !Number.isInteger(hourlyDelayMinutes) ||
@@ -174,6 +170,20 @@ export function latestAlertEmailPeriods(
   ) {
     throw new Error('Invalid dispatch time or hourly delay');
   }
+}
+
+/** Bangkok has a whole-hour UTC offset, so its scheduled minute is the UTC minute. */
+export function isAlertEmailHourlyRoundDue(now: Date, hourlyDelayMinutes: number): boolean {
+  validateAlertEmailDispatchTime(now, hourlyDelayMinutes);
+  return now.getUTCMinutes() === hourlyDelayMinutes;
+}
+
+/** Latest due windows; a durable batch key handles restarts without repeat delivery. */
+export function latestAlertEmailPeriods(
+  now: Date,
+  hourlyDelayMinutes: number,
+): { hourly: AlertEmailPeriod; daily: AlertEmailPeriod } {
+  validateAlertEmailDispatchTime(now, hourlyDelayMinutes);
   const delay = hourlyDelayMinutes * 60_000;
   const dueHour = Math.floor((now.getTime() - delay) / HOUR_MS) * HOUR_MS;
   const bangkokDayStart =

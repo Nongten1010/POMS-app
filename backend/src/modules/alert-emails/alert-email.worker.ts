@@ -1,4 +1,5 @@
 import type { ActiveAlertEmailPolicy, AlertEmailPolicy } from './alert-email-policy';
+import { isAlertEmailHourlyRoundDue, latestAlertEmailPeriods } from './alert-email-rules';
 
 interface WorkerDependencies {
   prepare(now: Date, policy: ActiveAlertEmailPolicy): Promise<unknown>;
@@ -9,11 +10,13 @@ interface WorkerDependencies {
 export function createAlertEmailWorker(policy: AlertEmailPolicy, dependencies: WorkerDependencies) {
   let stopped = false;
   let active: Promise<void> | null = null;
-  const runOnce = async (): Promise<void> => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pendingHourlyRound: Date | null = null;
+  const runAt = async (now: Date): Promise<void> => {
     if (!policy.enabled || stopped || active) return;
     active = (async () => {
       try {
-        await dependencies.prepare(new Date(), policy);
+        await dependencies.prepare(now, policy);
       } catch {
         dependencies.reportError('PREPARATION_FAILED');
       }
@@ -32,14 +35,47 @@ export function createAlertEmailWorker(policy: AlertEmailPolicy, dependencies: W
     } finally {
       active = null;
     }
+    if (!stopped && pendingHourlyRound) {
+      const pending = pendingHourlyRound;
+      pendingHourlyRound = null;
+      await runAt(pending);
+    }
   };
-  const timer = policy.enabled ? setInterval(() => void runOnce(), 60_000) : null;
-  timer?.unref();
+  const runOnce = (): Promise<void> => runAt(new Date());
+  const scheduleNextTick = (): void => {
+    if (!policy.enabled || stopped) return;
+    const now = Date.now();
+    const nextMinute = (Math.floor(now / 60_000) + 1) * 60_000;
+    timer = setTimeout(() => {
+      timer = null;
+      if (!policy.enabled || stopped) return;
+      scheduleNextTick();
+      const current = new Date();
+      let scheduledAt = new Date(Math.min(nextMinute, current.getTime()));
+      const latestRound = new Date(
+        latestAlertEmailPeriods(current, policy.hourlyDelayMinutes).hourly.scheduledAt,
+      );
+      // Recover an hourly boundary crossed while the event loop or wall clock was delayed.
+      if (latestRound > scheduledAt) scheduledAt = latestRound;
+      if (active) {
+        // Keep one latest round; its lookback picks up eligible events from earlier missed rounds.
+        if (isAlertEmailHourlyRoundDue(scheduledAt, policy.hourlyDelayMinutes)) {
+          pendingHourlyRound = scheduledAt;
+        }
+        return;
+      }
+      void runAt(scheduledAt);
+    }, nextMinute - now);
+    timer.unref();
+  };
+  scheduleNextTick();
   return {
     runOnce,
     async stop(): Promise<void> {
       stopped = true;
-      if (timer) clearInterval(timer);
+      pendingHourlyRound = null;
+      if (timer) clearTimeout(timer);
+      timer = null;
       await active;
     },
   };

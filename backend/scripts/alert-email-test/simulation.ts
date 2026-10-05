@@ -52,7 +52,7 @@ export const SIMULATION_POLICY: ActiveAlertEmailPolicy = {
   dailyFormat: 'BY_TYPE',
   abnormalMode: 'PREVIOUS_DAY',
   abnormalReadings: 5,
-  hourlyDelayMinutes: 5,
+  hourlyDelayMinutes: 0,
 };
 
 export interface SimulationCheck {
@@ -528,22 +528,22 @@ export async function runAlertEmailSimulation(
     { queued: 4, sends: 4, errors: 0 },
     { queued: prepared.queued, sends: sendAttempts, errors: prepared.errors },
   );
-  now = new Date('2026-10-05T12:04:59+07:00');
+  now = new Date('2026-10-05T11:59:59+07:00');
   prepared = await engine.run(now, SIMULATION_POLICY);
   await drain();
   check(
     'hourly-before-due',
-    'ก่อน 12:05 ยังไม่ส่งข้อมูลรอบ 11:00–11:59',
+    'ก่อน 12:00 ยังไม่ส่งข้อมูลรอบ 11:00–11:59',
     null,
     { queued: 0, sends: 4 },
     { queued: prepared.queued, sends: sendAttempts },
   );
-  now = new Date('2026-10-05T12:05:00+07:00');
+  now = new Date('2026-10-05T12:00:00+07:00');
   prepared = await engine.run(now, SIMULATION_POLICY);
   await drain();
   check(
     'hourly-at-due',
-    '12:05 ส่งข้อ 1–2 หลังจบชั่วโมงและหน่วง 5 นาที',
+    '12:00 ส่งข้อ 1–2 ตรงรอบต้นชั่วโมง ไม่มีการหน่วง',
     null,
     { queued: 2, sends: 6, errors: 0 },
     { queued: prepared.queued, sends: sendAttempts, errors: prepared.errors },
@@ -643,6 +643,95 @@ export async function runAlertEmailSimulation(
     'สร้าง engine ใหม่โดยใช้คิวเดิมแล้วไม่ส่งซ้ำ',
     null,
     { queued: 0, sends: 6 },
+    { queued: prepared.queued, sends: sendAttempts },
+  );
+
+  const addLateEvent = (code: string, value: number, detectedAt: string) => {
+    const parsed = createIntegrationAlertEventSchema.parse({
+      ...hourlyPayload('STANDARD', value),
+      stationId: points[2].stationId,
+      parameterCode: code,
+    });
+    return addEvent({ ...hourlyDTO(parsed, points[2]), detectedAt });
+  };
+  const lateIds = [addLateEvent('co', 126, '2026-10-05T12:00:15+07:00')];
+  now = new Date('2026-10-05T12:00:30+07:00');
+  prepared = await engine.run(now, SIMULATION_POLICY);
+  await drain();
+  check(
+    'hourly-round-cutoff',
+    'ข้อมูลที่เข้าหลัง 12:00 ไม่แทรกเข้ารอบที่ปิดแล้ว แม้ยังอยู่ในนาที 12:00',
+    null,
+    { queued: 0, sends: 6 },
+    { queued: prepared.queued, sends: sendAttempts },
+  );
+  prepared = await createAlertEmailEngine(dependencies).run(now, SIMULATION_POLICY);
+  await drain();
+  check(
+    'hourly-same-round-restart',
+    'สร้าง engine ใหม่ในนาทีเดิมยังคง cutoff 12:00 และไม่ส่งข้อมูลแทรกรอบ',
+    null,
+    { queued: 0, sends: 6 },
+    { queued: prepared.queued, sends: sendAttempts },
+  );
+  now = new Date('2026-10-05T12:06:00+07:00');
+  lateIds.push(addLateEvent('nox', 129, now.toISOString()));
+  prepared = await engine.run(now, SIMULATION_POLICY);
+  await drain();
+  check(
+    'hourly-late-between-rounds',
+    'ข้อมูลชั่วโมง 11:00 ที่เข้าตอน 12:06 รออยู่ในเหตุการณ์ ไม่ส่งแทรกระหว่างรอบ',
+    null,
+    { queued: 0, sends: 6 },
+    { queued: prepared.queued, sends: sendAttempts },
+  );
+  now = new Date('2026-10-05T12:59:59+07:00');
+  prepared = await engine.run(now, SIMULATION_POLICY);
+  await drain();
+  check(
+    'hourly-late-before-next-round',
+    'ก่อน 13:00 ข้อมูลมาช้ายังไม่ถูกส่ง',
+    null,
+    { queued: 0, sends: 6 },
+    { queued: prepared.queued, sends: sendAttempts },
+  );
+  now = new Date('2026-10-05T13:00:00+07:00');
+  prepared = await engine.run(now, SIMULATION_POLICY);
+  await drain();
+  const lateMail = outbox.deliveries.find((job) =>
+    lateIds.every((id) => job.eventIds.includes(id)),
+  );
+  check(
+    'hourly-late-next-round',
+    '13:00 รวมสองเหตุการณ์มาช้าเข้ารอบใหม่ โดยไม่รวมเหตุการณ์ที่ส่งไปแล้ว',
+    null,
+    { queued: 1, sends: 7, eventIds: lateIds, scheduledAt: '2026-10-05T06:00:00.000Z' },
+    {
+      queued: prepared.queued,
+      sends: sendAttempts,
+      eventIds: lateMail?.eventIds,
+      scheduledAt: lateMail?.scheduledAt,
+    },
+  );
+  check(
+    'hourly-late-measurement-time',
+    'อีเมลที่ส่งรอบ 13:00 ยังคงเวลาตรวจวัด 11.00 น. ตาม PDF',
+    null,
+    true,
+    Boolean(
+      lateMail?.subject.includes('เวลา 11.00 น.') &&
+      lateMail.periodStart === '2026-10-05T04:00:00.000Z' &&
+      lateMail.periodEnd === '2026-10-05T05:00:00.000Z',
+    ),
+  );
+  now = new Date('2026-10-05T14:00:00+07:00');
+  prepared = await createAlertEmailEngine(dependencies).run(now, SIMULATION_POLICY);
+  await drain();
+  check(
+    'hourly-next-round-no-duplicate',
+    'รอบ 14:00 และ engine ใหม่ไม่ส่งทั้งเหตุการณ์เดิมและข้อมูลมาช้าซ้ำ',
+    null,
+    { queued: 0, sends: 7 },
     { queued: prepared.queued, sends: sendAttempts },
   );
 
@@ -751,14 +840,14 @@ export async function runAlertEmailSimulation(
     mode: 'IN_MEMORY_LOOPBACK_SMTP',
     policy: { ...SIMULATION_POLICY },
     checks,
-    emails: initialMails,
+    emails: outbox.deliveries.map(emailEvidence),
     events: events.map((item) => ({ ...item.event })),
     limitations: [
       'ข้อ 1–2 ใช้ fixture เหตุการณ์ที่ผ่าน createIntegrationAlertEventSchema จริง ยังไม่พิสูจน์ตัวตรวจค่ารายชั่วโมงของระบบต้นทางหรือการเลือกเกณฑ์จากทะเบียนจริง',
       'ฐานข้อมูลและคิวเป็น in-memory adapter ไม่ได้ทดสอบ SQL Server, query ข้อมูลจริง, migration, transaction, multi-worker race หรือความคงทนข้าม process',
       'restart จำลองด้วยการสร้าง engine ใหม่โดยใช้ adapter เดิม ไม่ใช่ restart backend หรือฐานข้อมูลจริง',
       'SMTP sink รับเฉพาะในเครื่องและไม่ส่งต่อออกภายนอก จึงไม่พิสูจน์การเข้า inbox จริงหรือ SMTP production',
-      'เลือก ON_TIME, RESET, เจ้าหน้าที่ประจำจุด, 5 ค่าผิดปกติ และหน่วง 5 นาทีเพื่อทดสอบเท่านั้น ยังไม่ใช่การยืนยันนโยบาย production',
+      'ใช้ ON_TIME, RESET, เจ้าหน้าที่ประจำจุด, 5 ค่าผิดปกติ และหน่วง 0 นาทีในชุดทดสอบ ไม่อ่านหรือเปลี่ยนค่าบน production; การรัน timer ของ worker แยกทดสอบด้วย fake clock ใน Jest',
     ],
   };
 }
@@ -983,7 +1072,7 @@ export function renderSimulationReport(report: SimulationReport): string {
     .sort((a, b) => a.caseNumber - b.caseNumber)
     .map(
       (mail) =>
-        `<details class="card" open><summary>ข้อ ${mail.caseNumber} · ${escapeHtml(mail.label)}</summary><p class="meta">To: ${escapeHtml(mail.to)}<br>CC: ${escapeHtml(mail.cc.join(', '))}<br>Delivery #${mail.deliveryId} · Event IDs: ${escapeHtml(mail.eventIds.join(', '))}<br>รอบส่ง: ${escapeHtml(mail.scheduledAt)} · ${escapeHtml(mail.status)}<br>Subject: ${escapeHtml(mail.subject)}</p><iframe title="ตัวอย่างอีเมลข้อ ${mail.caseNumber}" sandbox="" srcdoc="${escapeHtml(mail.html)}"></iframe></details>`,
+        `<details class="card" open><summary>ข้อ ${mail.caseNumber} · ${escapeHtml(mail.label)}</summary><p class="meta">To: ${escapeHtml(mail.to)}<br>CC: ${escapeHtml(mail.cc.join(', '))}<br>Delivery #${mail.deliveryId} · Event IDs: ${escapeHtml(mail.eventIds.join(', '))}<br>รอบส่ง: ${escapeHtml(new Date(mail.scheduledAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false }))} น. (เวลาไทย)<br>${escapeHtml(mail.scheduledAt)} · ${escapeHtml(mail.status)}<br>Subject: ${escapeHtml(mail.subject)}</p><iframe title="ตัวอย่างอีเมลข้อ ${mail.caseNumber}" sandbox="" srcdoc="${escapeHtml(mail.html)}"></iframe></details>`,
     )
     .join('')}</section></main></body></html>`;
 }

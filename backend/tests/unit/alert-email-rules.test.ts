@@ -3,6 +3,7 @@ import {
   summarizeAlertDay,
   countConsecutiveLowReportingDays,
   detectAbnormalHourlyEpisodes,
+  isAlertEmailHourlyRoundDue,
   latestAlertEmailPeriods,
   type AlertHourlySample,
 } from '../../src/modules/alert-emails/alert-email-rules';
@@ -202,6 +203,32 @@ describe('alert email daily and hourly rules', () => {
       endAt: '2026-10-01T17:00:00.000Z',
       scheduledAt: '2026-10-02T02:00:00.000Z',
     });
+  });
+
+  it('opens an hourly round only during its scheduled minute', () => {
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T11:59:59.999+07:00'), 0)).toBe(false);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T12:00:00+07:00'), 0)).toBe(true);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T12:00:59.999+07:00'), 0)).toBe(true);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T12:01:00+07:00'), 0)).toBe(false);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T13:00:00+07:00'), 0)).toBe(true);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T14:00:00+07:00'), 0)).toBe(true);
+  });
+
+  it('honors an explicit hourly delay and midnight boundaries', () => {
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T12:00:00+07:00'), 5)).toBe(false);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T12:05:00+07:00'), 5)).toBe(true);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-05T12:06:00+07:00'), 5)).toBe(false);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-06T00:00:00+07:00'), 0)).toBe(true);
+    expect(isAlertEmailHourlyRoundDue(new Date('2026-10-06T00:59:59.999+07:00'), 59)).toBe(true);
+  });
+
+  it('rejects invalid hourly round times and delays', () => {
+    expect(() => isAlertEmailHourlyRoundDue(new Date('invalid'), 0)).toThrow();
+    for (const delay of [-1, 60, 0.5, NaN, Infinity]) {
+      expect(() =>
+        isAlertEmailHourlyRoundDue(new Date('2026-10-05T12:00:00+07:00'), delay),
+      ).toThrow();
+    }
   });
 
   it('handles 23:00 measurements and the daily deadline across midnight', () => {
