@@ -14,7 +14,7 @@ permission code และ scope ที่อ้างในหน้านี้
 2. อัปโหลดไฟล์แนบด้วย `POST /api/v1/kwp-form-submissions/attachments` และเก็บ metadata กลับไปผูกในฟอร์ม
 3. ส่งแบบ `POST /api/v1/kwp-form-submissions/kwp01` ถึง `kwp05`
 4. อ่านรายการและรายละเอียดแบบผ่าน `kwp-form-reports/*` และ `kwp-form-submissions/*`
-5. เจ้าหน้าที่อ่าน workflow และอนุมัติหรือ request revision ผ่าน workflow endpoints
+5. เจ้าหน้าที่อ่าน workflow และอนุมัติ ขอแก้ไข หรือปฏิเสธผ่าน workflow endpoints
 
 ```bash
 curl --request POST \
@@ -51,7 +51,7 @@ curl --request POST \
 | อ่านรายละเอียดแบบ | `GET` | `/api/v1/kwp-form-submissions/kwp01/:id` ถึง `/api/v1/kwp-form-submissions/kwp05/:id` | Bearer | `kwp_forms:view` | [Read detail](#get-detail-endpoints) |
 | ส่งแบบกลับหลังแก้ไข | `POST` | `/api/v1/kwp-form-submissions/kwp01/:id/resubmit` ถึง `/api/v1/kwp-form-submissions/kwp05/:id/resubmit` | Bearer | `kwp_forms:edit` | [Resubmit](#post-resubmit-endpoints) |
 | อ่าน workflow | `GET` | `/api/v1/kwp-form-submissions/:id/workflow` | Bearer | `kwp_forms:view` | [Workflow read](#get-apiv1kwp-form-submissionsidworkflow) |
-| อนุมัติ ขอแก้ไข หรือยกเลิก | `POST` | `/api/v1/kwp-form-submissions/:id/workflow-actions` | Bearer | `CANCEL`: `kwp_forms:edit`; คำสั่งอื่น: `kwp_forms:approve` | [Workflow action](#post-apiv1kwp-form-submissionsidworkflow-actions) |
+| อนุมัติ ขอแก้ไข ปฏิเสธ หรือยกเลิก | `POST` | `/api/v1/kwp-form-submissions/:id/workflow-actions` | Bearer | `CANCEL`: `kwp_forms:edit`; คำสั่งอื่น: `kwp_forms:approve` | [Workflow action](#post-apiv1kwp-form-submissionsidworkflow-actions) |
 | รายชื่อโรงงานสำหรับเมนู กวภ. | `GET` | `/api/v1/kwp-form-reports/factories` | Bearer | `kwp_forms:view` | [Reports](#get-apiv1kwp-form-reportsfactories) |
 | รายการคำขอ กวภ. | `GET` | `/api/v1/kwp-form-reports/requests` | Bearer | `kwp_forms:view` | [Reports](#get-apiv1kwp-form-reportsrequests) |
 
@@ -618,9 +618,9 @@ Request fields:
 
 | Field | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `action` | body | `REQUEST_REVISION` \| `APPROVE` \| `CANCEL` | Yes | `CANCEL` ใช้สิทธิ์ผู้ประกอบการและกฎด้านล่าง |
-| `revisionReason` | body | string | Conditional | ต้องส่งเมื่อ `action = REQUEST_REVISION` |
-| `officerNote` | body | string | No | หมายเหตุเจ้าหน้าที่ ใช้กับ `APPROVE`/`REQUEST_REVISION` เท่านั้น |
+| `action` | body | `REQUEST_REVISION` \| `APPROVE` \| `REJECT` \| `CANCEL` | Yes | `REJECT` ปฏิเสธได้จากทุกสถานะ; `CANCEL` ใช้สิทธิ์ผู้ประกอบการและกฎด้านล่าง |
+| `revisionReason` | body | string/null | Conditional | ต้องส่งข้อความ 1–1000 ตัวอักษรเมื่อ `action = REQUEST_REVISION`; สำหรับ `REJECT` เป็น optional และรับ `null`/ข้อความว่าง |
+| `officerNote` | body | string/null | No | หมายเหตุเจ้าหน้าที่ไม่เกิน 1000 ตัวอักษร ใช้กับ `APPROVE`/`REQUEST_REVISION`/`REJECT`; ข้อความว่างแปลงเป็น `null` |
 
 Request example:
 
@@ -643,6 +643,31 @@ Minimal response:
   }
 }
 ```
+
+#### ปฏิเสธแบบ กวภ.01–กวภ.05
+
+ส่ง `REJECT` ได้จาก `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED` และ `CANCELLED` โดยไม่บังคับเหตุผล ใช้สิทธิ์ `kwp_forms:approve` และบทบาท `monitoring_kpm`, `monitoring_5_centers` หรือ `admin` ภายในขอบเขตข้อมูลที่ได้รับสิทธิ์
+
+```json
+{ "action": "REJECT" }
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 12,
+    "status": "REJECTED",
+    "statusLabel": "ไม่ผ่านการพิจารณา",
+    "officerNote": null,
+    "allowedActions": ["REJECT"]
+  }
+}
+```
+
+หากส่ง `officerNote` จะคืนข้อความนั้นใน response; หากส่งเฉพาะ `revisionReason` จะคืนเป็น `officerNote` พร้อมบันทึกเหตุผลและหมายเหตุในประวัติ `kwp_form_status_history` การปฏิเสธบันทึกผู้พิจารณา/เวลา (`reviewed_by`, `reviewed_at`) และผู้แก้ไข (`updated_by`) โดย `statusHistory[].note` รองรับข้อความรวมสูงสุด 2001 ตัวอักษร (แต่ละช่องสูงสุด 1000 และคั่นด้วย newline)
+
+`GET workflow` คืน `REJECT` ใน `allowedActions` ของผู้มีสิทธิ์อนุมัติทุกสถานะ ผู้มีสิทธิ์ดูอย่างเดียวหรือผู้ประกอบการไม่สามารถปฏิเสธได้ ไม่พบคำขอในขอบเขตตอบ 404 `NOT_FOUND`; ไม่มีสิทธิ์หรือบทบาทตอบ 403 `FORBIDDEN`; สถานะเปลี่ยนระหว่างอ่านกับบันทึกตอบ 409 `CONFLICT` ให้โหลดใหม่และลองอีกครั้ง กฎสถานะของ `APPROVE`, `REQUEST_REVISION`, `CANCEL` และการส่งใหม่ยังใช้ตามเดิม
 
 ### `GET /api/v1/kwp-form-reports/factories`
 
@@ -931,7 +956,7 @@ curl '<BASE_URL>/api/v1/kwp-form-reports/factories/F000123/measurement-points' \
 
 ### การตรวจสอบและการนำขึ้นระบบ
 
-- Regression: [`kwp-handoff.persistence.test.ts`](../../../../../backend/tests/unit/kwp-handoff.persistence.test.ts), [`kwp-handoff.validator.test.ts`](../../../../../backend/tests/unit/kwp-handoff.validator.test.ts), [`kwp-form-parameters.test.ts`](../../../../../backend/tests/unit/kwp-form-parameters.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts)
+- Regression: [`kwp-rejection.workflow.test.ts`](../../../../../backend/tests/unit/kwp-rejection.workflow.test.ts), [`kwp-rejection.validator.test.ts`](../../../../../backend/tests/unit/kwp-rejection.validator.test.ts), [`kwp-handoff.persistence.test.ts`](../../../../../backend/tests/unit/kwp-handoff.persistence.test.ts), [`kwp-handoff.validator.test.ts`](../../../../../backend/tests/unit/kwp-handoff.validator.test.ts), [`kwp-form-parameters.test.ts`](../../../../../backend/tests/unit/kwp-form-parameters.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts)
 - Runtime schema: [`kwp-handoff.openapi.ts`](../../../../../backend/src/modules/api-docs/kwp-handoff.openapi.ts)
 - Migration: [`0121_add_kwp_submission_attachments_and_report_period.ts`](../../../../../backend/src/db/migrations/0121_add_kwp_submission_attachments_and_report_period.ts); ไม่มีการ backfill ปี/ลิงก์ของคำขอเดิม และ rollback ปฏิเสธหากคอลัมน์ใหม่มีข้อมูล
 - [ผลกระทบและการย้าย client](../../CHANGELOG.md#kwp-handoff-20260917)

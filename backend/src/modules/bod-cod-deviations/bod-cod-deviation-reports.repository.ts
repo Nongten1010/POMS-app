@@ -527,7 +527,7 @@ export const bodCodDeviationReportsRepository = {
     return db.transaction(async (trx) => {
       const now = new Date();
       const report = await assertCanChangeWorkflowStatus(id, input, access, trx);
-      const currentStepId = Number(report.current_step_id);
+      const currentStepId = toNumberOrNull(report.current_step_id);
       const nextStep =
         input.action === 'APPROVE'
           ? await findNextApprovalStep(id, Number(report.current_step_no), trx)
@@ -542,7 +542,16 @@ export const bodCodDeviationReportsRepository = {
       if (nextState.resetToFirstStep) {
         await buildResetApprovalStepsForResubmissionQuery(id, now, trx);
         await buildRestartFirstApprovalStepForResubmissionQuery(id, now, trx);
-      } else {
+      } else if (
+        input.action === 'REJECT' &&
+        currentStepId !== null &&
+        (report.current_step_status === 'APPROVED' || report.current_step_status === 'REJECTED')
+      ) {
+        await trx('bod_cod_approval_steps').where('id', currentStepId).update({
+          is_current: false,
+          updated_at: now,
+        });
+      } else if (currentStepId !== null) {
         await updateCurrentApprovalStep(
           currentStepId,
           nextState.currentStepStatus,
@@ -1090,7 +1099,7 @@ async function assertCanChangeWorkflowStatus(
     });
   }
 
-  if (row.current_step_id === null || row.current_step_no === null) {
+  if (input.action !== 'REJECT' && (row.current_step_id === null || row.current_step_no === null)) {
     throw new ConflictError('BOD/COD deviation report does not have a current approval step', {
       currentStatus: row.status,
       allowedActions,
@@ -2100,10 +2109,23 @@ function allowedActionsFor(
   scope: BodCodDeviationAccess['scope'],
   roles: string[] = [],
 ): BodCodAllowedAction[] {
-  if (status === 'APPROVED' || status === 'CANCELLED') return [];
-  if (isBodCodOperator({ actorUserId: 0, scope, roles })) return ['CANCEL'];
-  if (status === 'REJECTED' || scopeValue(scope) === 'OWN_FACTORY') return [];
-  if (currentStep?.status !== 'PENDING') return [];
+  if (isBodCodOperator({ actorUserId: 0, scope, roles })) {
+    return status === 'APPROVED' || status === 'CANCELLED' ? [] : ['CANCEL'];
+  }
+  if (scopeValue(scope) === 'OWN_FACTORY') return [];
+  const rejectionActions: BodCodAllowedAction[] = roles.some((role) =>
+    [
+      'monitoring_kpm',
+      'monitoring_5_centers',
+      'admin',
+      'kpm_director',
+      'center_director',
+      'kwp_director',
+    ].includes(role),
+  )
+    ? ['REJECT']
+    : [];
+  if (currentStep?.status !== 'PENDING') return rejectionActions;
   const expectedRoles: Partial<Record<BodCodDeviationReportStatus, BodCodApprovalRoleCode>> = {
     SUBMITTED: 'INSPECTOR',
     REVISED_PENDING_REVIEW: 'INSPECTOR',
@@ -2111,8 +2133,10 @@ function allowedActionsFor(
     WAITING_REVIEW: 'REVIEWER',
     WAITING_APPROVAL: 'APPROVER',
   };
-  if (currentStep.roleCode !== expectedRoles[status]) return [];
-  return canActOnCurrentStep(currentStep, roles) ? ['APPROVE', 'REQUEST_REVISION', 'REJECT'] : [];
+  if (currentStep.roleCode !== expectedRoles[status]) return rejectionActions;
+  return canActOnCurrentStep(currentStep, roles)
+    ? ['APPROVE', 'REQUEST_REVISION', ...rejectionActions]
+    : rejectionActions;
 }
 
 function canActOnCurrentStep(currentStep: BodCodWorkflowStepDTO, roles: string[]): boolean {

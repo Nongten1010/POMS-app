@@ -1839,6 +1839,13 @@ export const reviewConnectionRequestSchema = z
   .discriminatedUnion('decision', [
     z
       .object({
+        decision: z.literal('REJECT'),
+        revisionReason: optionalNullableTrimmedString(1000),
+        officerNote: optionalNullableTrimmedString(1000),
+      })
+      .strict(),
+    z
+      .object({
         decision: z.literal('APPROVE_DESIGN'),
         officerNote: optionalNullableTrimmedString(1000),
         pointCodeAssignments: pointCodeAssignmentsSchema.optional(),
@@ -1859,6 +1866,13 @@ export const reviewConnectionRequestSchema = z
 
 export const changeConnectionRequestStatusSchema = z
   .discriminatedUnion('action', [
+    z
+      .object({
+        action: z.literal('REJECT'),
+        revisionReason: optionalNullableTrimmedString(1000),
+        officerNote: optionalNullableTrimmedString(1000),
+      })
+      .strict(),
     z
       .object({
         action: z.literal('APPROVE_FORM'),

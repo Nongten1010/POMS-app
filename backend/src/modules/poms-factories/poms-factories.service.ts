@@ -400,6 +400,7 @@ export const pomsFactoriesService = {
     ensureAdminReviewActor(actor);
     const request = await this.getEditRequest(id, actorUserId, viewScope, regionalAccess);
     if (
+      input.decision !== 'REJECT' &&
       request.status !== POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW &&
       request.status !== POMS_FACTORY_EDIT_REQUEST_STATUS.REVISED_PENDING_REVIEW
     ) {
@@ -414,7 +415,10 @@ export const pomsFactoriesService = {
         },
       );
     }
-    const reviewed = await pomsFactoriesRepository.reviewEditRequest(id, input, actorUserId);
+    const reviewed = await pomsFactoriesRepository.reviewEditRequest(id, input, actorUserId, {
+      scope: viewScope,
+      regionalAccess,
+    });
     return {
       ...reviewed,
       contactPersons: (reviewed.proposedContacts?.contactPersons ?? request.contactPersons).map(

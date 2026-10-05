@@ -60,7 +60,7 @@ curl --request POST \
 
 ### สิทธิ์การพิจารณา
 
-ทุก mutation ต้องมี `view` ร่วมกับ `edit` หรือ `approve` ตามงาน และผ่าน data scope ทั้งสองสิทธิ์; หาก action เป็น binary grant (`scope: null`) ให้ใช้ scope ของ `view` โดยไม่ขยายพื้นที่ การพิจารณาใช้ role + สถานะ + current step ร่วมกัน:
+ทุก mutation ต้องมี `view` ร่วมกับ `edit` หรือ `approve` ตามงาน และผ่าน data scope ทั้งสองสิทธิ์; หาก action เป็น binary grant (`scope: null`) ให้ใช้ scope ของ `view` โดยไม่ขยายพื้นที่ `APPROVE` และ `REQUEST_REVISION` ใช้ role + สถานะ + current step ร่วมกัน:
 
 | ขั้น | Role ที่ใช้ได้ |
 | --- | --- |
@@ -71,6 +71,8 @@ curl --request POST \
 | `APPROVER` | `center_director`, `kwp_director` |
 
 `admin` เพียงอย่างเดียวไม่ให้สิทธิ์ทบทวน/อนุมัติสุดท้าย; detail คืน `allowedActions` ตามสิทธิ์และ scope ของงานนั้นจริง
+
+`REJECT` ใช้ role `monitoring_kpm`, `monitoring_5_centers`, `admin`, `kpm_director`, `center_director` หรือ `kwp_director` ที่มี `bod_cod_errors:view` + `bod_cod_errors:approve` และ scope ไม่ใช่ `OWN_FACTORY` ปฏิเสธได้ทุกสถานะ รวม `DRAFT`, `APPROVED`, `REJECTED` และ `CANCELLED` โดยไม่ต้องมี current step และไม่ต้องเป็นผู้รับผิดชอบขั้นปัจจุบัน
 
 ### ยกเลิกคำขอ
 
@@ -442,16 +444,17 @@ Resubmit ทำได้เฉพาะผู้ประกอบการเ�
 | --- | --- | --- | --- |
 | `action` | string | Yes | `APPROVE`, `REQUEST_REVISION` หรือ `REJECT` |
 | `revisionReason` | string | เมื่อ `REQUEST_REVISION` | 1-1,000 ตัวอักษร |
-| `officerNote` | string \| null | No | สูงสุด 1,000 ตัวอักษร |
+| `officerNote` | string \| null | No | สูงสุด 1,000 ตัวอักษร; `REJECT` ไม่บังคับเหตุผล ส่ง omitted, `null` หรือข้อความว่างได้ โดยข้อความว่างบันทึกเป็น `null` |
 
 ```json
 {
-  "action": "APPROVE",
-  "officerNote": "ข้อมูลถูกต้อง"
+  "action": "REJECT"
 }
 ```
 
 สำเร็จตอบ `200 OK` ด้วย workflow response shape เดียวกับ create; client ต้องใช้ `allowedActions` ล่าสุดแทนการอนุมาน action จาก `statusCode` เพียงอย่างเดียว
+
+`REJECT` เปลี่ยน `statusCode` เป็น `REJECTED`, ปิด current step และเพิ่มประวัติผู้ดำเนินการพร้อมเหตุผลเมื่อส่งมา โดยคง `reportNo`, `reportSequenceNo`, ผลอนุมัติที่เสร็จแล้ว และประวัติเดิม หากไม่มี current step จะบันทึก event ระดับรายงานโดยไม่สร้างหรือแก้ขั้นอนุมัติ ผู้มีสิทธิ์ยังเรียก `REJECT` ซ้ำได้
 
 ### แบบแจ้งผล
 
@@ -491,7 +494,7 @@ Response `200 OK` เป็น workflow response และเพิ่ม `resul
 
 `approvalTrack` เป็น `CENTRAL` หรือ `REGIONAL`; steps ใช้ role `INSPECTOR`, `RESULT_NOTICE`, `REVIEWER`, `APPROVER` และ step status `PENDING`, `WAITING`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED`
 
-`allowedActions` อาจมี `CANCEL`, `APPROVE`, `REQUEST_REVISION`, `REJECT` ตามผู้ใช้ สิทธิ์ data scope สถานะ และ current step; ใช้ route `/cancel` สำหรับ `CANCEL`
+`allowedActions` อาจมี `CANCEL`, `APPROVE`, `REQUEST_REVISION`, `REJECT` ตามผู้ใช้และ data scope; `REJECT` ไม่ผูกสถานะหรือ current step ส่วน action อื่นยังใช้ข้อกำหนด workflow เดิม ใช้ route `/cancel` สำหรับ `CANCEL` ผู้มีเพียงสิทธิ์ดูหรือผู้ประกอบการไม่ได้รับ `REJECT`
 
 ## Errors
 
@@ -533,7 +536,7 @@ Error envelope:
 | Repository | [`bod-cod-deviation-reports.repository.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository.ts) |
 | Submission policy | [`bod-cod-report-submission-policy.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-report-submission-policy.ts) |
 | Annual sequence migration | [`0124_add_bod_cod_annual_report_sequence.ts`](../../../../../backend/src/db/migrations/0124_add_bod_cod_annual_report_sequence.ts) |
-| Regression tests | [`bod-cod-report-submission-policy.test.ts`](../../../../../backend/tests/unit/bod-cod-report-submission-policy.test.ts), [`bod-cod-cancellation.repository.test.ts`](../../../../../backend/tests/unit/bod-cod-cancellation.repository.test.ts) |
+| Regression tests | [`bod-cod-report-submission-policy.test.ts`](../../../../../backend/tests/unit/bod-cod-report-submission-policy.test.ts), [`bod-cod-cancellation.repository.test.ts`](../../../../../backend/tests/unit/bod-cod-cancellation.repository.test.ts), [`bod-cod-rejection.repository.test.ts`](../../../../../backend/tests/unit/bod-cod-rejection.repository.test.ts) |
 | Numbering | [`bod-cod-deviation-report-number.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-report-number.ts), [`bod-cod-deviation-report-numbering.repository.ts`](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-report-numbering.repository.ts) |
 | Tests | [`bod-cod-deviation-reports.route.test.ts`](../../../../../backend/tests/unit/bod-cod-deviation-reports.route.test.ts), [`bod-cod-deviation-reports.repository.test.ts`](../../../../../backend/tests/unit/bod-cod-deviation-reports.repository.test.ts), [`bod-cod-deviation-report-number.test.ts`](../../../../../backend/tests/unit/bod-cod-deviation-report-number.test.ts), [`bod-cod-deviation-report-numbering.repository.test.ts`](../../../../../backend/tests/unit/bod-cod-deviation-report-numbering.repository.test.ts) |
 | Evidence | [เลขรายงาน BOD/COD แยกตามภาคและปี](../../../evidence/bod-cod-deviation-reports/request-numbering.tdd.md) |

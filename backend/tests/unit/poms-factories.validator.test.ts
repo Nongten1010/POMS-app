@@ -227,12 +227,12 @@ describe('POMS factory edit request validators', () => {
     ).toBe(true);
   });
 
-  it('requires an officer note for REJECT', () => {
+  it('accepts REJECT without an officer note', () => {
     expect(
       reviewPomsFactoryEditRequestSchema.safeParse({
         decision: 'REJECT',
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it.each(['APPROVE', 'REJECT'] as const)('accepts final review decision %s', (decision) => {

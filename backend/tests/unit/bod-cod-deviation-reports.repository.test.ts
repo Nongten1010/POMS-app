@@ -460,14 +460,18 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       isCurrent: true,
     };
 
-    expect(buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL', ['monitoring_kpm'])).toEqual([
-      'APPROVE',
-      'REQUEST_REVISION',
-      'REJECT',
-    ]);
-    expect(buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL', ['center_director'])).toEqual([]);
-    expect(buildBodCodAllowedActionsForTests('APPROVED', currentStep, 'ALL', ['monitoring_kpm'])).toEqual([]);
-    expect(buildBodCodAllowedActionsForTests('REJECTED', currentStep, 'ALL', ['monitoring_kpm'])).toEqual([]);
+    expect(
+      buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL', ['monitoring_kpm']),
+    ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
+    expect(
+      buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL', ['center_director']),
+    ).toEqual(['REJECT']);
+    expect(
+      buildBodCodAllowedActionsForTests('APPROVED', currentStep, 'ALL', ['monitoring_kpm']),
+    ).toEqual(['REJECT']);
+    expect(
+      buildBodCodAllowedActionsForTests('REJECTED', currentStep, 'ALL', ['monitoring_kpm']),
+    ).toEqual(['REJECT']);
   });
 
   it('allows BOD/COD director approvals only on their assigned workflow steps', () => {
@@ -486,23 +490,25 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       isCurrent: true,
     };
 
-    expect(buildBodCodAllowedActionsForTests('WAITING_REVIEW', reviewerStep, 'ALL', ['kpm_director'])).toEqual([
-      'APPROVE',
-      'REQUEST_REVISION',
-      'REJECT',
-    ]);
-    expect(buildBodCodAllowedActionsForTests('WAITING_REVIEW', reviewerStep, 'ALL', ['center_director'])).toEqual([]);
-    expect(buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', ['kwp_director'])).toEqual([
-      'APPROVE',
-      'REQUEST_REVISION',
-      'REJECT',
-    ]);
-    expect(buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', ['center_director'])).toEqual([
-      'APPROVE',
-      'REQUEST_REVISION',
-      'REJECT',
-    ]);
-    expect(buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', ['monitoring_kpm'])).toEqual([]);
+    expect(
+      buildBodCodAllowedActionsForTests('WAITING_REVIEW', reviewerStep, 'ALL', ['kpm_director']),
+    ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
+    expect(
+      buildBodCodAllowedActionsForTests('WAITING_REVIEW', reviewerStep, 'ALL', ['center_director']),
+    ).toEqual(['REJECT']);
+    expect(
+      buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', ['kwp_director']),
+    ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
+    expect(
+      buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', [
+        'center_director',
+      ]),
+    ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
+    expect(
+      buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', [
+        'monitoring_kpm',
+      ]),
+    ).toEqual(['REJECT']);
   });
 
   it('maps BOD/COD workflow actions to the next report and step state', () => {

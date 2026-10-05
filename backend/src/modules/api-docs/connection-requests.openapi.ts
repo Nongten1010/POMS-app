@@ -282,11 +282,13 @@ const monitoringPointStatusSchema = (description: string): OpenApiObject => ({
 });
 
 const reviewDecisionLabels: EnumLabelMap = {
+  REJECT: 'ไม่อนุมัติ',
   APPROVE_DESIGN: 'อนุมัติแบบ',
   REQUEST_REVISION: 'แจ้งแก้ไขแบบ',
 };
 
 const statusActionLabels: EnumLabelMap = {
+  REJECT: 'ไม่อนุมัติ',
   APPROVE_FORM: 'อนุมัติคำขอ',
   REQUEST_REVISION: 'ส่งกลับให้แก้ไข',
   RETURN_TO_WAITING_CONNECTION: 'ย้อนกลับไปรอเชื่อมต่อ',
@@ -312,6 +314,8 @@ const requestStatusDescriptions: EnumLabelMap = {
   CONNECTION_CONFIRMED: 'โรงงานยืนยันการตั้งค่าแล้วและรอเจ้าหน้าที่ตรวจยืนยันการเชื่อมต่อ',
   CONNECTED: 'เชื่อมต่อสำเร็จและใช้งานในระบบแล้ว',
   CANCELED: 'คำขอถูกยกเลิกและไม่เดิน workflow ต่อ',
+  REJECTED:
+    'คำขอไม่อนุมัติ เป็นสถานะสิ้นสุด; ผู้มีสิทธิ์ approve ปฏิเสธได้จากทุกสถานะโดยไม่บังคับเหตุผล',
 };
 
 const requestTypeDescriptions: EnumLabelMap = {
@@ -402,6 +406,7 @@ const requestListParameters = [
       'CONNECTION_CONFIRMED',
       'CONNECTED',
       'CANCELED',
+      'REJECTED',
     ],
     connectionRequestStatusFilterDescription,
     false,
@@ -1083,6 +1088,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
                 'CONNECTION_CONFIRMED',
                 'CONNECTED',
                 'CANCELED',
+                'REJECTED',
               ],
               CONNECTION_REQUEST_STATUS_LABELS,
               requestStatusDescriptions,
@@ -2800,7 +2806,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'พิจารณาคำขอ',
       summary: 'อนุมัติแบบหรือแจ้งแก้ไข',
       operationId: 'reviewConnectionRequest',
-      description: 'Permission: cems_wpms_requests:approve. ' + addParameterOwnershipDescription,
+      description:
+        'Permission: cems_wpms_requests:approve พร้อม data scope. decision REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ล็อกคำขอและตรวจ approve scope ซ้ำก่อนบันทึก; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. คำสั่งอื่นคงข้อจำกัดสถานะเดิม; คำสั่งที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
+        addParameterOwnershipDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -2831,6 +2839,17 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
                 revisionReason: { type: 'string', minLength: 1, maxLength: 1000 },
                 officerNote: { type: 'string', maxLength: 1000, nullable: true },
               },
+            },
+            {
+              type: 'object',
+              additionalProperties: false,
+              required: ['decision'],
+              properties: {
+                decision: { ...enumSchema(['REJECT'], reviewDecisionLabels) },
+                officerNote: { type: 'string', maxLength: 1000, nullable: true },
+                revisionReason: { type: 'string', maxLength: 1000, nullable: true },
+              },
+              example: { decision: 'REJECT' },
             },
           ],
           discriminator: { propertyName: 'decision' },
@@ -2863,6 +2882,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เปลี่ยนสถานะหรือแจ้งแก้ไข',
       operationId: 'changeConnectionRequestStatus',
       description:
+        'ล็อกคำขอและตรวจ approve scope ซ้ำก่อน REJECT; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. คำสั่งอื่นที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
+        'action REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ตรวจ approve permission และ data scope เดิม บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. ' +
         'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นผู้มีสิทธิ์ edit ตาม scope/assignment ของโรงงาน resubmit เพื่อเก็บ revision ใหม่ ทั้ง OPERATOR_FORM และ OFFICER_DIRECT_API โดยคง createdBy เดิม. กรณีอื่นคงข้อจำกัด transition เดิม. ' +
         addParameterOwnershipDescription,
       parameters: [idPathParameter],
@@ -2905,6 +2926,17 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
                 revisionReason: { type: 'string', minLength: 1, maxLength: 1000 },
                 officerNote: { type: 'string', maxLength: 1000, nullable: true },
               },
+            },
+            {
+              type: 'object',
+              additionalProperties: false,
+              required: ['action'],
+              properties: {
+                action: { ...enumSchema(['REJECT'], statusActionLabels) },
+                officerNote: { type: 'string', maxLength: 1000, nullable: true },
+                revisionReason: { type: 'string', maxLength: 1000, nullable: true },
+              },
+              example: { action: 'REJECT' },
             },
           ],
           discriminator: { propertyName: 'action' },

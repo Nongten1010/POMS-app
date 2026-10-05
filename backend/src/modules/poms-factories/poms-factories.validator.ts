@@ -278,11 +278,4 @@ export const reviewPomsFactoryEditRequestSchema = z
         message: 'revisionReason is only allowed for REQUEST_REVISION',
       });
     }
-    if (value.decision === 'REJECT' && !value.officerNote) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['officerNote'],
-        message: 'officerNote is required when rejecting a request',
-      });
-    }
   });

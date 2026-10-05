@@ -595,6 +595,7 @@ export const pomsFactoriesRepository = {
     id: number,
     input: ReviewPomsFactoryEditRequestInput,
     actorUserId: number,
+    access?: Pick<FactoryAccess, 'scope' | 'regionalAccess'>,
   ): Promise<PomsFactoryEditRequestDTO> {
     return db.transaction(async (trx) => {
       const request = await trx<EditRequestRow>('poms_factory_edit_requests')
@@ -603,7 +604,19 @@ export const pomsFactoriesRepository = {
         .forUpdate()
         .first();
       if (!request) throw new NotFoundError('POMS factory edit request not found');
-      if (!REVIEWABLE_STATUSES.includes(request.status)) {
+      if (
+        access &&
+        !(await buildEditRequestsQuery({ ...access, actorUserId }, trx)
+          .where('req.id', id)
+          .select('req.id')
+          .first())
+      ) {
+        throw new ForbiddenError('POMS factory edit request is outside the approval scope');
+      }
+      if (
+        input.decision !== POMS_FACTORY_EDIT_REQUEST_ACTION.REJECT &&
+        !REVIEWABLE_STATUSES.includes(request.status)
+      ) {
         throw new ConflictError(
           'POMS factory edit request cannot be reviewed from its current status',
           {
@@ -629,7 +642,10 @@ export const pomsFactoriesRepository = {
           officer_note: input.officerNote ?? null,
           reviewed_by: actorUserId,
           reviewed_at: now,
-          approved_at: transition.status === POMS_FACTORY_EDIT_REQUEST_STATUS.APPROVED ? now : null,
+          approved_at:
+            transition.status === POMS_FACTORY_EDIT_REQUEST_STATUS.APPROVED
+              ? now
+              : request.approved_at,
           updated_by: actorUserId,
           updated_at: now,
         });

@@ -14,6 +14,7 @@ export const CONNECTION_REQUEST_STATUS = {
   CONNECTION_CONFIRMED: 'CONNECTION_CONFIRMED',
   CONNECTED: 'CONNECTED',
   CANCELED: 'CANCELED',
+  REJECTED: 'REJECTED',
 } as const;
 
 export type ConnectionRequestStatus =
@@ -58,6 +59,7 @@ export const CONNECTION_REQUEST_STATUS_LABELS: Record<ConnectionRequestStatus, s
   [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]: 'รอเชื่อมต่อ',
   [CONNECTION_REQUEST_STATUS.CONNECTED]: 'เชื่อมต่อแล้ว',
   [CONNECTION_REQUEST_STATUS.CANCELED]: 'ยกเลิก',
+  [CONNECTION_REQUEST_STATUS.REJECTED]: 'ไม่อนุมัติ',
 };
 
 export type ConnectionSystemType = 'CEMS' | 'WPMS';
@@ -254,14 +256,14 @@ export interface ListPublicFactoryMapPointsQuery {
 }
 
 export interface ReviewConnectionRequestInput {
-  decision: 'APPROVE_DESIGN' | 'REQUEST_REVISION';
+  decision: 'APPROVE_DESIGN' | 'REQUEST_REVISION' | 'REJECT';
   revisionReason?: string | null;
   officerNote?: string | null;
   pointCodeAssignments?: PointCodeAssignmentInput[];
 }
 
 export interface ChangeConnectionRequestStatusInput {
-  action: 'APPROVE_FORM' | 'REQUEST_REVISION' | 'RETURN_TO_WAITING_CONNECTION';
+  action: 'APPROVE_FORM' | 'REQUEST_REVISION' | 'RETURN_TO_WAITING_CONNECTION' | 'REJECT';
   revisionReason?: string | null;
   officerNote?: string | null;
   pointCodeAssignments?: PointCodeAssignmentInput[];

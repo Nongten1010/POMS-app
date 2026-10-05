@@ -44,6 +44,7 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/factories/factory-001/previous-request
 | แก้ไขแล้ว/รอพิจารณาแบบ | `REVISED_PENDING_DESIGN_REVIEW` | โรงงานส่งแบบแก้ไขแล้ว รอเจ้าหน้าที่ตรวจอีกครั้ง         |
 | รอเชื่อมต่อ            | `CONNECTION_CONFIRMED`          | โรงงานยืนยันการตั้งค่าแล้ว รอเจ้าหน้าที่ตรวจยืนยัน      |
 | เชื่อมต่อแล้ว          | `CONNECTED`                     | เชื่อมต่อสำเร็จและเป็นจุดตรวจวัดที่ใช้งานอยู่           |
+| ไม่อนุมัติ             | `REJECTED`                      | คำขอถูกปฏิเสธและจบ workflow; ไม่ยกเลิกจุดที่เชื่อมต่ออยู่ |
 | ยกเลิก                 | `CANCELED`                      | คำขอสิ้นสุดและไม่ดำเนิน workflow ต่อ                    |
 
 ### Main Flow
@@ -78,6 +79,16 @@ curl --request POST \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
   --data '{"decision":"APPROVE_DESIGN","officerNote":null}'
+```
+
+เจ้าหน้าที่ [ปฏิเสธคำขอ](#reject-request) จากทุกสถานะโดยไม่บังคับเหตุผล:
+
+```bash
+curl --request POST \
+  --url '<BASE_URL>/api/v1/cems-wpms-requests/101/status' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Content-Type: application/json' \
+  --data '{"action":"REJECT"}'
 ```
 
 ผู้ประกอบการยกเลิกคำขอของตนเอง:
@@ -135,8 +146,8 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 | อ่าน config เดียวในคำขอ                       | `GET`  | `/api/v1/cems-wpms-requests/:id/device-configs/:configId` | `id`, `configId` path          | `cems_wpms_requests:view`           | [Device configs](./device-configs.md)                                                                                             |
 | สร้างคำขอเชื่อมต่อใหม่                        | `POST` | `/api/v1/cems-wpms-requests`                              | JSON body                      | `cems_wpms_requests:edit`           | [Eligibility gate](#eligibility-gate)                                                                                             |
 | ส่งแบบใหม่หลังถูกแจ้งแก้ไข                    | `PUT`  | `/api/v1/cems-wpms-requests/:id/form`                              | `id` path + JSON body          | `cems_wpms_requests:edit` + data scope | [Payload/validation](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform)                                      |
-| อนุมัติแบบ/แจ้งแก้ไข                          | `POST` | `/api/v1/cems-wpms-requests/:id/review`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Approve design](#approve-design)                                                                                                 |
-| เปลี่ยนสถานะ/แจ้งแก้ไข                        | `POST` | `/api/v1/cems-wpms-requests/:id/status`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Approve form status](#approve-form-status)                                                                                       |
+| อนุมัติแบบ/แจ้งแก้ไข/ปฏิเสธ                    | `POST` | `/api/v1/cems-wpms-requests/:id/review`                   | `id` path + JSON body          | `cems_wpms_requests:approve` + data scope | [Approve design](#approve-design), [ปฏิเสธ](#reject-request)                                                                       |
+| เปลี่ยนสถานะ/แจ้งแก้ไข/ปฏิเสธ                  | `POST` | `/api/v1/cems-wpms-requests/:id/status`                   | `id` path + JSON body          | `cems_wpms_requests:approve` + data scope | [Approve form status](#approve-form-status), [ปฏิเสธ](#reject-request)                                                             |
 | ผู้ประกอบการยกเลิกคำขอ                        | `POST` | `/api/v1/cems-wpms-requests/:id/cancel`                   | `id` path + `{ reason? }`      | `cems_wpms_requests:edit` + data scope   | [Cancel request](./operator-cancel-request.md)                                                                                    |
 | บันทึก config อุปกรณ์ในคำขอ                   | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs`           | `id` path + JSON body          | `cems_wpms_requests:edit`           | [Device configs](./device-configs.md)                                                                                             |
 | บันทึก/ยืนยันการเชื่อมต่อ                     | `POST` | `/api/v1/cems-wpms-requests/:id/confirm-connection`       | `id` path + JSON body          | `cems_wpms_requests:edit`           | `action`, `confirmedAt?`, `note?`                                                                                                 |
@@ -662,6 +673,65 @@ Minimal response (`200 OK`):
 }
 ```
 
+<a id="reject-request"></a>
+
+### ปฏิเสธคำขอ
+
+ใช้ `POST /api/v1/cems-wpms-requests/:id/status` พร้อม `action = "REJECT"` หรือ `POST /api/v1/cems-wpms-requests/:id/review` พร้อม `decision = "REJECT"` ทั้งสอง endpoint ใช้ Bearer token, สิทธิ์ `cems_wpms_requests:approve` และขอบเขตข้อมูลของสิทธิ์นั้นตามเดิม
+
+| Field | Location | Type | Required | Rules |
+| --- | --- | --- | --- | --- |
+| `id` | path | integer | Yes | จำนวนเต็ม >=1 ของคำขอในขอบเขตข้อมูลที่เข้าถึงได้ |
+| `action` | body (`/:id/status`) | `REJECT` | Yes | เลือกคำสั่งปฏิเสธ |
+| `decision` | body (`/:id/review`) | `REJECT` | Yes | เลือกคำสั่งปฏิเสธ |
+| `revisionReason` | body | string/null | No | trim ไม่เกิน 1000 ตัวอักษร; ละ field, `null`, `""` หรือช่องว่างล้วนได้ |
+| `officerNote` | body | string/null | No | trim ไม่เกิน 1000 ตัวอักษร; ละ field, `null`, `""` หรือช่องว่างล้วนได้ |
+
+Minimal request สำหรับ status endpoint:
+
+```json
+{ "action": "REJECT" }
+```
+
+Minimal request สำหรับ review endpoint:
+
+```json
+{ "decision": "REJECT" }
+```
+
+Relevant response fields (`200 OK`):
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `success` | boolean | สำเร็จเป็น `true` |
+| `data.status` | `REJECTED` | สถานะคำขอหลังปฏิเสธ |
+| `data.statusLabel` | string | `ไม่อนุมัติ` |
+| `data.revisionReason`, `data.officerNote` | string/null | เหตุผลและหมายเหตุที่ส่งมา; omitted/null/blank คืน `null` |
+| `data.statusHistory[].status` | string | เพิ่มรายการประวัติ `REJECTED` |
+| `data.statusHistory[].note` | string/null | เหตุผลและหมายเหตุรวมสูงสุด 2001 ตัวอักษร คั่นด้วย newline |
+| `data.statusHistory[].changedById` | integer/null | ID ผู้ทำรายการจาก access token |
+| `data.statusHistory[].isTerminal` | boolean | รายการ `REJECTED` เป็น `true` |
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 101,
+    "status": "REJECTED",
+    "statusLabel": "ไม่อนุมัติ",
+    "revisionReason": null,
+    "officerNote": null,
+    "statusHistory": [{ "status": "REJECTED", "changedById": 7, "isTerminal": true }]
+  }
+}
+```
+
+ปฏิเสธได้จากทุกสถานะ ได้แก่ `PENDING_DESIGN_REVIEW`, `WAITING_FACTORY_REVISION`, `REVISED_PENDING_DESIGN_REVIEW`, `WAITING_CONNECTION`, `CONNECTION_CONFIRMED`, `CONNECTED`, `CANCELED` และ `REJECTED` โดยไม่บังคับเหตุผล `REJECTED` เป็นสถานะสิ้นสุดของ workflow คำขอ แต่ปฏิเสธซ้ำได้ และการปฏิเสธคำขอที่เคยเชื่อมต่อแล้วเปลี่ยนเฉพาะสถานะ/ประวัติคำขอ ไม่เลิกใช้งานจุด current/live ใน `cems_wpms_connected_measurement_points` และไม่ย้อนข้อมูลโรงงานที่เชื่อมต่อสำเร็จแล้ว
+
+การปฏิเสธล็อกคำขอและตรวจขอบเขตสิทธิ์อนุมัติอีกครั้งก่อนบันทึก หากข้อมูลโรงงานหรือพื้นที่เปลี่ยนระหว่างทำรายการจนคำขออยู่นอกสิทธิ์ ตอบ 404 `NOT_FOUND` และไม่บันทึกสถานะหรือประวัติ คำสั่ง workflow อื่นที่ล่าช้าและพบว่าคำขอถูกปฏิเสธไปแล้วตอบ 409 `CONFLICT` พร้อม `error.details.currentStatus = "REJECTED"` ก่อนออกรหัสจุดหรือเปลี่ยนข้อมูลจุดที่เชื่อมต่ออยู่; `REJECT` ยังทำซ้ำได้
+
+กฎสถานะของการอนุมัติ แจ้งแก้ไข ยกเลิก และคำสั่งอื่นยังใช้ตามเดิม ไม่มี token ตอบ 401 `UNAUTHORIZED`; ไม่มีสิทธิ์อนุมัติตอบ 403 `FORBIDDEN`; ไม่พบคำขอหรืออยู่นอกขอบเขตข้อมูลตอบ 404 `NOT_FOUND`; field ไม่ถูกต้องหรือมี field เกิน schema ตอบ 400 `VALIDATION_ERROR` ใช้ [shared error envelope](../../shared/common-api/README.md)
+
 ### Approve design
 
 Request fields:
@@ -1051,6 +1121,8 @@ Minimal response:
 - การเชื่อมต่อโดยเจ้าหน้าที่โดยตรงเป็น flow แยกและไม่ใช้ลำดับอัตโนมัตินี้.
 
 ## Backend Maintainer Map
+
+การปฏิเสธคำขอ: [migration เพิ่มสถานะ `REJECTED`](../../../../../backend/src/db/migrations/0129_allow_rejected_connection_request_status.ts), [HTTP และ persistence regression](../../../../../backend/tests/unit/connection-requests.rejection.route.test.ts), [validation regression](../../../../../backend/tests/unit/connection-requests.rejection.validator.test.ts), [migration regression](../../../../../backend/tests/unit/connection-requests.rejection.migration.test.ts), [runtime OpenAPI regression](../../../../../backend/tests/unit/connection-requests.rejection.openapi.test.ts)
 
 | Concern                          | Canonical source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

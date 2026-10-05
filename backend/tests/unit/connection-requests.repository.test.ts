@@ -839,7 +839,11 @@ describe('connectionRequestsRepository query helpers', () => {
       endStatus: CONNECTION_REQUEST_STATUS.CONNECTED,
       endStatusLabel: 'เชื่อมต่อแล้ว',
       isTerminal: true,
-      terminalStatuses: [CONNECTION_REQUEST_STATUS.CONNECTED, CONNECTION_REQUEST_STATUS.CANCELED],
+      terminalStatuses: [
+        CONNECTION_REQUEST_STATUS.CONNECTED,
+        CONNECTION_REQUEST_STATUS.CANCELED,
+        CONNECTION_REQUEST_STATUS.REJECTED,
+      ],
       totalDurationDays: 2,
       totalDurationText: '2 วัน',
     });

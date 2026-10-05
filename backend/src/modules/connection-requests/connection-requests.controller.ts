@@ -626,7 +626,13 @@ export const connectionRequestsController = {
       const actorUserId = requireActorUserId(req);
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
       const payload = reviewConnectionRequestSchema.parse(req.body);
-      const data = await connectionRequestsService.review(id, payload, actorUserId);
+      const data = await connectionRequestsService.review(
+        id,
+        payload,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:approve'),
+        ...getRegionalAccessArg(req),
+      );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);

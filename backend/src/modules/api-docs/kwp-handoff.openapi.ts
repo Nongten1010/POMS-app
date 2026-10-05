@@ -175,10 +175,14 @@ export function extendKwpHandoffSchemas(schemas: Record<string, Schema>): void {
       reviewedAt: { ...text, format: 'date-time' },
       currentStep: step,
       steps: array(step),
-      allowedActions: array({
-        type: 'string',
-        enum: ['REQUEST_REVISION', 'APPROVE', 'RESUBMIT', 'CANCEL'],
-      }),
+      allowedActions: {
+        ...array({
+          type: 'string',
+          enum: ['REQUEST_REVISION', 'APPROVE', 'REJECT', 'RESUBMIT', 'CANCEL'],
+        }),
+        description:
+          'REJECT แสดงให้เจ้าหน้าที่ที่มีบทบาทและ kwp_forms:approve ใน data scope ที่อนุมัติได้ทุกสถานะ; action อื่นคงเงื่อนไขเดิม',
+      },
     },
   });
   schemas.KwpEligibleMeasurementPoint = {

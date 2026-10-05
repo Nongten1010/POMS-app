@@ -965,7 +965,7 @@ Minimal request JSON:
 | `data.submittedAt`           | ISO 8601 string                                                       | no       | เวลาส่งรอบล่าสุด                                                                 |
 | `data.reviewedBy`            | number                                                                | yes      | user ID ผู้พิจารณาล่าสุด                                                         |
 | `data.reviewedAt`            | ISO 8601 string                                                       | yes      | เวลาพิจารณาล่าสุด                                                                |
-| `data.approvedAt`            | ISO 8601 string                                                       | yes      | เวลาอนุมัติ; มีเฉพาะ `APPROVED`                                                  |
+| `data.approvedAt`            | ISO 8601 string                                                       | yes      | เวลาอนุมัติเดิม; ยังเก็บไว้เมื่อเปลี่ยนจาก `APPROVED` เป็น `REJECTED`              |
 | `data.createdBy`             | number                                                                | no       | user ID ผู้สร้างคำขอครั้งแรก                                                     |
 | `data.events`                | object[]                                                              | no       | audit events เรียงตามเวลาและ ID                                                  |
 | `data.events[].id`           | number                                                                | no       | event ID                                                                         |
@@ -1303,7 +1303,7 @@ Minimal response (`200 OK`):
 
 ### `POST /api/v1/poms-factories/edit-requests/:id/review`
 
-admin พิจารณาคำขอที่อยู่ใน `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` และอยู่ใน data scope ของ `factories:approve` ผู้มี role `admin` พิจารณาคำขอของตนเองได้ แม้เป็นผู้สร้างคำขอครั้งแรก (`createdBy`) หรือผู้ส่งรอบล่าสุด (`submittedBy`) โดยใช้ได้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT`
+admin ใช้ `REJECT` ได้จากทุกสถานะของคำขอ ได้แก่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW`, `APPROVED`, `REJECTED` และ `CANCELLED` โดยไม่บังคับเหตุผล ส่วน `APPROVE` และ `REQUEST_REVISION` ยังรับเฉพาะ `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` ทุก decision ต้องอยู่ใน data scope ของ `factories:approve` ผู้มี role `admin` พิจารณาคำขอของตนเองได้ แม้เป็นผู้สร้างคำขอครั้งแรก (`createdBy`) หรือผู้ส่งรอบล่าสุด (`submittedBy`)
 
 เมื่อพิจารณาสำเร็จ response ใช้ detail contract เดียวกับ `GET /api/v1/poms-factories/edit-requests/:id` จึงคืน `contactPersons`, `notificationEmails`, `informationProviderName` และ `informationProviderPosition` ที่ hydrate จาก source connection request แล้วด้วย
 
@@ -1313,7 +1313,7 @@ admin พิจารณาคำขอที่อยู่ใน `PENDING_REVI
 | ---------------- | ------------------------------------------- | ----------- | ---------------------------------------------------------------------------------- |
 | `decision`       | `APPROVE` \| `REQUEST_REVISION` \| `REJECT` | yes         | decision ของ state transition                                                      |
 | `revisionReason` | string \| null                              | conditional | บังคับเมื่อ `decision = "REQUEST_REVISION"`; trim แล้วไม่เกิน 1000 ตัวอักษร        |
-| `officerNote`    | string \| null                              | conditional | บังคับเมื่อ `decision = "REJECT"`; optional เมื่อ `APPROVE`; ไม่เกิน 1000 ตัวอักษร |
+| `officerNote`    | string \| null                              | no          | optional ทุก decision; ไม่เกิน 1000 ตัวอักษร; omitted, `null` หรือข้อความว่างหลัง trim บันทึกเป็น `null` |
 
 Minimal request:
 
@@ -1350,11 +1350,21 @@ Minimal response (`200 OK`):
 }
 ```
 
-หลัง `APPROVE` สำเร็จ ให้ refresh ข้อมูลโรงงานด้วย `GET /api/v1/poms-factories/:factoryId` หรือฟอร์มด้วย `GET /api/v1/poms-factories/:factoryId/form` เพื่ออ่านค่าปัจจุบัน ห้ามใช้ `currentFactory` ของรายละเอียดคำขอแทนข้อมูลโรงงานล่าสุด เพราะเป็น snapshot ก่อนแก้ไขที่ต้องเก็บไว้เพื่อเปรียบเทียบกับ `proposedFactory` แม้สถานะเป็น `APPROVED` แล้ว การพิจารณาแบบ `REQUEST_REVISION` หรือ `REJECT` จะไม่เปลี่ยนข้อมูลโรงงานจริง
+ตัวอย่าง request สำหรับ reject โดยไม่ระบุเหตุผล:
+
+```json
+{ "decision": "REJECT" }
+```
+
+เมื่อสำเร็จตอบ `200` ด้วย full [`PomsFactoryEditRequestResponse`](#get-apiv1poms-factoriesedit-requestsid) ตาม contract ด้านบน โดยมี `status = "REJECTED"`, `statusLabel = "ไม่อนุมัติ"`, `isOpen = false`, `officerNote = null` และเพิ่ม event `REJECT` ที่เก็บ `fromStatus` จริงขณะล็อกคำขอ การ reject ซ้ำจาก `REJECTED` สำเร็จและเพิ่ม event ใหม่
+
+หลัง `APPROVE` สำเร็จ ให้ refresh ข้อมูลโรงงานด้วย `GET /api/v1/poms-factories/:factoryId` หรือฟอร์มด้วย `GET /api/v1/poms-factories/:factoryId/form` เพื่ออ่านค่าปัจจุบัน ห้ามใช้ `currentFactory` ของรายละเอียดคำขอแทนข้อมูลโรงงานล่าสุด เพราะเป็น snapshot ก่อนแก้ไขที่ต้องเก็บไว้เพื่อเปรียบเทียบกับ `proposedFactory` แม้สถานะเป็น `APPROVED` แล้ว การพิจารณาแบบ `REQUEST_REVISION` หรือ `REJECT` จะไม่เปลี่ยนข้อมูลโรงงานจริง การ reject คำขอที่เคย `APPROVED` ไม่ย้อนข้อมูล current/live และยังเก็บ `approvedAt` กับ events เดิมไว้
 
 ## Workflow, Concurrency And Idempotency
 
 การเปิดใช้ cancellation จาก `REJECTED` ต้องรัน migration `0111_allow_rejected_poms_factory_edit_request_cancellation.ts` ด้วย เพื่อให้ audit constraint ยอมรับ `REJECTED → CANCELLED` โดยตรวจ edit scope/assignment และล็อกสถานะก่อนบันทึก การ rollback จะถูกปฏิเสธหากมีประวัติ transition ใหม่นี้แล้ว
+
+การเปิดใช้ `REJECT` จากทุกสถานะต้องรัน [`0130_allow_unrestricted_poms_edit_request_rejection.ts`](../../../../../backend/src/db/migrations/0130_allow_unrestricted_poms_edit_request_rejection.ts) ก่อนเปิด backend รุ่นนี้ เพื่อให้ audit constraint ยอมรับ transition ใหม่ โดยตรวจ approval scope ซ้ำหลังล็อกคำขอและบันทึกสถานะกับ event ใน transaction เดียวกัน การ rollback ถูกปฏิเสธเมื่อมีประวัติ `REJECT` จากสถานะที่กติกาเก่าไม่รองรับ โดยไม่ลบหรือแก้ประวัติ
 
 ### Status And Decisions
 
@@ -1376,7 +1386,7 @@ State transitions:
 | `REVISION_REQUESTED`                           | ผู้มี `factories:edit` | resubmission       | `REVISED_PENDING_REVIEW` | refresh current snapshot และส่ง proposed payload เดิมอีกครั้ง |
 | `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED` | ผู้มี `factories:edit` ตาม scope/assignment | `CANCEL` | `CANCELLED` | ปิดคำขอโดยไม่แก้ข้อมูล current/live |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `APPROVE`          | `APPROVED`               | sync ข้อมูลจริงแบบ atomic ตาม `formType`                    |
-| `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้ข้อมูลจริง                                   |
+| ทุกสถานะ รวม `APPROVED`, `REJECTED` และ `CANCELLED` | admin ตาม approval scope | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้หรือย้อนข้อมูล current/live; เหตุผล optional |
 
 ใน canonical mode `BASIC_INFO` เขียนข้อมูลทั่วไปหลักและประวัติ revision ใน transaction เดียวกับ approval พร้อมอัปเดตสำเนาสำหรับรองรับระบบเดิมตามตารางด้านล่าง; ตารางนี้เป็น compatibility projection ไม่ใช่หลายแหล่งหลัก. ใน legacy mode ใช้ตารางเดิมตาม mapping นี้โดยตรง. ใช้ allowlist เดิมรวมถึงการอนุมัติคำขอเก่าที่ยังรอพิจารณา:
 
@@ -1388,7 +1398,7 @@ State transitions:
 | `factoryFrontPhotos`, `factoryLogo` | `factory_front_photos_json`, `factory_logo_json` ทุก active point                         | ไม่มี target field และไม่อัปเดต                  |
 
 - หนึ่งโรงงานมี open request ได้หนึ่งรายการต่อ `formType` โดย open status คือ `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`
-- create/resubmission/cancel/review ไม่รับ `Idempotency-Key`; การยกเลิกซ้ำตอบ `409 INVALID_STATUS_TRANSITION` ส่วนการเรียก transition อื่นซ้ำตอบ `409 CONFLICT`
+- create/resubmission/cancel/review ไม่รับ `Idempotency-Key`; การยกเลิกซ้ำตอบ `409 INVALID_STATUS_TRANSITION`; `REJECT` ซ้ำสำเร็จและเพิ่ม audit event ใหม่ ส่วน `APPROVE` หรือ `REQUEST_REVISION` ที่สถานะไม่รองรับตอบ `409 CONFLICT`
 - create/resubmission lock ข้อมูล current/live connected POMS และตรวจ source version ของ snapshot ใน transaction เดียวกับการบันทึกคำขอและ event; หากขั้นตอนใดล้มเหลว transaction จะ rollback จึงไม่เหลือคำขอหรือ event ที่บันทึกเพียงบางส่วน
 - การอนุมัติ lock คำขอและข้อมูล current/live ที่เกี่ยวข้องใน transaction เดียวกัน และตรวจ source version จากตอนส่ง/ส่งกลับ หากข้อมูลจริงถูกเปลี่ยนระหว่างรอพิจารณาให้ตอบ `409 CONFLICT` โดยไม่มี partial update
 - ใน legacy mode source timestamp คงความละเอียดระดับมิลลิวินาทีตั้งแต่ create/resubmission; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL `DATETIME` จะใช้ `currentFactory.updatedAt` ใน snapshot เดิมได้เฉพาะเมื่อ source timestamp ตรงกับผลการปัดเวลานั้น และยังต้องตรงกับ current/live ทุกมิลลิวินาที จึงอนุมัติคำขอที่ค้างได้โดยไม่ต้องสร้างหรือส่งคำขอใหม่ หากเวลาเปลี่ยนจริงยังตอบ `409 CONFLICT`; snapshot เก่าที่ไม่มีเวลาที่ใช้ได้ยังตรวจ source timestamp เดิมแบบตรงกันเท่านั้น
@@ -1406,7 +1416,7 @@ State transitions:
 | `400`       | `FILE_UPLOAD_FAILED` | multipart upload เกิน limit เช่นไฟล์เกิน 5 MiB หรือส่งไฟล์/part เกินจำนวน                                                            | แสดงข้อผิดพลาดอัปโหลดและให้เลือกไฟล์ใหม่        |
 | `400`       | `BAD_REQUEST`      | แก้ข้อมูลติดต่อโดยเลือกจุดข้าม CEMS/WPMS, upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
-| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกอยู่นอก edit scope/assignment, reviewer ไม่มี role `admin`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
+| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกอยู่นอก edit scope/assignment, reviewer ไม่มี role `admin` หรือคำขอหลุดจาก approval scope หลังล็อก | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
 | `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
 | `409`       | `CONFLICT`         | ไม่มีข้อมูลที่แก้ไขเปลี่ยน, ข้อมูลติดต่อเปลี่ยนหลังยื่นคำขอ, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version/revision เปลี่ยน, canonical profile ยังไม่พร้อม, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |
@@ -1418,6 +1428,8 @@ State transitions:
 - [นิยามโรงงาน current/live และโรงงานที่เข้าข่าย](../eligible-factories/README.md)
 
 ## Backend Maintainer Map
+
+การ reject จากทุกสถานะและเหตุผล optional ตรวจด้วย [workflow tests](../../../../../backend/tests/unit/poms-factories.rejection.workflow.test.ts), [validator tests](../../../../../backend/tests/unit/poms-factories.rejection.validator.test.ts) และ [migration tests](../../../../../backend/tests/unit/poms-factories.rejection.migration.test.ts)
 
 List summary ใช้ [ตัวระบุจุดเป้าหมาย](../../../../../backend/src/modules/poms-factories/poms-edit-request-targets.ts), migration `0123_add_poms_edit_request_target_ids.ts` และ [หลักฐานทดสอบ list summary](../../../evidence/master-data/poms-edit-request-list-summary.md) ต้องรัน migration ก่อนเปิด backend รุ่นนี้; ไม่ backfill IDs เดิมด้วยการเดาจาก snapshot
 

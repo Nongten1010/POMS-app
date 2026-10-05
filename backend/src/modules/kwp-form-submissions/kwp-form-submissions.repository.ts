@@ -305,10 +305,12 @@ export const kwpFormSubmissionsRepository = {
 
     const historyRows = await listWorkflowHistory(Number(submission.id));
     const workflow = toWorkflowDTO(submission, historyRows, access.scope, access.roles);
+    const canApprove =
+      access.canApprove !== false &&
+      (access.approveScope === undefined ||
+        Boolean(await buildWorkflowQuery(id, { ...access, scope: access.approveScope }).first()));
     workflow.allowedActions = workflow.allowedActions.filter((action) =>
-      action === 'CANCEL' || action === 'RESUBMIT'
-        ? access.canEdit !== false
-        : access.canApprove !== false,
+      action === 'CANCEL' || action === 'RESUBMIT' ? access.canEdit !== false : canApprove,
     );
     return workflow;
   },
@@ -2064,9 +2066,9 @@ function allowedWorkflowActions(
 }
 
 function allowedWorkflowStatusActions(status: KwpFormSubmissionStatus): KwpFormWorkflowAction[] {
-  if (status === 'SUBMITTED') return ['REQUEST_REVISION', 'APPROVE'];
-  if (status === 'REVISION_REQUESTED') return ['APPROVE'];
-  return [];
+  if (status === 'SUBMITTED') return ['REQUEST_REVISION', 'APPROVE', 'REJECT'];
+  if (status === 'REVISION_REQUESTED') return ['APPROVE', 'REJECT'];
+  return ['REJECT'];
 }
 
 function latestRevisionReason(historyRows: WorkflowHistoryRow[]): string | null {
@@ -2081,6 +2083,7 @@ function nextWorkflowStatus(
   currentStatus: KwpFormSubmissionStatus,
   action: KwpFormWorkflowAction,
 ): KwpFormSubmissionStatus {
+  if (action === 'REJECT') return 'REJECTED';
   if (action === 'CANCEL') {
     if (currentStatus === 'APPROVED' || currentStatus === 'CANCELLED') {
       throw new ConflictError('Approved or cancelled KWP submissions cannot be cancelled');
@@ -2101,11 +2104,12 @@ function nextWorkflowStatus(
 
 function workflowOfficerNote(input: ChangeKwpFormWorkflowStatusDTO): string | null {
   if (input.action === 'REQUEST_REVISION') return input.revisionReason ?? null;
+  if (input.action === 'REJECT') return input.officerNote ?? input.revisionReason ?? null;
   return input.officerNote ?? null;
 }
 
 function workflowHistoryNote(input: ChangeKwpFormWorkflowStatusDTO): string | null {
-  if (input.action === 'REQUEST_REVISION') {
+  if (input.action === 'REQUEST_REVISION' || input.action === 'REJECT') {
     return [input.revisionReason, input.officerNote].filter(Boolean).join('\n') || null;
   }
   return input.officerNote ?? null;

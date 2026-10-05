@@ -13,7 +13,7 @@
 
 หน้า Swagger แสดงตาราง `บังคับ/ไม่บังคับ/ตามเงื่อนไข`, `รับ null`, `Data type` และ validation ของ field ชุดเดียวกันใต้ `Request body` ของทั้ง 4 endpoint โดยอัตโนมัติ เอกสารหน้านี้ยังเป็น canonical contract สำหรับอ่านรายละเอียด normalization และ business rule เชิงลึกที่ทำงานร่วมกันหลาย field
 
-นอกเหนือจาก 4 endpoint ข้างต้น approval endpoints `POST /api/v1/cems-wpms-requests/:id/review` และ `POST /api/v1/cems-wpms-requests/:id/status` ยังรองรับ field `pointCodeAssignments` ใน approve branch เพื่อให้เจ้าหน้าที่เลือกได้ว่าจะใช้รหัส legacy เดิมบางจุดหรือปล่อยให้ระบบออกรหัสใหม่อัตโนมัติ
+นอกเหนือจาก 4 endpoint ข้างต้น approval endpoints `POST /api/v1/cems-wpms-requests/:id/review` และ `POST /api/v1/cems-wpms-requests/:id/status` ยังรองรับ field `pointCodeAssignments` ใน approve branch เพื่อให้เจ้าหน้าที่เลือกได้ว่าจะใช้รหัส legacy เดิมบางจุดหรือปล่อยให้ระบบออกรหัสใหม่อัตโนมัติ และรองรับ `REJECT` เพื่อ [ปฏิเสธคำขอจากทุกสถานะโดยไม่บังคับเหตุผล](./README.md#reject-request)
 
 ## Frontend Quick Start
 
@@ -933,25 +933,27 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 
 ## Review Payloads ที่เกี่ยวข้องกับการส่งแบบแก้ไข
 
-แม้ไม่ใช่ 4 endpoint หลักของหน้านี้ แต่ frontend ที่ทำ flow แจ้งแก้ไขต้องใช้ payload ต่อไปนี้ร่วมด้วย
+แม้ไม่ใช่ 4 endpoint หลักของหน้านี้ แต่ frontend ที่ทำ flow อนุมัติ แจ้งแก้ไข หรือปฏิเสธต้องใช้ payload ต่อไปนี้ร่วมด้วย ทั้งสอง endpoint ใช้ `cems_wpms_requests:approve` และ data scope ของสิทธิ์นั้น
 
 ### `POST /api/v1/cems-wpms-requests/:id/review`
 
 | Field            | Location | Required    | Nullable | Type    | Validation                                                  |
 | ---------------- | -------- | ----------- | -------- | ------- | ----------------------------------------------------------- |
 | `id`             | path     | Yes         | No       | integer | จำนวนเต็ม >=1                                               |
-| `decision`       | body     | Yes         | No       | enum    | `APPROVE_DESIGN` หรือ `REQUEST_REVISION`                    |
-| `revisionReason` | body     | Conditional | No       | string  | required เมื่อ `decision = "REQUEST_REVISION"`; trim 1-1000 |
-| `officerNote`    | body     | No          | Yes      | string  | trim <=1000                                                 |
+| `decision`       | body     | Yes         | No       | enum    | `APPROVE_DESIGN`, `REQUEST_REVISION` หรือ `REJECT` |
+| `revisionReason` | body     | Conditional | เฉพาะ `REJECT` | string | required เมื่อ `decision = "REQUEST_REVISION"` (trim 1-1000); `REJECT` เป็น optional และรับ `null`/blank |
+| `officerNote`    | body     | No          | Yes      | string  | trim <=1000; รับ omitted/null/blank |
 
 ### `POST /api/v1/cems-wpms-requests/:id/status`
 
 | Field            | Location | Required    | Nullable | Type    | Validation                                                                                     |
 | ---------------- | -------- | ----------- | -------- | ------- | ---------------------------------------------------------------------------------------------- |
 | `id`             | path     | Yes         | No       | integer | จำนวนเต็ม >=1                                                                                  |
-| `action`         | body     | Yes         | No       | enum    | `APPROVE_FORM`, `REQUEST_REVISION`, `RETURN_TO_WAITING_CONNECTION`                             |
-| `revisionReason` | body     | Conditional | No       | string  | required เมื่อ action เป็น `REQUEST_REVISION` หรือ `RETURN_TO_WAITING_CONNECTION`; trim 1-1000 |
-| `officerNote`    | body     | No          | Yes      | string  | trim <=1000                                                                                    |
+| `action`         | body     | Yes         | No       | enum    | `APPROVE_FORM`, `REQUEST_REVISION`, `RETURN_TO_WAITING_CONNECTION` หรือ `REJECT` |
+| `revisionReason` | body     | Conditional | เฉพาะ `REJECT` | string | required เมื่อ action เป็น `REQUEST_REVISION` หรือ `RETURN_TO_WAITING_CONNECTION` (trim 1-1000); `REJECT` เป็น optional และรับ `null`/blank |
+| `officerNote`    | body     | No          | Yes      | string  | trim <=1000; รับ omitted/null/blank |
+
+เมื่อเลือก `REJECT` ส่งเฉพาะ discriminator ของ endpoint ได้ ไม่จำกัดสถานะต้นทาง แม้เป็น `CONNECTED`, `CANCELED` หรือ `REJECTED`; optional `revisionReason`/`officerNote` ที่ละ field, `null`, ข้อความว่าง หรือช่องว่างล้วนไม่ทำให้ validation ล้มเหลว สถานะปลายทางคือ terminal `REJECTED` (`ไม่อนุมัติ`) โดยไม่เลิกใช้งานจุด live หรือย้อนข้อมูลโรงงานที่เคยเชื่อมต่อสำเร็จแล้ว รายละเอียด request/response และข้อผิดพลาดอยู่ใน [สัญญาการปฏิเสธคำขอ](./README.md#reject-request)
 
 ## API ที่ใช้เทสหลังกรอกฟอร์ม
 
@@ -1050,6 +1052,7 @@ endpoint นี้รับ config เดี่ยวแบบ normalized; ไ�
 
 ## Backend Maintainer Links
 
+- Rejection contract: [คำสั่งปฏิเสธคำขอ](./README.md#reject-request), [status migration](../../../../../backend/src/db/migrations/0129_allow_rejected_connection_request_status.ts), [HTTP และ persistence tests](../../../../../backend/tests/unit/connection-requests.rejection.route.test.ts), [validator tests](../../../../../backend/tests/unit/connection-requests.rejection.validator.test.ts), [migration tests](../../../../../backend/tests/unit/connection-requests.rejection.migration.test.ts), [OpenAPI tests](../../../../../backend/tests/unit/connection-requests.rejection.openapi.test.ts)
 - Routes: [backend/src/modules/connection-requests/connection-requests.routes.ts](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts), [backend/src/modules/device-connections/device-connections.routes.ts](../../../../../backend/src/modules/device-connections/device-connections.routes.ts), [backend/src/modules/parameter-values/parameter-values.routes.ts](../../../../../backend/src/modules/parameter-values/parameter-values.routes.ts)
 - Controller: [backend/src/modules/connection-requests/connection-requests.controller.ts](../../../../../backend/src/modules/connection-requests/connection-requests.controller.ts)
 - Validator: [backend/src/modules/connection-requests/connection-requests.validator.ts](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts)

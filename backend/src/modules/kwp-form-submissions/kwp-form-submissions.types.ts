@@ -22,7 +22,7 @@ export type KwpFormSubmissionStatus =
   | 'REJECTED'
   | 'REVISION_REQUESTED'
   | 'CANCELLED';
-export type KwpFormWorkflowAction = 'REQUEST_REVISION' | 'APPROVE' | 'CANCEL';
+export type KwpFormWorkflowAction = 'REQUEST_REVISION' | 'APPROVE' | 'REJECT' | 'CANCEL';
 export type KwpFormAllowedAction = KwpFormWorkflowAction | 'RESUBMIT';
 
 export interface KwpFormSubmissionAccess {
@@ -47,11 +47,12 @@ export interface KwpFormSubmissionUpdateAccess extends KwpFormSubmissionAccess {
 export type KwpFormWorkflowAccess = KwpFormSubmissionAccess & {
   canEdit?: boolean;
   canApprove?: boolean;
+  approveScope?: KwpFormSubmissionAccess['scope'];
 };
 
 export interface ChangeKwpFormWorkflowStatusDTO {
   action: KwpFormWorkflowAction;
-  revisionReason?: string;
+  revisionReason?: string | null;
   officerNote?: string | null;
 }
 

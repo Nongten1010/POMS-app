@@ -1630,6 +1630,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
       19,
       { decision: 'APPROVE' },
       77,
+      { scope: { scope: 'ALL' }, regionalAccess: null },
     );
   });
 
@@ -1751,6 +1752,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
         11,
         { decision: 'APPROVE', officerNote: null },
         42,
+        { scope: { scope: 'ALL' }, regionalAccess: null },
       );
     },
   );
@@ -1779,6 +1781,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
         11,
         { decision: 'APPROVE', officerNote: null },
         actorUserId,
+        { scope: { scope: 'ALL' }, regionalAccess: null },
       );
     },
   );
@@ -1802,7 +1805,10 @@ describe('pomsFactoriesService edit-request workflow', () => {
     );
 
     expect(result.status).toBe(expectedStatus);
-    expect(mockedRepository.reviewEditRequest).toHaveBeenCalledWith(11, input, 42);
+    expect(mockedRepository.reviewEditRequest).toHaveBeenCalledWith(11, input, 42, {
+      scope: { scope: 'ALL' },
+      regionalAccess: null,
+    });
   });
 
   it.each([
@@ -1842,7 +1848,10 @@ describe('pomsFactoriesService edit-request workflow', () => {
     );
 
     expect(result.status).toBe(expectedStatus);
-    expect(mockedRepository.reviewEditRequest).toHaveBeenCalledWith(11, input, 77);
+    expect(mockedRepository.reviewEditRequest).toHaveBeenCalledWith(11, input, 77, {
+      scope: { scope: 'ALL' },
+      regionalAccess: null,
+    });
   });
 
   it.each(['REVISION_REQUESTED', 'APPROVED', 'REJECTED'] as const)(

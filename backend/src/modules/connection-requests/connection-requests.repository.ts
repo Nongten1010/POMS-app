@@ -432,7 +432,11 @@ interface EligibleFactoryProfileRow {
 
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
 const TEMPORARY_EIA_LABEL = 'ไม่มี' as const;
-const TERMINAL_CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = ['CONNECTED', 'CANCELED'];
+const TERMINAL_CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = [
+  'CONNECTED',
+  'CANCELED',
+  'REJECTED',
+];
 const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
   'ระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน';
 
@@ -1477,6 +1481,53 @@ export const connectionRequestsRepository = {
     });
   },
 
+  async rejectRequest(
+    id: number,
+    actorUserId: number,
+    access: Pick<ListAccess, 'scope' | 'regionalAccess'>,
+    update: Pick<StatusUpdate, 'officerNote' | 'revisionReason'>,
+  ): Promise<ConnectionRequestDTO> {
+    return db.transaction(async (trx) => {
+      const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first();
+      if (!current) throw new NotFoundError('Connection request not found');
+      if (
+        !['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(
+          getAccessScopeValue(access.scope) ?? '',
+        )
+      ) {
+        throw new NotFoundError('Connection request not found');
+      }
+      const accessible = await buildBaseQuery({}, { ...access, actorUserId }, trx)
+        .where('id', id)
+        .first('id');
+      if (!accessible) throw new NotFoundError('Connection request not found');
+      await trx('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .update({
+          status: CONNECTION_REQUEST_STATUS.REJECTED,
+          revision_reason: update.revisionReason ?? null,
+          officer_note: update.officerNote ?? null,
+          updated_by: actorUserId,
+          updated_at: trx.fn.now(),
+        });
+      await insertHistory(
+        trx,
+        id,
+        CONNECTION_REQUEST_STATUS.REJECTED,
+        actorUserId,
+        buildStatusHistoryNote(update),
+      );
+      const rejected = await findByIdInTransaction(trx, id);
+      if (!rejected) throw new NotFoundError('Connection request not found');
+      return rejected;
+    });
+  },
+
   async updateStatus(
     id: number,
     status: ConnectionRequestStatus,
@@ -1485,6 +1536,21 @@ export const connectionRequestsRepository = {
     options: StatusUpdateOptions = {},
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
+      const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first('id', 'status');
+      if (!current) throw new NotFoundError('Connection request not found');
+      if (
+        current.status === CONNECTION_REQUEST_STATUS.REJECTED &&
+        status !== CONNECTION_REQUEST_STATUS.REJECTED
+      ) {
+        throw new ConflictError(
+          'Rejected connection request cannot be changed by a delayed workflow action',
+          { currentStatus: current.status },
+        );
+      }
       if (
         status === CONNECTION_REQUEST_STATUS.WAITING_CONNECTION ||
         status === CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED

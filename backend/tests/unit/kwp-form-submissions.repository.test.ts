@@ -367,7 +367,7 @@ describe('kwpFormSubmissionsRepository', () => {
       ['center_director'],
     );
 
-    expect(monitoring.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE']);
+    expect(monitoring.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE', 'REJECT']);
     expect(director.allowedActions).toEqual([]);
   });
 

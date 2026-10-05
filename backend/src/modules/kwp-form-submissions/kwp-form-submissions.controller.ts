@@ -21,10 +21,12 @@ export const kwpFormSubmissionsController = {
     try {
       const actorUserId = requireActorUserId(req);
       const id = requireSubmissionId(req);
+      const approveScope = getScopeDetails(req, 'kwp_forms:approve');
       const result = await kwpFormSubmissionsService.getWorkflow(id, {
         actorUserId,
         canEdit: getScopeDetails(req, 'kwp_forms:edit') !== undefined,
-        canApprove: getScopeDetails(req, 'kwp_forms:approve') !== undefined,
+        canApprove: approveScope !== undefined,
+        ...(approveScope === undefined ? {} : { approveScope }),
         scope: getScopeDetails(req, 'kwp_forms:view'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,

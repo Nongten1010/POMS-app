@@ -1343,6 +1343,14 @@ export const connectionRequestsService = {
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
     ensureCanApprove(request, approveScope, regionalAccess);
+    if (input.decision === 'REJECT') {
+      return connectionRequestsRepository.rejectRequest(
+        id,
+        actorUserId,
+        { scope: approveScope, regionalAccess },
+        { officerNote: input.officerNote ?? null, revisionReason: input.revisionReason ?? null },
+      );
+    }
     ensureStatus(request, DESIGN_REVIEW_STATUSES);
 
     if (input.decision === 'REQUEST_REVISION') {
@@ -1406,6 +1414,19 @@ export const connectionRequestsService = {
     approveScope: AccessScope = 'ALL',
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
+    if (input.action === 'REJECT') {
+      return this.review(
+        id,
+        {
+          decision: 'REJECT',
+          officerNote: input.officerNote,
+          revisionReason: input.revisionReason,
+        },
+        actorUserId,
+        approveScope,
+        regionalAccess,
+      );
+    }
     if (input.action === 'RETURN_TO_WAITING_CONNECTION') {
       return this.returnToWaitingConnection(id, input, actorUserId, approveScope, regionalAccess);
     }
@@ -3649,7 +3670,8 @@ function isConnectionRequestInProgress(request: ConnectionRequestDTO | undefined
   return (
     request !== undefined &&
     request.status !== CONNECTION_REQUEST_STATUS.CONNECTED &&
-    request.status !== CONNECTION_REQUEST_STATUS.CANCELED
+    request.status !== CONNECTION_REQUEST_STATUS.CANCELED &&
+    request.status !== CONNECTION_REQUEST_STATUS.REJECTED
   );
 }
 

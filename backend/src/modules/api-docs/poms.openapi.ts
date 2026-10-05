@@ -701,9 +701,7 @@ const pomsFactoryMeasurementPointEditRequestExample = {
 };
 
 const pomsFactoryEditReviewExample = {
-  decision: 'REQUEST_REVISION',
-  revisionReason: 'กรุณาตรวจสอบพิกัดและแนบภาพถ่ายด้านหน้าโรงงานใหม่',
-  officerNote: 'ตรวจสอบเอกสารเบื้องต้นแล้ว',
+  decision: 'REJECT',
 };
 
 const pomsFactoryDocumentImageExample = {
@@ -2632,11 +2630,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       officerNote: {
         type: 'string',
-        minLength: 1,
         maxLength: 1000,
         nullable: true,
-        description:
-          'Required เมื่อ decision = REJECT; optional เมื่อ decision = APPROVE หรือ REQUEST_REVISION',
+        description: 'Optional ทุก decision รวม REJECT; ส่ง null ค่าว่าง หรือละ field ได้',
       },
     },
     example: pomsFactoryEditReviewExample,
@@ -3346,7 +3342,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         items: { type: 'string', enum: ['CANCEL', 'APPROVE', 'REQUEST_REVISION', 'REJECT'] },
         description:
-          'ตรวจ role, permission, data scope, สถานะและ current step; REJECTED ยังคืน CANCEL ให้เจ้าของโรงงานได้',
+          'ตรวจ role, permission และ data scope; REJECT คืนให้บทบาทเจ้าหน้าที่ที่อนุมัติได้ทุกสถานะโดยไม่ต้องมี current step. action อื่นยังตรวจสถานะและ current step; REJECTED ยังคืน CANCEL ให้เจ้าของโรงงานได้',
       },
       reporterName: nullableStringSchema(255),
       submittedAt: { type: 'string', format: 'date-time', nullable: true },
@@ -3819,7 +3815,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       id: { type: 'integer', minimum: 1 },
       status: { type: 'string', enum: [...KWP_FORM_STATUSES] },
       statusLabel: { type: 'string', maxLength: 128 },
-      note: nullableStringSchema(1000),
+      note: nullableStringSchema(2001),
       changedById: { type: 'integer', minimum: 1, nullable: true },
       changedBy: nullableStringSchema(500),
       changedAt: { type: 'string', format: 'date-time' },
@@ -4362,6 +4358,26 @@ const componentSchemas: Record<string, OpenApiObject> = {
         required: ['action'],
         properties: {
           action: { type: 'string', enum: ['APPROVE'] },
+          officerNote: {
+            type: 'string',
+            maxLength: 1000,
+            nullable: true,
+            description: 'Optional; ค่าว่างถูก trim และ normalize เป็น null',
+          },
+        },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['action'],
+        properties: {
+          action: { type: 'string', enum: ['REJECT'] },
+          revisionReason: {
+            type: 'string',
+            maxLength: 1000,
+            nullable: true,
+            description: 'Optional; ค่าว่างถูก trim และ normalize เป็น null',
+          },
           officerNote: {
             type: 'string',
             maxLength: 1000,
@@ -6021,17 +6037,18 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Review a POMS factory edit request',
       operationId: 'reviewPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องมี JWT role admin; userType อาจเป็น officer หรือ admin และ userType=admin อย่างเดียวไม่เพียงพอ; ผู้มี role admin พิจารณาคำขอของตนเองได้ ทั้งกรณีเป็น original creator (createdBy) หรือ latest submitter (submittedBy) โดยใช้ได้กับ APPROVE, REQUEST_REVISION และ REJECT. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องมี JWT role admin; userType อาจเป็น officer หรือ admin และ userType=admin อย่างเดียวไม่เพียงพอ; ผู้มี role admin พิจารณาคำขอของตนเองได้ ทั้งกรณีเป็น original creator (createdBy) หรือ latest submitter (submittedBy) โดยใช้ได้กับ APPROVE, REQUEST_REVISION และ REJECT. REJECT ได้ทุกสถานะเป็น REJECTED และไม่บังคับเหตุผล; officerNote ส่ง null ค่าว่าง หรือละ field ได้. REJECT บันทึกการพิจารณาโดยไม่ย้อนข้อมูล current/live ที่เคยอนุมัติและคง approvedAt เดิม. APPROVE และ REQUEST_REVISION ยังคงตรวจสถานะเดิม. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditReviewRequest'),
         pomsFactoryEditReviewExample,
       ),
       successSchema: schemaRef('PomsFactoryEditRequestDetailResponse'),
+      successDescription: 'พิจารณาสำเร็จ; decision REJECT คืนสถานะ REJECTED',
       extraResponses: {
         '409': {
           description:
-            'สถานะไม่อนุญาต หรือ current/live profile เปลี่ยนก่อนอนุมัติ หรือ canonical profile ยังไม่พร้อม',
+            'สถานะไม่อนุญาตสำหรับ APPROVE/REQUEST_REVISION หรือ current/live profile เปลี่ยนก่อนอนุมัติ หรือ canonical profile ยังไม่พร้อม; REJECT ไม่จำกัดสถานะต้นทาง',
           content: {
             'application/json': { schema: schemaRef('ErrorEnvelope') },
           },
@@ -6286,21 +6303,24 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Change BOD/COD workflow status',
       operationId: 'changeBodCodWorkflowStatus',
       description:
-        'ต้องมี view + approve และผ่านทั้งสอง data scope พร้อม current step PENDING. INSPECTOR: monitoring_kpm/monitoring_5_centers/admin; RESULT_NOTICE: monitoring_kpm/admin; REVIEWER: kpm_director; APPROVER: center_director/kwp_director. admin เพียงอย่างเดียวข้ามขั้นทบทวน/อนุมัติไม่ได้. ตรวจสถานะภายใต้ lock ร่วมกับ cancel/resubmit',
+        'ต้องมี bod_cod_errors:view + bod_cod_errors:approve และผ่านทั้งสอง data scope. REJECT ได้ทุกสถานะเป็น REJECTED และไม่ต้องมี current step; ไม่บังคับเหตุผล officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. ผู้ reject ต้องเป็น monitoring_kpm/monitoring_5_centers/admin/kpm_director/center_director/kwp_director และไม่ใช่ OWN_FACTORY. APPROVE/REQUEST_REVISION ยังคงต้องมี current step PENDING ตามบทบาท: INSPECTOR monitoring_kpm/monitoring_5_centers/admin; RESULT_NOTICE monitoring_kpm/admin; REVIEWER kpm_director; APPROVER center_director/kwp_director. admin เพียงอย่างเดียวข้ามขั้นทบทวน/อนุมัติไม่ได้. ตรวจสถานะภายใต้ lock ร่วมกับ cancel/resubmit',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodWorkflowActionRequest'), {
-        action: 'REQUEST_REVISION',
-        revisionReason: 'กรุณาแนบข้อมูลห้องปฏิบัติการให้ครบ',
+        action: 'REJECT',
       }),
       successSchema: schemaRef('BodCodReportResponse'),
+      successDescription: 'เปลี่ยน workflow สำเร็จ; action REJECT คืน statusCode REJECTED',
       extraResponses: {
-        '409': errorResponse('สถานะ/ขั้นตอน/identity ไม่อนุญาต ให้โหลดรายละเอียดล่าสุด', {
-          success: false,
-          error: {
-            code: 'CONFLICT',
-            message: 'BOD/COD workflow action is not allowed for current status',
+        '409': errorResponse(
+          'สถานะ/ขั้นตอน/identity ของ APPROVE/REQUEST_REVISION ไม่อนุญาต ให้โหลดรายละเอียดล่าสุด; REJECT ไม่จำกัดสถานะหรือ current step',
+          {
+            success: false,
+            error: {
+              code: 'CONFLICT',
+              message: 'BOD/COD workflow action is not allowed for current status',
+            },
           },
-        }),
+        ),
       },
     }),
   },
@@ -6626,6 +6646,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Get KWP workflow',
       operationId: 'getKwpWorkflow',
+      description:
+        'allowedActions คืน REJECT ให้เจ้าหน้าที่ที่มี kwp_forms:approve ผ่านบทบาทและ data scope ที่อนุมัติได้ในทุกสถานะ; action อื่นยังใช้เงื่อนไขเดิม',
       successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
     }),
@@ -6636,12 +6658,12 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Change KWP workflow status',
       operationId: 'changeKwpWorkflowStatus',
       description:
-        'CANCEL: เฉพาะผู้ประกอบการที่มี kwp_forms:edit และสิทธิ์โรงงาน; อนุญาตทุกสถานะยกเว้น APPROVED/CANCELLED; ตรวจสถานะซ้ำขณะ UPDATE และตอบ 409 เมื่อสถานะเปลี่ยน REQUEST_REVISION/APPROVE ยังคงต้องใช้ kwp_forms:approve และบทบาทเจ้าหน้าที่ที่อนุมัติได้',
+        'REJECT ได้ทุกสถานะเป็น REJECTED โดยไม่บังคับเหตุผล; ส่ง action อย่างเดียวได้ และ revisionReason/officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. ต้องมี kwp_forms:approve ผ่าน data scope และบทบาทเจ้าหน้าที่ที่อนุมัติได้ รวมถึงต้องไม่ใช่ OWN_FACTORY. CANCEL: เฉพาะผู้ประกอบการที่มี kwp_forms:edit และสิทธิ์โรงงาน; อนุญาตทุกสถานะยกเว้น APPROVED/CANCELLED; ตรวจสถานะซ้ำขณะ UPDATE และตอบ 409 เมื่อสถานะเปลี่ยน REQUEST_REVISION/APPROVE ยังคงใช้ข้อจำกัดสถานะเดิมและต้องมี kwp_forms:approve พร้อมบทบาทเจ้าหน้าที่ที่อนุมัติได้',
       successSchema: schemaRef('KwpWorkflowResponse'),
+      successDescription: 'เปลี่ยน workflow สำเร็จ; action REJECT คืน status REJECTED',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('KwpWorkflowActionRequest'), {
-        action: 'REQUEST_REVISION',
-        revisionReason: 'กรุณาแนบไฟล์เพิ่ม',
+        action: 'REJECT',
       }),
     }),
   },

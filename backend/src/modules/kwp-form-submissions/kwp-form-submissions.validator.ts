@@ -345,6 +345,13 @@ export const changeKwpWorkflowStatusSchema = z
         officerNote: optionalNullableText(1000),
       })
       .strict(),
+    z
+      .object({
+        action: z.literal('REJECT'),
+        revisionReason: optionalNullableText(1000),
+        officerNote: optionalNullableText(1000),
+      })
+      .strict(),
   ])
   .transform((payload) => ({
     ...payload,
