@@ -98,3 +98,7 @@
 ยังไม่ย้าย evidence เดิมในงานออกแบบนี้ ให้ทำตาม [documentation migration workflow](../explanations/documentation-migration-workflow.md)
 
 - [จัดการสถานะโรงงาน จุดตรวจวัด และพารามิเตอร์ (Admin)](./master-data/status-management.md)
+
+## Notifications
+
+- [อีเมลแจ้งเตือนมลพิษ: TDD, ขอบเขตสิทธิ์ และการกันส่งซ้ำ](./notifications/alert-email.tdd.md)

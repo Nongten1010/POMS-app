@@ -59,7 +59,7 @@ curl --request POST \
 | `pointCode` | string \| null | No | รหัสจุดตรวจวัด; เมื่อไม่ส่ง backend ใช้ `stationId` สำหรับค้นหา |
 | `parameterCode` | string | Yes | รหัสพารามิเตอร์ เช่น `so2`, `nox`, `cod` หรือ `bod`; backend normalize เป็น lowercase |
 | `unit` | string | Yes | หน่วยของค่าตรวจวัด เช่น `ppm` หรือ `mg/l` |
-| `eventDate` | string | Yes | วันที่ของชั่วโมงที่ตรวจพบ รูปแบบ `YYYY-MM-DD` |
+| `eventDate` | string | Yes | วันที่ของชั่วโมงที่ตรวจพบ รูปแบบ `YYYY-MM-DD` และต้องเป็นวันที่มีอยู่จริงในปฏิทิน |
 | `time` | string | Yes | เวลาเริ่มชั่วโมง รูปแบบ `HH:00` ตั้งแต่ `00:00` ถึง `23:00` |
 | `measuredValue` | number | Yes | ค่ารายชั่วโมงที่ตรวจวัดได้ |
 | `thresholdValue` | number | Yes | ค่าเกณฑ์ที่ใช้เปรียบเทียบ หน่วยเดียวกับ `unit` |
@@ -119,7 +119,7 @@ curl --request POST \
 | Field | Type | Nullable | Description |
 | --- | --- | --- | --- |
 | `id` | number | No | ID ของ alert event |
-| `idempotencyKey` | string | No | key ที่ backend สร้างเพื่อกันเหตุการณ์ซ้ำ |
+| `idempotencyKey` | string | No | opaque key ที่ backend สร้างเพื่อกันเหตุการณ์ซ้ำ; client ห้ามแยกองค์ประกอบหรือสร้าง key เอง |
 | `alertType` | `STANDARD_EXCEEDED` \| `EIA_EXCEEDED` | No | derive จาก `thresholdType` |
 | `systemType` | `CEMS` \| `WPMS` | No | ระบบต้นทาง |
 | `displaySystemType` | `CEMS` \| `BOD_COD_ONLINE` | No | ชื่อระบบสำหรับแสดงผล |
@@ -205,11 +205,15 @@ curl --request POST \
 - request root และแต่ละ `events[]` ใช้ strict schema; field ที่ไม่รู้จักทำให้ทั้ง request ตอบ `400 VALIDATION_ERROR`
 - `events` ต้องมี 1-500 รายการ หากรายการใดมีรูปแบบไม่ถูกต้อง backend จะไม่เริ่มประมวลผลทั้ง batch
 - `time` ต้องเป็นต้นชั่วโมง `HH:00`; ค่าอย่าง `20:30`, `24:00` หรือ `20` ไม่ผ่าน validation
+- `eventDate` ต้องเป็นวันที่จริง เช่น `2026-02-30` ไม่ผ่าน validation; กฎเดียวกันใช้กับวันที่ filter รายการ
 - Backend แปลง `eventDate=2026-03-02` และ `time=20:00` เป็น `startedAt=2026-03-02T20:00:00+07:00` และ `endedAt=2026-03-02T20:59:59+07:00`
-- `idempotencyKey` ประกอบจาก `systemType`, `stationId`, normalized `parameterCode`, derived `alertType` และ `startedAt`; การส่งเหตุการณ์เดิมซ้ำไม่สร้าง row ใหม่
+- `idempotencyKey` เป็น opaque key ที่คำนวณจาก `systemType`, `stationId`, normalized `parameterCode`, normalized `unit`, derived `alertType` และ `startedAt`; การส่งเหตุการณ์เดิมซ้ำไม่สร้าง row ใหม่ หน่วยใช้ trim และ lowercase ใน identity ดังนั้น `CO (ppm)` กับ `CO (%)` ไม่รวมเป็นเหตุการณ์เดียวกัน
+- เมื่อสอง request ส่งเหตุการณ์เดียวกันพร้อมกัน backend ใช้ unique constraint กันซ้ำและคืนรายการเดิมให้ request ที่แข่ง insert แพ้ ไม่รายงานเป็น persistence failure เพียงเพราะเป็น duplicate race
+- เหตุการณ์ที่บันทึกด้วย key รุ่นเดิมยังอ่านและรับการส่งซ้ำได้เมื่อหน่วยตรงกัน รูปแบบ key ของรายการใหม่อาจต่างจากรายการเดิม Client ใช้ `event.id` อ้างอิงและไม่พึ่งโครงสร้าง string ของ `idempotencyKey`
 - `stationId` หรือ `pointCode` ต้องตรงกับ active row ใน `cems_wpms_connected_measurement_points`; backend ใช้ข้อมูล current/live POMS จาก row นั้นเติมโรงงาน ชื่อจุด และประเภทจุด
 - `thresholdType=STANDARD` derive เป็น `STANDARD_EXCEEDED`; `thresholdType=EIA` derive เป็น `EIA_EXCEEDED`
 - Client ห้ามส่ง `alertType` หรือ `notificationStatus`; backend เป็นผู้กำหนดและตั้งสถานะแรกเป็น `AUTO`
+- การรับเหตุการณ์ไม่ส่งอีเมลทันทีและไม่ตีความ `notificationStatus` เป็นผล SMTP รอบ/ผลการส่งอยู่ใน [อีเมลแจ้งเตือนมลพิษ](../../menus/notifications/email-notifications.md)
 - Business error ของรายการหนึ่งไม่หยุดรายการอื่น ผลลัพธ์จะอยู่ใน `data.results[index].error` และนับใน `data.failed`
 
 ### Errors

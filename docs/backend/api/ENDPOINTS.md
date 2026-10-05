@@ -11,7 +11,7 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **147**
+จำนวน explicit endpoints: **149**
 
 | Method   | Full path                                                                 | Canonical owner                                                                 | Guard                                                                           | Route source                                                                                                |
 | -------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -156,6 +156,8 @@
 | `GET`    | `/api/v1/alert-events`                                                    | `docs/backend/api/menus/notifications/`                                         | `authenticate + authorize(notifications:view)`                                  | `backend/src/modules/alert-events/alert-events.routes.ts`                                                   |
 | `GET`    | `/api/v1/alert-events/:id`                                                | `docs/backend/api/menus/notifications/`                                         | `authenticate + authorize(notifications:view)`                                  | `backend/src/modules/alert-events/alert-events.routes.ts`                                                   |
 | `PATCH`  | `/api/v1/alert-events/:id/status`                                         | `docs/backend/api/menus/notifications/`                                         | `authenticate + authorize(notifications:edit)`                                  | `backend/src/modules/alert-events/alert-events.routes.ts`                                                   |
+| `POST` | `/api/v1/alert-email-previews` | `docs/backend/api/menus/notifications/` | `authenticate + authorize(notifications:edit)` | `backend/src/modules/alert-emails/alert-email-preview.ts` |
+| `GET` | `/api/v1/alert-email-deliveries/:id` | `docs/backend/api/menus/notifications/` | `authenticate + authorize(notifications:view_status)` | `backend/src/modules/alert-emails/alert-email-history.ts` |
 | `POST`   | `/api/v1/email-test/send`                                                 | `docs/backend/api/shared/internal-tools/`                                       | `authenticate`                                                                  | `backend/src/modules/email-test/email-test.routes.ts`                                                       |
 | `GET`    | `/api/v1/officer-notification-email-recipients`                           | `docs/backend/api/shared/notification-recipients/`                              | `authenticate + authorize(notifications:edit)`                                  | `backend/src/modules/officer-notification-email-recipients/officer-notification-email-recipients.routes.ts` |
 | `POST`   | `/api/v1/officer-notification-email-recipients`                           | `docs/backend/api/shared/notification-recipients/`                              | `authenticate + authorize(notifications:edit)`                                  | `backend/src/modules/officer-notification-email-recipients/officer-notification-email-recipients.routes.ts` |

@@ -366,7 +366,7 @@ function toAlertPointType(value: string) {
   return 'OTHER';
 }
 
-function toAlertEventDTO(row: AlertEventRow): AlertEventDTO {
+export function toAlertEventDTO(row: AlertEventRow): AlertEventDTO {
   const eventDate = toDateString(row.event_date);
   const startedAt = toDateTimeString(row.started_at);
   const endedAt = toDateTimeString(row.ended_at);

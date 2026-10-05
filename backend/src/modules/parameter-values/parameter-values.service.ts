@@ -1359,6 +1359,28 @@ function readParameterCompletenessPercent(
   return readCompletenessPercent(row);
 }
 
+/** Raw registered-unit data for alert detection; no display masking or UI thresholds. */
+export function readRegisteredAlertMeasurement(
+  row: Record<string, unknown>,
+  parameterLabel: string,
+): { value: number | null; status: number | null } {
+  const definition = buildParameterDefinitions([parameterLabel], [row])[0];
+  if (!definition?.unit) return { value: null, status: null };
+  let unidentifiedUnit = false;
+  for (const prefix of definition.prefixes) {
+    const unit = row[`${prefix}_units`];
+    if ((typeof unit !== 'string' || !unit.trim()) && toNumber(row[`${prefix}_value`]) !== null) {
+      unidentifiedUnit = true;
+    }
+    if (typeof unit !== 'string' || normalizeUnit(unit) !== normalizeUnit(definition.unit)) continue;
+    const value = toNumber(row[`${prefix}_value`]);
+    const status = resolvePomsClientParameterStatus(row[`${prefix}_status`])?.code ?? null;
+    if (value !== null || status !== null) return { value, status };
+  }
+  if (unidentifiedUnit) throw new Error('Measurement source unit is missing');
+  return { value: null, status: null };
+}
+
 function readParameterNumber(
   row: Record<string, unknown>,
   definition: ParameterDefinition,

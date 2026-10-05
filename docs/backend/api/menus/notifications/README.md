@@ -4,7 +4,7 @@
 
 ## Frontend Quick Start
 
-เมนูนี้ใช้สำหรับดูรายการ `alert-events`, เปิดรายละเอียดรายเหตุการณ์ และอัปเดตสถานะการติดตามของเจ้าหน้าที่
+เมนูนี้ใช้สำหรับดูรายการ `alert-events`, เปิดรายละเอียดรายเหตุการณ์ อัปเดตสถานะการติดตามของเจ้าหน้าที่ และตรวจตัวอย่าง/ผลการส่งอีเมลแจ้งเตือน
 
 หน้า interactive test ใช้ชุดเดียวกับ backend ที่ `/api/v1/docs` และ OpenAPI JSON อยู่ที่ `/api/v1/openapi.json`
 
@@ -14,6 +14,16 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
+ดูตัวอย่างอีเมลโดยเลือกเหตุการณ์ที่มีสิทธิ์เข้าถึงและเป็นประเภทเดียวกัน:
+
+```bash
+curl --request POST \
+  --url '<BASE_URL>/api/v1/alert-email-previews' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Content-Type: application/json' \
+  --data '{"eventIds":[1001],"scheduledAt":"2026-10-05T12:05:00+07:00"}'
+```
+
 ## Endpoint Summary
 
 | งาน                     | Method  | Path                              | Auth   | Permission           |
@@ -21,6 +31,10 @@ curl --request GET \
 | รายการแจ้งเตือน         | `GET`   | `/api/v1/alert-events`            | Bearer | `notifications:view` |
 | รายละเอียดแจ้งเตือน     | `GET`   | `/api/v1/alert-events/:id`        | Bearer | `notifications:view` |
 | อัปเดตสถานะการแจ้งเตือน | `PATCH` | `/api/v1/alert-events/:id/status` | Bearer | `notifications:edit` |
+| ตัวอย่างอีเมลแจ้งเตือน | `POST` | `/api/v1/alert-email-previews` | Bearer | `notifications:edit` |
+| ผลการส่งอีเมล | `GET` | `/api/v1/alert-email-deliveries/:id` | Bearer | `notifications:view_status` |
+
+ดู request/response, validation และ scope ของสอง endpoint อีเมลที่ [อีเมลแจ้งเตือนมลพิษ](./email-notifications.md)
 
 ## Contract Notes
 
@@ -53,6 +67,9 @@ curl --request GET \
 ```
 
 ## Maintainer Links
+
+- [คู่มือรอบอีเมล ผู้รับ และ SMTP](../../../guides/alert-email-operations.md)
+- [TDD evidence อีเมลแจ้งเตือน](../../../evidence/notifications/alert-email.tdd.md)
 
 - Routes: `backend/src/modules/alert-events/alert-events.routes.ts`
 - Controller: `backend/src/modules/alert-events/alert-events.controller.ts`

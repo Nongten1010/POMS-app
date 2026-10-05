@@ -7,6 +7,7 @@ import { closeParameterSourceDatabase } from './config/parameter-source-database
 import { closeBoilerSourceDatabase } from './config/boiler-source-database';
 import { startConnectionRequestAutoCancelWorker } from './modules/connection-requests/connection-request-auto-cancel.worker';
 import { startMonitoringPointAttachmentCleanupWorker } from './modules/monitoring-point-forms/monitoring-point-attachment-cleanup.worker';
+import { startAlertEmailWorker } from './modules/alert-emails/alert-email-runtime';
 
 const REQUEST_TIMEOUT_MS = 300000;
 
@@ -17,6 +18,7 @@ async function bootstrap(): Promise<void> {
     logger.warn('[boot] Continuing without DB connection (dev only). Fix DB and restart.');
   }
 
+  const alertEmailWorker = startAlertEmailWorker();
   const app = createApp();
   const server = app.listen(env.PORT, () => {
     logger.info(`[boot] POMS backend listening on http://localhost:${env.PORT}${env.API_PREFIX}`);
@@ -33,6 +35,7 @@ async function bootstrap(): Promise<void> {
     clearInterval(autoCancelWorker);
     clearInterval(attachmentCleanupWorker);
     server.close(async () => {
+      await alertEmailWorker.stop();
       await closeDatabase();
       await closeFactorySourceDatabase();
       await closeBoilerSourceDatabase();
