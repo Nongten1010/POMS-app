@@ -4803,8 +4803,16 @@ const componentSchemas: Record<string, OpenApiObject> = {
             unit: { type: 'string', minLength: 1, maxLength: 64 },
             eventDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
             time: { type: 'string', pattern: '^([01]\\d|2[0-3]):00$' },
-            measuredValue: { type: 'number' },
-            thresholdValue: { type: 'number' },
+            measuredValue: {
+              oneOf: [{ type: 'number' }, { type: 'string', minLength: 1 }],
+              description:
+                'ค่าตรวจวัดต้องเป็น finite number หรือ numeric string ที่ไม่ว่างและแปลงเป็น finite number ได้; หลังแปลงต้องมี measuredValue > thresholdValue ไม่ปัดเศษก่อนเปรียบเทียบ; ไม่รับ null, boolean, array หรือ object',
+            },
+            thresholdValue: {
+              oneOf: [{ type: 'number' }, { type: 'string', minLength: 1 }],
+              description:
+                'เกณฑ์ต้องเป็น finite number หรือ numeric string ที่ไม่ว่างและแปลงเป็น finite number ได้ หน่วยเดียวกับค่าตรวจวัด; ไม่รับ null, boolean, array หรือ object; ต้นทางเลือกเกณฑ์เอง backend ยังไม่ยืนยันกับ registered config',
+            },
             thresholdType: { type: 'string', enum: ['STANDARD', 'EIA'] },
           },
         },
@@ -4916,13 +4924,18 @@ const componentSchemas: Record<string, OpenApiObject> = {
           'SKIPPED',
         ],
         description:
-          'SMTP_ACCEPTED หมายถึง SMTP รับแล้ว; UNKNOWN ต้องตรวจสอบก่อนส่งซ้ำ; แยกจาก notificationStatus',
+          'SMTP_ACCEPTED หมายถึง SMTP รับแล้ว; UNKNOWN ต้องตรวจสอบก่อนส่งซ้ำ; SKIPPED คือ event eligibility ไม่ผ่านก่อนส่ง รวมค่ารายชั่วโมงเดิมที่ไม่เกินเกณฑ์จริง; แยกจาก notificationStatus',
       },
       attempts: { type: 'integer', minimum: 0, maximum: 5 },
       nextAttemptAt: { type: 'string', format: 'date-time', nullable: true },
       completedAt: { type: 'string', format: 'date-time', nullable: true },
       messageId: { type: 'string', nullable: true },
-      errorCode: { type: 'string', nullable: true },
+      errorCode: {
+        type: 'string',
+        nullable: true,
+        description:
+          'RECIPIENT_SCOPE_CHANGED สำหรับ SKIPPED ครอบคลุม event eligibility ที่ไม่ผ่าน ไม่ได้หมายถึงเปลี่ยนอีเมลผู้รับเท่านั้น',
+      },
       acceptedRecipients: { type: 'array', items: { type: 'string', format: 'email' } },
       rejectedRecipients: { type: 'array', items: { type: 'string', format: 'email' } },
     },
@@ -6672,7 +6685,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Integrations',
       summary: 'Submit integration alert events',
       operationId: 'createIntegrationAlertEvents',
-      description: 'รับเหตุการณ์รายชั่วโมงจาก integration; eventDate ต้องเป็นวันที่จริง; backend สร้าง opaque idempotencyKey รวมหน่วยเพื่อกันซ้ำและรองรับ concurrent requests โดยไม่สร้างรายการซ้ำ; client ใช้ event.id อ้างอิงและห้ามพึ่งรูปแบบ key เดิม; รายการเก่ายังคง key เดิม ไม่มีการส่งอีเมลทันที',
+      description:
+        'รับเหตุการณ์รายชั่วโมงจาก integration; measuredValue และ thresholdValue ต้องเป็น finite number (รองรับ numeric string ที่ไม่ว่างและแปลงได้) และ measuredValue > thresholdValue ทั้ง STANDARD และ EIA; validate ทั้ง batch ก่อนเรียก service หากรายการใดไม่ผ่านตอบ 400 VALIDATION_ERROR และไม่มีรายการใน batch ถูกบันทึก; ระบบต้นทางตรวจข้อมูลรายชั่วโมงและเลือกเกณฑ์/หน่วยเอง backend ยังไม่ยืนยันกับ registered config หรืออ่าน raw measurements มาสร้างเหตุการณ์; eventDate ต้องเป็นวันที่จริง; backend สร้าง opaque idempotencyKey รวมหน่วยเพื่อกันซ้ำและรองรับ concurrent requests โดยไม่สร้างรายการซ้ำ; client ใช้ event.id อ้างอิงและห้ามพึ่งรูปแบบ key เดิม; รายการเก่ายังคง key เดิม ไม่มีการส่งอีเมลทันที',
       requestBody: jsonRequestBody(
         schemaRef('IntegrationAlertEventBatchRequest'),
         alertEventBatchExample,
@@ -6756,7 +6770,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Preview an alert email without sending',
       operationId: 'previewAlertEmail',
       description:
-        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; ไม่มี SMTP หรือการเข้าคิว',
+        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; รายชั่วโมงต้องเป็น finite measuredValue > thresholdValue และ thresholdType ตรงประเภท มิฉะนั้น 400 BAD_REQUEST รวมข้อมูลเดิม; ไม่มี SMTP หรือการเข้าคิว',
       requestBody: jsonRequestBody(schemaRef('AlertEmailPreviewRequest'), {
         eventIds: [51],
         scheduledAt: '2026-10-05T12:05:00+07:00',

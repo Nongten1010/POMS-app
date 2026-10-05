@@ -1,6 +1,14 @@
-import { describe, expect, it } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import type { Knex } from 'knex';
+jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository', () => ({
+  lockAlertActivationPoints: jest.fn(async () => []),
+  syncAlertParameterActivations: jest.fn(async () => undefined),
+}));
 import { reconcileApprovedStationParameters } from '../../src/modules/device-connections/reconcile-approved-station-parameters';
+import {
+  lockAlertActivationPoints,
+  syncAlertParameterActivations,
+} from '../../src/modules/alert-emails/alert-parameter-activations.repository';
 
 function harness(failWrite = false) {
   const reads: Array<{ table: string; filters: unknown[][] }> = [];
@@ -48,6 +56,9 @@ function harness(failWrite = false) {
 }
 
 describe('approved station parameter reconciliation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
   it('retires only COD and its schedules from active configs without assigning Flow an address', async () => {
     const h = harness();
     await reconcileApprovedStationParameters(
@@ -74,6 +85,8 @@ describe('approved station parameter reconciliation', () => {
       values: { deleted_at: 'db-now', updated_at: 'db-now', updated_by: 77 },
     });
     expect(h.writes).toHaveLength(2);
+    expect(lockAlertActivationPoints).toHaveBeenCalledWith(h.trx, ['P0260']);
+    expect(syncAlertParameterActivations).toHaveBeenCalledWith(h.trx, ['P0260']);
     expect(h.writes[1].filters).toContainEqual(['whereNull', 'request_id']);
     expect(JSON.parse(String(h.writes[1].values.status_management_json))).toEqual({
       schedules: [{ selectedParameters: ['BOD (mg/l)'], status: 'Calibration' }],
@@ -89,5 +102,26 @@ describe('approved station parameter reconciliation', () => {
     await expect(
       reconcileApprovedStationParameters(h.trx, 'P0260', ['BOD (mg/l)'], 77),
     ).rejects.toThrow('write failed');
+    expect(syncAlertParameterActivations).not.toHaveBeenCalled();
+  });
+
+  it('preserves the historical repair without touching the later activation dependency when explicitly disabled', async () => {
+    const h = harness();
+    await reconcileApprovedStationParameters(
+      h.trx,
+      'P0260',
+      ['BOD (mg/l)', 'Watt (kW/hr)', 'Flow rate (m3/hr)'],
+      77,
+      { syncAlertActivations: false },
+    );
+    expect(lockAlertActivationPoints).not.toHaveBeenCalled();
+    expect(syncAlertParameterActivations).not.toHaveBeenCalled();
+    expect(h.writes).toHaveLength(2);
+    expect(h.writes[0].filters).toContainEqual(['whereIn', 'id', [2]]);
+    expect(h.writes[0].values).toEqual({
+      deleted_at: 'db-now',
+      updated_at: 'db-now',
+      updated_by: 77,
+    });
   });
 });

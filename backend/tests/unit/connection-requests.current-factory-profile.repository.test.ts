@@ -3,11 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), { transaction: jest.fn() }),
 }));
+jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository', () => ({
+  lockAlertActivationPoints: jest.fn(async () => []),
+  syncAlertParameterActivations: jest.fn(async () => undefined),
+  retireAlertParameterActivations: jest.fn(async () => undefined),
+}));
 
 import { db } from '../../src/config/database';
 import { env } from '../../src/config/env';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import type { MeasurementPointInput } from '../../src/modules/connection-requests/connection-requests.types';
+import { syncAlertParameterActivations } from '../../src/modules/alert-emails/alert-parameter-activations.repository';
 
 type Row = Record<string, unknown>;
 const mockedDb = db as unknown as { transaction: jest.Mock };
@@ -345,7 +351,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
       throw error;
     }
   });
-  return { tables, locks, beforeRegistryDelete, beforeHistoryInsert };
+  return { tables, locks, beforeRegistryDelete, beforeHistoryInsert, trx };
 }
 
 function currentPoint(): Row {
@@ -523,7 +529,13 @@ describe('connection profile persistence with a stale submitted factory', () => 
       const snapshot = structuredClone(request);
       // Replaying the same sync must not duplicate parameters or instruments.
       for (let attempt = 0; attempt < 2; attempt++) {
+        const priorPointId = fixture.tables[CONNECTED].find((row) => row.deleted_at == null)?.id;
         await connectionRequestsRepository.syncConnectedMeasurementPoints(request as never, 7);
+        expect(jest.mocked(syncAlertParameterActivations).mock.calls.at(-1)).toEqual([
+          fixture.trx,
+          ['S0017'],
+          { carryFromPointId: Number(priorPointId) },
+        ]);
         const active = fixture.tables[CONNECTED].filter((row) => row.deleted_at == null);
         expect(active).toHaveLength(1);
         expect(JSON.parse(String(active[0].parameters_json))).toEqual([oldParameter, ...added]);
@@ -1490,7 +1502,8 @@ describe('connection profile persistence with a stale submitted factory', () => 
       oldRequest('ADD_MEASUREMENT_POINT') as never,
       7,
     );
-    expect(fixture.locks).toEqual(['eligible_factories', CONNECTED]);
+    // Factory profile rows and the specific old point are both locked before replacement.
+    expect(fixture.locks).toEqual(['eligible_factories', CONNECTED, CONNECTED]);
   });
 
   it('keeps submitted profile fields on first connection when no live POMS factory exists', async () => {

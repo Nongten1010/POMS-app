@@ -140,6 +140,8 @@ export async function up(knex: Knex): Promise<void> {
     STATION,
     plan.after,
     reviewerId,
+    // This repair runs before 0128 creates and backfills activation history.
+    { syncAlertActivations: false },
   );
   const verified = await knex('cems_wpms_connected_measurement_points')
     .where('id', before[0].connectedPointId)

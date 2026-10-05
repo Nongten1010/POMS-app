@@ -15,6 +15,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:alert-emails": "tsx scripts/test-alert-emails.ts",
     "test:api": "./scripts/test-api.sh",
     "test:api:local": "./scripts/start-and-test-api.sh",
     "db:migrate": "knex --knexfile knexfile.ts migrate:latest",

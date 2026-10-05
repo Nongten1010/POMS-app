@@ -1,11 +1,20 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import type { Knex } from 'knex';
 
 jest.mock('../../src/config/database', () => ({
   db: jest.fn(),
 }));
+jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository', () => ({
+  lockAlertActivationPoints: jest.fn(async () => []),
+  syncAlertParameterActivations: jest.fn(async () => undefined),
+}));
 
 import { db } from '../../src/config/database';
 import { deviceConnectionsRepository } from '../../src/modules/device-connections/device-connections.repository';
+import {
+  lockAlertActivationPoints,
+  syncAlertParameterActivations,
+} from '../../src/modules/alert-emails/alert-parameter-activations.repository';
 
 const mockedDb = db as unknown as jest.Mock<(...args: unknown[]) => unknown>;
 
@@ -324,6 +333,12 @@ describe('deviceConnectionsRepository', () => {
       expect.objectContaining({ data_type: 'NOx (ppm)', test_mode: false }),
     ]);
     expect(result.channels.map((channel) => channel.testMode)).toEqual([true, false]);
+    expect(lockAlertActivationPoints).toHaveBeenCalledWith(trx as unknown as Knex.Transaction, [
+      'S0099',
+    ]);
+    expect(syncAlertParameterActivations).toHaveBeenCalledWith(trx as unknown as Knex.Transaction, [
+      'S0099',
+    ]);
   });
 });
 

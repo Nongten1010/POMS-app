@@ -60,6 +60,116 @@ function input(overrides: Partial<Parameters<typeof buildDailyAlertCandidates>[0
 }
 
 describe('buildDailyAlertCandidates', () => {
+  it('keeps verified daily identities stable across continuous point replacement and separates a new activation', () => {
+    const parameter = {
+      ...input().parameters[0],
+      activatedAt: '2026-09-01T00:00:00+07:00',
+      activationVerified: true,
+    };
+    const original = buildDailyAlertCandidates(input({ parameters: [parameter] }));
+    const replacement = buildDailyAlertCandidates(
+      input({
+        point: { ...point, id: 99, connectedAt: '2026-10-04T10:00:00+07:00' },
+        parameters: [parameter],
+      }),
+    );
+    expect(replacement.map((candidate) => candidate.idempotency_key)).toEqual(
+      original.map((candidate) => candidate.idempotency_key),
+    );
+    const reconnected = buildDailyAlertCandidates(
+      input({
+        point: { ...point, id: 100, connectedAt: '2026-10-01T00:00:00+07:00' },
+        parameters: [{ ...parameter, activatedAt: '2026-10-01T00:00:00+07:00' }],
+      }),
+    );
+    expect(reconnected[0].idempotency_key).not.toBe(original[0].idempotency_key);
+    const recased = buildDailyAlertCandidates(
+      input({
+        point: { ...point, id: 101, stationId: ' STATION-1 ' },
+        parameters: [parameter],
+      }),
+    );
+    expect(recased.map((candidate) => candidate.idempotency_key)).toEqual(
+      original.map((candidate) => candidate.idempotency_key),
+    );
+  });
+
+  it('canonicalizes verified parameter identity and rejects duplicate registrations with different Unicode spelling', () => {
+    const parameter = {
+      ...input().parameters[0],
+      code: 'CO',
+      unit: 'ppm',
+      activatedAt: '2026-09-01T00:00:00+07:00',
+      activationVerified: true,
+    };
+    const canonical = buildDailyAlertCandidates(input({ parameters: [parameter] }));
+    const alternative = { ...parameter, code: ' ＣＯ ', unit: ' ＰＰＭ ' };
+    expect(
+      buildDailyAlertCandidates(input({ parameters: [alternative] })).map(
+        (candidate) => candidate.idempotency_key,
+      ),
+    ).toEqual(canonical.map((candidate) => candidate.idempotency_key));
+    expect(() =>
+      buildDailyAlertCandidates(input({ parameters: [parameter, alternative] })),
+    ).toThrow('Duplicate parameter and unit');
+  });
+
+  it.each(['factory', 'station', 'system'] as const)(
+    'keeps verified %s ownership out of another daily identity',
+    (ownership) => {
+      const parameter = {
+        ...input().parameters[0],
+        activatedAt: '2026-09-01T00:00:00+07:00',
+        activationVerified: true,
+      };
+      const original = buildDailyAlertCandidates(input({ parameters: [parameter] }))[0];
+      const otherPoint =
+        ownership === 'factory'
+          ? { ...point, factoryId: 'factory-2' }
+          : ownership === 'station'
+            ? { ...point, stationId: 'station-2' }
+            : { ...point, systemType: 'WPMS' as const };
+      const other = buildDailyAlertCandidates(
+        input({ point: otherPoint, parameters: [parameter] }),
+      )[0];
+      expect(other.idempotency_key).not.toBe(original.idempotency_key);
+    },
+  );
+  it('preserves verified parameter history when approval replaces the live point ID', () => {
+    const established = {
+      code: 'SO2',
+      name: 'SO₂',
+      unit: 'ppm',
+      activatedAt: '2026-09-01T00:00:00+07:00',
+      activationVerified: true,
+      samples: samples(19),
+      dailySummaries: previousDays(15),
+    };
+    const newlyAdded = {
+      ...established,
+      code: 'NOX',
+      name: 'NOX',
+      activatedAt: '2026-10-04T10:00:00+07:00',
+    };
+    const candidates = buildDailyAlertCandidates(
+      input({
+        point: { ...point, id: 99, connectedAt: '2026-10-04T10:00:00+07:00' },
+        parameters: [established, newlyAdded],
+      }),
+    );
+    expect(candidates.some((candidate) => candidate.parameter_code === 'NOX')).toBe(false);
+    expect(candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          alert_type: 'CONSECUTIVE_NO_REPORT',
+          connected_measurement_point_id: 99,
+          parameter_code: 'SO2',
+          consecutive_days: 15,
+        }),
+      ]),
+    );
+  });
+
   it('builds a low-completeness event using trusted point identity, actual counts and full Bangkok day boundaries', () => {
     const candidates = buildDailyAlertCandidates(input());
 

@@ -20,6 +20,12 @@ import type { ActiveAlertEmailPolicy } from './alert-email-policy';
 import { alertEmailSourceRepository } from './alert-email-source.repository';
 import { renderAlertEmail } from './alert-email-template';
 import { createAlertEmailWorker } from './alert-email.worker';
+import {
+  alertParameterActivationKey,
+  parseRegisteredAlertParameter,
+  normalizeAlertActivationStationIdentity,
+} from './alert-parameter-activations';
+import { listActiveAlertParameterActivations } from './alert-parameter-activations.repository';
 
 const timestampSchema = z.iso.datetime({ offset: true });
 
@@ -138,6 +144,10 @@ async function checkCurrentEligibility(
   }));
   const points = await alertEmailSourceRepository.listPoints();
   const stationConfigurations = new Map<string, Promise<DeviceConnectionConfigDTO[]>>();
+  const pointActivations = new Map<
+    number,
+    ReturnType<typeof listActiveAlertParameterActivations>
+  >();
   return isAlertEmailJobEligible(job, policy, {
     events,
     points,
@@ -147,6 +157,30 @@ async function checkCurrentEligibility(
       // from the original validated Bangkok payload when the batch was enqueued.
       const startAt = job.cadence === 'HOURLY' ? job.periodStart : event.startedAt;
       if (!startAt || !timestampSchema.safeParse(startAt).success) return false;
+      const point = points.find(
+        (item) =>
+          normalizeAlertActivationStationIdentity(item.stationId) ===
+            normalizeAlertActivationStationIdentity(event.stationId) &&
+          item.systemType === event.systemType &&
+          item.factoryId === event.factoryId,
+      );
+      const requested = parseRegisteredAlertParameter(`${event.parameterCode} (${event.unit})`);
+      if (!point || !requested) return false;
+      let activations = pointActivations.get(point.id);
+      if (!activations) {
+        activations = listActiveAlertParameterActivations(point.id);
+        pointActivations.set(point.id, activations);
+      }
+      const registration = (await activations).find(
+        (activation) =>
+          alertParameterActivationKey(activation.parameterCode, activation.unit) === requested.key,
+      );
+      if (
+        !registration ||
+        !timestampSchema.safeParse(registration.activatedAt).success ||
+        Date.parse(registration.activatedAt) > Date.parse(startAt)
+      )
+        return false;
       let configurations = stationConfigurations.get(event.stationId);
       if (!configurations) {
         configurations = deviceConnectionsService.listActiveSettingsForIntegration({
@@ -156,44 +190,14 @@ async function checkCurrentEligibility(
       }
       const candidates = await configurations;
       return candidates.some((config) => {
-        if (
-          !timestampSchema.safeParse(config.updatedAt).success ||
-          Date.parse(config.updatedAt) > Date.parse(startAt)
-        )
-          return false;
         return config.channels.some((channel) => {
           if (channel.testMode) return false;
-          const parameter = parseRegisteredParameter(channel.dataType);
-          return (
-            parameter !== null &&
-            parameter.code === canonicalCode(event.parameterCode) &&
-            parameter.unit === normalizedUnit(event.unit ?? '')
-          );
+          const parameter = parseRegisteredAlertParameter(channel.dataType);
+          return parameter !== null && parameter.key === requested.key;
         });
       });
     },
   });
-}
-
-function parseRegisteredParameter(value: string): { code: string; unit: string } | null {
-  const normalized = value.normalize('NFKC').trim();
-  const match = /^(.*?)\s*\(([^()]+)\)\s*$/.exec(normalized);
-  if (!match) return null;
-  const code = canonicalCode(match[1]);
-  const unit = normalizedUnit(match[2]);
-  return code && unit ? { code, unit } : null;
-}
-
-function canonicalCode(value: string): string {
-  return value
-    .normalize('NFKC')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, '');
-}
-
-function normalizedUnit(value: string): string {
-  return value.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function parseEvidence(value: string | null): Record<string, unknown> | null {

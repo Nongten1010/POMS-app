@@ -42,6 +42,9 @@ jest.mock('../../src/modules/alert-emails/alert-email-eligibility', () => ({
 jest.mock('../../src/modules/device-connections/device-connections.service', () => ({
   deviceConnectionsService: { listActiveSettingsForIntegration: jest.fn() },
 }));
+jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository', () => ({
+  listActiveAlertParameterActivations: jest.fn(),
+}));
 jest.mock('../../src/modules/alert-events/alert-events.repository', () => ({
   toAlertEventDTO: jest.fn(),
 }));
@@ -61,6 +64,7 @@ import { alertEmailDailyRepository } from '../../src/modules/alert-emails/alert-
 import { isAlertEmailJobEligible } from '../../src/modules/alert-emails/alert-email-eligibility';
 import { toAlertEventDTO } from '../../src/modules/alert-events/alert-events.repository';
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
+import { listActiveAlertParameterActivations } from '../../src/modules/alert-emails/alert-parameter-activations.repository';
 import type { AlertEventDTO } from '../../src/modules/alert-events/alert-events.types';
 import type { AlertEmailJob } from '../../src/modules/alert-emails/alert-email-outbox.repository';
 import type { AlertEmailPoint } from '../../src/modules/alert-emails/alert-email-source.repository';
@@ -105,6 +109,7 @@ const job = {
   periodStart: '2026-10-04T04:00:00.000Z',
 } as AlertEmailJob;
 const registryConfigs = jest.mocked(deviceConnectionsService.listActiveSettingsForIntegration);
+const registryActivations = jest.mocked(listActiveAlertParameterActivations);
 
 function workerDependencies() {
   return jest.mocked(createAlertEmailWorker).mock.calls[0][1];
@@ -143,6 +148,9 @@ describe('startAlertEmailWorker', () => {
         updatedAt: '2026-10-01T00:00:00.000Z',
         channels: [{ dataType: 'CO₂ (ppm)', testMode: false }],
       } as never,
+    ]);
+    registryActivations.mockResolvedValue([
+      { parameterCode: 'co2', unit: 'ppm', activatedAt: '2026-10-01T00:00:00.000Z' },
     ]);
     (db as unknown as jest.Mock).mockReturnValue(query);
     whereIn.mockReturnValue(query);
@@ -262,7 +270,7 @@ describe('startAlertEmailWorker', () => {
     expect(alertEmailSourceRepository.listPoints).toHaveBeenCalledTimes(1);
   });
 
-  it('checks exact registered units, canonical Unicode parameter names, valid revision instants and test mode before SMTP', async () => {
+  it('checks exact registered units, canonical Unicode parameter names, trusted activation and test mode before SMTP', async () => {
     startAlertEmailWorker(settings);
     await workerDependencies().dispatch();
     await dispatchDependencies().isRecipientEligible(job);
@@ -274,6 +282,30 @@ describe('startAlertEmailWorker', () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
+  it('keeps a completed-hour event eligible after its device configuration is edited', async () => {
+    startAlertEmailWorker(settings);
+    await workerDependencies().dispatch();
+    registryConfigs.mockResolvedValue([
+      {
+        updatedAt: '2026-10-05T06:00:00Z',
+        channels: [{ dataType: 'CO₂ (ppm)', testMode: false }],
+      } as never,
+    ]);
+    await dispatchDependencies().isRecipientEligible(job);
+    const check = jest.mocked(isAlertEmailJobEligible).mock.calls[0][2].hasActiveParameter;
+    expect(await check(event)).toBe(true);
+    expect(registryActivations).toHaveBeenCalledWith(55);
+  });
+
+  it('skips hourly mail when activation evidence is unavailable', async () => {
+    registryActivations.mockResolvedValue([]);
+    startAlertEmailWorker(settings);
+    await workerDependencies().dispatch();
+    await dispatchDependencies().isRecipientEligible(job);
+    const check = jest.mocked(isAlertEmailJobEligible).mock.calls[0][2].hasActiveParameter;
+    expect(await check(event)).toBe(false);
+  });
+
   it('uses daily event time for registry ownership and rejects missing or ambiguous daily time', async () => {
     startAlertEmailWorker(settings);
     await workerDependencies().dispatch();
@@ -282,6 +314,32 @@ describe('startAlertEmailWorker', () => {
     expect(await check({ ...event, startedAt: '2026-10-03T17:00:00.000Z' })).toBe(true);
     expect(await check({ ...event, startedAt: null })).toBe(false);
     expect(await check({ ...event, startedAt: '2026-10-03T17:00:00' })).toBe(false);
+  });
+  it('checks a legacy daily event against the carried activation of its replacement live point', async () => {
+    jest.mocked(alertEmailSourceRepository.listPoints).mockResolvedValue([
+      {
+        ...point,
+        id: 99,
+        stationId: 's1',
+        factoryId: 'factory-1',
+        connectedAt: '2026-10-04T10:00:00+07:00',
+      },
+    ]);
+    startAlertEmailWorker(settings);
+    await workerDependencies().dispatch();
+    await dispatchDependencies().isRecipientEligible({ ...job, cadence: 'DAILY' });
+    const check = jest.mocked(isAlertEmailJobEligible).mock.calls[0][2].hasActiveParameter;
+    expect(
+      await check({
+        ...event,
+        factoryId: 'factory-1',
+        alertType: 'DAILY_COMPLETENESS_LOW',
+        startedAt: '2026-10-03T17:00:00.000Z',
+      }),
+    ).toBe(true);
+    expect(registryActivations).toHaveBeenCalledWith(99);
+    expect(registryActivations).not.toHaveBeenCalledWith(55);
+    expect(await check({ ...event, factoryId: 'other-factory' })).toBe(false);
   });
 
   it('treats array, null, and primitive evidence as unavailable rather than an authorization policy', async () => {
@@ -324,9 +382,19 @@ describe('startAlertEmailWorker', () => {
   });
 
   it.each([
-    { updatedAt: '2026-10-04T06:00:00Z', dataType: 'CO₂ (ppm)', testMode: false },
-    { updatedAt: '2026-10-01T00:00:00', dataType: 'CO₂ (ppm)', testMode: false },
-    { updatedAt: 'bad-dateZ', dataType: 'CO₂ (ppm)', testMode: false },
+    {
+      updatedAt: '2026-10-04T06:00:00Z',
+      activatedAt: '2026-10-04T06:00:00Z',
+      dataType: 'CO₂ (ppm)',
+      testMode: false,
+    },
+    {
+      updatedAt: '2026-10-01T00:00:00',
+      activatedAt: '2026-10-01T00:00:00',
+      dataType: 'CO₂ (ppm)',
+      testMode: false,
+    },
+    { updatedAt: 'bad-dateZ', activatedAt: 'bad-dateZ', dataType: 'CO₂ (ppm)', testMode: false },
     { updatedAt: '2026-10-01T00:00:00Z', dataType: 'CO₂ (ppm)', testMode: true },
     { updatedAt: '2026-10-01T00:00:00Z', dataType: 'CO₂', testMode: false },
     { updatedAt: '2026-10-01T00:00:00Z', dataType: 'NOx (ppm)', testMode: false },
@@ -340,6 +408,10 @@ describe('startAlertEmailWorker', () => {
         channels: [{ dataType: registration.dataType, testMode: registration.testMode }],
       } as never,
     ]);
+    if (typeof registration.activatedAt === 'string')
+      registryActivations.mockResolvedValue([
+        { parameterCode: 'co2', unit: 'ppm', activatedAt: registration.activatedAt },
+      ]);
     await dispatchDependencies().isRecipientEligible(job);
     const check = jest.mocked(isAlertEmailJobEligible).mock.calls[0][2].hasActiveParameter;
     expect(await check(event)).toBe(false);

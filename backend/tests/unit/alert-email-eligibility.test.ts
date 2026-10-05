@@ -29,8 +29,11 @@ function dependencies() {
           factoryId: 'F1',
           stationId: 'S1',
           notificationStatus: 'AUTO',
+          measuredValue: 125,
+          thresholdValue: 120,
+          thresholdType: 'STANDARD',
         } as AlertEventDTO,
-        evidence: null,
+        evidence: null as Record<string, unknown> | null,
       },
       {
         event: {
@@ -40,8 +43,11 @@ function dependencies() {
           factoryId: 'F2',
           stationId: 'S2',
           notificationStatus: 'AUTO',
+          measuredValue: 125,
+          thresholdValue: 120,
+          thresholdType: 'STANDARD',
         } as AlertEventDTO,
-        evidence: null,
+        evidence: null as Record<string, unknown> | null,
       },
     ],
     points: [
@@ -68,6 +74,62 @@ function dependencies() {
   };
 }
 describe('recipient eligibility immediately before SMTP', () => {
+  it.each([
+    ['STANDARD_EXCEEDED' as const, 'STANDARD' as const],
+    ['EIA_EXCEEDED' as const, 'EIA' as const],
+  ])('requires true finite exceedances for every %s event', async (alertType, thresholdType) => {
+    const hourlyJob = { ...job, alertType };
+    const deps = dependencies();
+    deps.events.forEach(({ event }) => {
+      event.alertType = alertType;
+      event.thresholdType = thresholdType;
+    });
+    expect(await isAlertEmailJobEligible(hourlyJob, policy, deps)).toBe(true);
+    for (const measuredValue of [100, 120, null, NaN, Infinity, -Infinity]) {
+      deps.events[1].event.measuredValue = measuredValue;
+      expect(await isAlertEmailJobEligible(hourlyJob, policy, deps)).toBe(false);
+    }
+    deps.events[1].event.measuredValue = 125;
+    for (const thresholdValue of [null, NaN, Infinity, -Infinity]) {
+      deps.events[1].event.thresholdValue = thresholdValue;
+      expect(await isAlertEmailJobEligible(hourlyJob, policy, deps)).toBe(false);
+    }
+    deps.events[1].event.thresholdValue = 120;
+    deps.events[1].event.thresholdType = thresholdType === 'STANDARD' ? 'EIA' : 'STANDARD';
+    expect(await isAlertEmailJobEligible(hourlyJob, policy, deps)).toBe(false);
+  });
+  it('does not allow hourly exceedances through a daily job with matching daily evidence', async () => {
+    const deps = dependencies();
+    deps.events.forEach((item) => {
+      item.evidence = {
+        completenessPolicy: policy.completenessPolicy,
+        exemptDayPolicy: policy.exemptDayPolicy,
+      };
+    });
+    expect(await isAlertEmailJobEligible({ ...job, cadence: 'DAILY' }, policy, deps)).toBe(false);
+  });
+  it('rejects daily events in hourly jobs but retains valid daily eligibility', async () => {
+    const deps = dependencies();
+    deps.events.forEach((item) => {
+      item.event.alertType = 'DAILY_COMPLETENESS_LOW';
+      item.event.measuredValue = null;
+      item.event.thresholdValue = null;
+      item.event.thresholdType = null;
+      item.evidence = {
+        completenessPolicy: policy.completenessPolicy,
+        exemptDayPolicy: policy.exemptDayPolicy,
+      };
+    });
+    const dailyJob = {
+      ...job,
+      alertType: 'DAILY_COMPLETENESS_LOW',
+      cadence: 'DAILY',
+    } as AlertEmailJob;
+    expect(await isAlertEmailJobEligible(dailyJob, policy, deps)).toBe(true);
+    expect(await isAlertEmailJobEligible({ ...dailyJob, cadence: 'HOURLY' }, policy, deps)).toBe(
+      false,
+    );
+  });
   it('requires current recipient ownership for every event in the frozen batch', async () => {
     const deps = dependencies();
     expect(await isAlertEmailJobEligible(job, policy, deps)).toBe(true);

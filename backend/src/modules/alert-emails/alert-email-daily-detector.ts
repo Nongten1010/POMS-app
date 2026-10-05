@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AlertEventRow } from '../alert-events/alert-events.types';
 import type { AlertEmailPoint } from './alert-email-source.repository';
+import { normalizeAlertActivationStationIdentity } from './alert-parameter-activations';
 import {
   countConsecutiveLowReportingDays,
   detectAbnormalHourlyEpisodes,
@@ -19,6 +20,8 @@ export interface DailyAlertParameter {
   unit: string;
   /** Earliest trusted activation of the current parameter/unit registration. */
   activatedAt?: string;
+  /** Persisted registry evidence survives replacement of a continuously connected live point. */
+  activationVerified?: boolean;
   samples: AlertHourlySample[];
   dailySummaries: AlertDaySummary[];
 }
@@ -52,18 +55,25 @@ export function buildDailyAlertCandidates(
   if (detected < end) throw new Error('Daily detection requires a completed reporting day');
   if (input.point.connectedAt === null) return [];
   const connected = timestamp(input.point.connectedAt, 'connectedAt');
-  // No complete-day evidence exists for an activation day that started before connection.
-  if (connected > start) return [];
 
   const candidates: DailyAlertCandidate[] = [];
   const uniqueParameters = new Set<string>();
   for (const parameter of input.parameters) {
+    if (parameter.activationVerified && !parameter.activatedAt)
+      throw new Error('Verified activation requires an activation timestamp');
     const effectiveConnected = parameter.activatedAt
-      ? Math.max(connected, timestamp(parameter.activatedAt, 'activatedAt'))
+      ? parameter.activationVerified
+        ? timestamp(parameter.activatedAt, 'activatedAt')
+        : Math.max(connected, timestamp(parameter.activatedAt, 'activatedAt'))
       : connected;
     if (effectiveConnected > start) continue;
     const normalizedUnit = normalizeUnit(parameter.unit);
-    const parameterIdentity = JSON.stringify([parameter.code.trim().toUpperCase(), normalizedUnit]);
+    const parameterIdentity = JSON.stringify([
+      parameter.activationVerified
+        ? canonicalParameterCode(parameter.code)
+        : parameter.code.trim().toUpperCase(),
+      normalizedUnit,
+    ]);
     if (uniqueParameters.has(parameterIdentity)) throw new Error('Duplicate parameter and unit');
     uniqueParameters.add(parameterIdentity);
     const relevantSamples = parameter.samples.filter((sample) => {
@@ -74,11 +84,13 @@ export function buildDailyAlertCandidates(
     const sharedEvidence = {
       completenessPolicy: input.completenessPolicy,
       exemptDayPolicy: input.exemptDayPolicy,
+      abnormalReadings: input.abnormalReadings,
       expectedCount: summary.expectedCount,
       receivedCount: summary.receivedCount,
       completenessPercent: summary.completenessPercent,
       reportingDate: input.date,
       parameterActivatedAt: new Date(effectiveConnected).toISOString(),
+      activationVerified: parameter.activationVerified === true,
       periodStartedAt: new Date(start).toISOString(),
       periodEndedAt: new Date(end).toISOString(),
     };
@@ -129,7 +141,7 @@ export function buildDailyAlertCandidates(
           input,
           parameter,
           'ABNORMAL_VALUE',
-          `${episode.abnormalType}:${episode.startedAt}`,
+          `${episode.abnormalType}:${parameter.activationVerified ? new Date(timestamp(episode.startedAt, 'startedAt')).toISOString() : episode.startedAt}`,
         ),
         started_at: episode.startedAt,
         ended_at: episode.endedAt,
@@ -209,23 +221,102 @@ function candidateKey(
   alertType: DailyAlertCandidate['alert_type'],
   episodeIdentity: string | null = null,
 ): string {
-  const identity = JSON.stringify([
-    'daily-alert-v1',
-    input.point.id,
-    input.point.systemType,
-    parameter.code.trim().toUpperCase(),
+  const activation = parameter.activatedAt
+    ? new Date(timestamp(parameter.activatedAt, 'activatedAt')).toISOString()
+    : null;
+  const verified = parameter.activationVerified === true;
+  if (verified && (!input.point.factoryId.trim() || !input.point.stationId.trim()))
+    throw new Error('Verified activation requires a factory and station identity');
+  const identity = [
+    ...(verified
+      ? [
+          'daily-alert-v2',
+          input.point.factoryId.trim(),
+          input.point.systemType,
+          normalizeAlertActivationStationIdentity(input.point.stationId),
+          canonicalParameterCode(parameter.code),
+        ]
+      : [
+          'daily-alert-v1',
+          input.point.id,
+          input.point.systemType,
+          parameter.code.trim().toUpperCase(),
+        ]),
     normalizeUnit(parameter.unit),
-    parameter.activatedAt
-      ? new Date(timestamp(parameter.activatedAt, 'activatedAt')).toISOString()
-      : null,
+    activation,
     input.date,
     input.completenessPolicy,
     input.exemptDayPolicy,
     input.abnormalReadings,
     alertType,
     episodeIdentity,
+  ];
+  return dailyAlertKey(verified ? 'v2' : 'v1', identity);
+}
+
+/** Compare a verified candidate with the original v1 key without trusting old evidence fields. */
+export function legacyDailyAlertKey(
+  candidate: DailyAlertCandidate,
+  oldPointId: number,
+): string | null {
+  if (!candidate.idempotency_key.startsWith('DAILY_ALERT:v2:')) return null;
+  if (!Number.isSafeInteger(oldPointId) || oldPointId <= 0) return null;
+  let evidence: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(candidate.evidence_json ?? 'null');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+    evidence = parsed as Record<string, unknown>;
+  } catch {
+    throw new Error('Invalid daily alert identity metadata');
+  }
+  if (
+    evidence.activationVerified !== true ||
+    typeof evidence.parameterActivatedAt !== 'string' ||
+    (evidence.completenessPolicy !== 'ON_TIME' &&
+      evidence.completenessPolicy !== 'NORMAL_EXCLUDING_SHUTDOWN') ||
+    (evidence.exemptDayPolicy !== 'RESET' && evidence.exemptDayPolicy !== 'PAUSE') ||
+    typeof evidence.abnormalReadings !== 'number' ||
+    !Number.isInteger(evidence.abnormalReadings) ||
+    evidence.abnormalReadings < 2 ||
+    typeof candidate.event_date !== 'string'
+  )
+    throw new Error('Invalid daily alert identity metadata');
+  reportingDayStart(candidate.event_date);
+  const activation = new Date(
+    timestamp(evidence.parameterActivatedAt, 'activatedAt'),
+  ).toISOString();
+  let episodeIdentity: string | null = null;
+  if (candidate.alert_type === 'ABNORMAL_VALUE') {
+    if (!candidate.abnormal_type || typeof candidate.started_at !== 'string')
+      throw new Error('Invalid daily alert identity metadata');
+    timestamp(candidate.started_at, 'started_at');
+    // v1 hashed the original source spelling, including its offset and source minutes.
+    episodeIdentity = `${candidate.abnormal_type}:${candidate.started_at}`;
+  }
+  return dailyAlertKey('v1', [
+    'daily-alert-v1',
+    oldPointId,
+    candidate.system_type,
+    candidate.parameter_code.trim().toUpperCase(),
+    normalizeUnit(candidate.unit ?? ''),
+    activation,
+    candidate.event_date,
+    evidence.completenessPolicy,
+    evidence.exemptDayPolicy,
+    evidence.abnormalReadings,
+    candidate.alert_type,
+    episodeIdentity,
   ]);
-  return `DAILY_ALERT:v1:${createHash('sha256').update(identity).digest('hex')}`;
+}
+
+function dailyAlertKey(version: 'v1' | 'v2', identity: unknown[]): string {
+  return `DAILY_ALERT:${version}:${createHash('sha256').update(JSON.stringify(identity)).digest('hex')}`;
+}
+
+function canonicalParameterCode(value: string): string {
+  const code = value.normalize('NFKC').trim().toLowerCase();
+  if (!code) throw new Error('A registered parameter code is required');
+  return code;
 }
 
 function normalizeUnit(value: string): string {

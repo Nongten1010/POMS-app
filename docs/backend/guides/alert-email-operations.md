@@ -42,9 +42,13 @@ Worker มองย้อนหลังรายชั่วโมง 24 ชั
 
 เมื่อ expected count เป็นศูนย์ วันนั้นเป็นวันยกเว้น ไม่ใช่ 0% และให้ใช้ `RESET` หรือ `PAUSE` ตามที่กำหนดไว้ วันที่รายงานได้อย่างน้อย 80% จบ streak ส่วนวันที่ summary ขาดจะไม่ถูกสมมติให้เป็นวันรายงานต่ำ
 
-แม้ `PAUSE` จะเก็บ streak เดิมไว้ วันยกเว้นเองไม่สร้างอีเมลรายงานต่ำหรือรายงานไม่ครบต่อเนื่อง การนับเริ่มที่วันเต็มหลังวันเริ่มใช้งานของแต่ละพารามิเตอร์ หากไม่ทราบ `connectedAt` หรือไม่พบเวลาของ device configuration ที่ยืนยันพารามิเตอร์นั้น จะข้ามการสร้างเหตุการณ์รายวันแทนการเดาประวัติ
+แม้ `PAUSE` จะเก็บ streak เดิมไว้ วันยกเว้นเองไม่สร้างอีเมลรายงานต่ำหรือรายงานไม่ครบต่อเนื่อง การนับเริ่มที่วันเต็มหลังวันเริ่มใช้งานของแต่ละพารามิเตอร์ หากไม่ทราบ `connectedAt` หรือไม่พบประวัติ activation ที่ตรงพารามิเตอร์และหน่วย จะข้ามการสร้างเหตุการณ์รายวันแทนการเดาประวัติ หากอ่านแหล่งประวัติไม่ได้จะเป็น source error
 
-วันเริ่มใช้งาน (`activatedAt`) ใช้เวลาที่ใหม่กว่าระหว่าง `connectedAt` ของจุด กับ `updatedAt` ของ device configuration revision ล่าสุดที่ตรง `deviceCode` และ channel `dataType` ของพารามิเตอร์พร้อมหน่วย วิธีนี้ป้องกันการเพิ่มพารามิเตอร์วันนี้แล้วนับช่วงก่อนเพิ่มว่าไม่รายงาน แต่มีข้อจำกัดว่าแก้ configuration อาจเริ่มนับวันใหม่แม้ channel เดิมยังใช้งานอยู่ เพราะระบบยังไม่มี timestamp ประวัติการเปิดใช้ราย channel ให้ยืนยันย้อนหลัง
+วันเริ่มใช้งาน (`activatedAt`) เก็บใน `alert_parameter_activations` แยกตาม live connected point พารามิเตอร์ และหน่วย การแก้ address, device, protocol หรือ config โดยยังมีพารามิเตอร์และหน่วยเดิมใน channel ปกติจะรักษาวันเริ่มเดิม การลบหรือเหลือเฉพาะ Test Mode ปิดช่วงใช้งาน เมื่อเพิ่มกลับจะเริ่มช่วงใหม่ การอนุมัติ `ADD_PARAMETER` รักษาประวัติของพารามิเตอร์เดิมได้เฉพาะจุดเดิมที่ยังเชื่อมต่อและตรงโรงงาน ระบบ และ station; พารามิเตอร์ใหม่เริ่มวันที่เพิ่มจริง และไม่ก่อน `connectedAt` ของจุดที่เชื่อมต่อใหม่
+
+ต้องติดตั้ง migration [`0128_create_alert_parameter_activations.ts`](../../../backend/src/db/migrations/0128_create_alert_parameter_activations.ts) ก่อนใช้ backend รุ่นนี้ แม้ worker ยังปิดอยู่ เพราะเส้นทางบันทึก config และอนุมัติ connection อัปเดตประวัติใน transaction เดียวกัน Migration เติม baseline ครั้งเดียวด้วยเวลาที่ใหม่กว่าระหว่าง `connectedAt` กับ `updatedAt` ของ config ปัจจุบันที่ตรง channel ปกติ ไม่อนุมานประวัติต่อเนื่องจาก audit revision เก่า จึงต้องทวน baseline ในฐานข้อมูลทดสอบก่อนเปิดใช้จริง
+
+หาก legacy audit ทำให้ baseline อยู่ในอนาคต ระบบจะรอถึงวันเต็มหลัง baseline นั้นก่อนนับ ไม่เดา timezone เพื่อเลื่อนประวัติ การปิดช่วงใช้งานใช้เวลาที่ไม่น้อยกว่า baseline เพื่อให้ config ยังบันทึกได้อย่างสอดคล้องกับข้อจำกัดฐานข้อมูล
 
 การหาจำนวนวันต่อเนื่องอ่านย้อนถึงวันเริ่มใช้งานนี้ เป็น query ช่วงละ 30 วัน ไม่ตัดตัวเลขให้เหลือ 15/8 วันและไม่สมมติจำนวนวันเกินข้อมูลที่มี หากโหลดข้อมูลมากกว่า 100,000 rows จะหยุดเป็น source error เพื่อให้ตรวจสภาพข้อมูลก่อนดำเนินการ
 
@@ -63,7 +67,7 @@ Worker มองย้อนหลังรายชั่วโมง 24 ชั
 - `officer_notification_emails_json` และ `notification_emails_json` ของ connected point เป็นข้อมูลปัจจุบัน ค่า `null` จึงใช้ข้อมูลคำขอต้นทางได้ แต่ `[]` หมายถึงล้างผู้รับแล้วและห้าม fallback
 - จัด delivery ต่อผู้รับหลัก และรวมเฉพาะเหตุการณ์ของจุดที่ผู้รับนั้นรับได้ ไม่ส่งข้อมูลโรงงานอื่นรวมไปเพราะใช้รอบเดียวกัน
 - ทุกฉบับต้องมี CC `diw.iemc@gmail.com`; normalize และกันอีเมลซ้ำใน envelope
-- ก่อนส่ง worker ตรวจว่าผู้รับยังรับเหตุการณ์ชุดนั้นได้ ถ้าขอบเขตเปลี่ยนจะบันทึก `SKIPPED`
+- ก่อนส่ง worker ตรวจผู้รับ จุด พารามิเตอร์ หน่วย และ activation ปัจจุบัน รวมถึง finite `measuredValue > thresholdValue` และ `thresholdType` ที่ตรงประเภทสำหรับรายชั่วโมง หากเหตุการณ์ใดในชุดไม่ผ่าน จะบันทึก `SKIPPED` ทั้ง delivery ก่อนเรียก SMTP
 - เหตุการณ์สถานะ `DISMISSED` ไม่ถูกจัดคิวส่ง และ worker ตรวจสถานะอีกครั้งก่อนส่งรายการที่เคยจัดคิวแล้ว
 
 ## คิวและผล SMTP
@@ -71,6 +75,8 @@ Worker มองย้อนหลังรายชั่วโมง 24 ชั
 Outbox เก็บเนื้อหา ผู้รับ รอบ และ event IDs เป็น snapshot ด้วยตาราง `alert_email_batches`, `alert_email_batch_events` และ `alert_email_deliveries` migration อยู่ที่ [`0127_create_alert_email_outbox.ts`](../../../backend/src/db/migrations/0127_create_alert_email_outbox.ts)
 
 การกันซ้ำมีทั้ง key ของ batch และคู่เหตุการณ์กับผู้รับใน cadence เดียวกัน จึงไม่จัดเหตุการณ์เดิมส่งซ้ำเมื่อ worker restart หรือเมื่อชุดใหม่มีเหตุการณ์เก่าปนกับเหตุการณ์ที่เข้ามาภายหลัง การ claim ใช้การอัปเดตแบบ atomic และมี lease token เพื่อไม่ให้สอง worker ส่งรายการเดียวกัน
+
+Daily key ที่อิง activation ซึ่งยืนยันแล้วเป็น opaque `DAILY_ALERT:v2:<SHA256>` โดย identity เดิมยังคงเดิมเมื่ออนุมัติ `ADD_PARAMETER` แล้วเปลี่ยน live row ID หากพบเหตุการณ์ v1 ที่ตรง ownership, activation, policy และ episode โดยตรวจ hash เดิม จะคืน event ID เดิมเพื่อคง outbox dedup และสถานะติดตาม ก่อนเปลี่ยน backend ให้หยุด worker รุ่นเก่าเพื่อไม่ให้มี writer ต่างรุ่นแข่งสร้าง v1/v2 ระหว่าง rollout
 
 | เหตุการณ์ | การจัดการ |
 | --- | --- |
@@ -80,15 +86,24 @@ Outbox เก็บเนื้อหา ผู้รับ รอบ และ 
 | SMTP ยอมรับเพียงบางผู้รับ | `FAILED` พร้อมรายการ accepted/rejected; ไม่ส่งซ้ำทั้ง envelope |
 | Timeout/ผลไม่ชัด หรือ lease หมดหลังเริ่มงาน | `UNKNOWN`; ไม่ลองใหม่อัตโนมัติเพราะอาจส่งสำเร็จแล้ว |
 | ตรวจขอบเขตผู้รับไม่ได้ | retry ได้เฉพาะขั้นก่อนส่ง และจำกัด attempts เช่นเดียวกัน |
+| เงื่อนไขส่งไม่ผ่าน | `SKIPPED` พร้อม `RECIPIENT_SCOPE_CHANGED`; code นี้ครอบคลุม event eligibility รวมข้อมูลรายชั่วโมงเดิมที่ไม่เกินเกณฑ์ ไม่ได้หมายถึงการเปลี่ยนอีเมลผู้รับเท่านั้น |
 
 หากได้ `UNKNOWN` ต้องตรวจ log/provider ด้วย message ID และข้อมูลที่ปกปิดแล้วก่อนตัดสินใจดำเนินการ ไม่มี public API สำหรับ resend ในงานนี้ สถานะ SMTP แยกจาก `AUTO`, `OFFICER`, `ACKNOWLEDGED`, `DISMISSED` ของการติดตามเหตุการณ์
+
+## ลำดับปล่อย backend
+
+[Deployment workflow](../../../.github/workflows/deploy.yml) build และทดสอบ backend พร้อมเตรียม release และ production dependencies ก่อนหยุด service จากนั้นหยุด backend ก่อน migration `0128` เพื่อไม่ให้ API เปลี่ยน config ระหว่างเติม baseline กับติดตั้ง activation hooks แล้วตรวจ preflight, คัดลอกไฟล์ใหม่ และเริ่ม service พร้อม health check
+
+หาก migration หรือ preflight ล้มเหลว workflow ไม่เดินต่อไปคัดลอกไฟล์ใหม่ และขั้น `always()` พยายามเริ่ม service คืน ต้องตรวจผล health และ Action log ก่อนถือว่า release สำเร็จ การเปลี่ยนลำดับนี้ไม่แก้ `.env` หรือนโยบายเปิดส่งอีเมล
+
+หาก migration `0128` สำเร็จแล้ว แต่ preflight หรือการติดตั้งไฟล์ล้มเหลว การเริ่ม backend รุ่นเก่าคืนอาจทำให้ config เปลี่ยนโดยไม่มี activation hooks ก่อน retry ต้องหยุดการเปลี่ยน config ทวนและปรับ activation baseline ให้ตรงข้อมูลปัจจุบันโดยผู้ดูแลฐานข้อมูล แล้วติดตั้ง backend รุ่นใหม่ให้ครบก่อนเปิด worker การรัน migration ซ้ำเพียงอย่างเดียวไม่เติม baseline ใหม่ เพราะ migration ที่สำเร็จแล้วจะไม่รันอีก
 
 ## ตรวจรับก่อนเปิดสภาพแวดล้อมจริง
 
 1. ยืนยันผู้รับหลัก สูตร 80% นโยบายวันยกเว้น จำนวนค่าต่อเนื่อง และเวลาที่ข้อมูลรายชั่วโมงพร้อมก่อนกำหนด settings
-2. ตรวจ migration และ dependency ของแหล่งค่าตรวจวัดในสภาพแวดล้อมทดสอบ พร้อมทวน `connectedAt` และ device configuration `updatedAt` ของ channel เดิมว่ารองรับวันที่เริ่มนับที่ต้องการ ห้ามใช้แหล่งข้อมูลที่อ่านไม่ได้แทน 0 รายงาน
+2. ตรวจ migrations `0127` และ `0128` พร้อม dependency ของแหล่งค่าตรวจวัดในฐานข้อมูลทดสอบ ทวน activation baseline ของแต่ละจุด/พารามิเตอร์/หน่วย และทดสอบแก้ config, เพิ่ม/ลบ channel, Test Mode และอนุมัติ `ADD_PARAMETER` ห้ามใช้แหล่งข้อมูลที่อ่านไม่ได้แทน 0 รายงาน
 3. ใช้ preview API ตรวจครบหกกรณี พร้อมพารามิเตอร์ชื่อเดียวกันแต่ต่างหน่วย โรงงานหลายแห่ง และช่วงข้ามวัน
-4. ทดสอบ transport จำลองให้ครอบคลุมยอมรับครบ ปฏิเสธชั่วคราว/ถาวร ยอมรับบางผู้รับ และ timeout ก่อนเปิด SMTP จริง
-5. ตรวจ [TDD evidence](../evidence/notifications/alert-email.tdd.md) และ runtime `/api/v1/openapi.json` ให้ตรงกับ contract เมื่อมีการ deploy ที่ได้รับอนุญาต
+4. รัน [ชุดจำลองอีเมลในเครื่อง](./alert-email-test.md) เพื่อดูครบหกแบบและตรวจเงื่อนไขเวลา/เกณฑ์/ส่งซ้ำ จากนั้นตรวจ SQL Server, ระบบต้นทาง และ worker จริงในสภาพแวดล้อมทดสอบ ชุดจำลองใช้ in-memory adapter และ SMTP sink ที่ `127.0.0.1` จึงยังไม่ยืนยันระบบส่วนเหล่านี้หรือ inbox production
+5. ตรวจ [TDD evidence เดิม](../evidence/notifications/alert-email.tdd.md), [หลักฐานการตรวจความถูกต้องและชุดจำลอง](../evidence/notifications/alert-email-correctness.tdd.md) และ runtime `/api/v1/openapi.json` ให้ตรงกับ contract เมื่อมีการ deploy ที่ได้รับอนุญาต
 
 ไม่เก็บ credential SMTP, database หรือ API key ในเอกสาร ไม่ใช้ log raw payload ที่มีอีเมล/ข้อมูลติดต่อเพื่อวิเคราะห์ผล

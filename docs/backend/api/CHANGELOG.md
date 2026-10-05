@@ -1,5 +1,25 @@
 # API Breaking Changes
 
+<a id="alert-email-presend-activation"></a>
+
+## 2026-10-05 — ตรวจเงื่อนไขก่อนส่งและรักษาประวัติพารามิเตอร์
+
+- **Affected canonical docs:** [อีเมลแจ้งเตือน](./menus/notifications/email-notifications.md), [คู่มือปฏิบัติการ](../guides/alert-email-operations.md)
+- **Impact:** Preview ของเหตุการณ์รายชั่วโมงเดิมที่ค่าไม่เป็น finite number หรือ `measuredValue <= thresholdValue` ตอบ `400 BAD_REQUEST`; worker ตรวจเงื่อนไขอีกครั้งก่อนส่งและข้าม delivery ทั้งชุดเมื่อมีเหตุการณ์ไม่ผ่าน โดยใช้ `SKIPPED` / `RECIPIENT_SCOPE_CHANGED` ซึ่งครอบคลุม event eligibility การแก้ config ที่ยังมีพารามิเตอร์และหน่วยเดิมไม่เลื่อนวันเริ่มนับอีกต่อไป การอนุมัติ `ADD_PARAMETER` รักษาประวัติของจุดเดิมที่ต่อเนื่องและกันเหตุการณ์รายวันซ้ำแม้ live point ID เปลี่ยน
+- **Migration:** รัน `0128_create_alert_parameter_activations.ts` ก่อน backend รุ่นนี้ แม้ยังปิด worker และใช้ `0127` สำหรับ outbox ทวน baseline ในฐานข้อมูลทดสอบตามคู่มือก่อนเปิดใช้ ประวัติเก่าเติมจาก config ปัจจุบันอย่างระมัดระวัง ไม่มีการเดาย้อน audit วันลบ/Test Mode แล้วเพิ่มกลับเป็น activation ใหม่ หยุด worker รุ่นเก่าก่อนเริ่มรุ่นใหม่เพื่อไม่ให้เกิด race ข้ามรุ่น Daily key ใหม่เป็น opaque `DAILY_ALERT:v2:<SHA256>` และอ่านเหตุการณ์ v1 ที่ตรง identity เดิมได้โดยคง event ID และหลักฐานเดิม
+- **Client action:** ใช้ event/delivery IDs อ้างอิงและไม่แยกองค์ประกอบ `idempotencyKey`; รองรับ preview ที่ตอบ `400` และแสดง `SKIPPED` เป็นเงื่อนไขส่งไม่ผ่าน ตรวจตัวอย่างครบหกแบบด้วย [ชุดทดสอบในเครื่อง](../guides/alert-email-test.md)
+- **Breaking change:** yes — preview เดิมที่เคยยอมให้แสดงค่าไม่เกินเกณฑ์จะถูกปฏิเสธ และ client ที่ตีความรูปแบบ daily key ต้องปรับ ไม่มีการเปิด worker หรือส่งอีเมลจากการรันชุดจำลอง
+
+<a id="alert-event-exceedance-validation"></a>
+
+## 2026-10-05 — รับเหตุการณ์เฉพาะค่าที่เกินเกณฑ์จริง
+
+- **Affected canonical docs:** [Integration Alert Events](./integrations/alert-events/README.md)
+- **Impact:** `POST /api/v1/integrations/alert-events` รับเฉพาะ finite `measuredValue` และ `thresholdValue` ที่มี `measuredValue > thresholdValue` ทั้ง `STANDARD` และ `EIA`; numeric string ที่ไม่ว่างและแปลงเป็น finite number ได้ยังรับและแปลงเป็น number ส่วน `null`, boolean, empty/whitespace-only string, array และ object ถูกปฏิเสธ หากรายการใดไม่ผ่าน validation จะตอบ `400 VALIDATION_ERROR` และไม่เรียก service หรือบันทึกรายการใดใน batch; เงื่อนไขไม่เกินระบุ `error.issues[].pathString=events.<index>.measuredValue`
+- **Migration:** ระบบต้นทางกรอง `measuredValue > thresholdValue` ก่อนสร้าง batch และส่งเฉพาะเหตุการณ์ค่าเกินเข้าช่องนี้ ค่าต่ำกว่าหรือเท่ากับเกณฑ์ส่งผ่าน ingestion เดิมสำหรับข้อมูลตรวจวัดปกติ ใช้ number หรือ numeric string ที่ถูกต้องและแก้ทั้ง batch ก่อน retry เมื่อได้ `400` ต้นทางยังเป็นผู้ตรวจข้อมูลรายชั่วโมงและเลือกเกณฑ์กับหน่วย; backend ตรวจความสัมพันธ์ตัวเลขที่ส่งมา แต่ยังไม่ได้ยืนยันเกณฑ์กับ registered config หรือทำ raw-measurement polling
+- **ข้อมูลเดิม:** ไม่มี database migration, backfill หรือการแก้ไขเหตุการณ์ที่บันทึกไว้ก่อนหน้านี้
+- **Breaking change:** yes — integration ที่เคยส่งค่าไม่เกินเกณฑ์หรือชนิดข้อมูลที่ถูก coercion เป็นตัวเลขโดยไม่ได้ตั้งใจต้องปรับก่อนใช้ backend รุ่นนี้
+
 <a id="alert-event-identity-unit-aware"></a>
 
 ## 2026-10-05 — Identity เหตุการณ์แจ้งเตือนแยกตามหน่วย

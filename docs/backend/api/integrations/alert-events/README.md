@@ -2,7 +2,9 @@
 
 [กลับไป Integration API Index](../README.md)
 
-API สำหรับ Worker หรือระบบภายนอกส่งเหตุการณ์ค่ารายชั่วโมงที่เกินเกณฑ์เข้าสู่ POMS แบบ batch โดย backend ตรวจ API key, ผูกจุดตรวจวัดกับโรงงานที่เชื่อมต่อแล้ว และสร้างช่วงเต็มชั่วโมงให้เอง
+API สำหรับ Worker หรือระบบภายนอกส่งเหตุการณ์ค่ารายชั่วโมงที่เกินเกณฑ์เข้าสู่ POMS แบบ batch โดย backend ตรวจ API key, ตรวจว่า `measuredValue > thresholdValue`, ผูกจุดตรวจวัดกับโรงงานที่เชื่อมต่อแล้ว และสร้างช่วงเต็มชั่วโมงให้เอง
+
+ระบบต้นทางเป็นผู้ตรวจข้อมูลรายชั่วโมงและเลือกเกณฑ์กับหน่วยให้ตรงกับพารามิเตอร์ Endpoint นี้ตรวจความสัมพันธ์ของตัวเลขที่ส่งมา แต่ยังไม่ได้ยืนยัน `thresholdValue` กับเกณฑ์ใน registered config หรืออ่านข้อมูลตรวจวัดดิบมาสร้างเหตุการณ์เอง
 
 ## Quick Start
 
@@ -33,7 +35,7 @@ curl --request POST \
 
 ## `POST /api/v1/integrations/alert-events`
 
-รับเหตุการณ์ตั้งแต่ 1 ถึง 500 รายการและตอบ `200 OK` พร้อมผลลัพธ์ของแต่ละรายการ การสร้างสำเร็จและรายการซ้ำสามารถอยู่ใน batch เดียวกันได้
+รับเหตุการณ์ตั้งแต่ 1 ถึง 500 รายการและตอบ `200 OK` พร้อมผลลัพธ์ของแต่ละรายการ การสร้างสำเร็จและรายการซ้ำสามารถอยู่ใน batch เดียวกันได้ Backend validate ทั้ง `events[]` ก่อนเรียก service หรือเขียนฐานข้อมูล หากมีรายการใดไม่ผ่าน validation จะตอบ `400 VALIDATION_ERROR` และไม่มีรายการใน batch นั้นถูกบันทึก
 
 ### Authentication And Permission
 
@@ -61,8 +63,8 @@ curl --request POST \
 | `unit` | string | Yes | หน่วยของค่าตรวจวัด เช่น `ppm` หรือ `mg/l` |
 | `eventDate` | string | Yes | วันที่ของชั่วโมงที่ตรวจพบ รูปแบบ `YYYY-MM-DD` และต้องเป็นวันที่มีอยู่จริงในปฏิทิน |
 | `time` | string | Yes | เวลาเริ่มชั่วโมง รูปแบบ `HH:00` ตั้งแต่ `00:00` ถึง `23:00` |
-| `measuredValue` | number | Yes | ค่ารายชั่วโมงที่ตรวจวัดได้ |
-| `thresholdValue` | number | Yes | ค่าเกณฑ์ที่ใช้เปรียบเทียบ หน่วยเดียวกับ `unit` |
+| `measuredValue` | number \| numeric string | Yes | ค่ารายชั่วโมงที่ตรวจวัดได้ ต้องเป็น finite number และมากกว่า `thresholdValue`; numeric string ที่ไม่ว่างแปลงเป็น number ก่อนตรวจ |
+| `thresholdValue` | number \| numeric string | Yes | ค่าเกณฑ์ที่ใช้เปรียบเทียบ หน่วยเดียวกับ `unit` ต้องเป็น finite number; numeric string ที่ไม่ว่างแปลงเป็น number ก่อนตรวจ |
 | `thresholdType` | `STANDARD` \| `EIA` | Yes | ประเภทเกณฑ์ที่ค่าเกิน |
 
 `startTime` และ `endTime` ไม่อยู่ใน contract ปัจจุบันและจะถูกปฏิเสธ เพราะ request ใช้ strict schema
@@ -203,7 +205,10 @@ curl --request POST \
 ### Validation And Business Rules
 
 - request root และแต่ละ `events[]` ใช้ strict schema; field ที่ไม่รู้จักทำให้ทั้ง request ตอบ `400 VALIDATION_ERROR`
-- `events` ต้องมี 1-500 รายการ หากรายการใดมีรูปแบบไม่ถูกต้อง backend จะไม่เริ่มประมวลผลทั้ง batch
+- `events` ต้องมี 1-500 รายการ Backend validate ทั้ง batch ก่อนเรียก service หากรายการใดมีรูปแบบหรือค่าที่ไม่ถูกต้อง จะตอบ `400 VALIDATION_ERROR` และไม่มีรายการใน batch นั้นถูกบันทึก แม้รายการอื่นจะผ่าน validation
+- `measuredValue` และ `thresholdValue` รับ number หรือ numeric string ที่ไม่ว่างและแปลงเป็น finite number ได้ เช่น `125` หรือ `"125"`; ไม่รับ `null`, boolean, empty/whitespace-only string, array, object, `NaN` หรือ infinity
+- ทั้ง `STANDARD` และ `EIA` ต้องมี `measuredValue > thresholdValue` หลังแปลงตัวเลข ค่าเท่ากับหรือต่ำกว่าเกณฑ์ไม่ใช่เหตุการณ์ค่าเกินและตอบ `400 VALIDATION_ERROR` โดย `error.issues[].pathString` ระบุ `events.<index>.measuredValue`
+- ต้นทางต้องเลือกพารามิเตอร์ หน่วย และเกณฑ์ที่ถูกต้องเอง การตรวจข้างต้นยืนยันเฉพาะความสัมพันธ์ตัวเลขจาก request ยังไม่ได้ตรวจ `thresholdValue` กับ registered config และไม่มี raw-measurement polling สำหรับสร้างเหตุการณ์ใน endpoint นี้
 - `time` ต้องเป็นต้นชั่วโมง `HH:00`; ค่าอย่าง `20:30`, `24:00` หรือ `20` ไม่ผ่าน validation
 - `eventDate` ต้องเป็นวันที่จริง เช่น `2026-02-30` ไม่ผ่าน validation; กฎเดียวกันใช้กับวันที่ filter รายการ
 - Backend แปลง `eventDate=2026-03-02` และ `time=20:00` เป็น `startedAt=2026-03-02T20:00:00+07:00` และ `endedAt=2026-03-02T20:59:59+07:00`
@@ -222,11 +227,36 @@ curl --request POST \
 
 | HTTP status | Code | Condition | Client action |
 | --- | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | body ผิดรูปแบบ, batch ว่าง/เกิน 500, `time` ไม่ใช่ `HH:00` หรือมี field ที่ไม่รู้จัก | แก้ request ทั้ง batch ก่อนส่งใหม่ |
+| `400` | `VALIDATION_ERROR` | body ผิดรูปแบบ, batch ว่าง/เกิน 500, `time` ไม่ใช่ `HH:00`, มี field ที่ไม่รู้จัก, ตัวเลขไม่ใช่ finite number หรือ `measuredValue <= thresholdValue` | แก้ request ทั้ง batch ก่อนส่งใหม่; กรองค่าที่ไม่เกินเกณฑ์ออกจากช่อง alert event |
 | `401` | `UNAUTHORIZED` | ไม่มี `X-API-Key` หรือ key ไม่ถูกต้อง | ตรวจ scoped integration key โดยไม่ log ค่า key |
 | `200` | item-level code | Request ผ่าน schema แต่บางรายการไม่ผูกกับ connected point หรือบันทึกไม่สำเร็จ | ตรวจ `data.failed` และ `data.results[].error` แล้ว retry เฉพาะรายการที่เหมาะสม |
 
-การแทน `startTime` และ `endTime` ด้วย `time` เป็น breaking change ดูวิธี migrate ที่ [API breaking-change log](../../CHANGELOG.md)
+### Validation Error Example
+
+เมื่อ `events[0]` ส่ง `measuredValue: 120` และ `thresholdValue: 120` backend ตอบ `400` ดังนี้ และไม่บันทึกรายการใดใน batch:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": {
+      "events": ["measuredValue must be greater than thresholdValue"]
+    },
+    "issues": [
+      {
+        "code": "custom",
+        "path": ["events", 0, "measuredValue"],
+        "pathString": "events.0.measuredValue",
+        "message": "measuredValue must be greater than thresholdValue"
+      }
+    ]
+  }
+}
+```
+
+การปฏิเสธค่าที่ไม่เกินเกณฑ์และชนิดข้อมูลที่แปลงเป็นตัวเลขโดยไม่ได้ตั้งใจเป็น breaking change ดูวิธี migrate ที่ [การตรวจเหตุการณ์ค่าเกิน](../../CHANGELOG.md#alert-event-exceedance-validation) การแทน `startTime` และ `endTime` ด้วย `time` ดูประวัติใน [API breaking-change log](../../CHANGELOG.md)
 
 ## Backend Maintainer Links
 
@@ -234,7 +264,10 @@ curl --request POST \
 - Authentication: [`integration-api-key.middleware.ts`](../../../../../backend/src/modules/integrations/integration-api-key.middleware.ts)
 - Controller: [`alert-events.controller.ts`](../../../../../backend/src/modules/alert-events/alert-events.controller.ts)
 - Validator: [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts)
+- กฎเปรียบเทียบค่าเกิน: [`alert-event-exceedance.ts`](../../../../../backend/src/modules/alert-events/alert-event-exceedance.ts)
 - Types: [`alert-events.types.ts`](../../../../../backend/src/modules/alert-events/alert-events.types.ts)
 - Service and repository: [`alert-events.service.ts`](../../../../../backend/src/modules/alert-events/alert-events.service.ts), [`alert-events.repository.ts`](../../../../../backend/src/modules/alert-events/alert-events.repository.ts)
+- การเรียก service โดยตรงมี guard ก่อนค้นฐานข้อมูล: ตัวเลขไม่เป็น finite number ใช้ `BAD_REQUEST` พร้อม `details.reason=INVALID_NUMBER`; ค่าไม่เกินใช้ `BAD_REQUEST` พร้อม `details.field=measuredValue` และ `details.reason=NOT_EXCEEDED` ส่วน HTTP endpoint ผ่าน batch validator ก่อนเสมอและใช้ `VALIDATION_ERROR` ตามตัวอย่างข้างต้น
 - Tests: [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`alert-events.service.test.ts`](../../../../../backend/tests/unit/alert-events.service.test.ts)
-- Evidence: [สัญญาเวลารายชั่วโมง](../../../evidence/integrations/alert-event-hourly-time.tdd.md)
+- Tests ค่าเกินและ runtime contract: [`alert-events.exceedance-validation.test.ts`](../../../../../backend/tests/unit/alert-events.exceedance-validation.test.ts), [`alert-events.exceedance.openapi.test.ts`](../../../../../backend/tests/unit/alert-events.exceedance.openapi.test.ts)
+- Evidence: [สัญญาเวลารายชั่วโมง](../../../evidence/integrations/alert-event-hourly-time.tdd.md), [ตรวจค่าเกินก่อนรับเหตุการณ์](../../../evidence/notifications/alert-event-exceedance-validation.tdd.md)

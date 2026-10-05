@@ -49,6 +49,46 @@ function event(overrides: Partial<AlertEventDTO> = {}): AlertEventDTO {
 }
 
 describe('renderAlertEmail', () => {
+  it.each([
+    ['STANDARD_EXCEEDED' as const, 'STANDARD' as const],
+    ['EIA_EXCEEDED' as const, 'EIA' as const],
+  ])(
+    'rejects below/equal-threshold %s events, including a mixed valid/invalid batch',
+    (alertType, thresholdType) => {
+      const valid = event({ alertType, thresholdType, measuredValue: 125, thresholdValue: 120 });
+      expect(renderAlertEmail({ events: [valid], scheduledAt }).text).toContain('ค่าตรวจวัด: 125');
+      for (const measuredValue of [100, 120]) {
+        expect(() =>
+          renderAlertEmail({
+            events: [
+              valid,
+              event({ id: 2, alertType, thresholdType, measuredValue, thresholdValue: 120 }),
+            ],
+            scheduledAt,
+          }),
+        ).toThrow('greater');
+      }
+    },
+  );
+  it.each([
+    ['STANDARD_EXCEEDED' as const, 'STANDARD' as const],
+    ['EIA_EXCEEDED' as const, 'EIA' as const],
+  ])('rejects missing or non-finite %s evidence before rendering', (alertType, thresholdType) => {
+    for (const value of [null, NaN, Infinity, -Infinity]) {
+      expect(() =>
+        renderAlertEmail({
+          events: [event({ alertType, thresholdType, measuredValue: value })],
+          scheduledAt,
+        }),
+      ).toThrow('threshold');
+      expect(() =>
+        renderAlertEmail({
+          events: [event({ alertType, thresholdType, thresholdValue: value })],
+          scheduledAt,
+        }),
+      ).toThrow('threshold');
+    }
+  });
   it('renders a completed hourly standard window with distinct scheduled and detected times in Bangkok', () => {
     const rendered = renderAlertEmail({ events: [event()], scheduledAt });
 

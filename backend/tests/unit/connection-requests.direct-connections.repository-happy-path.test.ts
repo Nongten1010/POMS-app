@@ -5,11 +5,17 @@ jest.mock('../../src/config/database', () => ({
     transaction: jest.fn(),
   }),
 }));
+jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository', () => ({
+  lockAlertActivationPoints: jest.fn(async () => []),
+  syncAlertParameterActivations: jest.fn(async () => undefined),
+  retireAlertParameterActivations: jest.fn(async () => undefined),
+}));
 
 import { db } from '../../src/config/database';
 import { env } from '../../src/config/env';
 import { factoryProfileReadTable } from '../../src/modules/factory-profiles/factory-profile-mode';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
+import { syncAlertParameterActivations } from '../../src/modules/alert-emails/alert-parameter-activations.repository';
 
 const originalMode = env.FACTORY_PROFILE_MODE;
 const mockedDb = db as unknown as jest.Mock<(...args: unknown[]) => unknown> & {
@@ -179,6 +185,12 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       );
 
       expect(mockedDb.transaction).toHaveBeenCalledTimes(1);
+      expect(jest.mocked(syncAlertParameterActivations).mock.calls).toEqual([
+        [trx, ['free form / จุด-01']],
+      ]);
+      expect(
+        jest.mocked(syncAlertParameterActivations).mock.invocationCallOrder[0],
+      ).toBeGreaterThan(connectedPointInsert.mock.invocationCallOrder[0]);
       expect(requestInsert).toHaveBeenCalledWith(
         expect.objectContaining({
           request_no: 'WPMS-0001/2569',

@@ -1,5 +1,8 @@
 import { describe, expect, it, jest } from '@jest/globals';
-import { createAlertEmailEngine } from '../../src/modules/alert-emails/alert-email-engine';
+import {
+  createAlertEmailEngine,
+  pointMatchesAlertEmailEvent,
+} from '../../src/modules/alert-emails/alert-email-engine';
 import type { AlertEventDTO } from '../../src/modules/alert-events/alert-events.types';
 import type { AlertEmailPoint } from '../../src/modules/alert-emails/alert-email-source.repository';
 import type { ActiveAlertEmailPolicy } from '../../src/modules/alert-emails/alert-email-policy';
@@ -84,6 +87,18 @@ function dependencies(events = [event(1)]) {
   };
 }
 describe('alert email scheduled engine', () => {
+  it('matches station case changes within the same factory and system without widening ownership', () => {
+    expect(pointMatchesAlertEmailEvent({ ...point, stationId: 's1' }, event(1))).toBe(true);
+    expect(
+      pointMatchesAlertEmailEvent({ ...point, stationId: 's1' }, event(1, { factoryId: 'F2' })),
+    ).toBe(false);
+    expect(
+      pointMatchesAlertEmailEvent({ ...point, stationId: 's1' }, event(1, { systemType: 'WPMS' })),
+    ).toBe(false);
+    expect(
+      pointMatchesAlertEmailEvent({ ...point, stationId: 's1' }, event(1, { stationId: 'S2' })),
+    ).toBe(false);
+  });
   it('does not touch data or mail when disabled', async () => {
     const deps = dependencies();
     await createAlertEmailEngine(deps).run(new Date('2026-10-02T12:05:00+07:00'), {

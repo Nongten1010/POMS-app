@@ -12,6 +12,13 @@ jest.mock('../../src/modules/parameter-values/parameter-values.repository', () =
 jest.mock('../../src/modules/device-connections/device-connections.service', () => ({
   deviceConnectionsService: { listActiveSettingsForIntegration: jest.fn() },
 }));
+jest.mock(
+  '../../src/modules/alert-emails/alert-parameter-activations.repository',
+  () => ({
+    listActiveAlertParameterActivations: jest.fn(),
+  }),
+  { virtual: true },
+);
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
 import { integrationDeviceConfigsService } from '../../src/modules/integrations/integration-device-configs.service';
 import { parameterValuesRepository } from '../../src/modules/parameter-values/parameter-values.repository';
@@ -20,16 +27,32 @@ import { loadAlertEmailParameters } from '../../src/modules/alert-emails/alert-e
 import type { AlertEmailPoint } from '../../src/modules/alert-emails/alert-email-source.repository';
 import type { ActiveAlertEmailPolicy } from '../../src/modules/alert-emails/alert-email-policy';
 
-const point = { stationId: 'S1', connectedAt: '2025-12-30T00:00:00+07:00' } as AlertEmailPoint;
+const point = {
+  id: 55,
+  stationId: 'S1',
+  connectedAt: '2025-12-30T00:00:00+07:00',
+} as AlertEmailPoint;
 const policy = { completenessPolicy: 'ON_TIME' } as ActiveAlertEmailPolicy;
 const config = jest.mocked(integrationDeviceConfigsService.getByStationId);
 const rows = jest.mocked(parameterValuesRepository.listRows);
 const table = jest.mocked(parameterValuesRepository.tableExists);
 const revisions = jest.mocked(deviceConnectionsService.listActiveSettingsForIntegration);
+const activations = (
+  jest.requireMock('../../src/modules/alert-emails/alert-parameter-activations.repository') as {
+    listActiveAlertParameterActivations: jest.Mock<
+      (
+        pointId: number,
+      ) => Promise<Array<{ parameterCode: string; unit: string; activatedAt: string }>>
+    >;
+  }
+).listActiveAlertParameterActivations;
 describe('daily alert measurement adapter', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     table.mockResolvedValue(true);
+    activations.mockResolvedValue([
+      { parameterCode: 'co', unit: 'ppm', activatedAt: '2025-12-30T00:00:00+07:00' },
+    ]);
     revisions.mockResolvedValue([
       {
         deviceCode: 'D1',
@@ -159,7 +182,7 @@ describe('daily alert measurement adapter', () => {
     expect(result[0].samples[0].value).toBe(2);
     expect(result[0].dailySummaries[2].receivedCount).toBe(1);
   });
-  it('bounds historical completeness by the current configuration revision rather than point connection alone', async () => {
+  it('preserves established activation history after editing the current configuration', async () => {
     revisions.mockResolvedValue([
       {
         deviceCode: 'D1',
@@ -168,8 +191,51 @@ describe('daily alert measurement adapter', () => {
       },
     ] as never);
     const result = await loadAlertEmailParameters(point, '2026-01-01', policy);
-    expect(result[0].activatedAt).toBe('2026-01-01T00:00:00+07:00');
+    expect(result[0].activatedAt).toBe('2025-12-30T00:00:00+07:00');
+    expect(result[0].activationVerified).toBe(true);
+    expect(result[0].dailySummaries.map((day) => day.date)).toEqual([
+      '2025-12-30',
+      '2025-12-31',
+      '2026-01-01',
+    ]);
+  });
+  it('does not count days before a newly registered parameter activation', async () => {
+    activations.mockResolvedValue([
+      { parameterCode: 'co', unit: 'ppm', activatedAt: '2026-01-01T00:00:00+07:00' },
+    ]);
+    const result = await loadAlertEmailParameters(point, '2026-01-01', policy);
     expect(result[0].dailySummaries.map((day) => day.date)).toEqual(['2026-01-01']);
+  });
+  it('loads carried history after ADD_PARAMETER replaces the live point during the reporting day', async () => {
+    config.mockResolvedValue({
+      parameterConfigs: [
+        { parameterName: 'CO', parameterUnit: 'ppm', parameter: 'CO (ppm)', testMode: false },
+        { parameterName: 'NOX', parameterUnit: 'ppm', parameter: 'NOX (ppm)', testMode: false },
+      ],
+    } as never);
+    activations.mockResolvedValue([
+      { parameterCode: 'co', unit: 'ppm', activatedAt: '2025-12-30T00:00:00+07:00' },
+      { parameterCode: 'nox', unit: 'ppm', activatedAt: '2026-01-01T10:00:00+07:00' },
+    ]);
+    const result = await loadAlertEmailParameters(
+      { ...point, id: 99, connectedAt: '2026-01-01T10:00:00+07:00' },
+      '2026-01-01',
+      policy,
+    );
+    expect(
+      result.find((parameter) => parameter.code === 'co')?.dailySummaries.map((day) => day.date),
+    ).toEqual(['2025-12-30', '2025-12-31', '2026-01-01']);
+    expect(result.find((parameter) => parameter.code === 'nox')?.dailySummaries).toEqual([]);
+    expect(activations).toHaveBeenCalledWith(99);
+  });
+  it('skips missing registry evidence and reports registry failure instead of assuming no report', async () => {
+    activations.mockResolvedValue([]);
+    expect(await loadAlertEmailParameters(point, '2026-01-01', policy)).toEqual([]);
+    expect(rows).not.toHaveBeenCalled();
+    activations.mockRejectedValue(new Error('activation source unavailable'));
+    await expect(loadAlertEmailParameters(point, '2026-01-01', policy)).rejects.toThrow(
+      'activation source unavailable',
+    );
   });
   it('does not let an earlier empty duplicate erase a later valid on-time value', async () => {
     rows.mockResolvedValue({
