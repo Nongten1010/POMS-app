@@ -4,6 +4,7 @@ import { toAlertEventDTO } from '../alert-events/alert-events.repository';
 import type { AlertEventDTO, AlertEventRow } from '../alert-events/alert-events.types';
 import { normalizeAlertEventUnit } from '../alert-events/alert-event-identity';
 import { createIntegrationAlertEventSchema } from '../alert-events/alert-events.validator';
+import type { AlertEmailRenderContext } from './alert-email-template';
 import { factoryProfileReadTable } from '../factory-profiles/factory-profile-mode';
 
 export interface AlertEmailPoint {
@@ -45,9 +46,118 @@ export interface AlertEmailSourcePeriod {
 
 const emailSchema = z.email();
 const HOUR_MS = 3_600_000;
+const calendarDateSchema = z.iso.date();
+
+interface AlertEmailRenderContextRow {
+  event_id: number | string;
+  event_factory_id: string | null;
+  event_system_type: AlertEventDTO['systemType'];
+  event_station_id: string;
+  event_date: Date | string;
+  event_alert_type: AlertEventDTO['alertType'];
+  point_factory_id: string;
+  point_system_type: AlertEventDTO['systemType'];
+  point_code: string;
+  factory_province_name: string | null;
+  evidence_json: string | null;
+}
 
 /** Read current connected points; the factory master is never a source of recipients. */
 export const alertEmailSourceRepository = {
+  async loadRenderContext(
+    events: AlertEventDTO[],
+  ): Promise<Record<number, AlertEmailRenderContext>> {
+    const context: Record<number, AlertEmailRenderContext> = {};
+    const ownedEvents = [...new Map(events.map((event) => [event.id, event])).values()].filter(
+      (event) => {
+        if (!Number.isSafeInteger(event.id) || event.id <= 0)
+          throw new Error('Invalid alert event ID');
+        context[event.id] = { factoryProvinceName: null, reportingStartedOn: null };
+        return Boolean(event.factoryId && event.stationId);
+      },
+    );
+    // Each identity binds four values, leaving headroom below SQL Server's 2,100 limit.
+    for (let offset = 0; offset < ownedEvents.length; offset += 200) {
+      const chunk = ownedEvents.slice(offset, offset + 200);
+      const rows = await db<AlertEmailRenderContextRow>('alert_events as ae')
+        .innerJoin(
+          factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
+          function joinPoint() {
+            this.on('cp.factory_id', '=', 'ae.factory_id')
+              .andOn('cp.system_type', '=', 'ae.system_type')
+              .andOn('cp.point_code', '=', 'ae.station_id');
+          },
+        )
+        .leftJoin(
+          factoryProfileReadTable('eligible_factories', 'eligible_factory'),
+          function joinEligibleFactory() {
+            this.on('eligible_factory.id', '=', 'cp.eligible_factory_id').andOnNull(
+              'eligible_factory.deleted_at',
+            );
+          },
+        )
+        .whereNull('ae.deleted_at')
+        .whereNull('cp.deleted_at')
+        .where(function boundEventIdentities() {
+          for (const event of chunk) {
+            this.orWhere({
+              'ae.id': event.id,
+              'ae.factory_id': event.factoryId,
+              'ae.system_type': event.systemType,
+              'ae.station_id': event.stationId,
+            });
+          }
+        })
+        .select(
+          'ae.id as event_id',
+          'ae.factory_id as event_factory_id',
+          'ae.system_type as event_system_type',
+          'ae.station_id as event_station_id',
+          'ae.event_date',
+          'ae.alert_type as event_alert_type',
+          'ae.evidence_json',
+          'cp.factory_id as point_factory_id',
+          'cp.system_type as point_system_type',
+          'cp.point_code',
+          'eligible_factory.province_name as factory_province_name',
+        )
+        .limit(1001);
+      if (rows.length >= 1001) throw new Error('Alert email rendering metadata limit exceeded');
+      for (const event of chunk) {
+        const matches = rows.filter((row) => Number(row.event_id) === event.id);
+        // Multiple active matches are ambiguous; never pick a province from the first row.
+        if (matches.length !== 1) continue;
+        const row = matches[0];
+        const eventDate =
+          row.event_date instanceof Date
+            ? row.event_date.toISOString().slice(0, 10)
+            : row.event_date;
+        if (
+          row.event_factory_id !== event.factoryId ||
+          row.point_factory_id !== event.factoryId ||
+          row.event_system_type !== event.systemType ||
+          row.point_system_type !== event.systemType ||
+          row.event_station_id !== event.stationId ||
+          row.point_code !== event.stationId ||
+          row.event_alert_type !== event.alertType ||
+          eventDate !== event.eventDate
+        )
+          continue;
+        context[event.id] = {
+          factoryProvinceName:
+            typeof row.factory_province_name === 'string'
+              ? row.factory_province_name.trim() || null
+              : null,
+          reportingStartedOn:
+            event.alertType === 'CONSECUTIVE_NO_REPORT'
+              ? reportingStartedOn(row.evidence_json, event.eventDate)
+              : null,
+        };
+      }
+    }
+    return context;
+  },
+
   async listPoints(): Promise<AlertEmailPoint[]> {
     const rows = await connectedPointsQuery().orderBy('cp.id', 'asc');
     return rows.map(toAlertEmailPoint);
@@ -201,5 +311,25 @@ function parseRecipients(value: string | null): string[] {
     ];
   } catch {
     return [];
+  }
+}
+
+function reportingStartedOn(value: string | null, eventDate: string): string | null {
+  if (!value || !calendarDateSchema.safeParse(eventDate).success) return null;
+  try {
+    const evidence: unknown = JSON.parse(value);
+    if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) return null;
+    const stored = evidence as Record<string, unknown>;
+    if (
+      stored.reportingDate !== eventDate ||
+      stored.endedOn !== eventDate ||
+      typeof stored.startedOn !== 'string' ||
+      !calendarDateSchema.safeParse(stored.startedOn).success ||
+      stored.startedOn > eventDate
+    )
+      return null;
+    return stored.startedOn;
+  } catch {
+    return null;
   }
 }

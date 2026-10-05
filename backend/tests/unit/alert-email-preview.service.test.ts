@@ -5,6 +5,10 @@ jest.mock('../../src/modules/alert-events/alert-events.service', () => ({
 jest.mock('../../src/modules/alert-emails/alert-email-template', () => ({
   renderAlertEmail: jest.fn(),
 }));
+jest.mock('../../src/modules/alert-emails/alert-email-source.repository', () => ({
+  alertEmailSourceRepository: { loadRenderContext: jest.fn() },
+}));
+import { alertEmailSourceRepository } from '../../src/modules/alert-emails/alert-email-source.repository';
 import { alertEventsService } from '../../src/modules/alert-events/alert-events.service';
 import { renderAlertEmail } from '../../src/modules/alert-emails/alert-email-template';
 import {
@@ -14,10 +18,12 @@ import {
 import type { AlertEventDTO } from '../../src/modules/alert-events/alert-events.types';
 const getById = jest.mocked(alertEventsService.getById);
 const render = jest.mocked(renderAlertEmail);
+const loadContext = jest.mocked(alertEmailSourceRepository.loadRenderContext);
 
 describe('alert email preview', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    loadContext.mockResolvedValue({});
   });
   it('requires unique event IDs, bounded lists, an actual date and explicit timezone', () => {
     expect(
@@ -55,6 +61,7 @@ describe('alert email preview', () => {
       ),
     ).rejects.toThrow('out of scope');
     expect(render).not.toHaveBeenCalled();
+    expect(loadContext).not.toHaveBeenCalled();
     expect(getById).toHaveBeenCalledWith(1, 7, { scope: 'OWN_FACTORY' }, null, false);
   });
   it('returns a preview only after the requested measurement window ends', async () => {
@@ -126,5 +133,47 @@ describe('alert email preview', () => {
         ],
       }),
     );
+  });
+  it('reads real rendering metadata only after every requested event passes access checks', async () => {
+    getById.mockResolvedValueOnce({ id: 1, endedAt: null } as AlertEventDTO);
+    getById.mockResolvedValueOnce({ id: 2, endedAt: null } as AlertEventDTO);
+    const context = { 1: { factoryProvinceName: 'ระยอง', reportingStartedOn: '2026-09-15' } };
+    loadContext.mockResolvedValue(context);
+    render.mockReturnValue({ subject: 'PDF subject', text: 'PDF body', html: '<p>PDF body</p>' });
+    await alertEmailPreviewService.preview(
+      { eventIds: [1, 2], scheduledAt: '2026-10-02T09:00:00+07:00' },
+      { userId: 7, scope: 'ALL', regionalAccess: null },
+    );
+    expect(loadContext).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 1 }),
+      expect.objectContaining({ id: 2 }),
+    ]);
+    expect(loadContext.mock.invocationCallOrder[0]).toBeGreaterThan(
+      Math.max(...getById.mock.invocationCallOrder),
+    );
+    expect(render).toHaveBeenCalledWith(expect.objectContaining({ contextByEventId: context }));
+  });
+  it('does not read metadata when another requested event is outside actor scope', async () => {
+    getById.mockResolvedValueOnce({ id: 1, endedAt: null } as AlertEventDTO);
+    getById.mockRejectedValueOnce(new Error('out of scope'));
+    await expect(
+      alertEmailPreviewService.preview(
+        { eventIds: [1, 2], scheduledAt: '2026-10-02T09:00:00+07:00' },
+        { userId: 7, scope: 'OWN_FACTORY', regionalAccess: null },
+      ),
+    ).rejects.toThrow('out of scope');
+    expect(loadContext).not.toHaveBeenCalled();
+    expect(render).not.toHaveBeenCalled();
+  });
+  it('does not render when reading real metadata fails', async () => {
+    getById.mockResolvedValue({ id: 1, endedAt: null } as AlertEventDTO);
+    loadContext.mockRejectedValue(new Error('metadata read failed'));
+    await expect(
+      alertEmailPreviewService.preview(
+        { eventIds: [1], scheduledAt: '2026-10-02T09:00:00+07:00' },
+        { userId: 7, scope: 'ALL', regionalAccess: null },
+      ),
+    ).rejects.toThrow('metadata read failed');
+    expect(render).not.toHaveBeenCalled();
   });
 });

@@ -82,7 +82,7 @@ cd /Users/yuthsuwannadech/Documents/POMS-app/backend
 npm run test:alert-emails
 ```
 
-ผล loopback ล่าสุดผ่าน **46/46 checks และรับ MIME อีเมลครบ 6 ฉบับ** มี To/CC, Message-ID ที่เชื่อม delivery/event, plain text และ HTML โดยทดสอบแม้ตั้ง `SMTP_HOST`/`DB_HOST` เป็น host ที่ไม่ควรถูกติดต่อและ `ALERT_EMAIL_ENABLED=true` เครื่องมือก็ยังรับเฉพาะในเครื่อง ไม่เปิด worker จริง
+ผล loopback ของ release ก่อนแก้แม่แบบ PDF ผ่าน **46/46 checks และรับ MIME อีเมลครบ 6 ฉบับ** มี To/CC, Message-ID ที่เชื่อม delivery/event, plain text และ HTML โดยทดสอบแม้ตั้ง `SMTP_HOST`/`DB_HOST` เป็น host ที่ไม่ควรถูกติดต่อและ `ALERT_EMAIL_ENABLED=true` เครื่องมือก็ยังรับเฉพาะในเครื่อง ไม่เปิด worker จริง
 
 CLI สร้าง `report.html`, `report.json` และ `message-01.eml` ถึง `message-06.eml` ใน `/private/tmp/poms-alert-email-test-*` ใช้โฟลเดอร์ใหม่และไม่เขียน generated files ลง repository รายละเอียดเงื่อนไข ข้อมูลจำลอง และ expected/actual อยู่ใน [คู่มือทดลอง](../../guides/alert-email-test.md)
 
@@ -99,3 +99,63 @@ Reason: ปิดเส้นทางส่งค่าไม่เกินเ
 Client impact: preview ปฏิเสธเหตุการณ์รายชั่วโมงเดิมที่ไม่เกินเกณฑ์; `SKIPPED` ครอบคลุม event eligibility; daily key เป็น opaque identity และต้องติดตั้ง migration `0128` ก่อน backend รุ่นนี้
 
 Breaking change: yes — [ผลกระทบและขั้นตอนย้าย](../../api/CHANGELOG.md#alert-email-presend-activation)
+
+
+## แก้ข้อความอีเมลให้ตรงแม่แบบ PDF
+
+เทียบคอลัมน์ `เตือนผ่าน e-mail` ทั้ง 6 หน้าใน “ข้อความแจ้งเตือน D-POMS.pdf” ที่ผู้ใช้ให้มา แก้เฉพาะ backend และ canonical docs ใน worktree แยกจาก `40fb3fd145b95e72359cb7840529cefc4e130bb8` ไม่รวมงานค้างจาก checkout เดิม ไม่ commit, push, deploy หรือส่งอีเมลภายนอกในรอบแก้แม่แบบนี้
+
+ข้อความใช้เรื่อง คำขึ้นต้น ลำดับบริษัท/จุด สีข้อมูล ข้อความดำเนินการ คำลงท้ายและข้อมูลติดต่อจาก PDF รวมข้อความตรวจห้องปฏิบัติการและรายงาน กวภ.02 เฉพาะข้อ 4 เรื่องใช้วันที่ข้อมูลและเวลาเริ่มตรวจวัดจริง แยกจากรอบส่ง จังหวัดมาจากข้อมูลที่ผูกกับโรงงาน/ระบบ/สถานีเดียวกัน วันเริ่มข้อ 4–5 อ่านหลักฐานที่บันทึกจริงโดยไม่เดาจากจำนวนวัน รายละเอียดข้อ 4–5 ยังคงรวมการรายงานต่ำกว่า 80% ตามที่ผู้ใช้ยืนยัน และหน่วยค่าตรวจวัดใช้หน่วยจริงของเหตุการณ์
+
+| กรณี | RED ก่อนแก้ | GREEN |
+| --- | --- | --- |
+| แม่แบบ PDF ทั้ง 6 แบบ | 27 failed / 7 passed | แม่แบบ 34 tests ผ่านก่อนเพิ่ม regression ระยะเวลา |
+| จังหวัด/วันเริ่มจริงและการอ่านตาม scope | 23 failed / 54 passed | 5 suites / 104 tests ผ่าน รวม runtime guards |
+| Runtime OpenAPI แม่แบบและข้อจำกัด preview | 2 failed / 3 passed | 3 suites / 83 tests ผ่านก่อนเพิ่ม duration contract |
+| ระยะเวลาข้อ 6 ถึงค่าผิดปกติล่าสุด | 4 failed / 33 passed | แม่แบบสุดท้าย 37 tests ผ่าน; detector จริง 24 ค่ารายชั่วโมงยืนยันที่ค่า 5 และแสดงช่วงจริง 23 ชั่วโมง |
+| Runtime OpenAPI ระยะเวลาข้อ 6 | 1 failed | 3 suites / 84 tests ผ่าน |
+
+รอบสุดท้าย `npm test -- --runInBand` ผ่าน **284 suites / 3,515 tests**; `npm run typecheck`, `npm run build`, strict TypeScript ของ CLI, Prettier และ `git diff --check` ผ่าน ESLint ของไฟล์ `src/` และ `tests/` ที่เปลี่ยนมี 0 errors / 0 warnings; scripts อยู่นอก ESLint configuration เดิมและตรวจด้วย strict TypeScript/Prettier ลิงก์ relative ที่เพิ่มใหม่ 11 ลิงก์ถูกต้อง และเอกสาร canonical ที่แก้ทั้ง 5 หน้าเข้าถึงได้จาก backend hub
+
+ชุดจำลองสุดท้ายผ่าน **49/49 checks** รับ MIME อีเมลครบ **6 ฉบับ** ที่ SMTP sink เฉพาะ `127.0.0.1` แม้ตั้ง SMTP/DB host ที่ไม่ควรถูกติดต่อและเปิด flag จริง รายงานเก็บใน `/private/tmp/poms-alert-email-test-pdf-copy-final/` ใช้ข้อมูลและ recipients จำลอง ไม่มีการส่งต่อไปยัง To/CC จริง
+
+การเปลี่ยนแม่แบบไม่สร้างข้อความใหม่หรือส่งซ้ำ snapshot ที่จัดคิวแล้ว Preview ที่รวมวันข้อมูลหรือเวลาเริ่มรายชั่วโมงต่างกันตอบ `400 BAD_REQUEST` โดยเปิดเผยใน [breaking change](../../api/CHANGELOG.md#alert-email-pdf-letter-contract) ข้อ 6 ใช้ช่วง `firstAbnormalAt` ถึง `endedAt` ของค่าล่าสุด ไม่ใช้ `confirmedAbnormalAt` เป็นเวลาสิ้นสุด และไม่อนุมานระยะเวลาหากไม่มี `endedAt`
+
+ผลนี้ไม่ยืนยัน SQL Server, scheduler process, ระบบตรวจค่าต้นทาง หรือ inbox production เครื่องมือ browser ไม่อนุญาตเปิด `file:` จึงไม่ได้ยืนยันหน้าตา HTML ใน browser ผ่านเครื่องมือนั้น ตัวอย่าง HTML ใช้ผล renderer จริงจาก MIME capture และพร้อมให้ผู้ใช้เปิดทบทวนก่อนปล่อย
+
+Docs impact: updated
+
+Canonical docs: [สัญญาอีเมล](../../api/menus/notifications/email-notifications.md), [คู่มือปฏิบัติการ](../../guides/alert-email-operations.md), [คู่มือทดลอง](../../guides/alert-email-test.md)
+
+Reason: ข้อความอีเมลและ runtime OpenAPI ต้องตรงต้นฉบับ PDF ที่ผู้ใช้ให้มาและใช้ข้อมูลจริงอย่างถูกต้อง
+
+Client impact: frontend
+
+Breaking change: yes — [ผลกระทบและขั้นตอนย้าย](../../api/CHANGELOG.md#alert-email-pdf-letter-contract)
+
+
+## ปรับเฉพาะหน้าตาโดยคงข้อมูลเดิม
+
+ตามการยืนยันของผู้ใช้หลังทบทวนตัวอย่าง แม่แบบ HTML จัดฟอนต์ ระยะห่าง น้ำหนักตัวอักษร สีแดงเข้ม เส้นสีเขียวเข้มด้านบน และพื้นสีอ่อนสำหรับข้อความดำเนินการเดิม ไม่เพิ่มคำอธิบาย ข้อมูล ปุ่ม หรือลิงก์ในอีเมล
+
+ตรวจเทียบผลทั้ง 6 แบบกับชุด `/private/tmp/poms-alert-email-test-pdf-copy-final/report.json`: `subject`, `text`, To/CC และวันที่รอบส่งตรงกันทุกค่า ส่วน visible HTML text ตรงกันหลัง normalize whitespace และลำดับข้อความคงเดิม ไม่มีลิงก์หรือรูปเพิ่ม รวมหน่วย วันที่ ระยะเวลาข้อ 6 ข้อความห้องปฏิบัติการในข้อ 4 และลายเซ็นครบเหมือนเดิม ชุด loopback ที่ `/private/tmp/poms-alert-email-test-pdf-polished/` ผ่าน 49/49 checks รับ MIME ครบ 6 ฉบับ การปรับหน้าตาครั้งนี้ยังไม่ commit, push หรือ deploy
+
+ตรวจหลังปรับหน้าตา: แม่แบบ/ชุดจำลอง/runtime OpenAPI รวม 3 suites / 46 tests ผ่าน; typecheck, ESLint และ diff check ผ่าน โดยไม่รันทั้ง backend ซ้ำสำหรับการปรับเฉพาะการนำเสนอ
+
+
+## ดีไซน์การ์ดแบบเดิมและตัวอักษรสีเข้ม
+
+ผู้ใช้ยืนยันให้ใช้หน้าตาแบบการ์ดเดิมและไม่ต้องใช้ตัวอักษรสีแดง โดยคงข้อมูลตามแม่แบบล่าสุด ปรับเฉพาะ HTML เป็นการ์ดสีขาว พื้นหลังเทาอ่อน หัวเรื่องสีน้ำเงินเข้ม ข้อมูลสีเข้ม และแถวค่าตรวจวัดแยกชัด ไม่มีการเพิ่ม brand copy, สรุปจำนวนจุด/รายการ, ค่าเกณฑ์, คำแนะนำเพิ่มเติม หรือ CTA จากแบบเก่าที่ผู้ใช้ไม่ได้ต้องการ
+
+การตรวจอิสระเทียบชุด `/private/tmp/poms-alert-email-test-pdf-cards/report.json` กับ polished baseline ทั้ง 6 แบบยืนยัน `subject` และ `text` ตรงทุกตัวอักษร ordered visible HTML text ตรงหลัง normalize whitespace ผู้รับ/CC/เหตุการณ์/รอบส่งคงเดิม รวมหน่วย จังหวัด ระยะเวลา ข้อความ กวภ.02 และลายเซ็นครบ ชุด loopback ผ่าน 49/49 checks รับ MIME 6 ฉบับ ไม่มีการส่งภายนอกหรือ deploy ในรอบนี้
+
+ผลตรวจดีไซน์การ์ด: 3 suites / 46 tests ผ่าน; typecheck, ESLint และ diff check ผ่าน ตัวอย่าง HTML ตรงผล renderer ทั้ง 6 แบบ ไม่มีตัวอักษรสีแดง ไม่มีลิงก์/ปุ่มเพิ่ม และโครง table ของการ์ดปิดครบ
+
+
+## ตรวจ release ของแม่แบบ PDF และดีไซน์การ์ด
+
+หลังผู้ใช้สั่ง `push production` ตรวจชุด source สุดท้ายบน base `40fb3fd145b95e72359cb7840529cefc4e130bb8` รวม 17 ไฟล์เฉพาะ backend/canonical docs ไม่มี migration, dependency, workflow หรือ frontend เปลี่ยน การตรวจอิสระของโค้ดและลำดับ deploy ไม่พบ blocker และอีเมลทั้ง 6 แบบคงข้อมูลจาก baseline ที่ผู้ใช้ยืนยัน
+
+`npm test -- --runInBand` ผ่าน 284 suites / 3,515 tests; build, typecheck, strict TypeScript ของ CLI, Prettier และ diff check ผ่าน ESLint ของ source/tests ที่เปลี่ยน 0 errors / 0 warnings ลิงก์ relative ที่เพิ่มใหม่ 11 ลิงก์ผ่าน และ canonical docs ที่แก้ทั้ง 5 หน้าเข้าถึงได้จาก backend hub ชุดจำลองจาก source release ใน `/private/tmp/poms-alert-email-test-pdf-release/` ผ่าน 49/49 checks รับ MIME ครบ 6 ฉบับเฉพาะ SMTP loopback
+
+ส่ง release ผ่าน feature branch/PR เพื่อ merge เข้า `main` และใช้ workflow deploy เดิม หลัง deploy ต้องยืนยัน Action SHA, service health และ runtime OpenAPI schema/operations ของอีเมลเทียบกับ source นี้ก่อนจบ release การตรวจนี้ไม่ส่งอีเมลทดสอบจริงหรือเปลี่ยนการตั้งค่าผู้รับ/worker

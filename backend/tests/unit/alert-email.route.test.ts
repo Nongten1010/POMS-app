@@ -10,6 +10,10 @@ jest.mock('../../src/modules/alert-emails/alert-email-template', () => ({
 jest.mock('../../src/modules/alert-emails/alert-email-outbox.repository', () => ({
   alertEmailOutboxRepository: { findDelivery: jest.fn() },
 }));
+jest.mock('../../src/modules/alert-emails/alert-email-source.repository', () => ({
+  alertEmailSourceRepository: { loadRenderContext: jest.fn() },
+}));
+import { alertEmailSourceRepository } from '../../src/modules/alert-emails/alert-email-source.repository';
 import { alertEmailPreviewRoutes } from '../../src/modules/alert-emails/alert-email-preview';
 import { alertEmailHistoryRoutes } from '../../src/modules/alert-emails/alert-email-history';
 import { alertEventsService } from '../../src/modules/alert-events/alert-events.service';
@@ -20,6 +24,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 import { NotFoundError } from '../../src/shared/errors/AppError';
 
 const events = jest.mocked(alertEventsService.getById);
+const loadContext = jest.mocked(alertEmailSourceRepository.loadRenderContext);
 const render = jest.mocked(renderAlertEmail);
 const find = jest.mocked(alertEmailOutboxRepository.findDelivery);
 const payload = { eventIds: [1], scheduledAt: '2026-10-02T12:05:00+07:00' };
@@ -42,6 +47,7 @@ function token(permission: string): string {
 describe('alert email API routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    loadContext.mockResolvedValue({});
     events.mockResolvedValue({ id: 1, endedAt: '2026-10-02T11:59:59+07:00' } as never);
     render.mockReturnValue({ subject: 'preview', text: 'plain text', html: '<p>preview</p>' });
     find.mockResolvedValue({
@@ -59,6 +65,7 @@ describe('alert email API routes', () => {
     );
     expect((await request(app()).get('/api/v1/alert-email-deliveries/1')).status).toBe(401);
     expect(events).not.toHaveBeenCalled();
+    expect(loadContext).not.toHaveBeenCalled();
     expect(find).not.toHaveBeenCalled();
   });
   it('does not permit viewing permission to preview or editing permission to view delivery recipients', async () => {
@@ -78,6 +85,7 @@ describe('alert email API routes', () => {
       ).status,
     ).toBe(403);
     expect(events).not.toHaveBeenCalled();
+    expect(loadContext).not.toHaveBeenCalled();
     expect(find).not.toHaveBeenCalled();
   });
   it('passes the editing data scope into preview and returns only rendered content', async () => {
@@ -105,6 +113,7 @@ describe('alert email API routes', () => {
       .send(body);
     expect(result.status).toBe(400);
     expect(events).not.toHaveBeenCalled();
+    expect(loadContext).not.toHaveBeenCalled();
     expect(render).not.toHaveBeenCalled();
   });
   it('checks all delivery event scopes and omits internal leases on success', async () => {
