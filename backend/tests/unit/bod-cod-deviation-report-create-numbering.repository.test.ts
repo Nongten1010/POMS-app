@@ -321,6 +321,7 @@ function thenableBuilder(value: unknown) {
   });
   Object.assign(chain, {
     leftJoin: returnChain,
+    innerJoin: returnChain,
     modify: returnChain,
     select: returnChain,
     first: returnChain,
@@ -386,6 +387,8 @@ function pointRow() {
     factory_code: 'REG-001',
     poms_factory_id: 9,
     factory_registration_no: 'REG-001',
+    factory_registration_no_new: 'REG-001',
+    eligible_factory_id: 17,
     parameters_json: '["BOD","COD"]',
     point_code: 'WEMS-001',
     point_name: 'Point A',

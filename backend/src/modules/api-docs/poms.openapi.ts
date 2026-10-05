@@ -3318,6 +3318,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
   BodCodReportData: {
     type: 'object',
     additionalProperties: true,
+    description:
+      'ชื่อ ทะเบียน และจังหวัดของรายงานเป็น snapshot ตอนยื่น; รายการ รายละเอียด และการแก้ไขยึด bod_cod_deviation_reports.factory_id = factories.id ก่อน จับคู่ fid/code ด้วยทะเบียนที่บันทึกไว้เฉพาะรายงาน legacy ที่ factory_id เป็น null เพื่อคงโรงงานเดิมและ data scope แม้ master อีกแถวมี code ตรงกับทะเบียนใหม่',
     required: ['id', 'reportNo', 'reportSequenceNo'],
     properties: {
       id: { type: 'integer', minimum: 1 },
@@ -3384,7 +3386,76 @@ const componentSchemas: Record<string, OpenApiObject> = {
           type: 'object',
           additionalProperties: true,
           properties: {
+            id: {
+              type: 'string',
+              description: 'identifier โรงงานจาก active connected point; คง identity เดิม',
+            },
+            factoryId: {
+              type: 'string',
+              description:
+                'identifier โรงงานจาก active connected point; ใช้ส่งรายงานคู่กับทะเบียนปัจจุบัน',
+            },
+            factoryName: {
+              type: 'string',
+              description: 'ชื่อโรงงาน current/live จาก connected point',
+            },
+            factoryRegistration: {
+              type: 'string',
+              description:
+                'เลขทะเบียนใหม่ปัจจุบันจาก active eligible factory ที่ผูกด้วย eligible_factory_id; ค่าเดียวกับ newRegistrationNo และใช้ส่งเป็น factoryRegistrationNo ใน create report',
+              example: '10520000225172',
+            },
+            newRegistrationNo: {
+              type: 'string',
+              description:
+                'เลขทะเบียนใหม่ปัจจุบันจาก eligible_factories.factory_registration_no_new ของ active eligible row ที่ผูกด้วย cp.eligible_factory_id = ef.id ทั้ง legacy และ canonical mode',
+              example: '10520000225172',
+            },
+            oldRegistrationNo: {
+              type: 'string',
+              nullable: true,
+              description: 'เลขทะเบียนเก่าจาก active eligible row เดียวกับ newRegistrationNo',
+              example: '3-1-2/17กจ',
+            },
+            industryType: { type: 'string', nullable: true },
+            province: {
+              type: 'string',
+              nullable: true,
+              description:
+                'จังหวัดปัจจุบันจาก eligible_factories.province_name ของ active eligible row เดียวกับ newRegistrationNo; ค่าเดียวกับ provinceName',
+              example: 'กาญจนบุรี',
+            },
+            provinceName: {
+              type: 'string',
+              nullable: true,
+              description:
+                'จังหวัดปัจจุบันจาก active eligible row ที่ผูกด้วย eligible_factory_id โดยตรง ทั้ง legacy และ canonical mode; ใช้ส่งรายงานและจำกัด scope จังหวัด/ภาค ไม่ย้อนใช้ factories.province_id',
+              example: 'กาญจนบุรี',
+            },
+            regionName: {
+              type: 'string',
+              nullable: true,
+              description:
+                'ภาคจาก provinces.region ที่ค้นด้วยจังหวัดของ active eligible row เดียวกับ response และ data scope',
+              example: 'ภาคตะวันตก',
+            },
+            industrialEstateName: { type: 'string', nullable: true },
+            address: { type: 'string', nullable: true },
+            eligibleFactoryId: {
+              type: 'integer',
+              nullable: true,
+              description:
+                'ID ของ active eligible row ที่ตรงกับ cp.eligible_factory_id; คง nullable type เดิม แต่รายการนี้มีค่าเสมอ',
+            },
+            monitoringPointCount: { type: 'integer', minimum: 0 },
+            latestReportId: { type: 'integer', nullable: true },
             latestReportNo: schemaRef('BodCodNullableReportNo'),
+            latestReportStatus: {
+              type: 'string',
+              enum: [...BOD_COD_DEVIATION_REPORT_STATUSES],
+              nullable: true,
+            },
+            latestReportStatusLabel: { type: 'string', nullable: true },
             measurementPoints: {
               type: 'array',
               items: {
@@ -6177,6 +6248,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'BOD/COD Deviation Reports',
       summary: 'List BOD/COD factories',
       operationId: 'listBodCodFactories',
+      description:
+        'คืนโรงงานใน bod_cod_errors:view data scope จาก active connected points ที่ผูก active eligible factory ด้วย cp.eligible_factory_id = ef.id ทั้ง legacy และ canonical mode; ไม่มี fallback สำหรับจุดที่ไม่ผูก eligible หรือ eligible ถูกลบ. factoryRegistration/newRegistrationNo/oldRegistrationNo และ province/provinceName มาจาก eligible row เดียวกัน; region และ scope จังหวัด/ภาคใช้จังหวัดชุดเดียวกับ response. ใช้ทะเบียนและจังหวัดปัจจุบันนี้ส่งรายงานได้ ส่วนรายงานที่ยื่นแล้วคงทะเบียนและจังหวัดเป็น snapshot เดิม. ไม่มี query parameter',
       successSchema: schemaRef('BodCodFactoriesResponse'),
     }),
   },
@@ -6197,7 +6270,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create BOD/COD deviation report',
       operationId: 'createBodCodReport',
       description:
-        'ต้องมี bod_cod_errors:view + edit และผ่านทั้งสอง data scope (binary action scope null ใช้ view scope); เฉพาะ factory_operator scope OWN_FACTORY หรือ role admin. ระบุ connectedMeasurementPointId หรือ pointCode ที่ชี้จุดของโรงงานได้เพียงจุดเดียวและมี selectedParameterCode; ถ้าส่งทั้งสองต้องตรงกัน. พารามิเตอร์จุดรองรับ code BOD/COD หรือชื่อรวมหน่วย mg/l โดย request ยังคงส่ง code. ปี พ.ศ./ครึ่งปีต้องเป็นปัจจุบันตาม Asia/Bangkok ตรวจหลัง lock ก่อนบันทึก. จุด+พารามิเตอร์+ปีมีคำขอค้างได้หนึ่งรายการ (APPROVED/REJECTED/CANCELLED เป็นสถานะสิ้นสุด); serialize การสร้างพร้อมกัน. 409 CONFLICT details.reason REPORT_PERIOD_CLOSED หรือ PENDING_REPORT_EXISTS; จุด/พารามิเตอร์ไม่ถูกต้อง 400 BAD_REQUEST, role ไม่ตรง 403 FORBIDDEN. ไม่รับ reportSequenceNo ใน request และไม่แก้ reportNo เก่า',
+        'ต้องมี bod_cod_errors:view + edit และผ่านทั้งสอง data scope (binary action scope null ใช้ view scope); เฉพาะ factory_operator scope OWN_FACTORY หรือ role admin. ระบุ connectedMeasurementPointId หรือ pointCode ที่ชี้จุดของโรงงานได้เพียงจุดเดียวและมี selectedParameterCode; ถ้าส่งทั้งสองต้องตรงกัน. หาโรงงานและจังหวัดสำหรับออกเลขรายงานด้วย eligible ID และ internal factory ID ของจุดที่ตรวจสิทธิ์แล้ว; master อีกแถวที่ code ตรงกับทะเบียนใหม่ไม่เปลี่ยนโรงงานที่ยื่น. พารามิเตอร์จุดรองรับ code BOD/COD หรือชื่อรวมหน่วย mg/l โดย request ยังคงส่ง code. ปี พ.ศ./ครึ่งปีต้องเป็นปัจจุบันตาม Asia/Bangkok ตรวจหลัง lock ก่อนบันทึก. จุด+พารามิเตอร์+ปีมีคำขอค้างได้หนึ่งรายการ (APPROVED/REJECTED/CANCELLED เป็นสถานะสิ้นสุด); serialize การสร้างพร้อมกัน. 409 CONFLICT details.reason REPORT_PERIOD_CLOSED หรือ PENDING_REPORT_EXISTS; จุด/พารามิเตอร์ไม่ถูกต้อง 400 BAD_REQUEST, role ไม่ตรง 403 FORBIDDEN. ไม่รับ reportSequenceNo ใน request และไม่แก้ reportNo เก่า',
       requestBody: jsonRequestBody(schemaRef('BodCodReportRequest'), bodCodReportExample),
       successStatus: '201',
       successSchema: schemaRef('BodCodReportResponse'),

@@ -16,6 +16,14 @@ permission code, alias ที่ frontend ใช้, และ scope keyword ท
 4. อ่านรายการหรือรายละเอียด แล้วใช้ `allowedActions` และ `currentStep` ควบคุม action ที่แสดง
 5. เมื่อถูกขอแก้ไข ผู้ประกอบการส่งข้อมูลทั้งฉบับใหม่ผ่าน `PUT /:id/resubmission`; เจ้าหน้าที่ใช้ workflow action และ result notice endpoints ตามขั้นปัจจุบัน
 
+อ่านข้อมูลโรงงานปัจจุบันก่อนเลือกจุดและส่งรายงาน:
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/bod-cod-deviation-reports/factories' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>'
+```
+
 ```bash
 curl --request POST \
   --url '<BASE_URL>/api/v1/bod-cod-deviation-reports' \
@@ -136,6 +144,7 @@ E-{รหัสภาค 2 หลัก}-{ลำดับ 4 หลัก}/{repor
 กติกา:
 
 - Backend หา region จากจังหวัดของโรงงานในข้อมูลฝั่ง server ไม่รับ `regionCode` จาก request body
+- สำหรับรายงานใหม่ backend หาโรงงานและจังหวัดด้วย eligible ID และ internal factory ID ของจุดที่ตรวจสิทธิ์แล้วตามข้อมูลปัจจุบันในรายการโรงงาน แม้มี master อีกแถวใช้ code ตรงกับเลขทะเบียนใหม่ก็ไม่เปลี่ยนโรงงานที่ใช้ยื่นหรือออกเลข
 - Running แยกตาม `region + reportYear` และใช้ชุดเดียวกันระหว่าง BOD, COD และรอบรายงานที่ 1-2
 - ลำดับอยู่ระหว่าง `0001`-`9999` และเริ่มที่ `0001` ใหม่เมื่อเปลี่ยน region หรือ `reportYear`
 - การ resubmit ใช้ `reportNo` เดิม; เลขที่ถูกใช้แล้วจะไม่นำกลับมาออกซ้ำ
@@ -184,16 +193,58 @@ curl --request POST \
 - `data[].latestReport*`: รายงานล่าสุดของโรงงาน
 - `meta.total`: จำนวนโรงงาน
 
+ใช้ Bearer token และ `bod_cod_errors:view` สำเร็จตอบ `200 OK` โดยคืนเฉพาะโรงงานใน data scope ของผู้เรียก
+
+#### แหล่งข้อมูลโรงงานปัจจุบัน
+
+รายการเริ่มจาก active `cems_wpms_connected_measurement_points` และจับคู่ active `eligible_factories` ด้วย `cp.eligible_factory_id = ef.id` ทั้ง legacy และ canonical mode โรงงานที่ไม่มี active eligible row ตรงกับ ID นี้ไม่อยู่ในรายการ ไม่จับคู่โรงงานด้วยชื่อหรือเลขทะเบียนแทน ID
+
+`factoryRegistration`, `newRegistrationNo`, `oldRegistrationNo`, `province` และ `provinceName` ใช้ eligible row เดียวกัน เลขทะเบียนใน connected point หรือข้อมูล master `factories` จึงไม่ย้อนทับทะเบียนและจังหวัดปัจจุบัน ส่วน `regionName` และการจำกัด scope จังหวัด/ภาคใช้จังหวัดชุดเดียวกับ response ใน canonical mode อ่านผ่าน current views ตาม [ข้อมูลทั่วไปโรงงานชุดเดียวกัน](../../../guides/factory-profile-consistency-rollout.md)
+
+เมื่อสร้างรายงาน ให้ใช้ `factoryId`, `factoryRegistration` หรือ `newRegistrationNo`, `provinceName` และจุดจากรายการนี้ส่งเป็น `factoryId`, `factoryRegistrationNo`, `provinceName`, `connectedMeasurementPointId` ตามลำดับ การแก้แหล่งข้อมูลรายการไม่เปลี่ยน identity ของจุดหรือ field/type ของ response รายงานที่ยื่นแล้วคงทะเบียนและจังหวัดที่บันทึกเป็น snapshot เดิม
+
+#### Success Response Fields
+
+| Field | Type | Nullable | Source/Meaning |
+| --- | --- | --- | --- |
+| `success` | boolean | No | `true` |
+| `data` | object[] | No | โรงงานที่มีทั้ง active connected point และ active eligible row ที่ผูกด้วย ID และอยู่ใน scope |
+| `data[].id`, `data[].factoryId` | string | No | identifier โรงงานจาก connected point; คง identity เดิม |
+| `data[].factoryName` | string | No | ชื่อโรงงาน current/live จาก connected point |
+| `data[].factoryRegistration`, `data[].newRegistrationNo` | string | No | เลขทะเบียนใหม่ปัจจุบันจาก `eligible_factories.factory_registration_no_new` ของโรงงานที่ผูก |
+| `data[].oldRegistrationNo` | string | Yes | เลขทะเบียนเก่าจาก eligible row เดียวกัน |
+| `data[].industryType` | string | Yes | `eligible_factories.business_activity`; fallback ข้อมูลประเภทกิจการจาก master เมื่อไม่มีค่า |
+| `data[].province`, `data[].provinceName` | string | Yes | `eligible_factories.province_name` ของโรงงานที่ผูกโดยตรง |
+| `data[].regionName` | string | Yes | `provinces.region` ที่ค้นด้วยจังหวัดจาก eligible row เดียวกัน |
+| `data[].industrialEstateName` | string | Yes | ชื่อจาก `industrial_estates`; legacy จับคู่ด้วย `factories.industrial_estate_id`, canonical จับคู่ด้วย `eligible_factories.industrial_estate_name` |
+| `data[].address` | string | Yes | ที่อยู่จาก eligible row; fallback ที่อยู่ current/live ของ connected point เมื่อไม่มีค่า |
+| `data[].eligibleFactoryId` | integer | Yes | `eligible_factories.id` ที่ตรงกับ `cp.eligible_factory_id`; คง nullable type เดิม แต่รายการนี้มีค่าเสมอ |
+| `data[].monitoringPointCount` | integer | No | จำนวนจุดตรวจวัดใน `measurementPoints` |
+| `data[].measurementPoints` | object[] | No | จุด current/live พร้อม identifier พารามิเตอร์และรอบรายงานตาม contract เดิม |
+| `data[].latestReportId` | integer | Yes | ID รายงานล่าสุด; `null` เมื่อไม่มีรายงาน |
+| `data[].latestReportNo` | string | Yes | เลขที่รายงานล่าสุด; `null` เมื่อไม่มีรายงาน |
+| `data[].latestReportStatus` | string | Yes | [สถานะรายงาน](#สถานะและ-workflow) ล่าสุด; `null` เมื่อไม่มีรายงาน |
+| `data[].latestReportStatusLabel` | string | Yes | ชื่อแสดงสถานะรายงานล่าสุด; `null` เมื่อไม่มีรายงาน |
+| `meta.total` | integer | No | จำนวนโรงงานใน `data` |
+
+Minimal request ไม่มี body และไม่มี query parameter ตัวอย่าง response (`200 OK`):
+
 ```json
 {
   "success": true,
   "data": [
     {
+      "id": "FID-001",
       "factoryId": "FID-001",
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
+      "factoryRegistration": "10520000225172",
       "newRegistrationNo": "10520000225172",
+      "oldRegistrationNo": "3-1-2/17กจ",
+      "province": "กาญจนบุรี",
       "provinceName": "กาญจนบุรี",
       "regionName": "ภาคตะวันตก",
+      "address": "99 หมู่ 1 จังหวัดกาญจนบุรี",
+      "eligibleFactoryId": 10,
       "monitoringPointCount": 1,
       "measurementPoints": [
         {
@@ -233,6 +284,8 @@ curl --request POST \
 | `factoryId` | string | No | trim แล้ว 1-64 ตัวอักษร |
 
 Response เป็น `{ success, data[], meta: { total } }`; แต่ละรายการมี `reportSequenceNo` (integer บวก หรือ null สำหรับรายงานก่อน migration) และ identity ของรายงาน/โรงงาน/จุดตรวจวัด, `selectedParameterCode`, `selectedParameterLabel` ซึ่งรวมหน่วย `mg/l`, `approvalTrack`, สถานะ, วันเวลา, `measurementCount` และ `statusHistory[]`
+
+รายการ รายละเอียด และการแก้ไขรายงานยึดโรงงานที่บันทึกด้วย `bod_cod_deviation_reports.factory_id = factories.id` รายงาน legacy ที่ไม่มี `factory_id` จึงค่อยจับคู่ `fid`/`code` ด้วยเลขทะเบียนที่บันทึกไว้ การเปลี่ยนทะเบียนหรือมี master อีกแถวใช้ code ตรงกันจึงไม่ทำให้รายงานที่มี factory ID ซ้ำหรือข้ามโรงงาน ส่วนชื่อ ทะเบียน และจังหวัดของรายงานยังใช้ snapshot ตอนยื่น
 
 ```json
 {

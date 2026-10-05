@@ -70,6 +70,7 @@ interface FactoryTableRow {
   factory_id: string;
   factory_name: string;
   factory_registration_no: string;
+  factory_registration_no_new: string;
   factory_address: string | null;
   point_code: string | null;
   point_name: string;
@@ -284,7 +285,9 @@ export const bodCodDeviationReportsRepository = {
         {
           ...input,
           factoryId: point.factory_fid ?? point.factory_id,
-          factoryRegistrationNo: point.factory_registration_no,
+          factoryRegistrationNo: point.factory_registration_no_new,
+          eligibleFactoryId: point.eligible_factory_id ?? undefined,
+          factoryInternalId: point.poms_factory_id,
         },
         access,
         trx,
@@ -686,7 +689,7 @@ async function resolveSubmissionPoint(
   }
   const readPoint = () => {
     const query = buildFactoryQuery(access, trx).where(
-      'cp.factory_registration_no',
+      'ef.factory_registration_no_new',
       input.factoryRegistrationNo,
     );
     if (input.connectedMeasurementPointId) query.where('cp.id', input.connectedMeasurementPointId);
@@ -850,45 +853,20 @@ function buildFactoryQuery(
         .orOn('f.code', '=', 'cp.factory_id')
         .orOn('f.code', '=', 'cp.factory_registration_no');
     })
-    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
-      this.on(function joinFactoryKeys() {
-        if (isCanonicalFactoryProfilesEnabled()) {
-          this.on('ef.id', '=', 'cp.eligible_factory_id').orOn(function unlinkedFactoryFallback() {
-            this.onNull('cp.eligible_factory_id').andOn(function factoryIdentifiers() {
-              this.on('ef.factory_registration_no_new', '=', 'cp.factory_registration_no')
-                .orOn('ef.factory_registration_no_new', '=', 'cp.factory_id')
-                .orOn('ef.source_factory_id', '=', 'cp.factory_id')
-                .orOn('ef.source_factory_id', '=', 'f.fid')
-                .orOn('ef.factory_registration_no_new', '=', 'f.code');
-            });
-          });
-        } else {
-          this.on('ef.factory_registration_no_new', '=', 'cp.factory_registration_no')
-            .orOn('ef.factory_registration_no_new', '=', 'cp.factory_id')
-            .orOn('ef.source_factory_id', '=', 'cp.factory_id')
-            .orOn('ef.source_factory_id', '=', 'f.fid')
-            .orOn('ef.factory_registration_no_new', '=', 'f.code');
-        }
-      }).andOnNull('ef.deleted_at');
+    .innerJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
+      this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
     })
+    .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
     .modify((builder) => {
       if (!isCanonicalFactoryProfilesEnabled()) {
-        builder
-          .leftJoin('provinces as p', 'p.id', 'f.province_id')
-          .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id');
+        builder.leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id');
         return;
       }
-      builder
-        .leftJoin('provinces as p', function currentProvince() {
-          this.on('p.name_th', '=', 'ef.province_name').orOn(function masterFallback() {
-            this.onNull('ef.id').andOn('p.id', '=', 'f.province_id');
-          });
-        })
-        .leftJoin('industrial_estates as ie', function currentEstate() {
-          this.on('ie.name_th', '=', 'ef.industrial_estate_name').orOn(function masterFallback() {
-            this.onNull('ef.id').andOn('ie.id', '=', 'f.industrial_estate_id');
-          });
+      builder.leftJoin('industrial_estates as ie', function currentEstate() {
+        this.on('ie.name_th', '=', 'ef.industrial_estate_name').orOn(function masterFallback() {
+          this.onNull('ef.id').andOn('ie.id', '=', 'f.industrial_estate_id');
         });
+      });
     })
     .whereNull('cp.deleted_at')
     .select(
@@ -909,10 +887,11 @@ function buildFactoryQuery(
       'f.fid as factory_fid',
       'f.code as factory_code',
       'f.system_detail as factory_system_detail',
-      'p.name_th as province_name',
+      'ef.province_name as province_name',
       'p.region as province_region',
       'ie.name_th as industrial_estate_name',
       'ef.factory_registration_no_old',
+      'ef.factory_registration_no_new',
       'ef.address',
       'ef.business_activity',
       'ef.id as eligible_factory_id',
@@ -949,9 +928,15 @@ function buildReportQuery(
 
   const builder = db<ReportTableRow>('bod_cod_deviation_reports as r')
     .leftJoin('factories as f', function joinReportFactory() {
-      this.on('f.id', '=', 'r.factory_id')
-        .orOn('f.fid', '=', 'r.factory_registration_no')
-        .orOn('f.code', '=', 'r.factory_registration_no');
+      this.on('f.id', '=', 'r.factory_id').orOn(function legacyFactoryIdentity() {
+        this.onNull('r.factory_id').andOn(function registrationIdentity() {
+          this.on('f.fid', '=', 'r.factory_registration_no').orOn(
+            'f.code',
+            '=',
+            'r.factory_registration_no',
+          );
+        });
+      });
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
@@ -1172,9 +1157,15 @@ function buildEditableReportQuery(
 ): Knex.QueryBuilder<EditableReportRow, EditableReportRow[]> {
   const builder = connection<EditableReportRow>('bod_cod_deviation_reports as r')
     .leftJoin('factories as f', function joinReportFactory() {
-      this.on('f.id', '=', 'r.factory_id')
-        .orOn('f.fid', '=', 'r.factory_registration_no')
-        .orOn('f.code', '=', 'r.factory_registration_no');
+      this.on('f.id', '=', 'r.factory_id').orOn(function legacyFactoryIdentity() {
+        this.onNull('r.factory_id').andOn(function registrationIdentity() {
+          this.on('f.fid', '=', 'r.factory_registration_no').orOn(
+            'f.code',
+            '=',
+            'r.factory_registration_no',
+          );
+        });
+      });
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
@@ -1927,8 +1918,8 @@ function toFactoryDTO(
     id: factoryId,
     factoryId,
     factoryName: row.factory_name,
-    factoryRegistration: row.factory_registration_no,
-    newRegistrationNo: row.factory_registration_no,
+    factoryRegistration: row.factory_registration_no_new,
+    newRegistrationNo: row.factory_registration_no_new,
     oldRegistrationNo: row.factory_registration_no_old,
     industryType: row.business_activity ?? row.factory_system_detail,
     province: row.province_name,

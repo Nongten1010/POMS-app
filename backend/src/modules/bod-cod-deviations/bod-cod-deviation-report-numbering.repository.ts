@@ -22,6 +22,14 @@ interface NumberingFactoryRow {
   region_name: string | null;
 }
 
+type NumberingFactoryInput = Pick<
+  CreateBodCodDeviationReportDTO,
+  'factoryId' | 'factoryRegistrationNo'
+> & {
+  eligibleFactoryId?: number | string;
+  factoryInternalId?: number | string | null;
+};
+
 export interface BodCodCreateNumberingContext {
   factoryInternalId: number | null;
   provinceName: string;
@@ -51,10 +59,7 @@ export function reserveBodCodDeviationReportNumberForTests(
 }
 
 export async function resolveBodCodCreateNumberingContext(
-  input: Pick<
-    CreateBodCodDeviationReportDTO,
-    'factoryId' | 'factoryRegistrationNo' | 'provinceName'
-  >,
+  input: NumberingFactoryInput & Pick<CreateBodCodDeviationReportDTO, 'provinceName'>,
   access: CreateBodCodDeviationReportAccess,
   trx: Knex.Transaction,
 ): Promise<BodCodCreateNumberingContext> {
@@ -130,12 +135,23 @@ export async function reserveBodCodDeviationReportNumber(
 }
 
 function buildNumberingFactoryQuery(
-  input: Pick<CreateBodCodDeviationReportDTO, 'factoryId' | 'factoryRegistrationNo'>,
+  input: NumberingFactoryInput,
   access: CreateBodCodDeviationReportAccess,
   connection: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<NumberingFactoryRow, NumberingFactoryRow | undefined> {
   const builder = connection<NumberingFactoryRow>('factories as f');
-  if (isCanonicalFactoryProfilesEnabled()) {
+  const eligibleFactoryId = input.eligibleFactoryId;
+  if (eligibleFactoryId !== undefined) {
+    // The locked, accessible connected point supplies this ID; request bodies cannot set it.
+    builder
+      .innerJoin(factoryProfileReadTable('eligible_factories', 'ef'), function linkedFactory() {
+        this.onVal('ef.id', '=', eligibleFactoryId).andOnNull('ef.deleted_at');
+      })
+      .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
+      .where('ef.factory_registration_no_new', input.factoryRegistrationNo)
+      .where('f.id', input.factoryInternalId ?? null)
+      .whereNull('f.deleted_at');
+  } else if (isCanonicalFactoryProfilesEnabled()) {
     builder
       .leftJoin(
         factoryProfileReadTable('eligible_factories', 'ef'),
