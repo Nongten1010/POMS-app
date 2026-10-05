@@ -3,6 +3,10 @@ import {
   parameterKey,
   approvedParameterLabel,
 } from '../poms-factories/poms-measurement-point-parameters';
+import {
+  lockAlertActivationPoints,
+  syncAlertParameterActivations,
+} from '../alert-emails/alert-parameter-activations.repository';
 
 // Only retire removed channels. A newly approved parameter has no known hardware
 // address, range or encoding until the operator saves its device configuration.
@@ -11,7 +15,12 @@ export async function reconcileApprovedStationParameters(
   stationId: string,
   parameters: string[],
   actorUserId: number,
+  options: { syncAlertActivations?: boolean } = {},
 ): Promise<void> {
+  // Historical migrations before 0128 have already locked their target point
+  // and must not depend on the activation registry introduced later.
+  const syncActivations = options.syncAlertActivations !== false;
+  if (syncActivations) await lockAlertActivationPoints(trx, [stationId]);
   const allowed = new Set(parameters.map(parameterKey));
   const configs = await trx('device_connection_configs')
     .where('station_id', stationId)
@@ -48,6 +57,7 @@ export async function reconcileApprovedStationParameters(
         updated_by: actorUserId,
       });
   }
+  if (syncActivations) await syncAlertParameterActivations(trx, [stationId]);
 }
 
 function filterSchedules(value: string | null, allowed: Set<string>): string | null {

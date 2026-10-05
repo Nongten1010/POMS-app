@@ -230,6 +230,56 @@ jobs:
           npm test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Prepare backend release
+        id: backend_release
+        if: steps.changes.outputs.backend_changed == 'true'
+        timeout-minutes: 15
+        run: |
+          if (Test-Path $env:BACKEND_RELEASE) {
+            Remove-Item $env:BACKEND_RELEASE -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Force -Path $env:BACKEND_RELEASE | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $env:BACKEND_RELEASE 'dist') | Out-Null
+
+          Copy-Item ".\backend\package.json" $env:BACKEND_RELEASE -Force
+          Copy-Item ".\backend\package-lock.json" $env:BACKEND_RELEASE -Force
+
+          $targetNodeModules = Join-Path $env:BACKEND_TARGET 'node_modules'
+          $productionDepsReady = (Test-Path (Join-Path $targetNodeModules '.package-lock.json')) -and (Test-Path (Join-Path $targetNodeModules 'express'))
+          $installProductionDeps = "${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !$productionDepsReady
+          "install_production_deps=$($installProductionDeps.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+          if ($installProductionDeps) {
+            Push-Location $env:BACKEND_RELEASE
+            try {
+              Write-Host "Installing backend production dependencies with npm ci --omit=dev."
+              npm ci --omit=dev
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            } finally {
+              Pop-Location
+            }
+          } else {
+            Write-Host "Reusing existing backend production node_modules; package files did not change."
+          }
+
+          robocopy ".\backend\dist" (Join-Path $env:BACKEND_RELEASE 'dist') /MIR /R:3 /W:5 /NFL /NDL /NP
+          $robocopyExit = $LASTEXITCODE
+
+          if ($robocopyExit -gt 7) {
+            throw "robocopy failed with exit code $robocopyExit"
+          }
+
+          $global:LASTEXITCODE = 0
+
+      - name: Stop backend before migrations
+        if: steps.changes.outputs.backend_changed == 'true'
+        timeout-minutes: 2
+        run: |
+          # Freeze config writes while activation history is backfilled and the new hooks are installed.
+          Stop-Service -Name $env:BACKEND_SERVICE -Force
+          (Get-Service -Name $env:BACKEND_SERVICE).WaitForStatus('Stopped', '00:00:30')
+
       - name: Run backend database migrations
         if: steps.changes.outputs.backend_changed == 'true'
         working-directory: backend
@@ -276,49 +326,10 @@ jobs:
         if: steps.changes.outputs.backend_changed == 'true'
         timeout-minutes: 15
         run: |
-          if (Test-Path $env:BACKEND_RELEASE) {
-            Remove-Item $env:BACKEND_RELEASE -Recurse -Force
-          }
-
-          New-Item -ItemType Directory -Force -Path $env:BACKEND_RELEASE | Out-Null
-          New-Item -ItemType Directory -Force -Path (Join-Path $env:BACKEND_RELEASE 'dist') | Out-Null
-
-          Copy-Item ".\backend\package.json" $env:BACKEND_RELEASE -Force
-          Copy-Item ".\backend\package-lock.json" $env:BACKEND_RELEASE -Force
-
-          $targetNodeModules = Join-Path $env:BACKEND_TARGET 'node_modules'
-          $productionDepsReady = (Test-Path (Join-Path $targetNodeModules '.package-lock.json')) -and (Test-Path (Join-Path $targetNodeModules 'express'))
-          $installProductionDeps = "${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !$productionDepsReady
-
-          if ($installProductionDeps) {
-            Push-Location $env:BACKEND_RELEASE
-            try {
-              Write-Host "Installing backend production dependencies with npm ci --omit=dev."
-              npm ci --omit=dev
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            } finally {
-              Pop-Location
-            }
-          } else {
-            Write-Host "Reusing existing backend production node_modules; package files did not change."
-          }
-
-          robocopy ".\backend\dist" (Join-Path $env:BACKEND_RELEASE 'dist') /MIR /R:3 /W:5 /NFL /NDL /NP
-          $robocopyExit = $LASTEXITCODE
-
-          if ($robocopyExit -gt 7) {
-            throw "robocopy failed with exit code $robocopyExit"
-          }
-
-          $global:LASTEXITCODE = 0
-
-          Stop-Service -Name $env:BACKEND_SERVICE -Force
-          (Get-Service -Name $env:BACKEND_SERVICE).WaitForStatus('Stopped', '00:00:30')
-
           Copy-Item (Join-Path $env:BACKEND_RELEASE 'package.json') $env:BACKEND_TARGET -Force
           Copy-Item (Join-Path $env:BACKEND_RELEASE 'package-lock.json') $env:BACKEND_TARGET -Force
 
-          if ($installProductionDeps) {
+          if ("${{ steps.backend_release.outputs.install_production_deps }}" -eq 'true') {
             robocopy (Join-Path $env:BACKEND_RELEASE 'node_modules') (Join-Path $env:BACKEND_TARGET 'node_modules') /MIR /R:3 /W:5 /NFL /NDL /NP
             $robocopyExit = $LASTEXITCODE
 

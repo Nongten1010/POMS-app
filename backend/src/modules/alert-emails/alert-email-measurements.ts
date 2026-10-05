@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { deviceConnectionsService } from '../device-connections/device-connections.service';
 import { integrationDeviceConfigsService } from '../integrations/integration-device-configs.service';
 import { parameterValuesRepository } from '../parameter-values/parameter-values.repository';
 import { readRegisteredAlertMeasurement } from '../parameter-values/parameter-values.service';
@@ -7,6 +6,11 @@ import type { AlertEmailPoint } from './alert-email-source.repository';
 import type { ActiveAlertEmailPolicy } from './alert-email-policy';
 import type { DailyAlertParameter } from './alert-email-daily-detector';
 import { summarizeAlertDay, type AlertHourlySample } from './alert-email-rules';
+import {
+  alertParameterActivationKey,
+  parseRegisteredAlertParameter,
+} from './alert-parameter-activations';
+import { listActiveAlertParameterActivations } from './alert-parameter-activations.repository';
 
 const DAY_MS = 86_400_000;
 const isoTimestamp = z.iso.datetime({ offset: true });
@@ -22,14 +26,18 @@ export async function loadAlertEmailParameters(
   const end = Date.parse(`${date}T00:00:00+07:00`);
   if (!isoTimestamp.safeParse(`${date}T00:00:00+07:00`).success)
     throw new Error('Invalid reporting date');
-  const firstDay = Math.ceil((connected + 7 * 3_600_000) / DAY_MS) * DAY_MS - 7 * 3_600_000;
-  if (firstDay > end) return [];
   const { parameterConfigs } = await integrationDeviceConfigsService.getByStationId(
     point.stationId,
   );
-  const revisions = await deviceConnectionsService.listActiveSettingsForIntegration({
-    stationId: point.stationId,
-  });
+  const activationRows = await listActiveAlertParameterActivations(point.id);
+  const activations = new Map<string, string>();
+  for (const activation of activationRows) {
+    if (!isoTimestamp.safeParse(activation.activatedAt).success)
+      throw new Error('Invalid registered activation timestamp');
+    const key = alertParameterActivationKey(activation.parameterCode, activation.unit);
+    if (activations.has(key)) throw new Error('Ambiguous registered parameter activation');
+    activations.set(key, activation.activatedAt);
+  }
   const parameters = new Map<
     string,
     { code: string; name: string; unit: string; label: string; activatedAt: string }
@@ -39,32 +47,18 @@ export async function loadAlertEmailParameters(
       continue;
     const name = parameter.parameterName.trim();
     const unit = parameter.parameterUnit.trim();
-    const matches = revisions.filter(
-      (config, index) =>
-        (config.deviceCode || `${point.stationId}/${String(index + 1).padStart(2, '0')}`) ===
-          parameter.deviceCode &&
-        config.channels.some(
-          (channel) =>
-            !channel.testMode &&
-            channel.dataType.trim().toLowerCase() === parameter.parameter.trim().toLowerCase(),
-        ),
-    );
-    const revisionTimes = matches.map((config) => Date.parse(config.updatedAt));
-    if (revisionTimes.length === 0 || revisionTimes.some((at) => !Number.isFinite(at))) continue;
-    const activated = Math.max(connected, ...revisionTimes);
-    const activatedAt =
-      matches.find((config) => Date.parse(config.updatedAt) === activated)?.updatedAt ??
-      point.connectedAt;
-    const code = name
-      .normalize('NFKC')
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, '');
-    if (!code) continue;
-    const key = JSON.stringify([code, unit.normalize('NFKC').toLowerCase()]);
-    const existing = parameters.get(key);
-    if (!existing || Date.parse(existing.activatedAt) < activated) {
-      parameters.set(key, { code, name, unit, label: `${name} (${unit})`, activatedAt });
-    }
+    const registered = parseRegisteredAlertParameter(parameter.parameter);
+    const requested = parseRegisteredAlertParameter(`${name} (${unit})`);
+    if (!registered || !requested || registered.key !== requested.key) continue;
+    const activatedAt = activations.get(registered.key);
+    if (!activatedAt) continue;
+    parameters.set(registered.key, {
+      code: registered.parameterCode,
+      name,
+      unit,
+      label: `${name} (${unit})`,
+      activatedAt,
+    });
   }
   if (parameters.size === 0) return [];
   const tableName = parameterValuesRepository.tableName(point.stationId, '60m');
@@ -163,6 +157,7 @@ export async function loadAlertEmailParameters(
       name: parameter.name,
       unit: parameter.unit,
       activatedAt: parameter.activatedAt,
+      activationVerified: true,
       samples,
       dailySummaries,
     };

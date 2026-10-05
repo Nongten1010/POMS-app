@@ -30,3 +30,4 @@
 ## Notifications
 
 - [อีเมลแจ้งเตือนมลพิษ: รอบ ผู้รับ นโยบาย และผล SMTP](./alert-email-operations.md)
+- [ลองอีเมลครบหกแบบในเครื่อง: ชุดจำลองและรายงานผล](./alert-email-test.md)

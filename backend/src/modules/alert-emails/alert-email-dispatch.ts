@@ -4,7 +4,7 @@ import type {
   AlertEmailJob,
   AlertEmailOutboxRepository,
 } from './alert-email-outbox.repository';
-import { MANDATORY_EMAIL_CC } from '../../shared/services/email.service';
+import { MANDATORY_EMAIL_CC } from '../../shared/services/email-policy';
 
 export interface AlertEmailTransportResult {
   messageId?: string;

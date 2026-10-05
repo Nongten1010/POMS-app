@@ -12,6 +12,10 @@ import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-acc
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { toCanonicalStatusDateTime } from './device-connection-status-datetime';
 import {
+  lockAlertActivationPoints,
+  syncAlertParameterActivations,
+} from '../alert-emails/alert-parameter-activations.repository';
+import {
   type DeviceConnectionAccessContext,
   type CreateDeviceConnectionConfigInput,
   type DeviceConnectionConfigDTO,
@@ -138,7 +142,13 @@ export const deviceConnectionsRepository = {
     actorUserId: number,
     requestId: number | null = null,
   ): Promise<DeviceConnectionConfigDTO[]> {
-    return db.transaction((trx) => insertConfigs(trx, inputs, actorUserId, requestId));
+    return db.transaction(async (trx) => {
+      const stationIds = [...new Set(inputs.map((input) => input.stationId))];
+      if (requestId === null) await lockAlertActivationPoints(trx, stationIds);
+      const saved = await insertConfigs(trx, inputs, actorUserId, requestId);
+      if (requestId === null) await syncAlertParameterActivations(trx, stationIds);
+      return saved;
+    });
   },
 
   async replaceActive(
@@ -154,10 +164,14 @@ export const deviceConnectionsRepository = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
+      const stationIds = [...new Set(inputs.map((input) => input.stationId))];
+      await lockAlertActivationPoints(trx, stationIds);
       for (const input of inputs) {
         await softDeleteActiveConfigByDeviceKey(trx, input, actorUserId);
       }
-      return insertConfigs(trx, inputs, actorUserId, null);
+      const saved = await insertConfigs(trx, inputs, actorUserId, null);
+      await syncAlertParameterActivations(trx, stationIds);
+      return saved;
     });
   },
 
@@ -168,6 +182,7 @@ export const deviceConnectionsRepository = {
   ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
       // Use the same lock order as approval: live point, then device configuration.
+      await lockAlertActivationPoints(trx, [stationId]);
       const points = await trx('cems_wpms_connected_measurement_points')
         .where((builder) => builder.where('point_code', stationId).orWhere('point_name', stationId))
         .whereNull('deleted_at')
@@ -185,7 +200,9 @@ export const deviceConnectionsRepository = {
           { invalidParameters, allowedParameters: parameters },
         );
       await softDeleteActiveConfigsByStation(trx, stationId, actorUserId);
-      return insertConfigs(trx, inputs, actorUserId, null);
+      const saved = await insertConfigs(trx, inputs, actorUserId, null);
+      await syncAlertParameterActivations(trx, [stationId]);
+      return saved;
     });
   },
 
@@ -208,6 +225,8 @@ export const deviceConnectionsRepository = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
+      const stationIds = [...new Set(inputs.map((input) => input.stationId))];
+      await lockAlertActivationPoints(trx, stationIds);
       for (const input of inputs) {
         await softDeleteRequestConfigByDeviceKey(trx, input, actorUserId, requestId);
         await softDeleteActiveConfigByDeviceKey(trx, input, actorUserId);
@@ -215,6 +234,7 @@ export const deviceConnectionsRepository = {
 
       const requestSnapshots = await insertConfigs(trx, inputs, actorUserId, requestId);
       await insertConfigs(trx, inputs, actorUserId, null);
+      await syncAlertParameterActivations(trx, stationIds);
       return requestSnapshots;
     });
   },

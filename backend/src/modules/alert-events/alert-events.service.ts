@@ -2,6 +2,7 @@ import { AppError, BadRequestError, NotFoundError } from '../../shared/errors/Ap
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { alertEventsRepository } from './alert-events.repository';
+import { ALERT_EVENT_EXCEEDANCE_MESSAGE, isAlertEventExceedance } from './alert-event-exceedance';
 import {
   buildLegacyAlertEventIdempotencyKey,
   normalizeAlertEventUnit,
@@ -21,6 +22,19 @@ export const alertEventsService = {
   async createFromIntegration(
     input: CreateIntegrationAlertEventInput,
   ): Promise<CreateAlertEventResult> {
+    if (!Number.isFinite(input.measuredValue) || !Number.isFinite(input.thresholdValue)) {
+      throw new BadRequestError('measuredValue and thresholdValue must be finite numbers', {
+        field: !Number.isFinite(input.measuredValue) ? 'measuredValue' : 'thresholdValue',
+        reason: 'INVALID_NUMBER',
+      });
+    }
+    if (!isAlertEventExceedance(input.measuredValue, input.thresholdValue)) {
+      throw new BadRequestError(ALERT_EVENT_EXCEEDANCE_MESSAGE, {
+        field: 'measuredValue',
+        reason: 'NOT_EXCEEDED',
+      });
+    }
+
     const existing = await alertEventsRepository.findByIdempotencyKey(input.idempotencyKey);
     if (existing) {
       return {

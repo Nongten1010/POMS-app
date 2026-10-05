@@ -1,4 +1,5 @@
 import type { AlertEventAlertType, AlertEventDTO } from '../alert-events/alert-events.types';
+import { isAlertEventExceedance } from '../alert-events/alert-event-exceedance';
 
 const APPLICATION_URL = 'https://d-poms.diw.go.th/';
 const TIME_ZONE = 'Asia/Bangkok';
@@ -118,10 +119,11 @@ function validateEvents(events: AlertEventDTO[], scheduledDate: Date): void {
       const expectedThreshold = event.alertType === 'STANDARD_EXCEEDED' ? 'STANDARD' : 'EIA';
       if (
         event.thresholdType !== expectedThreshold ||
-        !isFiniteNumber(event.thresholdValue) ||
-        !isFiniteNumber(event.measuredValue)
+        !isAlertEventExceedance(event.measuredValue, event.thresholdValue)
       ) {
-        throw new Error('Hourly events require a matching threshold and finite measured value');
+        throw new Error(
+          'Hourly events require a matching threshold and finite measured value greater than thresholdValue',
+        );
       }
     }
   }

@@ -1,6 +1,10 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import type { AlertEmailTransportResult } from '../../src/modules/alert-emails/alert-email-dispatch';
 import type { AlertEmailJob } from '../../src/modules/alert-emails/alert-email-outbox.repository';
+import { isAlertEmailJobEligible } from '../../src/modules/alert-emails/alert-email-eligibility';
+import type { AlertEventDTO } from '../../src/modules/alert-events/alert-events.types';
+import type { AlertEmailPoint } from '../../src/modules/alert-emails/alert-email-source.repository';
+import type { ActiveAlertEmailPolicy } from '../../src/modules/alert-emails/alert-email-policy';
 
 const now = new Date('2026-10-05T02:00:00.000Z');
 const recipient = 'officer@example.com';
@@ -12,7 +16,7 @@ function fixture(attempts = 1) {
     batchId: 7,
     deduplicationKey: 'daily:2026-10-04:officer:3',
     cadence: 'DAILY',
-    alertType: 'LOW_COMPLETENESS',
+    alertType: 'DAILY_COMPLETENESS_LOW',
     systemType: 'CEMS',
     scheduledAt: now.toISOString(),
     periodStart: '2026-10-03T17:00:00.000Z',
@@ -70,6 +74,67 @@ function dispatch(input: ReturnType<typeof fixture>): Promise<{
 }
 
 describe('alert email dispatch', () => {
+  it.each([
+    ['STANDARD_EXCEEDED' as const, 'STANDARD' as const, 100, 'SKIPPED'],
+    ['STANDARD_EXCEEDED' as const, 'STANDARD' as const, 120, 'SKIPPED'],
+    ['EIA_EXCEEDED' as const, 'EIA' as const, 100, 'SKIPPED'],
+    ['EIA_EXCEEDED' as const, 'EIA' as const, 120, 'SKIPPED'],
+    ['STANDARD_EXCEEDED' as const, 'STANDARD' as const, null, 'SKIPPED'],
+    ['EIA_EXCEEDED' as const, 'EIA' as const, Infinity, 'SKIPPED'],
+    ['STANDARD_EXCEEDED' as const, 'STANDARD' as const, 125, 'SMTP_ACCEPTED'],
+    ['EIA_EXCEEDED' as const, 'EIA' as const, 125, 'SMTP_ACCEPTED'],
+  ])(
+    'checks an immutable %s/%s batch with measuredValue %s and records %s',
+    async (alertType, thresholdType, measuredValue, expectedStatus) => {
+      const input = fixture();
+      input.job.alertType = alertType;
+      input.job.cadence = 'HOURLY';
+      const events = [125, measuredValue].map((value, index) => ({
+        event: {
+          id: index + 1,
+          alertType,
+          systemType: 'CEMS',
+          factoryId: 'F1',
+          stationId: 'S1',
+          notificationStatus: 'AUTO',
+          thresholdType,
+          measuredValue: value,
+          thresholdValue: 120,
+        } as AlertEventDTO,
+        evidence: null,
+      }));
+      const policy = { enabled: true, recipientMode: 'POINT_OFFICERS' } as ActiveAlertEmailPolicy;
+      const points = [
+        {
+          id: 1,
+          factoryId: 'F1',
+          stationId: 'S1',
+          systemType: 'CEMS',
+          officerEmails: [recipient],
+          factoryEmails: [],
+        },
+      ] as unknown as AlertEmailPoint[];
+      input.isRecipientEligible.mockImplementation(async (job) =>
+        isAlertEmailJobEligible(job as AlertEmailJob, policy, {
+          events,
+          points,
+          hasActiveParameter: async () => true,
+        }),
+      );
+      expect(await dispatch(input)).toEqual(
+        expect.objectContaining({ status: expectedStatus, persisted: true }),
+      );
+      expect(input.transport.send).toHaveBeenCalledTimes(expectedStatus === 'SKIPPED' ? 0 : 1);
+      expect(input.repository.renewLease).toHaveBeenCalledTimes(
+        expectedStatus === 'SKIPPED' ? 0 : 1,
+      );
+      expect(input.repository.complete).toHaveBeenCalledWith(
+        11,
+        'lease-123',
+        expect.objectContaining({ status: expectedStatus, nextAttemptAt: null }),
+      );
+    },
+  );
   it('sends the frozen TO and CC envelope and records SMTP acceptance rather than delivered', async () => {
     const input = fixture();
     const result = await dispatch(input);

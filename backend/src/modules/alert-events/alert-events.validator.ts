@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
 import { buildAlertEventIdempotencyKey } from './alert-event-identity';
+import { ALERT_EVENT_EXCEEDANCE_MESSAGE, isAlertEventExceedance } from './alert-event-exceedance';
 import {
   ALERT_EVENT_ALERT_TYPES,
   ALERT_EVENT_DISPLAY_SYSTEM_TYPES,
@@ -30,6 +31,10 @@ const isoDateSchema = z
 const hourlyTimeSchema = z
   .string()
   .regex(/^([01]\d|2[0-3]):00$/, 'time must use HH:00 for an hourly alert');
+const finiteAlertNumberSchema = z.union([
+  z.number().finite(),
+  z.string().trim().min(1).transform(Number).pipe(z.number().finite()),
+]);
 
 export const createIntegrationAlertEventSchema = z
   .object({
@@ -40,11 +45,15 @@ export const createIntegrationAlertEventSchema = z
     unit: unitSchema,
     eventDate: isoDateSchema,
     time: hourlyTimeSchema,
-    measuredValue: z.coerce.number().finite(),
-    thresholdValue: z.coerce.number().finite(),
+    measuredValue: finiteAlertNumberSchema,
+    thresholdValue: finiteAlertNumberSchema,
     thresholdType: z.enum(ALERT_EVENT_THRESHOLD_TYPES),
   })
   .strict()
+  .refine((value) => isAlertEventExceedance(value.measuredValue, value.thresholdValue), {
+    message: ALERT_EVENT_EXCEEDANCE_MESSAGE,
+    path: ['measuredValue'],
+  })
   .transform((value) => {
     const alertType = alertTypeFor(value.thresholdType);
     const parameterName = value.parameterCode.toUpperCase();

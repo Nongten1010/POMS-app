@@ -3,8 +3,11 @@ import { db } from '../../config/database';
 import { alertEventsRepository, toAlertEventDTO } from '../alert-events/alert-events.repository';
 import type { AlertEventDTO, AlertEventRow } from '../alert-events/alert-events.types';
 import type { DailyAlertCandidate } from './alert-email-daily-detector';
+import { legacyDailyAlertKey } from './alert-email-daily-detector';
+import { normalizeAlertActivationStationIdentity } from './alert-parameter-activations';
 
 const timestampSchema = z.iso.datetime({ offset: true });
+const MAX_LEGACY_DAILY_ALERTS = 1_000;
 
 /** Persist detector facts once; no recipient addresses or source credentials belong here. */
 export const alertEmailDailyRepository = {
@@ -19,6 +22,8 @@ export const alertEmailDailyRepository = {
     const payload = toInsertPayload(candidate);
     const existing = await alertEventsRepository.findByIdempotencyKey(candidate.idempotency_key);
     if (existing) return existing;
+    const legacy = await findLegacyDailyAlert(candidate);
+    if (legacy) return legacy;
 
     try {
       const inserted = await db<AlertEventRow>('alert_events').insert(payload).returning('*');
@@ -37,6 +42,63 @@ export const alertEmailDailyRepository = {
     }
   },
 };
+
+async function findLegacyDailyAlert(candidate: DailyAlertCandidate): Promise<AlertEventDTO | null> {
+  if (!candidate.idempotency_key.startsWith('DAILY_ALERT:v2:')) return null;
+  // Validate all reconstruction inputs even when the SQL result is empty.
+  legacyDailyAlertKey(candidate, 1);
+  if (
+    typeof candidate.event_date !== 'string' ||
+    !candidate.factory_id?.trim() ||
+    !candidate.station_id.trim()
+  )
+    throw new Error('Invalid daily alert identity scope');
+  const date = candidate.event_date;
+  const rows = await db<AlertEventRow>('alert_events')
+    .whereNull('deleted_at')
+    .where('factory_id', candidate.factory_id)
+    .where('system_type', candidate.system_type)
+    .whereRaw('LOWER(LTRIM(RTRIM(??))) = ?', [
+      'station_id',
+      normalizeAlertActivationStationIdentity(candidate.station_id),
+    ])
+    .where('event_date', date)
+    .where('alert_type', candidate.alert_type)
+    .whereLike('idempotency_key', 'DAILY_ALERT:v1:%')
+    .orderBy('id', 'asc')
+    .limit(MAX_LEGACY_DAILY_ALERTS + 1)
+    .select('*');
+  if (rows.length > MAX_LEGACY_DAILY_ALERTS) throw new Error('Too many legacy daily alerts');
+  for (const row of rows) {
+    // Check returned ownership explicitly; SQL collation may be case insensitive.
+    if (
+      row.deleted_at !== null ||
+      row.factory_id !== candidate.factory_id ||
+      row.system_type !== candidate.system_type ||
+      normalizeAlertActivationStationIdentity(row.station_id) !==
+        normalizeAlertActivationStationIdentity(candidate.station_id) ||
+      row.alert_type !== candidate.alert_type ||
+      eventDate(row.event_date) !== candidate.event_date
+    )
+      continue;
+    const oldPointId =
+      typeof row.connected_measurement_point_id === 'number'
+        ? row.connected_measurement_point_id
+        : typeof row.connected_measurement_point_id === 'string' &&
+            /^\d+$/.test(row.connected_measurement_point_id)
+          ? Number(row.connected_measurement_point_id)
+          : NaN;
+    const expectedKey = legacyDailyAlertKey(candidate, oldPointId);
+    if (expectedKey && expectedKey === row.idempotency_key) return toAlertEventDTO(row);
+  }
+  return null;
+}
+
+function eventDate(value: unknown): string | null {
+  if (value instanceof Date && Number.isFinite(value.getTime()))
+    return value.toISOString().slice(0, 10);
+  return typeof value === 'string' ? value.slice(0, 10) : null;
+}
 
 function toInsertPayload(candidate: DailyAlertCandidate): DailyAlertCandidate {
   return {

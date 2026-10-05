@@ -6,6 +6,11 @@ import {
 } from '../poms-factories/poms-measurement-point-parameters';
 import type { StoredFactoryStatus } from '../poms-factories/poms-status-management.types';
 import type { Knex } from 'knex';
+import {
+  retireAlertParameterActivations,
+  syncAlertParameterActivations,
+} from '../alert-emails/alert-parameter-activations.repository';
+import { normalizeAlertActivationStationIdentity } from '../alert-emails/alert-parameter-activations';
 import { db } from '../../config/database';
 import { env } from '../../config/env';
 import {
@@ -162,7 +167,15 @@ interface ConnectedMeasurementPointRow {
   instruments_json: string | null;
 }
 
-interface AddParameterPointOwnerRow extends ConnectedMeasurementPointRow {
+interface AlertActivationConnectedPointRow extends ConnectedMeasurementPointRow {
+  factory_id: string;
+  eligible_factory_id: number | string | null;
+  system_type: string;
+  point_code: string | null;
+  point_name: string;
+}
+
+interface AddParameterPointOwnerRow extends AlertActivationConnectedPointRow {
   eligible_factory_id: number | string | null;
   system_type: 'CEMS' | 'WPMS';
   point_code: string;
@@ -1221,6 +1234,7 @@ export const connectionRequestsRepository = {
             created_by: actorUserId,
             updated_by: actorUserId,
           });
+          await syncAlertParameterActivations(trx, [pointCode]);
         }
 
         const created = await findByIdInTransaction(trx, requestId);
@@ -1774,6 +1788,24 @@ async function syncConnectedMeasurementPointsInTransaction(
       created_by: actorUserId,
       updated_by: actorUserId,
     });
+    const stationId = point.pointCode?.trim() || point.pointName;
+    const carriesContinuousParameters =
+      isAddParameter &&
+      existing !== null &&
+      existing.factory_id === request.factoryId &&
+      Number(existing.eligible_factory_id) === Number(activeEligibleFactory.id) &&
+      existing.system_type === request.systemType &&
+      normalizeAlertActivationStationIdentity(
+        existing.point_code?.trim() || existing.point_name,
+      ) === normalizeAlertActivationStationIdentity(stationId);
+    if (carriesContinuousParameters) {
+      await syncAlertParameterActivations(trx, [stationId], {
+        carryFromPointId: Number(existing.id),
+      });
+    } else {
+      await syncAlertParameterActivations(trx, [stationId]);
+      if (existing) await retireAlertParameterActivations(trx, [Number(existing.id)]);
+    }
   }
 }
 
@@ -1816,9 +1848,11 @@ async function lockAddParameterPointOwners(
       .forUpdate()
       .select(
         'id',
+        'factory_id',
         'eligible_factory_id',
         'system_type',
         'point_code',
+        'point_name',
         'parameters_json',
         'instruments_json',
       );
@@ -3608,10 +3642,20 @@ async function softDeleteDuplicateActiveMeasurementPoints(
 async function findConnectedPointForMeasurementPoint(
   trx: Knex.Transaction,
   point: MeasurementPointDTO,
-): Promise<ConnectedMeasurementPointRow | null> {
-  const query = trx<ConnectedMeasurementPointRow>('cems_wpms_connected_measurement_points')
+): Promise<AlertActivationConnectedPointRow | null> {
+  const query = trx<AlertActivationConnectedPointRow>('cems_wpms_connected_measurement_points')
     .whereNull('deleted_at')
-    .select('id', 'parameters_json', 'instruments_json');
+    .forUpdate()
+    .select(
+      'id',
+      'parameters_json',
+      'instruments_json',
+      'factory_id',
+      'eligible_factory_id',
+      'system_type',
+      'point_code',
+      'point_name',
+    );
 
   if (point.pointCode) {
     query.where('point_code', point.pointCode);

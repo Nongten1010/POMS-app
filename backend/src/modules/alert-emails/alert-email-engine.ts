@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { AlertEventDTO } from '../alert-events/alert-events.types';
-import { MANDATORY_EMAIL_CC } from '../../shared/services/email.service';
+import { MANDATORY_EMAIL_CC } from '../../shared/services/email-policy';
 import type { ActiveAlertEmailPolicy, AlertEmailPolicy } from './alert-email-policy';
 import type { AlertEmailPoint } from './alert-email-source.repository';
 import type { AlertEmailOutboxRepository } from './alert-email-outbox.repository';
 import { latestAlertEmailPeriods, type AlertEmailPeriod } from './alert-email-rules';
+import { normalizeAlertActivationStationIdentity } from './alert-parameter-activations';
 
 export interface AlertEmailEngineDependencies {
   source: {
@@ -46,7 +47,8 @@ export function alertEmailPointRecipients(
 export function pointMatchesAlertEmailEvent(point: AlertEmailPoint, event: AlertEventDTO): boolean {
   return (
     point.systemType === event.systemType &&
-    point.stationId === event.stationId &&
+    normalizeAlertActivationStationIdentity(point.stationId) ===
+      normalizeAlertActivationStationIdentity(event.stationId) &&
     Boolean(event.factoryId) &&
     point.factoryId === event.factoryId
   );

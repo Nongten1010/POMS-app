@@ -56,6 +56,7 @@ function fixture(
     eligible_factory_id: 7,
     point_code: 'P0260',
     point_name: '1',
+    connected_at: '2026-09-01T00:00:00.000Z',
     parameters_json: JSON.stringify(before.parameters),
     details_json: JSON.stringify(proposal.details),
     monitoring_point_status: null,
@@ -69,9 +70,13 @@ function fixture(
     { id: 3, config_id: 9, data_type: 'Watt (kW/hr)', address_id: 3, deleted_at: null },
   ];
   const writes: Array<{ table: string; values: Record<string, unknown> }> = [];
+  const queriedTables: string[] = [];
   let requestQueries = 0;
   const fake = Object.assign(
     (table: string) => {
+      queriedTables.push(table);
+      if (table === 'alert_parameter_activations')
+        throw new Error('Activation registry is unavailable before migration 0128');
       const requestQuery = table === 'poms_factory_edit_requests' ? ++requestQueries : 0;
       let ids: number[] | undefined;
       let excludedRequestId: number | undefined;
@@ -125,10 +130,18 @@ function fixture(
       schema: { hasTable: async () => false, createTable: async () => undefined },
     },
   );
-  return { knex: fake as unknown as Knex, live, channels, writes, request };
+  return { knex: fake as unknown as Knex, live, channels, writes, request, queriedTables };
 }
 
 describe('targeted P0260 production repair migration', () => {
+  it('completes its original repair before the later activation registry migration exists', async () => {
+    process.env.NODE_ENV = 'production';
+    const f = fixture();
+    await up(f.knex);
+    expect(JSON.parse(String(f.live.parameters_json))).toEqual(parameters);
+    expect(f.queriedTables).not.toContain('alert_parameter_activations');
+    expect(f.writes.some((write) => write.table === 'device_measurement_channels')).toBe(true);
+  });
   it('backs up before writing approved POMS parameters and retiring only COD', async () => {
     process.env.NODE_ENV = 'production';
     const f = fixture();
