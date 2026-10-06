@@ -97,6 +97,19 @@ Workspace เก่าที่ใช้ diagnosis ขาดไฟล์ `0125_r
 
 หลัง workflow สำเร็จต้องอ่านค่า 29 แถวและข้อมูลสำรองจากฐานข้อมูลจริง ตรวจ index กับ migration records และตรวจ `GET /api/v1/openapi.json` ให้ตรงกับ contract. `/api/v1/cems-wpms-requests/table-rows` ต้องตรวจภายใต้สิทธิ์จริง; การตรวจ SQL หรือ OpenAPI ไม่ถือเป็นการทดสอบ HTTP ของ endpoint นี้แทน
 
+## ผล production หลัง release
+
+[Workflow 37405606388](https://github.com/Nongten1010/POMS-app/actions/runs/37405606388) deploy backend commit `6ddfd9ddefa1cd9442b635623deea6d3d4a2ea35` สำเร็จ. เครื่อง production ทดสอบผ่าน 301 suites / 3,756 tests, migration batch `108` รันสาม migrations ของชุดนี้ และ health check คืน `success: true`, `status: ok`
+
+อ่านข้อมูลจริงหลัง deploy แล้วตรวจตรง manifest ครบ 29 แถว: eligible 14 แถว, snapshot เพิ่มโรงงาน 13 แถว และคำขอ CEMS 2 แถว. ตารางสำรองมี `eligible = 14`, `addition = 13`, `request = 2` รวม 29 แถว; migration records มี `0132`, `0133`, `0134` ครบ. Index ปัจจุบันคือ `uq_eligible_factory_registration_active_new` ตาม filter ที่กำหนด และไม่พบกลุ่มเลขทะเบียนซ้ำใน active eligible
+
+| คำขอ | `factory_id` หลังซ่อม | เลขแสดงที่รักษาไว้ | สถานะที่รักษาไว้ |
+| --- | --- | --- | --- |
+| `CEMS-0020/2569` | `91120225825674` | `ข3-59-7/67ปจ` | `WAITING_FACTORY_REVISION` |
+| `CEMS-0021/2569` | `91120225825674` | `ข3-59-7/67ปจ` | `WAITING_FACTORY_REVISION` |
+
+[Runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) ตอบสำเร็จ และ `components.schemas` กับ `paths` ตรงกับ JSON contract ของ build release ทุกส่วน. การเรียก `/api/v1/cems-wpms-requests/table-rows` โดยไม่มี token ตอบ `401` ตาม authentication contract; ยังไม่ได้ตรวจ HTTP response ของ endpoint นี้ผ่าน session ผู้ใช้จริง. ผล SQL ยืนยันค่าที่บันทึก ส่วน regression ยืนยัน mapping ของ table row จึงรายงานขอบเขตการตรวจทั้งสองส่วนแยกกัน
+
 ## การประกาศผลกระทบของการแก้ไข
 
 Docs impact: updated
