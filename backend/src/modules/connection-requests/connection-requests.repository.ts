@@ -264,6 +264,9 @@ interface FactoryRow {
   industrial_estate_name: string | null;
   is_active: boolean | number | null;
   factory_registration_no_old: string | null;
+  source_factory_id?: string | null;
+  source_system?: string | null;
+  factory_registration_no_new?: string | null;
   factory_type_sequence: string | null;
   address: string | null;
   latitude: number | string | null;
@@ -304,6 +307,8 @@ interface FactoryGeneralRow {
   juristic_id: string | null;
   juristic_name: string | null;
   source_factory_id: string | null;
+  source_system?: string | null;
+  factory_registration_no_new?: string | null;
   factory_registration_no_old: string | null;
   factory_type_sequence: string | null;
   address: string | null;
@@ -410,6 +415,7 @@ interface OfficerNotificationEmailLookupInput {
 interface EligibleFactoryReferenceRow {
   id: number | string;
   source_factory_id: string | null;
+  source_system?: string | null;
   factory_registration_no_new: string;
   factory_registration_no_old: string | null;
 }
@@ -417,6 +423,9 @@ interface EligibleFactoryReferenceRow {
 interface DirectConnectionFactoryRow {
   eligible_factory_id: number | string;
   factory_registration_no_new: string;
+  factory_registration_no_old?: string | null;
+  source_factory_id?: string | null;
+  source_system?: string | null;
   factory_name: string;
 }
 
@@ -459,22 +468,29 @@ export const connectionRequestsRepository = {
           .orWhere('factory_registration_no_new', input.factoryRegistrationNo)
           .orWhere('factory_registration_no_old', input.factoryRegistrationNo);
       })
+      .where((builder) => {
+        builder
+          .where('source_factory_id', input.factoryId)
+          .orWhere('factory_registration_no_new', input.factoryId)
+          .orWhere('factory_registration_no_old', input.factoryId);
+      })
       .select(
         'id',
         'source_factory_id',
+        'source_system',
         'factory_registration_no_new',
         'factory_registration_no_old',
       )
       .first();
 
-    return row
-      ? {
-          id: Number(row.id),
-          sourceFactoryId: row.source_factory_id,
-          factoryRegistrationNoNew: row.factory_registration_no_new,
-          factoryRegistrationNoOld: row.factory_registration_no_old,
-        }
-      : null;
+    if (!row) return null;
+    const registration = resolveFactoryRegistrationIdentity(row);
+    return {
+      id: Number(row.id),
+      sourceFactoryId: row.source_factory_id,
+      factoryRegistrationNoNew: registration.newRegistrationNo,
+      factoryRegistrationNoOld: registration.oldRegistrationNo,
+    };
   },
 
   async findDirectConnectionFactory(
@@ -485,15 +501,17 @@ export const connectionRequestsRepository = {
     factoryId: string;
     factoryName: string;
     newRegistrationNo: string;
+    oldRegistrationNo?: string | null;
   } | null> {
     const row = await buildDirectConnectionFactoryQuery(input, access).first();
     if (!row) return null;
 
+    const registration = resolveFactoryRegistrationIdentity(row);
     return {
       eligibleFactoryId: Number(row.eligible_factory_id),
-      factoryId: row.factory_registration_no_new,
+      factoryId: registration.newRegistrationNo,
       factoryName: row.factory_name,
-      newRegistrationNo: row.factory_registration_no_new,
+      ...registration,
     };
   },
 
@@ -624,16 +642,12 @@ export const connectionRequestsRepository = {
       .leftJoin(
         factoryProfileReadTable('eligible_factories', 'ef'),
         function joinEligibleFactory() {
-          if (canonical) {
-            this.on(function factoryIdentity() {
-              this.on('f.code', '=', 'ef.factory_registration_no_new')
-                .orOn('f.fid', '=', 'ef.factory_registration_no_new')
-                .orOn('f.fid', '=', 'ef.source_factory_id')
-                .orOn('f.code', '=', 'ef.source_factory_id');
-            }).andOnNull('ef.deleted_at');
-          } else {
-            this.on('ef.factory_registration_no_new', '=', 'f.code').andOnNull('ef.deleted_at');
-          }
+          this.on(function factoryIdentity() {
+            this.on('f.code', '=', 'ef.factory_registration_no_new')
+              .orOn('f.fid', '=', 'ef.factory_registration_no_new')
+              .orOn('f.fid', '=', 'ef.source_factory_id')
+              .orOn('f.code', '=', 'ef.source_factory_id');
+          }).andOnNull('ef.deleted_at');
         },
       )
       .leftJoin(
@@ -687,6 +701,8 @@ export const connectionRequestsRepository = {
         'j.juristic_id as juristic_id',
         'j.name_th as juristic_name',
         'ef.source_factory_id',
+        'ef.source_system',
+        'ef.factory_registration_no_new',
         'ef.factory_registration_no_old',
         'ef.factory_type_sequence',
         'ef.address',
@@ -2267,6 +2283,9 @@ function buildFactoriesForAccessQuery(
       'ie.code as industrial_estate_code',
       db.raw('COALESCE(ef.industrial_estate_name, ie.name_th) as industrial_estate_name'),
       'ef.factory_registration_no_old',
+      'ef.source_factory_id',
+      'ef.source_system',
+      'ef.factory_registration_no_new',
       'ef.factory_type_sequence',
       'ef.address',
       'ef.latitude',
@@ -2354,7 +2373,7 @@ function buildConnectedFactoriesForAccessQuery(
     })
     .select(
       'f.id',
-      db.raw('COALESCE(f.fid, ef.factory_registration_no_new) as fid'),
+      db.raw('COALESCE(ef.source_factory_id, f.fid, ef.factory_registration_no_new) as fid'),
       db.raw('COALESCE(f.code, ef.factory_registration_no_new) as code'),
       db.raw(`
         COALESCE(
@@ -2381,6 +2400,9 @@ function buildConnectedFactoriesForAccessQuery(
         ? 'ef.industrial_estate_name as industrial_estate_name'
         : db.raw('COALESCE(ie.name_th, ef.industrial_estate_name) as industrial_estate_name'),
       'ef.factory_registration_no_old',
+      'ef.source_factory_id',
+      'ef.source_system',
+      'ef.factory_registration_no_new',
       'ef.factory_type_sequence',
       'ef.address',
       'ef.latitude',
@@ -2444,7 +2466,24 @@ function buildDirectConnectionFactoryQuery(
         .orWhereIn('ef.factory_registration_no_new', identifiers)
         .orWhereIn('ef.factory_registration_no_old', identifiers);
     })
-    .select('ef.id as eligible_factory_id', 'ef.factory_registration_no_new', 'ef.factory_name');
+    .select(
+      'ef.id as eligible_factory_id',
+      'ef.factory_registration_no_new',
+      'ef.factory_registration_no_old',
+      'ef.source_factory_id',
+      'ef.source_system',
+      'ef.factory_name',
+    );
+
+  if (eligibleFactoryId === undefined && input.factoryId.trim()) {
+    // The display registration may be stale; it must never select another factory.
+    builder.where((identifierBuilder) => {
+      identifierBuilder
+        .where('ef.source_factory_id', input.factoryId.trim())
+        .orWhere('ef.factory_registration_no_new', input.factoryId.trim())
+        .orWhere('ef.factory_registration_no_old', input.factoryId.trim());
+    });
+  }
 
   applyDirectConnectionFactoryAccessFilter(builder, access.scope, access.regionalAccess);
   applyFactoryRegionalAccessFilter(builder, access.scope, access.regionalAccess);
@@ -2925,6 +2964,37 @@ function applyFactorySnapshotFilters(
   });
 }
 
+function resolveFactoryRegistrationIdentity(row: {
+  fid?: string;
+  code?: string;
+  source_system?: string | null;
+  source_factory_id?: string | null;
+  factory_registration_no_new?: string | null;
+  factory_registration_no_old?: string | null;
+}): { newRegistrationNo: string; oldRegistrationNo: string | null } {
+  const sourceFactoryId = row.source_factory_id?.trim();
+  const factoryId = row.fid?.trim();
+  const storedNew = row.factory_registration_no_new?.trim();
+  const masterRegistration = row.code?.trim();
+  const newRegistrationNo =
+    row.source_system === 'diw.fac_import' &&
+    sourceFactoryId &&
+    /^\d{14}$/.test(sourceFactoryId) &&
+    (!storedNew || !/^\d{14}$/.test(storedNew))
+      ? sourceFactoryId
+      : storedNew ||
+        (factoryId && /^\d{14}$/.test(factoryId) ? factoryId : masterRegistration) ||
+        '';
+  // Legacy direct selections put DISPFACREG in the new column. Retain it as display data.
+  const legacyDisplay =
+    row.source_system === 'diw.fac_import' && storedNew !== newRegistrationNo ? storedNew : null;
+  const oldRegistrationNo =
+    row.factory_registration_no_old?.trim() ||
+    legacyDisplay ||
+    (masterRegistration && masterRegistration !== newRegistrationNo ? masterRegistration : null);
+  return { newRegistrationNo, oldRegistrationNo: oldRegistrationNo || null };
+}
+
 function toFactorySummaryDTO(
   row: FactoryRow,
   includeEiaOther = isCanonicalFactoryProfilesEnabled(),
@@ -2938,13 +3008,13 @@ function toFactorySummaryDTO(
   const hasEia = environmentalAssessment.hasEia;
   const isEligible = row.eligible_factory_id !== null && row.eligible_factory_id !== undefined;
   const industrialArea = toIndustrialArea(row.industrial_estate_code, row.industrial_estate_name);
+  const registration = resolveFactoryRegistrationIdentity(row);
   return {
     id: row.id === null ? null : Number(row.id),
     eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
-    factoryId: row.fid,
+    factoryId: row.source_system === 'diw.fac_import' ? registration.newRegistrationNo : row.fid,
     factoryName: row.name,
-    newRegistrationNo: row.code,
-    oldRegistrationNo: row.factory_registration_no_old,
+    ...registration,
     industryType: row.system_detail,
     industryMainOrder: factoryClass ?? TEMPORARY_FACTORY_TEXT,
     industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
@@ -2987,12 +3057,12 @@ function toIndustrialArea(
 
 function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(row.factory_type_sequence);
+  const registration = resolveFactoryRegistrationIdentity(row);
   return {
     id: Number(row.id),
-    factoryId: row.fid,
+    factoryId: row.source_system === 'diw.fac_import' ? registration.newRegistrationNo : row.fid,
     factoryName: row.name,
-    newRegistrationNo: row.code,
-    oldRegistrationNo: row.factory_registration_no_old,
+    ...registration,
     industryType: row.system_detail,
     industryMainOrder: factoryClass ?? TEMPORARY_FACTORY_TEXT,
     industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
@@ -3038,9 +3108,9 @@ function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
     isEligible: row.eligible_factory_id !== null && row.eligible_factory_id !== undefined,
     eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
     formDefaults: {
-      factoryId: row.fid,
+      factoryId: row.source_system === 'diw.fac_import' ? registration.newRegistrationNo : row.fid,
       factoryName: row.name,
-      factoryRegistrationNo: row.code,
+      factoryRegistrationNo: registration.oldRegistrationNo ?? registration.newRegistrationNo,
     },
   };
 }
@@ -3070,7 +3140,7 @@ function toConnectedFactoryGeneralDTO(row: FactoryRow): FactoryGeneralDTO {
     formDefaults: {
       factoryId: summary.factoryId,
       factoryName: summary.factoryName,
-      factoryRegistrationNo: summary.newRegistrationNo,
+      factoryRegistrationNo: summary.oldRegistrationNo ?? summary.newRegistrationNo,
     },
   };
 }

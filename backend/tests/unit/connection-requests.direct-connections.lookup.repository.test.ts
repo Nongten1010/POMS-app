@@ -33,6 +33,7 @@ describe('connectionRequestsRepository.findDirectConnectionFactory', () => {
       factoryId: '10120000325542',
       factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
       newRegistrationNo: '10120000325542',
+      oldRegistrationNo: null,
     });
   });
 

@@ -552,7 +552,7 @@ const createEligibleFactoryExample = {
 };
 
 const createEligibleFactoryAddRequestExample = {
-  factoryId: 'F000123',
+  factoryId: '10120000325542',
   reason: 'มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์',
   contactName: 'สมชาย ใจดี',
   contactPhone: '081-234-5678',
@@ -2040,7 +2040,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     required: ['factoryId', 'reason'],
     properties: {
-      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryId: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'ใช้รหัสจาก owner factory list; โรงงานจาก Fac60k ใช้ FID/เลขทะเบียนใหม่',
+        example: '10120000325542',
+      },
       reason: { type: 'string', minLength: 1, maxLength: 1000 },
       contactName: {
         type: 'string',
@@ -2105,8 +2111,20 @@ const componentSchemas: Record<string, OpenApiObject> = {
     ],
     properties: {
       id: { type: 'integer', minimum: 1 },
-      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
-      factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 80 },
+      factoryId: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'รหัสโรงงานจาก owner factory list; โรงงานจาก Fac60k ใช้ FID/เลขทะเบียนใหม่',
+        example: '10120000325542',
+      },
+      factoryRegistrationNo: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+        description: 'เลขทะเบียนสำหรับแสดงผล; ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่ ไม่ใช่ factoryId เสมอไป',
+        example: '3-34(3)-3/54นบ',
+      },
       factoryName: { type: 'string', minLength: 1, maxLength: 500 },
       provinceName: { type: 'string', minLength: 1, maxLength: 128 },
       reason: { type: 'string', minLength: 1, maxLength: 1000 },
@@ -5563,7 +5581,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List eligible factories',
       operationId: 'listEligibleFactories',
       description:
-        'คืนเลขใหม่ใน factoryId และเลขเดิมใน factoryRegistrationNo; รองรับแถวเก่าที่ POST เคยสลับช่องโดยไม่เขียนฐานข้อมูลระหว่าง GET',
+        'คืน active eligible: เลขใหม่ใน factoryId และเลขเดิมใน factoryRegistrationNo; หนึ่ง active row ต่อเลขใหม่ ส่วนประวัติที่ soft-delete อาจมี FID เดียวกันหลายแถว. รองรับแถวเก่าที่ POST เคยสลับช่องโดยไม่เขียนฐานข้อมูลระหว่าง GET',
       successSchema: schemaRef('SelectedEligibleFactoriesResponse'),
     }),
     post: securedOperation({
@@ -5571,7 +5589,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create eligible factory',
       operationId: 'createEligibleFactory',
       description:
-        'เลือก candidate โดยเก็บ factoryId เป็นเลขใหม่ และ factoryRegistrationNo เป็นเลขเดิม; trim strings, body เป็น strict object. ตรวจโรงงานซ้ำด้วยเลขใหม่ รวมแถว legacy จาก diw.fac_import ที่เก็บเลขใหม่ไว้ใน source_factory_id; ตอบ 409 เมื่อเลือกแล้วหรือมีคำขอเพิ่มโรงงานที่ยังเปิดอยู่. สิทธิ์ eligible_factories:edit และ data scope เดิม',
+        'เลือก candidate โดยเก็บ factoryId เป็นเลขใหม่ และ factoryRegistrationNo เป็นเลขเดิม; trim strings, body เป็น strict object. มีได้หนึ่ง active eligible ต่อเลขใหม่; ตรวจ active duplicate รวมแถว legacy จาก diw.fac_import ที่เก็บเลขใหม่ไว้ใน source_factory_id และตอบ 409 เมื่อมี active row แล้วหรือมีคำขอเพิ่มโรงงานที่ยังเปิดอยู่. ประวัติ soft-delete อาจมี FID เดียวกันหลายแถว; ถ้าไม่มี active row ให้ restore ประวัติที่ตรงเลขใหม่กับ source/form ที่ระบุ โดยเลือก deleted_at DESC, id DESC. สิทธิ์ eligible_factories:edit และ data scope เดิม',
       requestBody: jsonRequestBody(
         schemaRef('CreateEligibleFactoryRequest'),
         createEligibleFactoryExample,
@@ -5586,7 +5604,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List eligible-factory add requests',
       operationId: 'listEligibleFactoryAddRequests',
       description:
-        'Permission: eligible_factories:view. คืนคำขอทุกสถานะตาม data scope โดยไม่แบ่งหน้า รองรับเฉพาะ optional search และเรียง submittedAt DESC, id DESC; query status, page และ perPage ไม่อยู่ใน contract และถูกปฏิเสธด้วย 400. contactName และ contactPhone คืนค่าที่บันทึกในคำขอทุกสถานะ รวมถึงหลังอนุมัติหรือปฏิเสธ; null เฉพาะฟิลด์ที่ไม่ได้บันทึกข้อมูลผู้ติดต่อ',
+        'Permission: eligible_factories:view. คืนคำขอทุกสถานะตาม data scope โดยไม่แบ่งหน้า รองรับเฉพาะ optional search และเรียง submittedAt DESC, id DESC; query status, page และ perPage ไม่อยู่ใน contract และถูกปฏิเสธด้วย 400. factoryId ของโรงงาน Fac60k ใช้ FID/เลขทะเบียนใหม่; factoryRegistrationNo ใช้เลขเดิมสำหรับแสดงผลเมื่อมี มิฉะนั้นเลขใหม่. contactName และ contactPhone คืนค่าที่บันทึกในคำขอทุกสถานะ รวมถึงหลังอนุมัติหรือปฏิเสธ; null เฉพาะฟิลด์ที่ไม่ได้บันทึกข้อมูลผู้ติดต่อ',
       parameters: [
         {
           name: 'search',
@@ -5604,7 +5622,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Submit an eligible-factory add request',
       operationId: 'createEligibleFactoryAddRequest',
       description:
-        'Permission (ต้องมีครบ): factories:view + factories:edit. Operator ส่งได้เฉพาะโรงงานใน OWN_FACTORY scope ที่ยังไม่เข้าข่ายและไม่มีคำขอ PENDING_REVIEW',
+        'Permission (ต้องมีครบ): factories:view + factories:edit. Operator ส่งได้เฉพาะโรงงานใน OWN_FACTORY scope ที่ยังไม่เข้าข่ายและไม่มีคำขอ PENDING_REVIEW. backend resolve ข้อมูลเอง: snapshot.sourceFactoryId และ factoryRegistrationNoNew เก็บ FID/เลขทะเบียนใหม่ของ Fac60k; factoryRegistrationNoOld เก็บเลขเดิม และ factoryRegistrationNo ใน response ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่',
       requestBody: jsonRequestBody(
         schemaRef('CreateEligibleFactoryAddRequest'),
         createEligibleFactoryAddRequestExample,

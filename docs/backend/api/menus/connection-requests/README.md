@@ -300,8 +300,8 @@ Request fields ที่ต้องมีจริง:
 
 | Field                            | Type             | Required    | Rules                                                                                                                     |
 | -------------------------------- | ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `factoryId`                      | string \| null   | conditional | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า เพื่อ resolve active `eligible_factories` และตรวจ scope |
-| `factoryRegistrationNo`          | string \| null   | conditional | เป็น identifier สำรอง; ส่ง `null` ได้เมื่อมี `factoryId`                                                                  |
+| `factoryId`                      | string \| null   | conditional | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า เพื่อ resolve active `eligible_factories` และตรวจ scope; สำหรับ Fac60k ใช้ FID/เลขทะเบียนใหม่ |
+| `factoryRegistrationNo`          | string \| null   | conditional | เลขทะเบียนสำหรับแสดงผลหรือ identifier สำรอง; รับเลขเดิมที่มีภาษาไทยได้และส่ง `null` ได้เมื่อมี `factoryId` |
 | `systemType`                     | `CEMS` \| `WPMS` | yes         | ห้ามเป็น `null`                                                                                                           |
 | `submissionAction`               | enum             | no          | แนะนำให้ส่ง `CONNECT` หรือ `REQUEST_FACTORY_REVISION`; ถ้าไม่ส่ง action/status จะ default เป็น `CONNECT`                  |
 | `revisionReason`                 | string \| null   | conditional | ต้องมีข้อความเมื่อ `submissionAction = REQUEST_FACTORY_REVISION`                                                          |
@@ -398,12 +398,15 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 `GET /api/v1/cems-wpms-requests/table-rows` คืน `data[].province` จาก factory snapshot ของคำขอ โดย snapshot ต้องรับจังหวัดจาก active row ใน `eligible_factories` ที่เชื่อมด้วย `eligibleFactoryId`. โรงงานที่ไม่มี row ใน `factories` ต้องยังคงจังหวัดเดิมหลังส่งคำขอ และ backend ต้องไม่ใช้การมีอยู่ของ factory master เป็นเงื่อนไขในการคืนจังหวัด.
 
+`data[].factoryId` คือรหัสโรงงานที่บันทึกในคำขอ สำหรับ Fac60k ใช้ `FID`/เลขทะเบียนใหม่ เช่น `91120225825674`. ช่องนี้ใช้เป็นเลขใหม่ในตารางได้ โดยไม่ใช้ `DISPFACREG`/`FACREG` ซึ่งเป็นเลขทะเบียนเดิม และ endpoint นี้ไม่ได้คืน `newRegistrationNo` หรือ `oldRegistrationNo` เพิ่มเติม. เมื่อสร้างคำขอโดยเจ้าหน้าที่ backend ต้อง resolve โรงงานตาม identity ที่ตรวจสิทธิ์แล้วและคงเลขใหม่เป็น `factoryId` แม้ active eligible row รุ่นเก่าเคยเก็บเลขเดิมไว้ในช่องเลขใหม่; ไม่จับคู่ด้วยชื่อบริษัท เพราะชื่อเดียวกันอาจมีหลายโรงงาน. ดู [การแยกเลขทะเบียน](#factory-registration-identity) และ [หลักฐานการแก้ defect](../../../evidence/connection-requests/factory-registration-identity.tdd.md).
+
 สำหรับ scope `OWN_FACTORY` ตารางนี้คืนคำขอของทุกโรงงานที่ผู้ประกอบการได้รับมอบหมายผ่าน `user_juristics` หรือ `user_factory_access` แม้เจ้าหน้าที่หรือผู้ใช้อื่นจะเป็นผู้สร้างคำขอ; ทุก action ของคำขอใช้ permission และ scope/assignment ตาม contract ของ endpoint โดยไม่บังคับให้ผู้ทำรายการเป็น `createdBy`.
 
 `data[].factoryName` ใช้ชื่อจาก active current/live POMS point ใน `cems_wpms_connected_measurement_points` ที่อัปเดตล่าสุดและจับคู่ด้วย `eligibleFactoryId`, `factoryId` หรือเลขทะเบียนโรงงาน โดยไม่บังคับว่าต้องมี factory master. ถ้ายังไม่มี current/live point ให้ fallback ไป `factories.name` และชื่อ snapshot ในคำขอตามลำดับ. กติกานี้ใช้เหมือนกันทั้งผู้ประกอบการและเจ้าหน้าที่; role มีผลเฉพาะ permission/scope ของรายการที่มองเห็น.
 
 | Response field       | Type           | Source/Meaning                                                                               |
 | -------------------- | -------------- | -------------------------------------------------------------------------------------------- |
+| `data[].factoryId`   | string         | รหัสโรงงานในคำขอ; สำหรับ Fac60k คือ FID/เลขทะเบียนใหม่ ไม่ใช่เลขทะเบียนเดิมสำหรับแสดงผล |
 | `data[].factoryName` | string         | active current/live POMS point ล่าสุด; fallback เป็น factory master แล้วจึง request snapshot |
 | `data[].province`    | string \| null | factory snapshot ของคำขอที่มาจาก active eligible factory                                     |
 | `data[].monitoringPointCode` | string \| null | รหัสจุดตรวจวัดจาก `measurementPoints[0].pointCode`; `null` เมื่อยังไม่มีรหัสหรือไม่มีจุด |
@@ -426,7 +429,7 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/table-rows" \
   "data": [
     {
       "id": 101,
-      "factoryId": "factory-001",
+      "factoryId": "10120000325542",
       "factoryName": "บริษัท ทดสอบ จำกัด",
       "industryType": null,
       "province": "สระบุรี",
@@ -452,6 +455,21 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/table-rows" \
 ```
 
 รายละเอียด field อื่นดู runtime OpenAPI และรูปแบบข้อผิดพลาดดู [API กลาง](../../shared/common-api/README.md). แหล่ง implementation คือ [`toRequestTableRow`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts) และทดสอบใน [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts).
+
+### Factory registration identity
+
+โรงงานจาก Fac60k มีเลขใหม่และเลขเดิมคนละค่า การเปลี่ยนชื่อโรงงานหรือการแสดงเลขเดิมไม่เปลี่ยน identity ที่ใช้ตรวจสิทธิ์และส่งคำขอ:
+
+| Field | ความหมายสำหรับ Fac60k | ตัวอย่าง |
+| --- | --- | --- |
+| `factoryId` | `FID`/เลขทะเบียนใหม่สำหรับ action และ scope | `91120225825674` |
+| `newRegistrationNo` | เลขทะเบียนใหม่ใน factory summary/general และฟอร์มที่มี field นี้ | `91120225825674` |
+| `oldRegistrationNo` | เลขเดิมจาก `DISPFACREG`/`FACREG`; `null` เมื่อไม่มี | `ข3-59-7/67ปจ` |
+| `formDefaults.factoryRegistrationNo` และเลขทะเบียนที่บันทึกเพื่อแสดงผล | เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่; ไม่ใช้แทน `factoryId` โดยอัตโนมัติ | `ข3-59-7/67ปจ` |
+
+`GET /cems-wpms-requests/factories/:factoryId/general` และ lookup ที่ใช้สร้างคำขออ่านเลขใหม่จาก identity ของโรงงาน ไม่ยก `factories.code` ซึ่งเป็นเลขแสดงเดิมมาเป็น `newRegistrationNo`. สำหรับแถว legacy จาก `diw.fac_import` ที่เก็บเลขเดิมใน `eligible_factories.factory_registration_no_new` ใช้ `source_factory_id` เป็นเลขใหม่และคงเลขเดิมไว้ใน field สำหรับแสดงผลระหว่างรอซ่อมข้อมูล. การอ่าน GET ไม่ซ่อมฐานข้อมูลโดยอัตโนมัติ.
+
+กฎนี้ไม่เพิ่ม field ใน response ของตารางคำขอ และไม่เปลี่ยนเงื่อนไขของรายการผู้ประกอบการที่ไม่เข้าข่าย: descriptive fields ของแถวเหล่านั้นยังเป็น `null` ตามหัวข้อถัดไป. รายละเอียดการเก็บ candidate และ snapshot คำขอเพิ่มโรงงานอยู่ที่ [โรงงานที่เข้าข่าย](../eligible-factories/README.md#selection-registration-numbers).
 
 ### Officer eligible factory list status
 
@@ -495,10 +513,10 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/table-rows" \
 | Response field                                        | Type                            | Source/Meaning                                                                                              |
 | ----------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `data[].id`                                           | number \| null                  | row id ของ factory master; อาจเป็น `null` กับบางแหล่งข้อมูลที่ไม่มี row id แบบเดียวกัน                      |
-| `data[].factoryId`                                    | string                          | factory identifier ที่ใช้เป็น owner scope key                                                               |
+| `data[].factoryId`                                    | string                          | factory identifier ที่ใช้เป็น owner scope key; โรงงานจาก Fac60k ใช้ FID/เลขทะเบียนใหม่ |
 | `data[].factoryName`                                  | string                          | ชื่อโรงงานที่ owner เข้าถึงได้; ใช้ factory master เป็นฐานและอาจถูกเสริมด้วยข้อมูลที่ sync แล้ว             |
-| `data[].newRegistrationNo`                            | string \| null                  | เลขทะเบียนโรงงานใหม่เมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                             |
-| `data[].oldRegistrationNo`                            | string \| null                  | เลขทะเบียนเก่าเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                                   |
+| `data[].newRegistrationNo`                            | string \| null                  | เลขทะเบียนโรงงานใหม่/FID เมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].oldRegistrationNo`                            | string \| null                  | เลขทะเบียนเดิมจาก DISPFACREG/FACREG เมื่อเข้าข่าย; เป็น `null` เมื่อไม่มีหรือไม่เข้าข่าย |
 | `data[].industryType`                                 | string \| null                  | คำอธิบายการประกอบกิจการจาก `businessActivity`; เป็น `null` เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย                                             |
 | `data[].industryMainOrder`, `data[].industrySubOrder` | string \| null                  | ลำดับหลัก/ย่อยจาก active `eligible_factories`; เป็น `null` เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย ไม่ใช้ข้อความ `ไม่ระบุ` แทนรหัส                                 |
 | `data[].businessActivity`                             | string \| null                  | การประกอบกิจการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                |
@@ -593,7 +611,7 @@ Minimal response:
 
 ทุก endpoint ที่สร้างคำขอรับเฉพาะโรงงานที่มี active row ใน `eligible_factories` โดย resolve จาก identifier aliases ของโรงงานก่อนเริ่ม transaction สร้างคำขอ พฤติกรรมนี้ใช้กับ `NEW_CONNECTION`, `ADD_MEASUREMENT_POINT`, `ADD_PARAMETER` และ Direct Connection.
 
-Direct Connection resolve และตรวจ scope จาก `eligible_factories` โดยตรง โรงงานจึงยังไม่ต้องมี row ใน `factories` หรือ `cems_wpms_connected_measurement_points` มาก่อน ชื่อและเลขทะเบียน canonical ที่บันทึกมาจาก active eligible row; backend ไม่ใช้ `factoryName` จาก client เป็นแหล่งยืนยันตัวตน.
+Direct Connection resolve และตรวจ scope จาก `eligible_factories` โดยตรง โรงงานจึงยังไม่ต้องมี row ใน `factories` หรือ `cems_wpms_connected_measurement_points` มาก่อน ชื่อและเลขทะเบียนที่บันทึกมาจาก identity ของ active eligible row ตาม [กฎแยกเลขใหม่และเลขเดิม](#factory-registration-identity): `factoryId` เป็นเลขใหม่ ส่วน `factoryRegistrationNo` ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่. กติกาเดียวกันใช้เมื่อเจ้าหน้าที่ส่ง `REQUEST_FACTORY_REVISION` ในฟอร์มเพิ่มจุด; backend ไม่ใช้ `factoryName` จาก client เป็นแหล่งยืนยันตัวตน.
 
 Field requirements ของ Direct Connection อยู่ที่ [เชื่อมต่อโดยเจ้าหน้าที่โดยตรง](#เชื่อมต่อโดยเจ้าหน้าที่โดยตรง). ตารางต่อไปนี้ใช้กับ endpoint ฟอร์มคำขอปกติ:
 

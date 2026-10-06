@@ -30,6 +30,7 @@
 - [Normalize อักขระซ่อนในอีเมลคำขอเชื่อมต่อ](./connection-requests/email-invisible-character-normalization.tdd.md)
 - [เจ้าหน้าที่เชื่อมต่อโรงงานเข้าข่ายโดยตรง](./connection-requests/officer-direct-eligible-lookup.tdd.md)
 - [ชื่อโรงงานในตารางรายการคำขอใช้ current/live POMS](./connection-requests/request-table-current-factory-name.tdd.md)
+- [เลขทะเบียนใหม่และเลขเดิมในคำขอเชื่อมต่อและ snapshot](./connection-requests/factory-registration-identity.tdd.md)
 - [จุดตรวจวัดที่ได้รับการยกเว้นทั้งหมดเป็น Active POMS Point](./connection-requests/fully-exempted-active-point.tdd.md)
 
 ## Eligible factories

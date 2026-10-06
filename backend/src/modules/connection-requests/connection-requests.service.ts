@@ -1045,7 +1045,7 @@ export const connectionRequestsService = {
     const eligibleFactory = await requireActiveEligibleFactory(input);
 
     return connectionRequestsRepository.create(
-      { ...clearPendingPointCodes(input), eligibleFactoryId: eligibleFactory.id },
+      { ...clearPendingPointCodes(input), ...eligibleFactory },
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -1088,7 +1088,7 @@ export const connectionRequestsService = {
           eligibleFactoryId: factory.eligibleFactoryId,
           factoryId: factory.factoryId,
           factoryName: factory.factoryName,
-          factoryRegistrationNo: factory.newRegistrationNo,
+          factoryRegistrationNo: factory.oldRegistrationNo ?? factory.newRegistrationNo,
           requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
         }),
         actorUserId,
@@ -1146,7 +1146,7 @@ export const connectionRequestsService = {
           requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
           factoryId: factory.factoryId,
           factoryName: factory.factoryName,
-          factoryRegistrationNo: factory.newRegistrationNo,
+          factoryRegistrationNo: factory.oldRegistrationNo ?? factory.newRegistrationNo,
           measurementPoints: [{ ...point, pointCode }],
         },
         actorUserId,
@@ -1158,7 +1158,7 @@ export const connectionRequestsService = {
     return connectionRequestsRepository.create(
       clearPendingPointCodes({
         ...input,
-        eligibleFactoryId: eligibleFactory.id,
+        ...eligibleFactory,
         requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
       }),
       actorUserId,
@@ -1240,7 +1240,7 @@ export const connectionRequestsService = {
       requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
       factoryId: factory.factoryId,
       factoryName: factory.factoryName,
-      factoryRegistrationNo: factory.newRegistrationNo,
+      factoryRegistrationNo: factory.oldRegistrationNo ?? factory.newRegistrationNo,
       status: initialStatus,
       revisionReason:
         initialStatus === CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION
@@ -1268,7 +1268,7 @@ export const connectionRequestsService = {
     return connectionRequestsRepository.create(
       {
         ...input,
-        eligibleFactoryId: eligibleFactory.id,
+        ...eligibleFactory,
         requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
       },
       actorUserId,
@@ -1327,7 +1327,7 @@ export const connectionRequestsService = {
 
     return connectionRequestsRepository.replaceForm(
       id,
-      { ...effectiveInput, eligibleFactoryId: eligibleFactory.id },
+      { ...effectiveInput, eligibleFactoryId: eligibleFactory.eligibleFactoryId },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
       { ...access, expectedUpdatedAt: input.expectedUpdatedAt ?? request.updatedAt },
@@ -1773,11 +1773,20 @@ export function toConnectionRequestFormDTO(
 async function requireActiveEligibleFactory(input: {
   factoryId: string;
   factoryRegistrationNo: string;
-}): Promise<{ id: number }> {
+}): Promise<{ eligibleFactoryId: number; factoryId: string; factoryRegistrationNo: string }> {
   const eligibleFactory =
     await connectionRequestsRepository.findActiveEligibleFactoryReference(input);
   if (!eligibleFactory) throw new NotFoundError('Active eligible factory not found');
-  return eligibleFactory;
+  return {
+    eligibleFactoryId: eligibleFactory.id,
+    factoryId: /^\d{14}$/.test(eligibleFactory.factoryRegistrationNoNew)
+      ? eligibleFactory.factoryRegistrationNoNew
+      : input.factoryId,
+    factoryRegistrationNo:
+      eligibleFactory.factoryRegistrationNoOld ??
+      input.factoryRegistrationNo ??
+      eligibleFactory.factoryRegistrationNoNew,
+  };
 }
 
 function toCurrentMeasurementPoint(
@@ -2544,8 +2553,13 @@ function findFactorySummary(
     id: null,
     factoryId: request.factoryId,
     factoryName: request.factoryName,
-    newRegistrationNo: request.factoryRegistrationNo,
-    oldRegistrationNo: null,
+    newRegistrationNo: /^\d{14}$/.test(request.factoryId)
+      ? request.factoryId
+      : request.factoryRegistrationNo,
+    oldRegistrationNo:
+      /^\d{14}$/.test(request.factoryId) && request.factoryRegistrationNo !== request.factoryId
+        ? request.factoryRegistrationNo
+        : null,
     industryType: null,
     industryMainOrder: request.industryMainOrder,
     industrySubOrder: request.industrySubOrder,

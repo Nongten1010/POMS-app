@@ -182,7 +182,7 @@ export const eligibleFactoriesService = {
           factoryMasterId,
           factoryId: factory.factoryId,
           factoryName: factory.factoryName,
-          factoryRegistrationNo: factory.newRegistrationNo,
+          factoryRegistrationNo: factory.oldRegistrationNo ?? factory.newRegistrationNo,
           provinceName,
           reason: input.reason,
           contactName: input.contactName?.trim() || null,

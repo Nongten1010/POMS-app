@@ -120,7 +120,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(sql).toContain('cp.eligible_factory_id = ef.id');
     expect(sql).toContain('[cp].[deleted_at] is null');
     expect(sql).toContain('left join [factories] as [f]');
-    expect(sql).toContain('coalesce(f.fid, ef.factory_registration_no_new) as fid');
+    expect(sql).toContain('coalesce(ef.source_factory_id, f.fid, ef.factory_registration_no_new) as fid');
   });
 
   it('keeps connected dashboard factories fail-closed for OWN_FACTORY access', () => {

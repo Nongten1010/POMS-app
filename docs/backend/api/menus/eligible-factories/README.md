@@ -81,8 +81,8 @@ Bearer authentication และ `eligible_factories:edit` ภายใน data s
 
 | Request field | Type / validation | ความหมาย |
 | --- | --- | --- |
-| `factoryId` | string, 1–64 | คัดลอก `candidate.factoryId` ซึ่ง UI ใช้เป็นเลขใหม่; เก็บใน `sourceFactoryId` และ `factoryRegistrationNoNew` |
-| `factoryRegistrationNo` | string, 1–64 | คัดลอก `candidate.factoryRegistrationNo` ซึ่ง UI ใช้เป็นเลขเดิม; เก็บใน `factoryRegistrationNoOld` และรักษาค่า fallback ของต้นทางเมื่อไม่มีเลขเดิมแยก |
+| `factoryId` | string, 1–64 | คัดลอก `candidate.factoryId` ซึ่งเป็น FID/เลขใหม่ของ Fac60k; เก็บใน `sourceFactoryId` และ `factoryRegistrationNoNew` |
+| `factoryRegistrationNo` | string, 1–64 | คัดลอก `candidate.factoryRegistrationNo` สำหรับแสดงผลจาก DISPFACREG แล้ว fallback FACREG หรือ FID; เก็บใน `factoryRegistrationNoOld` และรักษาค่า fallback ของต้นทางเมื่อไม่มีเลขเดิมแยก |
 | `factoryName` | string, 1–500 | ชื่อโรงงาน |
 | `factoryClass`, `factorySubclass` | string 1–64 หรือ null | รหัสประเภทโรงงาน |
 | `address` | string 1–1,000 หรือ null | ที่อยู่ |
@@ -169,15 +169,19 @@ Bearer authentication และ `eligible_factories:view`; ไม่รับ qu
 }
 ```
 
-ข้อผิดพลาดใช้ [shared error envelope](../../shared/README.md): `400` เมื่อ validation ไม่ผ่าน, `401` เมื่อไม่มี token ที่ใช้ได้, `403` เมื่อไม่มีสิทธิ์หรือ POST อยู่นอก scope, `409` เมื่อโรงงานเข้าข่ายแล้วหรือมีคำขอเพิ่มโรงงานที่ยังเปิดอยู่ การตรวจเลขใหม่ซ้ำรวมแถว legacy ที่เก็บเลขใหม่ไว้ใน `source_factory_id` ด้วย
+ข้อผิดพลาดใช้ [shared error envelope](../../shared/README.md): `400` เมื่อ validation ไม่ผ่าน, `401` เมื่อไม่มี token ที่ใช้ได้, `403` เมื่อไม่มีสิทธิ์หรือ POST อยู่นอก scope, `409` เมื่อมี active eligible ของโรงงานนั้นแล้วหรือมีคำขอเพิ่มโรงงานที่ยังเปิดอยู่ การตรวจเลขใหม่ซ้ำรวม active แถว legacy ที่เก็บเลขใหม่ไว้ใน `source_factory_id` ด้วย
 
-รายการ candidate ตัดโรงงานที่เลือกแล้วโดยใช้ทั้งเลขใหม่และเลขเดิมที่บันทึกไว้ เพื่อไม่ให้โรงงานกลับมาปรากฏให้เลือกซ้ำหลังแก้ mapping ของ POST
+รายการ candidate ตัดโรงงานที่มี active eligible แล้วโดยใช้ทั้งเลขใหม่และเลขเดิมที่บันทึกไว้ เพื่อไม่ให้โรงงานกลับมาปรากฏให้เลือกซ้ำหลังแก้ mapping ของ POST
+
+เลขทะเบียนใหม่มี active eligible ได้เพียงหนึ่งแถว (`deleted_at = null`). ประวัติที่ soft-delete แล้วอาจมีเลขใหม่/FID เดียวกันหลายแถว และไม่ถือเป็น active duplicate. เมื่อเลือกใหม่โดยไม่มี active row และมีประวัติที่นำกลับมาใช้ได้ backend เลือกแถวที่ตรงเลขใหม่ รวม `source_system`, `source_factory_id` และ `monitoring_point_form_id` ที่ระบุใน input โดยเรียง `deleted_at DESC, id DESC`; จึงนำประวัติล่าสุดของแหล่ง/ฟอร์มนั้นกลับมาใช้โดยไม่หยิบแถวประวัติอื่นเพียงเพราะมี FID เดียวกัน. ขั้นตอนนี้เป็นการเลือกโรงงานเข้าข่าย ไม่ใช่การ review คำขอเพิ่มโรงงาน
 
 ### ตรวจข้อมูลเก่าก่อนซ่อมฐานข้อมูล
 
-GET รองรับข้อมูลเก่าเฉพาะรูปแบบข้างต้นโดยไม่เขียนข้อมูลกลับ การ deploy นี้ไม่ย้ายเลขทะเบียนในฐานข้อมูลและไม่แก้ snapshots ประวัติ
+GET รองรับข้อมูลเก่าเฉพาะรูปแบบข้างต้นโดยไม่เขียนข้อมูลกลับ การย้ายเลขทะเบียนและซ่อม snapshots ประวัติต้องผ่าน migration เฉพาะรายการที่ตรวจแล้วแยกจากการอ่าน API ดู [หลักฐานและเงื่อนไขการซ่อม](../../../evidence/connection-requests/factory-registration-identity.tdd.md#การซ่อมข้อมูลเฉพาะรายการ)
 
 ใช้ [SQL audit แบบ SELECT-only](../../../../../backend/scripts/sql/audit-eligible-factory-registration-numbers.sql) เพื่อดูค่าเดิม/ค่าที่เสนอ ทั้งแถว active และ soft-deleted รวมถึงเลขใหม่ที่ชนแถวอื่น ต้องตรวจ `FID`/`DISPFACREG` จาก Fac60k และรายการอ้างอิง เช่น แบบฟอร์ม คำขอ ข้อมูล connected POMS และ canonical profiles ก่อนกำหนด transaction ซ่อมข้อมูล ไม่ใช้ค่าที่เสนอเป็นคำสั่ง UPDATE อัตโนมัติ และไม่อัปเดตตาราง `factories` โดยอนุมาน
+
+เลขใหม่ใน factory summary ที่ใช้สร้างคำขอเพิ่มโรงงานต้องเป็น `FID` ไม่ใช่ `factories.code` ซึ่งเป็นเลขเดิมสำหรับแสดงผล. Backend แยกเลขใหม่/เลขเดิมใน snapshot แม้โรงงานยังไม่เข้าข่าย; การ review คำขอยังคงเปลี่ยนสถานะอย่างเดียว ดู [กฎทะเบียนของคำขอเชื่อมต่อ](../connection-requests/README.md#factory-registration-identity) และ [หลักฐานการตรวจและซ่อมเฉพาะรายการ](../../../evidence/connection-requests/factory-registration-identity.tdd.md).
 
 เทสต์ป้องกันบั๊กต่อ [validator → create → GET](../../../../../backend/tests/unit/eligible-factories.service.test.ts) โดยใช้ข้อมูลที่ส่งเข้าบันทึกจริงใน mock; ตรวจ query หาแถวเก่าด้วย [repository test](../../../../../backend/tests/unit/eligible-factories.repository.test.ts) หลัง deploy ต้องตรวจ `/api/v1/openapi.json` ว่ามี `CreateEligibleFactoryResponse` และ `SelectedEligibleFactoriesResponse` พร้อม mapping นี้
 
@@ -303,7 +307,7 @@ Request fields:
 
 ```json
 {
-  "factoryId": "F000123",
+  "factoryId": "10120000325542",
   "reason": "ขอเพิ่มโรงงานเพื่อยื่นคำขอเชื่อมต่อ",
   "contactName": "สมชาย ใจดี",
   "contactPhone": "081-234-5678"
@@ -318,7 +322,7 @@ curl --request POST \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
   --data '{
-    "factoryId": "F000123",
+    "factoryId": "10120000325542",
     "reason": "มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์",
     "contactName": "สมชาย ใจดี",
     "contactPhone": "081-234-5678"
@@ -332,8 +336,8 @@ Success response (`201 Created`):
   "success": true,
   "data": {
     "id": 41,
-    "factoryId": "F000123",
-    "factoryRegistrationNo": "10120000325542",
+    "factoryId": "10120000325542",
+    "factoryRegistrationNo": "3-34(3)-3/54นบ",
     "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
     "provinceName": "นนทบุรี",
     "reason": "มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์",
@@ -357,6 +361,7 @@ Business rules:
 
 - เก็บข้อมูลผู้ติดต่อไว้ใน `eligible_factory_add_requests.contact_name` และ `contact_phone` ของคำขอนี้เท่านั้น; คำขอเดิมคืน `null` ทั้งสองฟิลด์ การพิจารณาคำขอคงข้อมูลผู้ติดต่อเดิมไว้
 - backend resolve ข้อมูลโรงงานและ snapshot จาก access scope ของผู้ประกอบการเอง ไม่รับชื่อ จังหวัด หรือเลขทะเบียนจาก client
+- สำหรับ Fac60k snapshot เก็บ `sourceFactoryId` และ `factoryRegistrationNoNew` เป็น FID/เลขทะเบียนใหม่ และ `factoryRegistrationNoOld` เป็นเลขทะเบียนเดิม; `factoryRegistrationNo` ใน response ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่ ไม่ยกเลขเดิมมาเป็นเลขใหม่เพราะโรงงานยังไม่เข้าข่าย
 - โรงงานนอก owner scope ตอบ `404 Not Found` เพื่อไม่เปิดเผย resource
 - ถ้าโรงงานอยู่ใน `eligible_factories` แล้วตอบ `409 Conflict`
 - ถ้ามีคำขอ `PENDING_REVIEW` ของโรงงานเดียวกันอยู่แล้วตอบ `409 Conflict`; database บังคับหนึ่ง open request ต่อโรงงานเพื่อกัน request ชนพร้อมกัน
@@ -387,9 +392,9 @@ Primary response fields:
 | Field | Type | Nullable | Meaning |
 | --- | --- | --- | --- |
 | `data[].id` | integer | no | request id สำหรับ action ถัดไป |
-| `data[].factoryId` | string | no | identifier เดียวกับ owner factory list |
+| `data[].factoryId` | string | no | identifier เดียวกับ owner factory list; โรงงานจาก Fac60k ใช้ FID/เลขทะเบียนใหม่ |
 | `data[].factoryName` | string | no | ชื่อโรงงาน/บริษัท |
-| `data[].factoryRegistrationNo` | string | no | เลขทะเบียนโรงงานที่ใช้แสดงในตาราง |
+| `data[].factoryRegistrationNo` | string | no | เลขทะเบียนสำหรับแสดงผล ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่; ไม่จำเป็นต้องเท่ากับ factoryId |
 | `data[].provinceName` | string | no | จังหวัดสำหรับแสดงผล |
 | `data[].reason` | string | no | เหตุผลจากผู้ประกอบการ |
 | `data[].contactName` | string | yes | ชื่อ-นามสกุลผู้ติดต่อที่ระบุในคำขอ ไม่เกิน 255 ตัวอักษร; `null` เมื่อไม่ระบุหรือเป็นคำขอเดิม |
@@ -414,8 +419,8 @@ Minimal response (`200 OK`):
   "data": [
     {
       "id": 41,
-      "factoryId": "F000123",
-      "factoryRegistrationNo": "10120000325542",
+      "factoryId": "10120000325542",
+      "factoryRegistrationNo": "3-34(3)-3/54นบ",
       "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
       "provinceName": "นนทบุรี",
       "reason": "มีคำขอเชื่อมต่อระบบ CEMS",
@@ -472,8 +477,8 @@ Minimal response (`200 OK`):
   "success": true,
   "data": {
     "id": 41,
-    "factoryId": "F000123",
-    "factoryRegistrationNo": "10120000325542",
+    "factoryId": "10120000325542",
+    "factoryRegistrationNo": "3-34(3)-3/54นบ",
     "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
     "provinceName": "นนทบุรี",
     "reason": "มีคำขอเชื่อมต่อระบบ CEMS",

@@ -475,7 +475,8 @@ const operatorFormProperties: Record<string, OpenApiObject> = {
     type: 'string',
     minLength: 1,
     maxLength: 64,
-    description: 'Required, not null; ต้อง resolve เป็น active eligible factory',
+    description:
+      'Required, not null; ต้อง resolve เป็น active eligible factory. โรงงานจาก Fac60k ใช้ FID/เลขทะเบียนใหม่ เช่น 91120225825674 ไม่ใช้เลขทะเบียนเดิมสำหรับแสดงผลเป็น factoryId',
   },
   factoryName: {
     type: 'string',
@@ -487,7 +488,8 @@ const operatorFormProperties: Record<string, OpenApiObject> = {
     type: 'string',
     maxLength: 64,
     nullable: true,
-    description: 'Optional; trim แล้วเมื่อไม่ส่ง/null/ค่าว่าง backend ใช้ factoryId',
+    description:
+      'Optional; เลขทะเบียนสำหรับแสดงผลหรือ alias สำหรับ resolve โรงงาน อาจเป็นเลขเดิมที่มีภาษาไทย; trim แล้วเมื่อไม่ส่ง/null/ค่าว่าง backend ใช้ factoryId. ไม่ใช่ค่าเดียวกับเลขทะเบียนใหม่เสมอไป',
   },
   industryMainOrder: nullableString(128, 'Optional'),
   industryMainOrderLabel: nullableString(500, 'Optional'),
@@ -836,9 +838,26 @@ const componentSchemas: Record<string, OpenApiObject> = {
     description:
       'ข้อมูลทั่วไปตาม FactoryGeneralDTO; คง field และชนิดข้อมูลเดิม เพิ่ม eiaOther เป็น optional nullable field สำหรับ canonical mode',
     properties: {
-      factoryId: { type: 'string', maxLength: 64 },
+      factoryId: {
+        type: 'string',
+        maxLength: 64,
+        description: 'รหัสโรงงาน; สำหรับ Fac60k ใช้ FID/เลขทะเบียนใหม่',
+        example: '91120225825674',
+      },
       factoryName: { type: 'string', maxLength: 500 },
       eligibleFactoryId: { type: 'integer', minimum: 1, nullable: true },
+      newRegistrationNo: {
+        type: 'string',
+        nullable: true,
+        description: 'เลขทะเบียนใหม่; โรงงานจาก Fac60k ใช้ FID ไม่ใช้ DISPFACREG/FACREG',
+        example: '91120225825674',
+      },
+      oldRegistrationNo: {
+        type: 'string',
+        nullable: true,
+        description: 'เลขทะเบียนเดิมสำหรับแสดงผล; null เมื่อไม่มี',
+        example: 'ข3-59-7/67ปจ',
+      },
       address: nullableString(1000, 'ที่อยู่ปัจจุบัน'),
       provinceName: nullableString(128, 'จังหวัดปัจจุบัน'),
       industrialEstateName: nullableString(255, 'ชื่อนิคมปัจจุบัน'),
@@ -902,10 +921,26 @@ const componentSchemas: Record<string, OpenApiObject> = {
     ],
     properties: {
       id: { type: 'integer', minimum: 1, nullable: true },
-      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryId: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'รหัสโรงงานสำหรับ action และ scope; โรงงานจาก Fac60k ใช้ FID/เลขทะเบียนใหม่',
+        example: '91120225825674',
+      },
       factoryName: { type: 'string' },
-      newRegistrationNo: { type: 'string', nullable: true },
-      oldRegistrationNo: { type: 'string', nullable: true },
+      newRegistrationNo: {
+        type: 'string',
+        nullable: true,
+        description: 'เลขทะเบียนใหม่/FID เมื่อเข้าข่าย; null เมื่อไม่เข้าข่าย',
+        example: '91120225825674',
+      },
+      oldRegistrationNo: {
+        type: 'string',
+        nullable: true,
+        description: 'เลขทะเบียนเดิมจาก DISPFACREG/FACREG เมื่อมี; null เมื่อไม่มีหรือไม่เข้าข่าย',
+        example: 'ข3-59-7/67ปจ',
+      },
       industryType: {
         type: 'string',
         nullable: true,
@@ -1003,7 +1038,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
     ],
     properties: {
       id: { type: 'integer' },
-      factoryId: { type: 'string' },
+      factoryId: {
+        type: 'string',
+        description:
+          'รหัสโรงงานที่บันทึกในคำขอ; สำหรับ Fac60k คือ FID/เลขทะเบียนใหม่ เช่น 91120225825674 ไม่ใช่เลขเดิมสำหรับแสดงผล',
+        example: '91120225825674',
+      },
       factoryName: { type: 'string' },
       industryType: { type: 'string', nullable: true },
       province: { type: 'string', nullable: true },
@@ -1494,8 +1534,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
             type: 'object',
             properties: {
               ...connectionRequestFormProperties,
-              newRegistrationNo: { type: 'string' },
-              oldRegistrationNo: { type: 'string', nullable: true },
+              newRegistrationNo: {
+                type: 'string',
+                description: 'เลขทะเบียนใหม่; โรงงานจาก Fac60k ใช้ FID',
+              },
+              oldRegistrationNo: {
+                type: 'string',
+                nullable: true,
+                description: 'เลขทะเบียนเดิมสำหรับแสดงผล; null เมื่อไม่มี',
+              },
               measurementPoints: {
                 type: 'array',
                 minItems: 1,
@@ -1925,12 +1972,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: {
       factoryId: nullableString(
         64,
-        'Conditional: ต้องมีอย่างน้อย factoryId หรือ factoryRegistrationNo',
+        'Conditional: ต้องมีอย่างน้อย factoryId หรือ factoryRegistrationNo; โรงงานจาก Fac60k ใช้ FID/เลขทะเบียนใหม่เป็น factoryId',
       ),
       factoryName: nullableString(500, 'Optional; backend ใช้ชื่อ canonical เมื่อไม่ส่ง'),
       factoryRegistrationNo: nullableString(
         64,
-        'Conditional: ต้องมีอย่างน้อย factoryId หรือ factoryRegistrationNo',
+        'Conditional: ต้องมีอย่างน้อย factoryId หรือ factoryRegistrationNo; รับเลขเดิมเป็น alias สำหรับ resolve โดยไม่เปลี่ยน factoryId ให้เป็นเลขเดิม',
       ),
       industryMainOrder: nullableString(128, 'Optional'),
       industryMainOrderLabel: nullableString(500, 'Optional'),
@@ -2367,7 +2414,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านรายการคำขอสำหรับตาราง',
       operationId: 'listConnectionRequestTableRows',
       description:
-        'Permission: cems_wpms_requests:view. คอลัมน์รหัสจุดตรวจวัดใช้ monitoringPointCode ตามด้วยชื่อจุดตรวจวัด monitoringPointName จากจุดแรกใน snapshot คำขอ ใช้เหมือนกันทั้งเจ้าหน้าที่และผู้ประกอบการตาม scope เดิม; ลำดับคอลัมน์กำหนดที่ client ไม่อาศัยลำดับ key ใน JSON',
+        'Permission: cems_wpms_requests:view. factoryId เป็นรหัสโรงงานที่บันทึกในคำขอ; โรงงานจาก Fac60k ใช้ FID/เลขทะเบียนใหม่ ไม่ใช้ DISPFACREG/FACREG ที่เป็นเลขเดิม. คอลัมน์รหัสจุดตรวจวัดใช้ monitoringPointCode ตามด้วยชื่อจุดตรวจวัด monitoringPointName จากจุดแรกใน snapshot คำขอ ใช้เหมือนกันทั้งเจ้าหน้าที่และผู้ประกอบการตาม scope เดิม; ลำดับคอลัมน์กำหนดที่ client ไม่อาศัยลำดับ key ใน JSON',
       parameters: requestListParameters,
       successSchema: schemaRef('ConnectionRequestTableResponse'),
       successExamples: {
@@ -2378,7 +2425,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
             data: [
               {
                 id: 101,
-                factoryId: 'factory-001',
+                factoryId: '10120000325542',
                 factoryName: 'บริษัท ทดสอบ จำกัด',
                 industryType: null,
                 province: 'สระบุรี',
@@ -2461,7 +2508,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านข้อมูลทั่วไปของโรงงาน',
       operationId: 'getConnectionRequestFactoryGeneral',
       description:
-        'Permission: factories:view. ข้อมูลมี 3 ชุด: ทะเบียนต้นทาง Fac60k เป็น read-only ตามเดิม; canonical mode ใช้ข้อมูลทั่วไปปัจจุบันร่วมกันเฉพาะโรงงานเข้าข่ายและ POMS. โรงงานที่ยังไม่เข้าข่ายยังอ่านทะเบียนต้นทางตาม contract เดิม; เพิ่ม eiaOther แบบ optional nullable โดยคง factoryId และ field เดิม',
+        'Permission: factories:view. ข้อมูลมี 3 ชุด: ทะเบียนต้นทาง Fac60k เป็น read-only ตามเดิม; canonical mode ใช้ข้อมูลทั่วไปปัจจุบันร่วมกันเฉพาะโรงงานเข้าข่ายและ POMS. factoryId และ newRegistrationNo ของโรงงาน Fac60k ใช้ FID/เลขทะเบียนใหม่; oldRegistrationNo ใช้เลขเดิม DISPFACREG/FACREG. formDefaults.factoryRegistrationNo ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่. แถว DIW รุ่นเก่าที่สลับช่องทะเบียนยัง resolve เลขใหม่จาก source_factory_id โดยไม่ใช้ชื่อบริษัทจับคู่. โรงงานที่ยังไม่เข้าข่ายยังอ่านทะเบียนต้นทางตาม contract เดิม; เพิ่ม eiaOther แบบ optional nullable โดยคง factoryId และ field เดิม',
       successSchema: schemaRef('ConnectionFactoryGeneralResponse'),
       parameters: [factoryIdPathParameter],
     }),

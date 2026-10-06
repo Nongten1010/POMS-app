@@ -281,10 +281,13 @@ export const eligibleFactoriesRepository = {
         .first('id');
       if (!factoryMaster) throw new NotFoundError('Factory not found for this user');
 
-      const selected = await this.findByRegistrationNoNew(input.factoryRegistrationNo, trx);
+      const selected = await this.findByRegistrationNoNew(
+        input.requestedFactory.factoryRegistrationNoNew,
+        trx,
+      );
       if (selected) {
         throw new ConflictError('Factory is already selected as eligible', {
-          factoryRegistrationNoNew: input.factoryRegistrationNo,
+          factoryRegistrationNoNew: input.requestedFactory.factoryRegistrationNoNew,
         });
       }
       const openRequest = await this.findOpenAddRequestByFactoryMasterId(
@@ -832,8 +835,19 @@ async function restoreDeletedFactory(
   const deletedFactoryQuery = querySource('eligible_factories')
     .where('factory_registration_no_new', input.factoryRegistrationNoNew)
     .whereNotNull('deleted_at')
+    .orderBy('deleted_at', 'desc')
+    .orderBy('id', 'desc')
     .select<{ id: number | string }[]>('id')
     .first();
+  if (input.sourceFactoryId?.trim()) {
+    deletedFactoryQuery.where('source_factory_id', input.sourceFactoryId.trim());
+  }
+  if (input.sourceSystem?.trim()) {
+    deletedFactoryQuery.where('source_system', input.sourceSystem.trim());
+  }
+  if (input.monitoringPointFormId !== undefined) {
+    deletedFactoryQuery.where('monitoring_point_form_id', input.monitoringPointFormId);
+  }
   deletedFactoryQuery.forUpdate();
   const existingDeleted = await deletedFactoryQuery;
 
@@ -962,6 +976,30 @@ function toAddRequestRecordDTO(
     throw new Error('Eligible factory request snapshot is invalid');
   }
 
+  const sourceFactoryId =
+    typeof requestedFactory.sourceFactoryId === 'string'
+      ? requestedFactory.sourceFactoryId
+      : row.source_factory_id;
+  const snapshotNewNumber =
+    typeof requestedFactory.factoryRegistrationNoNew === 'string'
+      ? requestedFactory.factoryRegistrationNoNew
+      : null;
+  // Older requests copied the display registration into the snapshot's new-number field.
+  const isLegacyDisplayNumber =
+    Boolean(sourceFactoryId) &&
+    snapshotNewNumber === row.factory_registration_no &&
+    snapshotNewNumber !== sourceFactoryId &&
+    requestedFactory.factoryRegistrationNoOld == null &&
+    row.factory_registration_no_old === null;
+  const newRegistrationNo = isLegacyDisplayNumber
+    ? sourceFactoryId!
+    : (snapshotNewNumber ?? sourceFactoryId ?? row.factory_registration_no);
+  const oldRegistrationNo =
+    typeof requestedFactory.factoryRegistrationNoOld === 'string'
+      ? requestedFactory.factoryRegistrationNoOld
+      : (row.factory_registration_no_old ??
+        (row.factory_registration_no !== newRegistrationNo ? row.factory_registration_no : null));
+
   return {
     ...toAddRequestDTO(row),
     factoryMasterId: Number(row.factory_master_id),
@@ -970,17 +1008,14 @@ function toAddRequestRecordDTO(
         typeof requestedFactory.sourceSystem === 'string'
           ? requestedFactory.sourceSystem
           : 'eligible_factory_add_requests',
-      sourceFactoryId:
-        typeof requestedFactory.sourceFactoryId === 'string'
-          ? requestedFactory.sourceFactoryId
-          : row.source_factory_id,
+      sourceFactoryId,
       monitoringPointFormId:
         typeof requestedFactory.monitoringPointFormId === 'number'
           ? requestedFactory.monitoringPointFormId
           : null,
       factoryName: row.factory_name,
-      factoryRegistrationNoNew: row.factory_registration_no,
-      factoryRegistrationNoOld: row.factory_registration_no_old,
+      factoryRegistrationNoNew: newRegistrationNo,
+      factoryRegistrationNoOld: oldRegistrationNo,
       factoryTypeSequence:
         typeof requestedFactory.factoryTypeSequence === 'string'
           ? requestedFactory.factoryTypeSequence
