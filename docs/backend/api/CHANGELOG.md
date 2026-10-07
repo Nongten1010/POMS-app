@@ -1,5 +1,15 @@
 # API Breaking Changes
 
+<a id="historical-received-completeness"></a>
+
+## 2026-10-07 — เปอร์เซ็นต์วันย้อนหลังรวมข้อมูลที่ส่งช้า
+
+- **Affected canonical docs:** [สถิติและปฏิทินจุดตรวจวัด](./shared/connected-measurement-points/README.md#home-measurement-rules)
+- **Impact:** `measurement-statistics`, `calendar-status` และ `calendar-status/details` รวม annual aliases เปลี่ยนเปอร์เซ็นต์หลักของวันย้อนหลังเป็นจำนวน parameter-hours ที่รับแล้วทั้งตรงเวลาและส่งช้า หารด้วย 24 ชั่วโมงต่อพารามิเตอร์ รวมถึงเปอร์เซ็นต์รายชั่วโมง, `dataCompletenessStatus`, `lowDataDays` และ low-data details; วันนี้ยังใช้เฉพาะส่งตรงเวลาในชั่วโมงที่จบแล้วตาม `Asia/Bangkok`.
+- **Migration:** ไม่ต้อง migrate ฐานข้อมูล; client ต้องใช้เปอร์เซ็นต์หลักของวันย้อนหลังโดยตรง ห้ามบวก `lateDataPercent` ซ้ำ เพราะเป็นส่วนย่อยที่รวมแล้ว ให้ล้าง cache ของเปอร์เซ็นต์/low-data summary เดิมหลัง deploy และตรวจ runtime OpenAPI ก่อนถือว่า release เสร็จ.
+- **Old contract:** วันย้อนหลังนับเฉพาะข้อมูลส่งตรงเวลา เช่น P0446 รับ 23 ชั่วโมงแต่ส่งช้า 1 ชั่วโมง แสดง `91.67%`.
+- **New contract:** ตัวอย่างเดียวกันแสดง `95.83%` และยังคืน `lateDataPercent: 4.17`; การจำแนก `lateData` และการประเมินมลพิษคงเดิม.
+
 <a id="menu-location-assignments"></a>
 
 ## 2026-10-07 — มอบหมายพื้นที่รายเมนูแยกจากโปรไฟล์ผู้ใช้

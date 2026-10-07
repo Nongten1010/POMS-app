@@ -180,12 +180,12 @@ describe('home handoff measurement calculations', () => {
 
   it.each([
     ['2026-09-22', '2026-09-22', '23:59:59.999', 'normal', 100, 0],
-    ['2026-09-22', '2026-09-23', '00:00:00', 'lateData', 95.83, 4.17],
-    ['2026-09-22', '2026-09-23', '23:00:00', 'lateData', 95.83, 4.17],
-    ['2026-12-31', '2027-01-01', '00:00:00', 'lateData', 95.83, 4.17],
+    ['2026-09-22', '2026-09-23', '00:00:00', 'lateData', 100, 4.17],
+    ['2026-09-22', '2026-09-23', '23:00:00', 'lateData', 100, 4.17],
+    ['2026-12-31', '2027-01-01', '00:00:00', 'lateData', 100, 4.17],
   ])(
     'compares corrected local timestamps directly for %s 23:00 sent at %s %s',
-    async (measuredDate, sentDate, sentTime, expectedStatus, onTimePercent, latePercent) => {
+    async (measuredDate, sentDate, sentTime, expectedStatus, completenessPercent, latePercent) => {
       jest.setSystemTime(new Date('2027-01-01T17:30:00.000Z'));
       const rows = Array.from({ length: 24 }, (_, hour) => ({
         ...hourRow(hour),
@@ -207,7 +207,7 @@ describe('home handoff measurement calculations', () => {
       );
 
       expect(statistics.data.summary).toMatchObject({
-        todayDataCompletenessPercent: onTimePercent,
+        todayDataCompletenessPercent: completenessPercent,
         lateDataPercent: latePercent,
       });
       expect(calendar.data.summary).toEqual(statistics.data.summary);

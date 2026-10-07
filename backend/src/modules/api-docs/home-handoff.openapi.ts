@@ -12,6 +12,16 @@ const date = { type: 'string', format: 'date' };
 const count = { type: 'integer', minimum: 0 };
 const percent = { type: 'number', minimum: 0, maximum: 100 };
 const nullablePercent = { ...percent, nullable: true };
+const dailyCompleteness = {
+  ...nullablePercent,
+  description:
+    'ร้อยละคู่พารามิเตอร์ที่แสดง–ชั่วโมงของวันที่เลือก: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า หารด้วย 24 ชั่วโมงต่อพารามิเตอร์; วันปัจจุบันนับเฉพาะส่งตรงเวลาในชั่วโมงที่จบแล้วตาม Asia/Bangkok; ไม่มี expected buckets คืน null',
+};
+const lateCompleteness = {
+  ...nullablePercent,
+  description:
+    'ร้อยละคู่พารามิเตอร์–ชั่วโมงที่ส่งช้าและไม่มีรายการตรงเวลาใน bucket เดียวกัน ใช้ฐานเดียวกับเปอร์เซ็นต์หลัก; วันย้อนหลังเป็นส่วนหนึ่งของเปอร์เซ็นต์หลัก ห้ามนำมาบวกซ้ำ; ไม่มี expected buckets คืน null',
+};
 const array = (items: Schema): Schema => ({ type: 'array', items });
 const object = (
   properties: Record<string, Schema>,
@@ -59,18 +69,10 @@ export const homeHandoffSchemas: Record<string, Schema> = {
     lowDataDays: {
       ...count,
       description:
-        'จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุด ย้อนจากวันสิ้นสุดได้ข้ามปี หยุดเมื่อถึงอย่างน้อย 80% หรือวันเริ่มเชื่อมต่อ; วันสิ้นสุดถึง 80% หรือไม่มี expected bucket คืน 0',
+        'จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุด ใช้เปอร์เซ็นต์หลักซึ่งวันย้อนหลังรวมส่งตรงเวลาและส่งช้า ย้อนจากวันสิ้นสุดได้ข้ามปี หยุดเมื่อถึงอย่างน้อย 80% หรือวันเริ่มเชื่อมต่อ; วันสิ้นสุดถึง 80% หรือไม่มี expected bucket คืน 0',
     },
-    todayDataCompletenessPercent: {
-      ...nullablePercent,
-      description:
-        'เปอร์เซ็นต์จำนวนคู่พารามิเตอร์ที่แสดง–ชั่วโมงที่ส่งตามกำหนด เทียบจำนวนคู่ที่คาดว่าจะได้รับของวันสิ้นสุดที่เลือก เริ่มชั่วโมง 00:00; วันปัจจุบันนับเฉพาะชั่วโมงที่จบแล้ว และข้อมูลส่งช้าไม่นับเป็นส่งตามกำหนด; ไม่มีชั่วโมงที่จบหรือไม่มีพารามิเตอร์ที่แสดงคืน null',
-    },
-    lateDataPercent: {
-      ...nullablePercent,
-      description:
-        'เปอร์เซ็นต์จำนวนคู่พารามิเตอร์ที่แสดง–ชั่วโมงที่ส่งย้อนหลัง เทียบจำนวนคู่ที่คาดว่าจะได้รับของวันสิ้นสุดที่เลือก ใช้ cdate/ctime เป็นเวลาตรวจวัด และ udate/utime เป็นเวลาส่งจากเครื่องใน Asia/Bangkok; ไม่มีชั่วโมงที่จบหรือไม่มีพารามิเตอร์ที่แสดงคืน null',
-    },
+    todayDataCompletenessPercent: dailyCompleteness,
+    lateDataPercent: lateCompleteness,
   }),
   HomeMeasurementValue: object({
     value: { type: 'number', nullable: true },
@@ -100,7 +102,11 @@ export const homeHandoffSchemas: Record<string, Schema> = {
   HomeMeasurementStatisticRow: object({
     time: { type: 'string', example: '09.00-09.59 น.' },
     chartTime: { type: 'string', example: '09:00' },
-    dataCompletenessPercent: percent,
+    dataCompletenessPercent: {
+      ...percent,
+      description:
+        'ร้อยละพารามิเตอร์ที่ได้รับในชั่วโมงนั้น: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า; วันปัจจุบันนับเฉพาะส่งตรงเวลา ไม่ใช้ field นี้ซ่อนค่าตรวจวัดที่ส่งช้า',
+    },
     values: {
       type: 'object',
       description: 'key เป็นชื่อพารามิเตอร์พร้อมหน่วย; คืนเฉพาะพารามิเตอร์ที่แสดง',
@@ -141,8 +147,8 @@ export const homeHandoffSchemas: Record<string, Schema> = {
   ),
   HomeCalendarDay: object({
     date,
-    dataCompletenessPercent: nullablePercent,
-    lateDataPercent: nullablePercent,
+    dataCompletenessPercent: dailyCompleteness,
+    lateDataPercent: lateCompleteness,
     dataCompletenessStatus: completenessStatus,
     pollutionStatus,
     display: object({ backgroundStatus: completenessStatus, borderStatus: pollutionStatus }),
@@ -161,14 +167,11 @@ export const homeHandoffSchemas: Record<string, Schema> = {
       description: 'ช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์นี้สิ้นสุดที่ endDate',
     },
     todayDataCompletenessPercent: {
-      ...nullablePercent,
+      ...dailyCompleteness,
       description:
-        'ร้อยละข้อมูลตรงเวลาของพารามิเตอร์นี้เฉพาะวันที่ endDate เลือกไว้ แม้ชื่อ field มี today; ตรวจวันที่ใช้จริงจาก meta.endDate',
+        'ร้อยละข้อมูลของพารามิเตอร์นี้ ณ endDate แม้ชื่อ field มี today: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า หารด้วย 24 ชั่วโมง; วันปัจจุบันนับเฉพาะส่งตรงเวลาในชั่วโมงที่จบแล้ว; ตรวจวันที่จาก meta.endDate; ไม่มี expected buckets คืน null',
     },
-    lateDataPercent: {
-      ...nullablePercent,
-      description: 'ร้อยละข้อมูลมาช้าของพารามิเตอร์นี้เฉพาะวันที่ endDate เลือกไว้',
-    },
+    lateDataPercent: lateCompleteness,
   }),
   HomeCalendarStatusResponse: response(
     object({
@@ -199,7 +202,7 @@ export const homeHandoffSchemas: Record<string, Schema> = {
     exceededBy: { type: 'number' },
     displayExceededBy: text,
   }),
-  HomeCalendarLowDataDetailRow: object({ date, dataCompletenessPercent: nullablePercent }),
+  HomeCalendarLowDataDetailRow: object({ date, dataCompletenessPercent: dailyCompleteness }),
   HomeCalendarStatusDetailsResponse: response(
     object({
       metadata: object({
@@ -291,7 +294,7 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
 }
 
 const timestampRules =
-  'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง รวมกรณีข้ามวัน/ปี เช่น cdate/ctime=2026-09-23 23:00:00 และ udate/utime=2026-09-24 00:00:00 เป็นข้อมูลย้อนหลังของวันที่ 23 ชั่วโมง 23 ข้อมูลส่งช้าแสดงค่าได้แต่ไม่นับเป็นส่งตามกำหนด denominator คือคู่พารามิเตอร์ที่แสดง–ชั่วโมงที่คาดว่าจะได้รับ เริ่มชั่วโมง 00:00 วันปัจจุบันรวมเฉพาะชั่วโมงปฏิทินที่จบแล้ว เช่น 10:30 ใช้ถึง 09:59; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup ใช้ชั่วโมงล่าสุด 23 ของวันก่อนหน้า กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ตัดจุดที่ยกเว้นทั้งหมด และถ้าไม่เหลือจุดไม่คืนโรงงาน';
+  'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง รวมกรณีข้ามวัน/ปี เช่น cdate/ctime=2026-09-23 23:00:00 และ udate/utime=2026-09-24 00:00:00 เป็นข้อมูลย้อนหลังของวันที่ 23 ชั่วโมง 23 ข้อมูลส่งช้าแสดงค่าได้; วันย้อนหลังรวมส่งตรงเวลาและส่งช้าในเปอร์เซ็นต์หลัก หารด้วย 24 ชั่วโมงต่อพารามิเตอร์ และใช้ยอดรวมนี้ตัดสิน lowData/lowDataDays/lowData details; lateDataPercent เป็นส่วนหนึ่งของยอดรวม ห้ามบวกซ้ำ ส่วนวันปัจจุบันนับเฉพาะส่งตรงเวลา denominator คือคู่พารามิเตอร์ที่แสดง–ชั่วโมงที่คาดว่าจะได้รับ เริ่มชั่วโมง 00:00 วันปัจจุบันรวมเฉพาะชั่วโมงปฏิทินที่จบแล้ว เช่น 10:30 ใช้ถึง 09:59; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup ใช้ชั่วโมงล่าสุด 23 ของวันก่อนหน้า กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ตัดจุดที่ยกเว้นทั้งหมด และถ้าไม่เหลือจุดไม่คืนโรงงาน';
 
 export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<string, Schema> {
   const result = { ...paths };
@@ -357,15 +360,15 @@ export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<
 const summaryExample = {
   exceededDays: 0,
   lowDataDays: 0,
-  todayDataCompletenessPercent: 100,
-  lateDataPercent: 0,
+  todayDataCompletenessPercent: 95.83,
+  lateDataPercent: 4.17,
 };
 const metaExample = {
   stationId: 'S1128',
   interval: '60m' as const,
   schemaName: 'dbo',
   tableName: 'S1128_60m',
-  count: 10,
+  count: 23,
   registeredParameters: ['CO (ppm)'],
 };
 const factoryExample = { factoryId: 'F001', factoryName: 'โรงงานตัวอย่าง', systemType: 'CEMS' };
@@ -392,7 +395,7 @@ const statisticsExample: MeasurementStatisticsResultDTO = {
             time: '09.00-09.59 น.',
             chartTime: '09:00',
             dataCompletenessPercent: 100,
-            values: { 'CO (ppm)': { value: 10, displayValue: '10.00', status: 'normal' } },
+            values: { 'CO (ppm)': { value: 10, displayValue: '10.00', status: 'lateData' } },
           },
         ],
       },
@@ -415,11 +418,11 @@ const calendarExample: CalendarStatusResultDTO = {
       days: [
         {
           date: '2026-09-23',
-          dataCompletenessPercent: 100,
-          lateDataPercent: 0,
+          dataCompletenessPercent: 95.83,
+          lateDataPercent: 4.17,
           dataCompletenessStatus: 'highData',
-          pollutionStatus: 'normal',
-          display: { backgroundStatus: 'highData', borderStatus: 'normal' },
+          pollutionStatus: 'lateData',
+          display: { backgroundStatus: 'highData', borderStatus: 'lateData' },
         },
       ],
     },

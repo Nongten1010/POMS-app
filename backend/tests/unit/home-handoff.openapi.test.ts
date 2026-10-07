@@ -25,6 +25,32 @@ const annualStationPath = `${stationPath}/{buddhistYear}`;
 const responseSchema = (path: string): unknown => objectAt(responseFor(path), 'schema').$ref;
 
 describe('home handoff OpenAPI contract', () => {
+  it('publishes historical received totals with late percentages as an included subset', () => {
+    for (const [schema, field] of [
+      ['HomeMeasurementSummary', 'todayDataCompletenessPercent'],
+      ['HomeCalendarDay', 'dataCompletenessPercent'],
+      ['HomeParameterSummary', 'todayDataCompletenessPercent'],
+    ]) {
+      const description = objectAt(propertiesFor(schema), field).description;
+      expect(description).toContain('วันย้อนหลังรวมส่งตรงเวลาและส่งช้า');
+      expect(description).toContain('24 ชั่วโมง');
+      expect(description).toContain('วันปัจจุบันนับเฉพาะส่งตรงเวลา');
+      expect(objectAt(propertiesFor(schema), 'lateDataPercent').description).toContain(
+        'ห้ามนำมาบวกซ้ำ',
+      );
+    }
+    for (const prefix of [stationPath, annualStationPath]) {
+      for (const suffix of ['/measurement-statistics', '/calendar-status']) {
+        expect(
+          objectAt(responseFor(`${prefix}${suffix}`), 'example', 'data', 'summary'),
+        ).toMatchObject({
+          todayDataCompletenessPercent: 95.83,
+          lateDataPercent: 4.17,
+        });
+      }
+    }
+  });
+
   it.each([
     ['/operator-factory-dashboard', 'HomeOperatorFactoryDashboardResponse'],
     ['/public/factory-map-points', 'HomePublicFactoryMapResponse'],
