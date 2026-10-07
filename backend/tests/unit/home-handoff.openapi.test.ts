@@ -25,7 +25,7 @@ const annualStationPath = `${stationPath}/{buddhistYear}`;
 const responseSchema = (path: string): unknown => objectAt(responseFor(path), 'schema').$ref;
 
 describe('home handoff OpenAPI contract', () => {
-  it('publishes historical received totals with late percentages as an included subset', () => {
+  it('publishes received totals for completed hours with late percentages as an included subset', () => {
     for (const [schema, field] of [
       ['HomeMeasurementSummary', 'todayDataCompletenessPercent'],
       ['HomeCalendarDay', 'dataCompletenessPercent'],
@@ -34,7 +34,7 @@ describe('home handoff OpenAPI contract', () => {
       const description = objectAt(propertiesFor(schema), field).description;
       expect(description).toContain('วันย้อนหลังรวมส่งตรงเวลาและส่งช้า');
       expect(description).toContain('24 ชั่วโมง');
-      expect(description).toContain('วันปัจจุบันนับเฉพาะส่งตรงเวลา');
+      expect(description).toContain('วันปัจจุบันรวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว');
       expect(objectAt(propertiesFor(schema), 'lateDataPercent').description).toContain(
         'ห้ามนำมาบวกซ้ำ',
       );
@@ -48,6 +48,17 @@ describe('home handoff OpenAPI contract', () => {
           lateDataPercent: 4.17,
         });
       }
+    }
+  });
+
+  it('publishes noData for unfinished current-day statistic hours', () => {
+    expect(objectAt(propertiesFor('HomeMeasurementStatisticRow'), 'values').description).toContain(
+      'วันปัจจุบันชั่วโมงที่ยังไม่จบและถัดไปคืน value: null',
+    );
+    for (const prefix of [stationPath, annualStationPath]) {
+      expect(operationFor(`${prefix}/measurement-statistics`).description).toContain(
+        '22:15 ใช้ถึง 21:59',
+      );
     }
   });
 

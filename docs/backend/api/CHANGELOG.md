@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="current-day-completed-received-completeness"></a>
+
+## 2026-10-07 — วันนี้นับข้อมูลที่ได้รับในชั่วโมงที่จบแล้วและซ่อนชั่วโมงที่ยังไม่จบ
+
+- **Affected canonical docs:** [สถิติและปฏิทินจุดตรวจวัด](./shared/connected-measurement-points/README.md#home-measurement-rules), [หน้าหลัก](./menus/home/README.md#กติกาข้อมูลหน้าหลัก)
+- **Impact:** `measurement-statistics`, `calendar-status` และ `calendar-status/details` รวม annual aliases นับข้อมูลตรงเวลาและส่งช้าในเปอร์เซ็นต์หลักของวันนี้เฉพาะชั่วโมงที่จบแล้ว รวม low-data summary/details; ตารางสถิติคง 24 แถว แต่ชั่วโมงที่ยังไม่จบและถัดไปคืน `value: null`, `displayValue: "-"`, `status: "noData"`, `dataCompletenessPercent: 0` แม้มีข้อมูลต้นทางแล้ว วันย้อนหลังยังใช้ฐาน 24 ชั่วโมง
+- **Migration:** ไม่ต้อง migrate ฐานข้อมูล; client ใช้เปอร์เซ็นต์หลักโดยตรงและห้ามบวก `lateDataPercent` ซ้ำทั้งวันนี้และย้อนหลัง รองรับแถวชั่วโมงที่ยังไม่จบเป็น `noData` และล้าง cache สถิติ/ปฏิทินหลัง deploy ตรวจ runtime OpenAPI ก่อนถือว่า release เสร็จ
+- **Old contract:** เวลา 22:15 รับครบชั่วโมง 00–21 แต่ส่งช้า 1 ชั่วโมง แสดง 95.45% และอาจแสดงข้อมูลชั่วโมง 22 แล้ว
+- **New contract:** กรณีเดียวกันแสดง 100% และ `lateDataPercent: 4.55` โดยแสดงค่าถึงชั่วโมง 21 เท่านั้น หากขาดชั่วโมงที่จบแล้วจริงหนึ่งชั่วโมงจะเป็น 95.45%
+- **Breaking change:** yes — เปลี่ยนการรวมข้อมูลส่งช้าของวันนี้และตัดค่าชั่วโมงที่ยังไม่จบออกจากตารางสถิติ
+
 <a id="historical-received-completeness"></a>
 
 ## 2026-10-07 — เปอร์เซ็นต์วันย้อนหลังรวมข้อมูลที่ส่งช้า

@@ -74,7 +74,7 @@ describe('home handoff measurement calculations', () => {
     expect(result.data.calendar.days[0].dataCompletenessPercent).toBe(100);
   });
 
-  it('excludes current-hour pollution from calendar while retaining statistic table values', async () => {
+  it('excludes the unfinished hour from calendar and statistic table values', async () => {
     repository.listRows.mockResolvedValue({
       tableName: 'S1125_data_60m',
       rows: [...Array.from({ length: 10 }, (_, hour) => hourRow(hour)), hourRow(10, 150)],
@@ -94,8 +94,9 @@ describe('home handoff measurement calculations', () => {
     expect(calendar.data.calendar.days[0].pollutionStatus).toBe('normal');
     expect(calendar.data.monthlySummary[0].exceededDays).toBe(0);
     expect(statistics.data.measurementPoints[0].rows[10].values['CO (ppm)']).toMatchObject({
-      value: 150,
-      status: 'exceeded',
+      value: null,
+      displayValue: '-',
+      status: 'noData',
     });
   });
 
@@ -156,7 +157,7 @@ describe('home handoff measurement calculations', () => {
       options,
     );
     expect(calendar.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 95,
+      todayDataCompletenessPercent: 100,
       lateDataPercent: 5,
       lowDataDays: 0,
     });
@@ -170,12 +171,12 @@ describe('home handoff measurement calculations', () => {
         }),
         expect.objectContaining({
           parameterCode: 'NOX',
-          todayDataCompletenessPercent: 90,
+          todayDataCompletenessPercent: 100,
           lateDataPercent: 10,
         }),
       ]),
     );
-    expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(50);
+    expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(100);
   });
 
   it.each([
@@ -259,7 +260,7 @@ describe('home handoff measurement calculations', () => {
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  it('keeps an absent-hour on-time result unchanged when the missing value later arrives late', async () => {
+  it('counts the completed missing hour once its value arrives late', async () => {
     const rows = Array.from({ length: 9 }, (_, hour) => hourRow(hour));
     repository.listRows.mockResolvedValue({ tableName: 'S1125_data_60m', rows });
     const before = await parameterValuesService.calendarStatus(
@@ -278,7 +279,7 @@ describe('home handoff measurement calculations', () => {
     );
     expect(before.data.summary.todayDataCompletenessPercent).toBe(90);
     expect(after.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 90,
+      todayDataCompletenessPercent: 100,
       lateDataPercent: 10,
     });
     expect(after.data.calendar.days[0].pollutionStatus).toBe('lateData');
@@ -304,6 +305,17 @@ describe('home handoff measurement calculations', () => {
       dataCompletenessStatus: null,
       pollutionStatus: 'insufficient',
       display: { backgroundStatus: null },
+    });
+    const midnightStatistics = await parameterValuesService.measurementStatistics(
+      { stationId: 'S1125', date: '2026-09-23' },
+      access,
+      options,
+    );
+    expect(midnightStatistics.data.summary.todayDataCompletenessPercent).toBeNull();
+    expect(midnightStatistics.data.measurementPoints[0].rows[0].values['CO (ppm)']).toEqual({
+      value: null,
+      displayValue: '-',
+      status: 'noData',
     });
     jest.setSystemTime(new Date('2026-09-22T18:00:00.000Z'));
     const one = await parameterValuesService.calendarStatus(

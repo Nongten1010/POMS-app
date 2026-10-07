@@ -914,9 +914,8 @@ function buildHourlyStatisticRows(
   definitions: ParameterDefinition[],
   current: DateHour | null,
 ) {
-  const includeLate = isHistoricalDate(date, current);
   const rowsByHour = new Map<number, Record<string, unknown>[]>();
-  for (const row of [...rows].sort(compareHomeMeasurementRows)) {
+  for (const row of completedRowsForDate(date, rows, current).sort(compareHomeMeasurementRows)) {
     const rowDate = stringValue(row.cdate);
     const hour = parseHour(row.ctime);
     if (rowDate === date && hour !== null) {
@@ -931,7 +930,7 @@ function buildHourlyStatisticRows(
         (row) =>
           readParameterNumber(row, definition) !== null &&
           (homeMeasurementReceiptStatus(row) === 'onTime' ||
-            (includeLate && homeMeasurementReceiptStatus(row) === 'late')),
+            homeMeasurementReceiptStatus(row) === 'late'),
       ),
     ).length;
     const dataCompletenessPercent = percentOfExpected(receivedParameters, definitions.length) ?? 0;
@@ -1035,7 +1034,6 @@ function buildDailySummary(
   current: DateHour | null,
 ): DailySummary {
   const expectedHours = expectedHoursForDate(date, current);
-  const includeLate = isHistoricalDate(date, current);
   const completedRows = completedRowsForDate(date, rows, current);
   const parameterCompleteness = new Map<
     string,
@@ -1064,7 +1062,7 @@ function buildDailySummary(
       );
     }
     for (const hour of onTimeHours) lateHours.delete(hour);
-    const receivedHours = onTimeHours.size + (includeLate ? lateHours.size : 0);
+    const receivedHours = onTimeHours.size + lateHours.size;
     totalReceived += receivedHours;
     totalLate += lateHours.size;
     parameterCompleteness.set(definition.label, {
@@ -1091,10 +1089,6 @@ function buildDailySummary(
     parameterStatuses,
     parameterCompleteness,
   };
-}
-
-function isHistoricalDate(date: string, current: DateHour | null): boolean {
-  return current !== null && date < current.date;
 }
 
 function percentOfExpected(received: number, expected: number): number | null {
@@ -1697,7 +1691,7 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
       invalid: 'สีเทา ข้อมูลผิดรูปแบบหรือสถานะอื่นๆ',
     },
     dataCompletenessPercent:
-      'ร้อยละ parameter-hour ที่มีค่าตัวเลข: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า ใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์; วันนี้นับเฉพาะส่งตรงเวลาในชั่วโมงที่จบแล้ว; ความครบถ้วนต้นทางที่ใช้ตัดสิน insufficient แยกจากเปอร์เซ็นต์หลัก',
+      'ร้อยละ parameter-hour ที่มีค่าตัวเลข: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า ใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์; วันนี้รวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว; ความครบถ้วนต้นทางที่ใช้ตัดสิน insufficient แยกจากเปอร์เซ็นต์หลัก',
   };
 }
 
@@ -1728,7 +1722,7 @@ function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
       exceeded:
         'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%',
       lowData:
-        'คืนหนึ่งแถวต่อวันในช่วงข้อมูลต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ ย้อนจาก endDate โดยไม่คืนเวลา; วันย้อนหลังรวมส่งตรงเวลาและส่งช้า หารด้วย 24 ชั่วโมง ส่วนวันนี้นับเฉพาะส่งตรงเวลาในชั่วโมงที่จบแล้ว',
+        'คืนหนึ่งแถวต่อวันในช่วงข้อมูลต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ ย้อนจาก endDate โดยไม่คืนเวลา; วันย้อนหลังรวมส่งตรงเวลาและส่งช้า หารด้วย 24 ชั่วโมง ส่วนวันนี้รวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว',
     },
     rows: 'เรียงวันที่จากเก่าไปใหม่ หนึ่งแถวต่อวัน; exceeded จำกัดปีที่ขอถึง endDate ส่วน lowData ต่อเนื่องข้ามปีได้',
     displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',

@@ -229,10 +229,11 @@ GET /api/v1/connected-measurement-points/S1125/requests
 
 - `cdate`/`ctime` เป็นวันและเวลาตรวจวัดหน้าเครื่อง ส่วน `udate`/`utime` เป็นวันและเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ `Asia/Bangkok` ที่ต้นทางปรับ timezone แล้ว Backend เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่แปลงเป็น UTC หรือบวก/ลบ offset ซ้ำ และไม่อนุมาน offset ของข้อมูลเก่าจากผลต่างเวลา
 - จัดวันและชั่วโมงตาม `cdate`/`ctime`; ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง เช่นตรวจวัด `2026-09-23 23:00:00` แล้วส่ง `2026-09-23 23:59:59.999` ยังทันเวลา แต่ส่ง `2026-09-24 00:00:00` เป็นข้อมูลย้อนหลังของวันที่ 23 ชั่วโมง 23 ต้องเทียบวันที่ด้วยเสมอ รวมกรณีข้ามปี
-- Summary และปฏิทินของวันปัจจุบันคิดเฉพาะชั่วโมงที่จบแล้ว: เวลา `10:30` ใช้ข้อมูลถึง `09:59` ชั่วโมง 10 ไม่อยู่ทั้งตัวตั้งและตัวหาร วันย้อนหลังใช้ครบ 24 ชั่วโมงและนับทั้งข้อมูลส่งตรงเวลาและส่งช้าเป็นข้อมูลที่ได้รับ ตารางสถิติคง 24 แถวและวัน/ชั่วโมงของค่าต้นทางเดิมตาม contract ด้านล่าง
+- Summary ปฏิทิน และค่าตารางสถิติของวันปัจจุบันคิดเฉพาะชั่วโมงที่จบแล้ว: เวลา `10:30` ใช้ข้อมูลถึง `09:59` ชั่วโมง 10 ไม่อยู่ทั้งตัวตั้งและตัวหาร วันย้อนหลังใช้ครบ 24 ชั่วโมงและนับทั้งข้อมูลส่งตรงเวลาและส่งช้าเป็นข้อมูลที่ได้รับ ตารางสถิติคง 24 แถว แต่ชั่วโมงที่ยังไม่จบและถัดไปคืน `value: null`, `displayValue: "-"`, `status: "noData"` แม้มีข้อมูลต้นทางแล้ว
 - หน่วยนับคือหนึ่งพารามิเตอร์ต่อหนึ่งชั่วโมง (`parameter-hour`) หลังกรอง visibility: ตัวหาร = จำนวนพารามิเตอร์ที่แสดง × จำนวนชั่วโมงที่จบแล้วซึ่งคาดว่าจะได้รับข้อมูล ชั่วโมงแรกคือ `00:00–00:59` รวม source row เวลา `00:00` ด้วย; เวลา `10:30` มี 10 ชั่วโมง (`00`–`09`) และวันย้อนหลังเต็มวันมี 24 ชั่วโมง
-- เปอร์เซ็นต์หลักของวันปัจจุบัน = `round2(onTimeParameterHours / expectedParameterHours * 100)`; ของวันย้อนหลัง = `round2((onTimeParameterHours + lateParameterHours) / (24 * visibleParameterCount) * 100)`; `lateDataPercent` = `round2(lateParameterHours / expectedParameterHours * 100)` โดย `round2` ปัดสองตำแหน่ง วันย้อนหลังมีข้อมูลส่งช้ารวมอยู่ในเปอร์เซ็นต์หลักแล้ว ห้ามบวก `lateDataPercent` ซ้ำ ไม่เฉลี่ย field completeness ต้นทางแทนหลักฐาน `udate`/`utime` พารามิเตอร์ที่ส่งต่างเวลากันจำแนกเป็นรายพารามิเตอร์
+- เปอร์เซ็นต์หลักของวันปัจจุบัน = `round2((onTimeParameterHours + lateParameterHours) / expectedParameterHours * 100)`; ของวันย้อนหลัง = `round2((onTimeParameterHours + lateParameterHours) / (24 * visibleParameterCount) * 100)`; `lateDataPercent` = `round2(lateParameterHours / expectedParameterHours * 100)` โดย `round2` ปัดสองตำแหน่ง ทั้งวันนี้และวันย้อนหลังมีข้อมูลส่งช้ารวมอยู่ในเปอร์เซ็นต์หลักแล้ว ห้ามบวก `lateDataPercent` ซ้ำ ไม่เฉลี่ย field completeness ต้นทางแทนหลักฐาน `udate`/`utime` พารามิเตอร์ที่ส่งต่างเวลากันจำแนกเป็นรายพารามิเตอร์
 - bucket ที่ได้รับข้อมูลต้องมีค่าตัวเลขของพารามิเตอร์ที่ตรงหน่วย (รวม `0`) และวัน/เวลาส่งข้อมูลที่อ่านได้; operational status ที่ไม่มีค่าตัวเลขไม่ถือเป็น measurement bucket การนับการส่งข้อมูลแยกจากการอนุญาตนำค่าไปประเมินมลพิษ และไม่ใช้เวลาปัจจุบันทดแทน `udate`/`utime` ที่หาย/อ่านไม่ได้
+- ตัวอย่างวันปัจจุบัน P0446 เวลา `22:15`: รับครบชั่วโมง `00`–`21` รวม 22 ชั่วโมง แม้ชั่วโมง 01 ส่งช้า ได้เปอร์เซ็นต์หลัก `22 / 22 * 100 = 100`, `lateDataPercent: 4.55`; ข้อมูลชั่วโมง 22 ที่มาถึงแล้วไม่แสดงและไม่รวมคำนวณ ถ้าขาดหนึ่งชั่วโมงที่จบแล้วจริงจะได้ `21 / 22 * 100 = 95.45`
 - ตัวอย่างวันย้อนหลัง P0446 วันที่ `2026-10-06`: ขาดชั่วโมง 05 และชั่วโมง 17 ส่งเวลา 18:00:29 จึงมีตรงเวลา 22 ชั่วโมง ส่งช้า 1 ชั่วโมง รวมรับ 23 ชั่วโมง ได้เปอร์เซ็นต์หลัก `95.83`, `lateDataPercent: 4.17` และ `highData` สำหรับทั้งจุดและแต่ละพารามิเตอร์
 - จำนวนซ้ำของพารามิเตอร์เดียวในชั่วโมงเดียวไม่เพิ่มตัวตั้งหรือตัวหาร เมื่อมีรายการที่ทันเวลาแล้ว bucket นั้นนับเป็นส่งทันเวลา และไม่นับซ้ำเป็นข้อมูลย้อนหลัง
 - กรอง visibility ตามลำดับโรงงาน → จุด → พารามิเตอร์ และกรองจุดที่ยกเว้นทั้งหมด ก่อนคืนค่า/สถานะและก่อนคำนวณจำนวน เปอร์เซ็นต์ วันต่ำกว่า 80% หรือวันเกินมาตรฐาน การเรียก `stationId` โดยตรงไม่ทำให้เข้าถึงค่าที่ถูกซ่อนได้
@@ -279,10 +280,10 @@ curl --request GET \
 | `meta.registeredParameters` | string[] | No | พารามิเตอร์ที่ลงทะเบียน โดยชื่อ Flow จะถูก normalize เป็น `Flow Rate (m3/hr)` และไม่ซ้ำ |
 | `data.summary.exceededDays` | number | No | จำนวนวันเกินมาตรฐานไม่ซ้ำของจุด ตั้งแต่ 1 มกราคมถึง `date`; หลายพารามิเตอร์เกินวันเดียวกันนับหนึ่งวัน |
 | `data.summary.lowDataDays` | number | No | จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุดของจุด ย้อนจาก `date` |
-| `data.summary.todayDataCompletenessPercent` | number \| null | Yes | ร้อยละข้อมูลของจุดใน `date`; วันย้อนหลังรวมส่งตรงเวลาและส่งช้า ใช้ 24 ชั่วโมงต่อพารามิเตอร์; วันนี้นับเฉพาะส่งตรงเวลาในชั่วโมงที่จบแล้ว |
-| `data.summary.lateDataPercent` | number \| null | Yes | ร้อยละข้อมูลที่ได้รับหลังเส้นตายของจุดใน `date` ใช้ฐาน expected data เดียวกับเปอร์เซ็นต์หลัก; วันย้อนหลังรวมส่วนนี้ในเปอร์เซ็นต์หลักแล้ว ห้ามบวกซ้ำ |
+| `data.summary.todayDataCompletenessPercent` | number \| null | Yes | ร้อยละข้อมูลของจุดใน `date`; วันย้อนหลังรวมส่งตรงเวลาและส่งช้า ใช้ 24 ชั่วโมงต่อพารามิเตอร์; วันนี้รวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว |
+| `data.summary.lateDataPercent` | number \| null | Yes | ร้อยละข้อมูลที่ได้รับหลังเส้นตายของจุดใน `date` ใช้ฐาน expected data เดียวกับเปอร์เซ็นต์หลัก; ทั้งวันนี้และวันย้อนหลังรวมส่วนนี้ในเปอร์เซ็นต์หลักแล้ว ห้ามบวกซ้ำ |
 | `data.measurementPoints[].rows[].time` | string | No | ชั่วโมงของข้อมูล เช่น `00:00` |
-| `data.measurementPoints[].rows[].dataCompletenessPercent` | number | No | ร้อยละพารามิเตอร์ที่มีค่าตัวเลขได้รับในชั่วโมงนั้น; วันย้อนหลังรวมส่งตรงเวลาและส่งช้า ส่วนวันนี้นับเฉพาะส่งตรงเวลา เทียบกับพารามิเตอร์ที่แสดงผลของจุด; ไม่ใช่ตัวตัดสินว่าใช้ค่าตรวจวัดแสดงย้อนหลังได้หรือไม่ |
+| `data.measurementPoints[].rows[].dataCompletenessPercent` | number | No | ร้อยละพารามิเตอร์ที่มีค่าตัวเลขได้รับในชั่วโมงนั้น; นับพารามิเตอร์ที่มีค่าตัวเลขและรับแล้วทั้งตรงเวลาและส่งช้า เทียบกับพารามิเตอร์ที่แสดงผลของจุด; วันนี้ใช้เฉพาะชั่วโมงที่จบแล้ว ชั่วโมงปัจจุบันและถัดไปคืน `0`; ความครบถ้วนต้นทางที่ใช้ซ่อนค่าตรวจวัดเป็นคนละเงื่อนไข |
 | `data.measurementPoints[].rows[].values` | object | No | ค่าที่วัดได้ โดย key เป็นชื่อพารามิเตอร์พร้อมหน่วย |
 | `data.measurementPoints[].rows[].values["Flow Rate (m3/hr)"]` | object | No | ค่าอัตราการไหล; เป็นชื่อ Flow เพียงชื่อเดียวใน response |
 | `data.measurementPoints[].rows[].values["Flow Rate (m3/hr)"].value` | number \| null | Yes | ค่าจาก source `flow_value` หน่วย `m3/hr` |
@@ -328,7 +329,7 @@ curl --request GET \
 
 - ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะอ่านจาก source `flow_value` เดียวกัน และคืนเป็น key มาตรฐาน `Flow Rate (m3/hr)` เพียงหนึ่ง key
 - ชั่วโมงและค่าที่แสดงจัดตาม `ctime` เดิม ข้อมูลส่งช้าต้องยังอยู่ในชั่วโมงต้นทาง พร้อมสถานะตาม [กติกาหน้าหลัก](#home-measurement-rules) ไม่ย้ายไปชั่วโมงที่ `utime` มาถึง
-- ตารางคง 24 แถวรายชั่วโมงตาม `date`; การตัดชั่วโมงปัจจุบันออกใช้กับ summary/daily expected data ไม่เปลี่ยนวัน/ชั่วโมงของค่าที่มีอยู่ในตาราง
+- ตารางคง 24 แถวรายชั่วโมงตาม `date`; วันปัจจุบันแสดงค่าเฉพาะชั่วโมงที่จบแล้ว เช่น `22:15` แสดงถึง `21.00-21.59 น.` แถวชั่วโมง `22`–`23` คืน `value: null`, `displayValue: "-"`, `status: "noData"` และ `dataCompletenessPercent: 0` แม้มีข้อมูลต้นทางแล้ว; วันย้อนหลังแสดงได้ทั้ง 24 ชั่วโมง
 - เมื่อ completeness ที่ต้นทางระบุสำหรับค่าพารามิเตอร์ต่ำกว่า 80% จะคืน `value: null`, `displayValue: "-"` และ `status: "insufficient"`; เปอร์เซ็นต์ส่งทันเวลาที่ต่ำเพราะ row มาช้าไม่ทำให้ค่าที่ใช้ได้ถูกซ่อน จึงยังแสดง `lateData`, `warning` หรือ `exceeded` ได้
 - เมื่อ POMS Client status ไม่ใช่ `1`, `Ok` หรือ `Normal` จะคืน `value: null`, ใช้ชื่อสถานะใน `displayValue` และไม่ใช้ค่าต้นทางคำนวณกราฟ เช่น StatusCode `6` คืน `displayValue: "Shut Down"`; StatusCode `9` คืน `displayValue: "No Discharge"`. ดู [StatusCode contract](../../menus/connection-requests/parameter-values.md#statuscode-contract)
 
@@ -393,8 +394,8 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&end
 | `data.calendar.month` | number | No | เลขเดือน `1` ถึง `12` จาก `month` |
 | `data.calendar.days` | object[] | No | สถานะรายวันในเดือนที่เลือกถึง `endDate` เรียงเก่าไปใหม่ รวมวันไม่มี source row ที่มี expected data; ไม่สร้างวันขาดก่อนวันเริ่มคาดหวังข้อมูลหรือหลังวันนี้ |
 | `data.calendar.days[].date` | string | No | วันที่ในรูปแบบ `YYYY-MM-DD` |
-| `data.calendar.days[].dataCompletenessPercent` | number \| null | Yes | ร้อยละข้อมูลรายวัน; วันย้อนหลังรวมส่งตรงเวลาและส่งช้า ใช้ 24 ชั่วโมงต่อพารามิเตอร์; วันนี้นับเฉพาะส่งตรงเวลาในชั่วโมงที่จบแล้วตาม `Asia/Bangkok`; `null` เมื่อไม่มี expected buckets |
-| `data.calendar.days[].lateDataPercent` | number \| null | Yes | ร้อยละข้อมูลย้อนหลังของวันนั้น ใช้ expected data ชุดเดียวกับ `dataCompletenessPercent` และไม่รวมรายการส่งทันเวลา; วันย้อนหลังเป็นส่วนหนึ่งของเปอร์เซ็นต์หลัก ห้ามบวกซ้ำ; `null` เมื่อไม่มี expected buckets |
+| `data.calendar.days[].dataCompletenessPercent` | number \| null | Yes | ร้อยละข้อมูลรายวัน; วันย้อนหลังรวมส่งตรงเวลาและส่งช้า ใช้ 24 ชั่วโมงต่อพารามิเตอร์; วันนี้รวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้วตาม `Asia/Bangkok`; `null` เมื่อไม่มี expected buckets |
+| `data.calendar.days[].lateDataPercent` | number \| null | Yes | ร้อยละข้อมูลย้อนหลังของวันนั้น ใช้ expected data ชุดเดียวกับ `dataCompletenessPercent` และไม่รวมรายการส่งทันเวลา; ทุกวันเป็นส่วนหนึ่งของเปอร์เซ็นต์หลัก ห้ามบวกซ้ำ; `null` เมื่อไม่มี expected buckets |
 | `data.calendar.days[].dataCompletenessStatus` | `lowData` \| `highData` \| null | Yes | `lowData` เมื่อต่ำกว่า 80%; มิฉะนั้นเป็น `highData`; `null` เมื่อไม่มี expected buckets |
 | `data.calendar.days[].pollutionStatus` | `normal` \| `lateData` \| `warning` \| `exceeded` \| `insufficient` | No | สถานะมลพิษรายวันสำหรับเส้นขอบปฏิทิน คำนวณเฉพาะค่าที่ source status เป็น `Normal`, `Ok` หรือ code `1` และเป็นอิสระจาก `dataCompletenessStatus` |
 | `data.calendar.days[].display.backgroundStatus` | `lowData` \| `highData` \| null | Yes | สถานะพื้นหลังเดียวกับ `dataCompletenessStatus`; ใช้แสดงความครบถ้วนของข้อมูลเท่านั้น |
@@ -402,7 +403,7 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&end
 | `data.summary.exceededDays` | number | No | จำนวนวันเกินมาตรฐานไม่ซ้ำของจุด ตั้งแต่ 1 มกราคมถึง `endDate`; หลายพารามิเตอร์เกินในวันเดียวกันนับหนึ่งวัน ห้ามรวม `monthlySummary[].exceededDays` แทน |
 | `data.summary.lowDataDays` | number | No | จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุดของจุด โดยย้อนจาก `endDate` |
 | `data.summary.todayDataCompletenessPercent` | number \| null | Yes | ร้อยละข้อมูลของจุด ณ `endDate` ตามกติกาวันปัจจุบัน/วันย้อนหลัง; ชื่อ field คงใช้คำว่า `today` แม้เลือกวันย้อนหลัง |
-| `data.summary.lateDataPercent` | number \| null | Yes | ร้อยละข้อมูลย้อนหลังของจุด ณ `endDate` ใช้ expected data ชุดเดียวกับเปอร์เซ็นต์หลัก; วันย้อนหลังเป็นส่วนหนึ่งของเปอร์เซ็นต์หลัก ห้ามบวกซ้ำ |
+| `data.summary.lateDataPercent` | number \| null | Yes | ร้อยละข้อมูลย้อนหลังของจุด ณ `endDate` ใช้ expected data ชุดเดียวกับเปอร์เซ็นต์หลัก; ทุกวันเป็นส่วนหนึ่งของเปอร์เซ็นต์หลัก ห้ามบวกซ้ำ |
 | `data.monthlySummary` | object[] | No | สรุปพารามิเตอร์ที่แสดงผลถึงวันสิ้นสุดที่เลือก; ชื่อ field คงเดิมเพื่อ compatibility |
 | `data.monthlySummary[].parameterCode` | string | No | รหัสพารามิเตอร์แบบ machine-stable |
 | `data.monthlySummary[].parameterName` | string | No | ชื่อพารามิเตอร์ |
