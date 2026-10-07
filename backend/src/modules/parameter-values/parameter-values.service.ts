@@ -925,15 +925,14 @@ function buildHourlyStatisticRows(
 
   return Array.from({ length: HOURS_PER_DAY }, (_, hour) => {
     const hourRows = rowsByHour.get(hour) ?? [];
-    const receivedParameters = definitions.filter((definition) =>
+    const onTimeParameters = definitions.filter((definition) =>
       hourRows.some(
         (row) =>
           readParameterNumber(row, definition) !== null &&
-          (homeMeasurementReceiptStatus(row) === 'onTime' ||
-            homeMeasurementReceiptStatus(row) === 'late'),
+          homeMeasurementReceiptStatus(row) === 'onTime',
       ),
     ).length;
-    const dataCompletenessPercent = percentOfExpected(receivedParameters, definitions.length) ?? 0;
+    const dataCompletenessPercent = percentOfExpected(onTimeParameters, definitions.length) ?? 0;
 
     return {
       time: hourLabel(hour),
@@ -979,7 +978,12 @@ function buildStatisticValue(
     return {
       value: null,
       displayValue: sourceStatus.label,
-      status: sourceStatus.code === 0 ? ('noData' as const) : ('invalid' as const),
+      status:
+        sourceStatus.code === 0
+          ? ('noData' as const)
+          : homeMeasurementReceiptStatus(row) === 'late'
+            ? ('lateData' as const)
+            : ('invalid' as const),
     };
   }
 
@@ -1040,7 +1044,7 @@ function buildDailySummary(
     { completeness: number | null; late: number | null; lowData: boolean | null }
   >();
   const parameterStatuses = new Map<string, ParameterValueStatus[]>();
-  let totalReceived = 0;
+  let totalOnTime = 0;
   let totalLate = 0;
   for (const definition of definitions) {
     const onTimeHours = new Set<number>();
@@ -1062,18 +1066,17 @@ function buildDailySummary(
       );
     }
     for (const hour of onTimeHours) lateHours.delete(hour);
-    const receivedHours = onTimeHours.size + lateHours.size;
-    totalReceived += receivedHours;
+    totalOnTime += onTimeHours.size;
     totalLate += lateHours.size;
     parameterCompleteness.set(definition.label, {
-      completeness: percentOfExpected(receivedHours, expectedHours),
+      completeness: percentOfExpected(onTimeHours.size, expectedHours),
       late: percentOfExpected(lateHours.size, expectedHours),
-      lowData: expectedHours > 0 ? receivedHours * 5 < expectedHours * 4 : null,
+      lowData: expectedHours > 0 ? onTimeHours.size * 5 < expectedHours * 4 : null,
     });
     parameterStatuses.set(definition.label, statuses);
   }
   const denominator = expectedHours * definitions.length;
-  const dataCompletenessPercent = percentOfExpected(totalReceived, denominator);
+  const dataCompletenessPercent = percentOfExpected(totalOnTime, denominator);
   const lateDataPercent = percentOfExpected(totalLate, denominator);
   return {
     date,
@@ -1082,7 +1085,7 @@ function buildDailySummary(
     dataCompletenessStatus:
       dataCompletenessPercent === null
         ? null
-        : totalReceived * 5 < denominator * 4
+        : totalOnTime * 5 < denominator * 4
           ? 'lowData'
           : 'highData',
     pollutionStatus: worstPollutionStatus([...parameterStatuses.values()].flat()),
@@ -1683,7 +1686,8 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
   return {
     status: {
       normal: 'สีเขียว ปกติ ค่ามลพิษ <= normalMax',
-      lateData: 'ค่าปกติที่ Server ได้รับหลังสิ้นสุดชั่วโมงตาม ctime',
+      lateData:
+        'ข้อมูลที่ส่งหลังสิ้นสุดชั่วโมงตาม ctime รวมสถานะเครื่องเช่น Shut Down; สถานะมลพิษ warning/exceeded ยังมีลำดับความสำคัญสูงกว่า',
       warning: 'สีส้ม เฝ้าระวัง ค่ามลพิษ <= warningMax',
       exceeded: 'สีแดง เกินมาตรฐาน ค่ามลพิษ > warningMax',
       insufficient: 'สีเทา ข้อมูลไม่เพียงพอ',
@@ -1691,7 +1695,7 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
       invalid: 'สีเทา ข้อมูลผิดรูปแบบหรือสถานะอื่นๆ',
     },
     dataCompletenessPercent:
-      'ร้อยละ parameter-hour ที่มีค่าตัวเลข: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า ใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์; วันนี้รวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว; ความครบถ้วนต้นทางที่ใช้ตัดสิน insufficient แยกจากเปอร์เซ็นต์หลัก',
+      'ร้อยละ parameter-hour ที่มีค่าตัวเลขและส่งตรงเวลาเท่านั้น ทุกสถานะรวม Shut Down ที่ส่งช้าถือเป็นย้อนหลัง; วันนี้ใช้เฉพาะชั่วโมงที่จบแล้ว วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์; เกณฑ์ lowData และรายละเอียดใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกัน; lateDataPercent แยกจากเปอร์เซ็นต์หลัก ความครบถ้วนต้นทางที่ใช้ตัดสิน insufficient แยกจากเปอร์เซ็นต์การส่งข้อมูล',
   };
 }
 
@@ -1722,7 +1726,7 @@ function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
       exceeded:
         'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%',
       lowData:
-        'คืนหนึ่งแถวต่อวันในช่วงข้อมูลต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ ย้อนจาก endDate โดยไม่คืนเวลา; วันย้อนหลังรวมส่งตรงเวลาและส่งช้า หารด้วย 24 ชั่วโมง ส่วนวันนี้รวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว',
+        'คืนหนึ่งแถวต่อวันในช่วงข้อมูลต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ ย้อนจาก endDate โดยไม่คืนเวลา; ทุกวันนับเฉพาะส่งตรงเวลา; วันย้อนหลังหารด้วย 24 ชั่วโมง ส่วนวันนี้ใช้เฉพาะชั่วโมงที่จบแล้ว',
     },
     rows: 'เรียงวันที่จากเก่าไปใหม่ หนึ่งแถวต่อวัน; exceeded จำกัดปีที่ขอถึง endDate ส่วน lowData ต่อเนื่องข้ามปีได้',
     displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',

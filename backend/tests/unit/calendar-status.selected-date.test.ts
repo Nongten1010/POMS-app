@@ -66,7 +66,7 @@ describe('calendar selected-date completeness', () => {
   it('recalculates completeness and late data when the selected day changes', async () => {
     for (const [endDate, completeness, lateData] of [
       ['2026-09-28', 100, 0],
-      ['2026-09-27', 54.17, 4.17],
+      ['2026-09-27', 50, 4.17],
       ['2026-09-28', 100, 0],
     ] as const) {
       const result = await calendarStatus(endDate);

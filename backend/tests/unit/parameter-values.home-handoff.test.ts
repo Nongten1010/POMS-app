@@ -59,6 +59,43 @@ describe('home handoff measurement calculations', () => {
     jest.useRealTimers();
   });
 
+  it.each([6, '6', 'Shut Down'])(
+    'returns lateData for late shutdown status %s while preserving its display label',
+    async (status) => {
+      const row = { ...hourRow(3, 0), co_status: status, utime: '04:00:00' };
+      repository.listRows.mockResolvedValue({ tableName: 'S1125_data_60m', rows: [row] });
+      const result = await parameterValuesService.measurementStatistics(
+        { stationId: 'S1125', date: '2026-09-23' },
+        access,
+        options,
+      );
+      const expected = { value: null, displayValue: 'Shut Down', status: 'lateData' };
+      expect(result.data.measurementPoints[0].rows[3].values['CO (ppm)']).toEqual(expected);
+      expect(evaluateHomeMeasurementRow(row, ['CO (ppm)'], options)['CO (ppm)']).toEqual(expected);
+      expect(result.data.summary).toMatchObject({
+        todayDataCompletenessPercent: 0,
+        lateDataPercent: 10,
+      });
+    },
+  );
+
+  it.each([
+    [6, '03:59:59', 'Shut Down', 'invalid'],
+    [6, null, 'Shut Down', 'invalid'],
+    [0, '04:00:00', 'NoData', 'noData'],
+    [2, '04:00:00', 'Calibration', 'lateData'],
+  ])(
+    'keeps receipt and operational status controls for code %s sent at %s',
+    (code, sentTime, label, status) => {
+      const row = { ...hourRow(3, 0), co_status: code, utime: sentTime };
+      expect(evaluateHomeMeasurementRow(row, ['CO (ppm)'], options)['CO (ppm)']).toEqual({
+        value: null,
+        displayValue: label,
+        status,
+      });
+    },
+  );
+
   it('counts the ten completed hours at 10:30 as 100 percent', async () => {
     repository.listRows.mockResolvedValue({
       tableName: 'S1125_data_60m',
@@ -157,7 +194,7 @@ describe('home handoff measurement calculations', () => {
       options,
     );
     expect(calendar.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 100,
+      todayDataCompletenessPercent: 95,
       lateDataPercent: 5,
       lowDataDays: 0,
     });
@@ -171,19 +208,19 @@ describe('home handoff measurement calculations', () => {
         }),
         expect.objectContaining({
           parameterCode: 'NOX',
-          todayDataCompletenessPercent: 100,
+          todayDataCompletenessPercent: 90,
           lateDataPercent: 10,
         }),
       ]),
     );
-    expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(100);
+    expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(50);
   });
 
   it.each([
     ['2026-09-22', '2026-09-22', '23:59:59.999', 'normal', 100, 0],
-    ['2026-09-22', '2026-09-23', '00:00:00', 'lateData', 100, 4.17],
-    ['2026-09-22', '2026-09-23', '23:00:00', 'lateData', 100, 4.17],
-    ['2026-12-31', '2027-01-01', '00:00:00', 'lateData', 100, 4.17],
+    ['2026-09-22', '2026-09-23', '00:00:00', 'lateData', 95.83, 4.17],
+    ['2026-09-22', '2026-09-23', '23:00:00', 'lateData', 95.83, 4.17],
+    ['2026-12-31', '2027-01-01', '00:00:00', 'lateData', 95.83, 4.17],
   ])(
     'compares corrected local timestamps directly for %s 23:00 sent at %s %s',
     async (measuredDate, sentDate, sentTime, expectedStatus, completenessPercent, latePercent) => {
@@ -260,7 +297,7 @@ describe('home handoff measurement calculations', () => {
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  it('counts the completed missing hour once its value arrives late', async () => {
+  it('excludes a late normal receipt from both calendar completeness and delivery', async () => {
     const rows = Array.from({ length: 9 }, (_, hour) => hourRow(hour));
     repository.listRows.mockResolvedValue({ tableName: 'S1125_data_60m', rows });
     const before = await parameterValuesService.calendarStatus(
@@ -279,10 +316,11 @@ describe('home handoff measurement calculations', () => {
     );
     expect(before.data.summary.todayDataCompletenessPercent).toBe(90);
     expect(after.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 100,
+      todayDataCompletenessPercent: 90,
       lateDataPercent: 10,
     });
     expect(after.data.calendar.days[0].pollutionStatus).toBe('lateData');
+    expect(after.data.calendar.days[0].dataCompletenessPercent).toBe(90);
   });
 
   it('uses null instead of a missing-data result before the first hour ends and includes 00:00 once completed', async () => {

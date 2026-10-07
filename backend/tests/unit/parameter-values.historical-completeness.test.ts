@@ -56,7 +56,7 @@ async function results() {
   return { statistics, calendar, details };
 }
 
-describe('historical received-data completeness', () => {
+describe('on-time data completeness', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers().setSystemTime(new Date('2026-10-07T03:30:00Z'));
@@ -70,7 +70,91 @@ describe('historical received-data completeness', () => {
     jest.useRealTimers();
   });
 
-  it('counts the P0446 shutdown day as 23/24 including the delayed 17:00 hour', async () => {
+  it('shows 12/22 on-time normal hours as 54.55 percent while keeping ten late hours visible', async () => {
+    jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
+    const lateHours = [3, 4, 5, 6, 7, 13, 14, 15, 16, 21];
+    loadRows(
+      Array.from({ length: 23 }, (_, hour) => ({
+        ...hourRow(hour, lateHours.includes(hour)),
+        bod_status: 'Normal',
+      })),
+    );
+    const { statistics, calendar, details } = await results();
+    expect(statistics.data.summary).toMatchObject({
+      todayDataCompletenessPercent: 54.55,
+      lateDataPercent: 45.45,
+      lowDataDays: 1,
+    });
+    expect(calendar.data.summary).toEqual(statistics.data.summary);
+    expect(calendar.data.monthlySummary[0].todayDataCompletenessPercent).toBe(54.55);
+    expect(calendar.data.calendar.days[0]).toMatchObject({
+      dataCompletenessPercent: 54.55,
+      dataCompletenessStatus: 'lowData',
+    });
+    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 54.55 }]);
+    const rows = statistics.data.measurementPoints[0].rows;
+    expect(
+      rows.flatMap((row, hour) => (row.values['BOD (mg/l)'].status === 'lateData' ? [hour] : [])),
+    ).toEqual(lateHours);
+    expect(rows[22].values['BOD (mg/l)'].value).toBeNull();
+    expect(rows[23].values['BOD (mg/l)'].value).toBeNull();
+  });
+
+  it('excludes late hours from current-day delivery regardless of parameter status', async () => {
+    jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
+    repository.listRegisteredParameters.mockResolvedValue(['BOD (mg/l)', 'Flow rate (m3/hr)']);
+    loadRows(
+      Array.from({ length: 21 }, (_, hour) => ({
+        ...hourRow(hour, hour === 1 || hour === 2),
+        bod_status: hour === 1 ? 'Normal' : hour === 2 ? 'Shut Down' : '6',
+        flow_value: '0',
+        flow_units: 'm3/hr',
+        flow_status: 'Normal',
+      })),
+    );
+    const { statistics, calendar } = await results();
+    expect(statistics.data.summary).toMatchObject({
+      todayDataCompletenessPercent: 86.36,
+      lateDataPercent: 9.09,
+    });
+    expect(calendar.data.summary).toEqual(statistics.data.summary);
+    expect(
+      calendar.data.monthlySummary.map((summary) => summary.todayDataCompletenessPercent),
+    ).toEqual([86.36, 86.36]);
+  });
+
+  it.each([
+    ['Normal', 0],
+    ['Calibration', 0],
+    ['6', 0],
+    [6, 0],
+    ['Shut Down', 0],
+  ])(
+    'handles all-late status %s today and still counts 24-hour on-time data after midnight',
+    async (status, delivery) => {
+      jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
+      loadRows(
+        Array.from({ length: 22 }, (_, hour) => ({
+          ...hourRow(hour, true),
+          bod_status: status,
+        })),
+      );
+      const today = await results();
+      expect(today.statistics.data.summary).toMatchObject({
+        todayDataCompletenessPercent: delivery,
+        lateDataPercent: 100,
+        lowDataDays: 1,
+      });
+      expect(today.calendar.data.summary).toEqual(today.statistics.data.summary);
+      expect(today.calendar.data.calendar.days[0].dataCompletenessPercent).toBe(0);
+      jest.setSystemTime(new Date('2026-10-06T17:01:00Z'));
+      const yesterday = await results();
+      expect(yesterday.statistics.data.summary.todayDataCompletenessPercent).toBe(0);
+      expect(yesterday.calendar.data.summary).toEqual(yesterday.statistics.data.summary);
+    },
+  );
+
+  it('counts the P0446 shutdown day as 22/24 on-time hours and marks delayed values lateData', async () => {
     const parameters = ['BOD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'];
     repository.listRegisteredParameters.mockResolvedValue(parameters);
     loadRows(
@@ -89,53 +173,56 @@ describe('historical received-data completeness', () => {
 
     const { statistics, calendar, details } = await results();
     expect(statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 95.83,
+      todayDataCompletenessPercent: 91.67,
       lateDataPercent: 4.17,
       lowDataDays: 0,
     });
     expect(calendar.data.summary).toEqual(statistics.data.summary);
     expect(calendar.data.calendar.days[0]).toMatchObject({
-      dataCompletenessPercent: 95.83,
+      dataCompletenessPercent: 91.67,
       dataCompletenessStatus: 'highData',
     });
     for (const parameter of calendar.data.monthlySummary) {
       expect(parameter).toMatchObject({
-        todayDataCompletenessPercent: 95.83,
+        todayDataCompletenessPercent: 91.67,
         lateDataPercent: 4.17,
       });
     }
-    expect(statistics.data.measurementPoints[0].rows[17].dataCompletenessPercent).toBe(100);
+    expect(statistics.data.measurementPoints[0].rows[17].dataCompletenessPercent).toBe(0);
+    for (const value of Object.values(statistics.data.measurementPoints[0].rows[17].values)) {
+      expect(value).toEqual({ value: null, displayValue: 'Shut Down', status: 'lateData' });
+    }
     expect(statistics.data.measurementPoints[0].rows[5].dataCompletenessPercent).toBe(0);
     expect(details.data.rows).toEqual([]);
   });
 
-  it('counts all 24 delayed normal hours while retaining lateData pollution status', async () => {
+  it('counts zero on-time hours for an all-late historical day while retaining lateData pollution status', async () => {
     loadRows(
       Array.from({ length: 24 }, (_, hour) => ({ ...hourRow(hour, true), bod_status: 'Normal' })),
     );
     const { statistics, calendar, details } = await results();
     expect(statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 100,
+      todayDataCompletenessPercent: 0,
       lateDataPercent: 100,
-      lowDataDays: 0,
+      lowDataDays: 1,
     });
     expect(calendar.data.summary).toEqual(statistics.data.summary);
     expect(calendar.data.calendar.days[0].pollutionStatus).toBe('lateData');
     expect(statistics.data.measurementPoints[0].rows[23].values['BOD (mg/l)'].status).toBe(
       'lateData',
     );
-    expect(details.data.rows).toEqual([]);
+    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 0 }]);
   });
 
-  it('uses received hours for the historical low-data streak and detail percentage', async () => {
+  it('uses on-time hours for the historical low-data streak and detail percentage', async () => {
     loadRows(Array.from({ length: 17 }, (_, hour) => hourRow(hour, true)));
     const { statistics, calendar, details } = await results();
     expect(statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 70.83,
+      todayDataCompletenessPercent: 0,
       lowDataDays: 1,
     });
     expect(calendar.data.monthlySummary[0].lowDataDays).toBe(1);
-    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 70.83 }]);
+    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 0 }]);
   });
 
   it('deduplicates parameter-hours and excludes unknown receipts and status-only values', async () => {
@@ -149,14 +236,14 @@ describe('historical received-data completeness', () => {
     ]);
     const { statistics, calendar } = await results();
     expect(statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 8.33,
+      todayDataCompletenessPercent: 4.17,
       lateDataPercent: 4.17,
     });
     expect(calendar.data.summary).toEqual(statistics.data.summary);
   });
 
   it.each(['15', '59'])(
-    'counts 22 received completed hours at 22:%s and masks the unfinished hour',
+    'counts 21 on-time shutdown hours out of 22 completed hours at 22:%s and masks the unfinished hour',
     async (minute) => {
       repository.listRegisteredParameters.mockResolvedValue([
         'BOD (mg/l)',
@@ -177,12 +264,15 @@ describe('historical received-data completeness', () => {
       jest.setSystemTime(new Date(`2026-10-06T15:${minute}:00Z`));
       const { statistics, calendar } = await results();
       expect(statistics.data.summary).toMatchObject({
-        todayDataCompletenessPercent: 100,
+        todayDataCompletenessPercent: 95.45,
         lateDataPercent: 4.55,
       });
       expect(calendar.data.summary).toEqual(statistics.data.summary);
       for (const summary of calendar.data.monthlySummary) {
-        expect(summary).toMatchObject({ todayDataCompletenessPercent: 100, lateDataPercent: 4.55 });
+        expect(summary).toMatchObject({
+          todayDataCompletenessPercent: 95.45,
+          lateDataPercent: 4.55,
+        });
       }
       const rows = statistics.data.measurementPoints[0].rows;
       expect(rows).toHaveLength(24);
@@ -204,7 +294,7 @@ describe('historical received-data completeness', () => {
     );
     jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
     const { statistics, calendar } = await results();
-    expect(statistics.data.summary.todayDataCompletenessPercent).toBe(95.45);
+    expect(statistics.data.summary.todayDataCompletenessPercent).toBe(90.91);
     expect(calendar.data.summary).toEqual(statistics.data.summary);
   });
 
@@ -213,7 +303,7 @@ describe('historical received-data completeness', () => {
     jest.setSystemTime(new Date('2026-10-06T16:00:00Z'));
     const at23 = await results();
     expect(at23.statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 100,
+      todayDataCompletenessPercent: 95.65,
       lateDataPercent: 4.35,
     });
     expect(
@@ -222,7 +312,7 @@ describe('historical received-data completeness', () => {
     jest.setSystemTime(new Date('2026-10-06T17:00:00Z'));
     const historical = await results();
     expect(historical.statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 95.83,
+      todayDataCompletenessPercent: 91.67,
       lateDataPercent: 4.17,
     });
     expect(historical.calendar.data.summary).toEqual(historical.statistics.data.summary);
@@ -243,20 +333,20 @@ describe('historical received-data completeness', () => {
     }
   });
 
-  it('uses completed received hours for today low-data streaks and drill-down', async () => {
+  it('uses completed on-time hours for today low-data streaks and drill-down', async () => {
     loadRows(Array.from({ length: 18 }, (_, hour) => hourRow(hour, hour === 1)));
     jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
     const { statistics, calendar, details } = await results();
     expect(statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 81.82,
-      lowDataDays: 0,
+      todayDataCompletenessPercent: 77.27,
+      lowDataDays: 1,
     });
     expect(calendar.data.summary).toEqual(statistics.data.summary);
-    expect(calendar.data.monthlySummary[0].lowDataDays).toBe(0);
-    expect(details.data.rows).toEqual([]);
+    expect(calendar.data.monthlySummary[0].lowDataDays).toBe(1);
+    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 77.27 }]);
   });
 
-  it('uses completed received hours today and switches to the full 24-hour denominator after midnight', async () => {
+  it('uses completed on-time hours today and switches to the full 24-hour denominator after midnight', async () => {
     loadRows([
       ...Array.from({ length: 8 }, (_, hour) => hourRow(hour)),
       hourRow(8, true),
@@ -265,10 +355,10 @@ describe('historical received-data completeness', () => {
     jest.setSystemTime(new Date('2026-10-06T03:30:00Z'));
     const today = await results();
     expect(today.statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 90,
+      todayDataCompletenessPercent: 80,
       lateDataPercent: 10,
     });
-    expect(today.statistics.data.measurementPoints[0].rows[8].dataCompletenessPercent).toBe(100);
+    expect(today.statistics.data.measurementPoints[0].rows[8].dataCompletenessPercent).toBe(0);
     expect(today.statistics.data.measurementPoints[0].rows[10].values['BOD (mg/l)']).toEqual({
       value: null,
       displayValue: '-',
@@ -277,12 +367,10 @@ describe('historical received-data completeness', () => {
     jest.setSystemTime(new Date('2026-10-06T17:01:00Z'));
     const yesterday = await results();
     expect(yesterday.statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 41.67,
+      todayDataCompletenessPercent: 37.5,
       lateDataPercent: 4.17,
     });
     expect(yesterday.calendar.data.summary).toEqual(yesterday.statistics.data.summary);
-    expect(yesterday.statistics.data.measurementPoints[0].rows[8].dataCompletenessPercent).toBe(
-      100,
-    );
+    expect(yesterday.statistics.data.measurementPoints[0].rows[8].dataCompletenessPercent).toBe(0);
   });
 });

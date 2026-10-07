@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="on-time-delivery-and-operational-late-status"></a>
+
+## 2026-10-07 — นับเฉพาะส่งตรงเวลาทุกวัน และแสดงสถานะเครื่องที่ส่งช้าเป็น lateData
+
+- **Affected canonical docs:** [สถิติและปฏิทินจุดตรวจวัด](./shared/connected-measurement-points/README.md#home-measurement-rules), [ข้อมูลหน้าหลัก](./menus/home/README.md#กติกาข้อมูลหน้าหลัก)
+- **Impact:** `measurement-statistics`, `calendar-status`, `calendar-status/details` รวม annual aliases เปลี่ยนเปอร์เซ็นต์หลักทั้งระดับจุด พารามิเตอร์ แถวสถิติ และปฏิทินเป็นจำนวน parameter-hours ส่งตรงเวลาเท่านั้นทุกวันทุกสถานะ รวม `Shut Down` ที่ส่งช้าไม่นับตรงเวลา; วันนี้ใช้ชั่วโมงที่จบแล้ว วันย้อนหลังใช้ 24 ชั่วโมง เกณฑ์ lowData/lowDataDays/details ใช้เปอร์เซ็นต์เดียวกัน ข้อความสถานะเครื่องที่ส่งช้าในสถิติและ popup หน้าหลักคืน `status: "lateData"` แทน `invalid` โดยคง `value: null` และชื่อสถานะเดิม
+- **Migration:** ไม่ต้อง migrate ฐานข้อมูล; client ใช้ `lateData` ตาม enum เดิมเพื่อแสดงสีน้ำเงิน และล้าง cache สถิติ/ปฏิทินหลัง deploy; `lateDataPercent` แยกจากเปอร์เซ็นต์หลักทุกวัน บวกกันได้ยอดรับรวม ตรวจ runtime OpenAPI ก่อนถือว่า release เสร็จ
+- **Old contract:** ข้อมูล SHTDWN ที่ส่งช้าคืน `invalid`; เปอร์เซ็นต์หลักรวมส่งช้า เช่นวันย้อนหลังรับ 23 ชั่วโมงและส่งช้า 1 ชั่วโมง แสดง 95.83%
+- **New contract:** SHTDWN ที่ส่งช้าคืน `lateData`; วันย้อนหลังตัวอย่างเดียวกันส่งตรงเวลา 22/24 ชั่วโมง แสดง 91.67% และ `lateDataPercent: 4.17`; วันนี้ส่งตรงเวลา 12/22 ชั่วโมงแสดง 54.55% และส่งช้า 45.45%; แถวที่มีเฉพาะส่งช้าแสดงเปอร์เซ็นต์ 0 แต่ยังแสดงค่าหรือข้อความสถานะ
+- **Breaking change:** yes — เปลี่ยนเปอร์เซ็นต์หลักและการนับ low-data ทุกวัน รวมสถานะสีของข้อความเครื่องที่ส่งช้า
+
 <a id="current-day-completed-received-completeness"></a>
 
 ## 2026-10-07 — วันนี้นับข้อมูลที่ได้รับในชั่วโมงที่จบแล้วและซ่อนชั่วโมงที่ยังไม่จบ

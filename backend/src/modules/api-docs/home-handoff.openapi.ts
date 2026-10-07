@@ -15,12 +15,12 @@ const nullablePercent = { ...percent, nullable: true };
 const dailyCompleteness = {
   ...nullablePercent,
   description:
-    'ร้อยละคู่พารามิเตอร์ที่แสดง–ชั่วโมงของวันที่เลือก: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า หารด้วย 24 ชั่วโมงต่อพารามิเตอร์; วันปัจจุบันรวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้วตาม Asia/Bangkok; ไม่มี expected buckets คืน null',
+    'ร้อยละคู่พารามิเตอร์ที่แสดง–ชั่วโมงที่ส่งตรงเวลาเท่านั้น ทุกสถานะรวม Shut Down (code 6) ที่ส่งช้าถือเป็นย้อนหลังและไม่นับส่งตรงเวลา; วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์; วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้วตาม Asia/Bangkok; คิดรายพารามิเตอร์และไม่นับชั่วโมงซ้ำ เช่นส่งตรงเวลา 12/22 ชั่วโมงได้ 54.55%; ใช้เปอร์เซ็นต์เดียวกันสำหรับ lowData/lowDataDays/lowData details; ไม่มี expected buckets คืน null',
 };
 const lateCompleteness = {
   ...nullablePercent,
   description:
-    'ร้อยละคู่พารามิเตอร์–ชั่วโมงที่ส่งช้าและไม่มีรายการตรงเวลาใน bucket เดียวกัน ใช้ฐานเดียวกับเปอร์เซ็นต์หลัก; ทุกวันเป็นส่วนหนึ่งของเปอร์เซ็นต์หลัก ห้ามนำมาบวกซ้ำ; ไม่มี expected buckets คืน null',
+    'ร้อยละคู่พารามิเตอร์–ชั่วโมงที่ส่งช้าทุกสถานะรวม Shut Down และไม่มีรายการตรงเวลาใน bucket เดียวกัน ใช้ฐานเดียวกับเปอร์เซ็นต์ส่งตรงเวลา ทั้งวันนี้และวันย้อนหลังแยกจากเปอร์เซ็นต์หลัก; บวกกับเปอร์เซ็นต์ส่งตรงเวลาได้ยอดรับรวม; ไม่มี expected buckets คืน null',
 };
 const array = (items: Schema): Schema => ({ type: 'array', items });
 const object = (
@@ -36,7 +36,7 @@ const status = {
   type: 'string',
   enum: ['normal', 'lateData', 'warning', 'exceeded', 'insufficient', 'noData', 'invalid'],
   description:
-    'ค่าปกติที่ส่งล่าช้าใช้ lateData; ค่าที่มีระดับมลพิษใช้ exceeded > warning > lateData > normal โดยไม่กลบ noData/invalid/insufficient',
+    'ค่าปกติและข้อความสถานะเครื่องเช่น Shut Down ที่ส่งล่าช้าใช้ lateData โดยคง displayValue เดิม; source NoData (code 0) คง noData; ค่าที่มีระดับมลพิษใช้ exceeded > warning > lateData > normal โดยไม่กลบค่าผิดรูปแบบหรือ insufficient',
 };
 const pollutionStatus = {
   type: 'string',
@@ -69,7 +69,7 @@ export const homeHandoffSchemas: Record<string, Schema> = {
     lowDataDays: {
       ...count,
       description:
-        'จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุด ใช้เปอร์เซ็นต์หลักซึ่งวันย้อนหลังรวมส่งตรงเวลาและส่งช้า ย้อนจากวันสิ้นสุดได้ข้ามปี หยุดเมื่อถึงอย่างน้อย 80% หรือวันเริ่มเชื่อมต่อ; วันสิ้นสุดถึง 80% หรือไม่มี expected bucket คืน 0',
+        'จำนวนวันส่งตรงเวลาต่ำกว่า 80% ต่อเนื่องล่าสุด ใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกับเปอร์เซ็นต์หลัก ย้อนจากวันสิ้นสุดได้ข้ามปี หยุดเมื่อถึงอย่างน้อย 80% หรือวันเริ่มเชื่อมต่อ; วันสิ้นสุดถึง 80% หรือไม่มี expected bucket คืน 0',
     },
     todayDataCompletenessPercent: dailyCompleteness,
     lateDataPercent: lateCompleteness,
@@ -105,7 +105,7 @@ export const homeHandoffSchemas: Record<string, Schema> = {
     dataCompletenessPercent: {
       ...percent,
       description:
-        'ร้อยละพารามิเตอร์ที่ได้รับในชั่วโมงนั้น: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า; วันปัจจุบันรวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว; ชั่วโมงปัจจุบันและถัดไปคืน 0 และ values เป็น noData',
+        'ร้อยละพารามิเตอร์ที่มีค่าตัวเลขและส่งตรงเวลาในชั่วโมงนั้นเท่านั้น ทั้งวันนี้และวันย้อนหลัง; ชั่วโมงที่มีเฉพาะข้อมูลส่งช้าคืน 0 แต่ยังแสดงค่า/ข้อความและ status lateData ตามกติกาสถานะ; วันปัจจุบันชั่วโมงปัจจุบันและถัดไปคืน 0 และ values เป็น noData',
     },
     values: {
       type: 'object',
@@ -165,12 +165,12 @@ export const homeHandoffSchemas: Record<string, Schema> = {
     },
     lowDataDays: {
       ...count,
-      description: 'ช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์นี้สิ้นสุดที่ endDate',
+      description:
+        'ช่วงส่งตรงเวลาต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์นี้สิ้นสุดที่ endDate ใช้เปอร์เซ็นต์เดียวกับเปอร์เซ็นต์หลัก',
     },
     todayDataCompletenessPercent: {
       ...dailyCompleteness,
-      description:
-        'ร้อยละข้อมูลของพารามิเตอร์นี้ ณ endDate แม้ชื่อ field มี today: วันย้อนหลังรวมส่งตรงเวลาและส่งช้า หารด้วย 24 ชั่วโมง; วันปัจจุบันรวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว; ตรวจวันที่จาก meta.endDate; ไม่มี expected buckets คืน null',
+      description: `${dailyCompleteness.description} ใช้เฉพาะพารามิเตอร์นี้ ณ endDate แม้ชื่อ field มี today; ตรวจวันที่จาก meta.endDate`,
     },
     lateDataPercent: lateCompleteness,
   }),
@@ -295,7 +295,7 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
 }
 
 const timestampRules =
-  'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง รวมกรณีข้ามวัน/ปี เช่น cdate/ctime=2026-09-23 23:00:00 และ udate/utime=2026-09-24 00:00:00 เป็นข้อมูลย้อนหลังของวันที่ 23 ชั่วโมง 23 ข้อมูลส่งช้าแสดงค่าได้; วันย้อนหลังรวมส่งตรงเวลาและส่งช้าในเปอร์เซ็นต์หลัก หารด้วย 24 ชั่วโมงต่อพารามิเตอร์ และใช้ยอดรวมนี้ตัดสิน lowData/lowDataDays/lowData details; lateDataPercent เป็นส่วนหนึ่งของยอดรวม ห้ามบวกซ้ำ ส่วนวันปัจจุบันรวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว denominator คือคู่พารามิเตอร์ที่แสดง–ชั่วโมงที่คาดว่าจะได้รับ เริ่มชั่วโมง 00:00 วันปัจจุบันรวมเฉพาะชั่วโมงปฏิทินที่จบแล้ว เช่น 22:15 ใช้ถึง 21:59; ตารางคง 24 แถว แต่ชั่วโมง 22–23 คืน value: null, displayValue: -, status: noData; รับครบ 22 ชั่วโมงได้ 100% แม้บางชั่วโมงส่งช้า; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup ใช้ชั่วโมงล่าสุด 23 ของวันก่อนหน้า กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ตัดจุดที่ยกเว้นทั้งหมด และถ้าไม่เหลือจุดไม่คืนโรงงาน';
+  'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง รวมกรณีข้ามวัน/ปี ข้อมูลส่งช้าแสดงค่าได้; เปอร์เซ็นต์หลักรวมถึงเปอร์เซ็นต์แถวสถิติ ปฏิทิน lowData/lowDataDays/lowData details นับเฉพาะส่งตรงเวลาทุกสถานะ; วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์ วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้ว เช่น 22:15 ใช้ถึง 21:59; ตารางคง 24 แถว แต่ชั่วโมง 22–23 คืน value: null, displayValue: -, status: noData; lateDataPercent แยกจากเปอร์เซ็นต์หลักทุกวัน บวกกับเปอร์เซ็นต์ส่งตรงเวลาได้ยอดรับรวม; สถานะ Normal ส่งตรงเวลา 12/22 ชั่วโมงได้ 54.55% และ lateDataPercent 45.45%; Shut Down ส่งตรงเวลา 21/22 ชั่วโมงและส่งช้า 1 ชั่วโมงได้ 95.45% และ lateDataPercent 4.55%; ข้อความสถานะเครื่องที่ส่งช้าเช่น Shut Down คืน value:null, displayValue:Shut Down, status:lateData; source NoData คง noData และ warning/exceeded คงระดับมลพิษ; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup ใช้ชั่วโมงล่าสุด 23 ของวันก่อนหน้า กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ตัดจุดที่ยกเว้นทั้งหมด และถ้าไม่เหลือจุดไม่คืนโรงงาน';
 
 export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<string, Schema> {
   const result = { ...paths };
@@ -361,7 +361,7 @@ export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<
 const summaryExample = {
   exceededDays: 0,
   lowDataDays: 0,
-  todayDataCompletenessPercent: 95.83,
+  todayDataCompletenessPercent: 91.67,
   lateDataPercent: 4.17,
 };
 const metaExample = {
@@ -395,8 +395,8 @@ const statisticsExample: MeasurementStatisticsResultDTO = {
           {
             time: '09.00-09.59 น.',
             chartTime: '09:00',
-            dataCompletenessPercent: 100,
-            values: { 'CO (ppm)': { value: 10, displayValue: '10.00', status: 'lateData' } },
+            dataCompletenessPercent: 0,
+            values: { 'CO (ppm)': { value: null, displayValue: 'Shut Down', status: 'lateData' } },
           },
         ],
       },
@@ -419,7 +419,7 @@ const calendarExample: CalendarStatusResultDTO = {
       days: [
         {
           date: '2026-09-23',
-          dataCompletenessPercent: 95.83,
+          dataCompletenessPercent: 91.67,
           lateDataPercent: 4.17,
           dataCompletenessStatus: 'highData',
           pollutionStatus: 'lateData',

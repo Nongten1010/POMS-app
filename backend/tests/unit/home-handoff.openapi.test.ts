@@ -25,26 +25,28 @@ const annualStationPath = `${stationPath}/{buddhistYear}`;
 const responseSchema = (path: string): unknown => objectAt(responseFor(path), 'schema').$ref;
 
 describe('home handoff OpenAPI contract', () => {
-  it('publishes received totals for completed hours with late percentages as an included subset', () => {
+  it('publishes on-time percentages for every date and status, separate from late receipts', () => {
     for (const [schema, field] of [
       ['HomeMeasurementSummary', 'todayDataCompletenessPercent'],
       ['HomeCalendarDay', 'dataCompletenessPercent'],
       ['HomeParameterSummary', 'todayDataCompletenessPercent'],
+      ['HomeCalendarLowDataDetailRow', 'dataCompletenessPercent'],
     ]) {
       const description = objectAt(propertiesFor(schema), field).description;
-      expect(description).toContain('วันย้อนหลังรวมส่งตรงเวลาและส่งช้า');
-      expect(description).toContain('24 ชั่วโมง');
-      expect(description).toContain('วันปัจจุบันรวมส่งตรงเวลาและส่งช้าเฉพาะชั่วโมงที่จบแล้ว');
-      expect(objectAt(propertiesFor(schema), 'lateDataPercent').description).toContain(
-        'ห้ามนำมาบวกซ้ำ',
-      );
+      expect(description).toContain('ส่งตรงเวลาเท่านั้น');
+      expect(description).toContain('วันย้อนหลังใช้ฐาน 24 ชั่วโมง');
+      expect(description).toContain('วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้ว');
+      expect(description).toContain('Shut Down (code 6) ที่ส่งช้าถือเป็นย้อนหลัง');
     }
+    expect(objectAt(propertiesFor('HomeMeasurementValue'), 'status').description).toContain(
+      'Shut Down ที่ส่งล่าช้าใช้ lateData',
+    );
     for (const prefix of [stationPath, annualStationPath]) {
       for (const suffix of ['/measurement-statistics', '/calendar-status']) {
         expect(
           objectAt(responseFor(`${prefix}${suffix}`), 'example', 'data', 'summary'),
         ).toMatchObject({
-          todayDataCompletenessPercent: 95.83,
+          todayDataCompletenessPercent: 91.67,
           lateDataPercent: 4.17,
         });
       }
