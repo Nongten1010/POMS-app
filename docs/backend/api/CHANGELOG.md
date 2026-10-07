@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="calendar-visible-through-latest-day"></a>
+
+## 2026-10-07 — ปฏิทินแสดงสถานะถึงวันนี้แยกจากวันที่เลือกดูสถิติ
+
+- **Affected canonical docs:** [ปฏิทินและสถิติจุดตรวจวัด](./shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidcalendar-status)
+- **Impact:** `GET /connected-measurement-points/:stationId/calendar-status` รวม annual alias คืน `calendar.days` ถึงวันนี้ตาม `Asia/Bangkok` หรือวันสุดท้ายของเดือนที่ถึงก่อน แม้ `endDate` เป็นวันย้อนหลัง เพิ่ม `data.metadata.calendarEndDate` และ `meta.calendarEndDate`; `meta.count` นับ source rows ที่โหลดถึง `calendarEndDate` ส่วน `summary`, `monthlySummary` และ `meta.endDate` ยังคำนวณตามวันที่เลือก ไม่รวมวันถัดไปในยอดสถิติ
+- **Migration:** client แสดงสี/เส้นสถานะจาก `calendar.days` ทั้งชุด ไม่กรองหลัง `endDate`; ใช้ `calendarEndDate` สำหรับช่วงแสดงปฏิทิน และใช้ `endDate` เดิมส่งให้ `calendar-status/details` เพื่อให้ drill-down ตรงกับ counters ล้าง cache ปฏิทินหลัง deploy ไม่ต้อง migrate หรือแก้ข้อมูลในฐานข้อมูล ตรวจ runtime OpenAPI ก่อนถือว่า release เสร็จ
+- **Old contract:** วันนี้คือ 7 ตุลาคม เลือก `endDate=2026-10-01` ปฏิทินหยุดวันที่ 1
+- **New contract:** request เดิมคืนสถานะวันที่ 1–7 ตามวันเริ่มคาดหวังข้อมูล สถิติยังเป็นของวันที่ 1; เดือนที่จบแล้วคืนถึงวันสิ้นเดือนและเดือนอนาคตไม่สร้างวันอนาคต
+- **Breaking change:** yes — ช่วง `calendar.days` และช่วงอ่านข้อมูลสำหรับ `meta.count` เปลี่ยนเมื่อเลือกวันย้อนหลัง; query, validation, permissions และรายละเอียดสถิติยังคงเดิม
+
 <a id="on-time-delivery-and-operational-late-status"></a>
 
 ## 2026-10-07 — นับเฉพาะส่งตรงเวลาทุกวัน และแสดงสถานะเครื่องที่ส่งช้าเป็น lateData

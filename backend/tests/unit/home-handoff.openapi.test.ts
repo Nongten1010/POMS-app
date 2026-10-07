@@ -25,6 +25,37 @@ const annualStationPath = `${stationPath}/{buddhistYear}`;
 const responseSchema = (path: string): unknown => objectAt(responseFor(path), 'schema').$ref;
 
 describe('home handoff OpenAPI contract', () => {
+  it('documents independent calendar and summary dates for both calendar aliases', () => {
+    const data = objectAt(propertiesFor('HomeCalendarStatusResponse'), 'data', 'properties');
+    const metadata = objectAt(data, 'metadata', 'properties');
+    expect(metadata.calendarEndDate).toMatchObject({ type: 'string', format: 'date' });
+    expect(objectAt(metadata, 'calendarEndDate').description).toContain('Asia/Bangkok');
+    expect(objectAt(data, 'calendar', 'properties', 'days').description).toContain(
+      'ไม่ตัดตาม endDate',
+    );
+    const meta = objectAt(propertiesFor('HomeCalendarStatusResponse'), 'meta', 'properties');
+    expect(meta.calendarEndDate).toMatchObject({ type: 'string', format: 'date' });
+    expect(objectAt(meta, 'count').description).toContain('calendarEndDate');
+    for (const prefix of [stationPath, annualStationPath]) {
+      const operation = operationFor(`${prefix}/calendar-status`);
+      expect(operation.parameters).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'endDate',
+            description: expect.stringContaining('ไม่ตัดตาม endDate'),
+          }),
+        ]),
+      );
+      expect(
+        objectAt(responseFor(`${prefix}/calendar-status`), 'example', 'data', 'metadata'),
+      ).toMatchObject({ endDate: '2026-09-23', calendarEndDate: '2026-09-23' });
+      expect(objectAt(responseFor(`${prefix}/calendar-status`), 'example', 'meta')).toMatchObject({
+        endDate: '2026-09-23',
+        calendarEndDate: '2026-09-23',
+      });
+    }
+  });
+
   it('publishes on-time percentages for every date and status, separate from late receipts', () => {
     for (const [schema, field] of [
       ['HomeMeasurementSummary', 'todayDataCompletenessPercent'],

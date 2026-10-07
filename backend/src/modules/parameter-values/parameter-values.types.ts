@@ -242,6 +242,7 @@ export interface CalendarStatusDTO {
     description: string;
     month: string;
     endDate: string;
+    calendarEndDate: string;
     valueDefinitions: Record<string, unknown>;
   };
   summary: HomeMeasurementSummaryDTO;
@@ -262,6 +263,7 @@ export interface CalendarStatusResultDTO {
     tableName: string;
     month: string;
     endDate: string;
+    calendarEndDate: string;
     count: number;
     registeredParameters: string[];
   };

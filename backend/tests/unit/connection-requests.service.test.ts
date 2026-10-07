@@ -273,6 +273,7 @@ describe('connectionRequestsService', () => {
           description: 'DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน',
           month: '2026-06',
           endDate: '2026-06-09',
+          calendarEndDate: '2026-06-30',
           valueDefinitions: {},
         },
         calendar: {
@@ -289,6 +290,7 @@ describe('connectionRequestsService', () => {
         tableName: 'S0001_data_60m',
         month: '2026-06',
         endDate: '2026-06-09',
+        calendarEndDate: '2026-06-30',
         count: 0,
         registeredParameters: [],
       },

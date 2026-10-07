@@ -415,10 +415,9 @@ describe('home handoff measurement calculations', () => {
       todayDataCompletenessPercent: 4.17,
     });
     expect(statistics.data.summary).toEqual(calendar.data.summary);
-    expect(calendar.data.calendar.days.map((day) => day.date)).toEqual([
-      '2026-01-01',
-      '2026-01-02',
-    ]);
+    expect(calendar.data.calendar.days.map((day) => day.date)).toEqual(
+      Array.from({ length: 31 }, (_, i) => `2026-01-${String(i + 1).padStart(2, '0')}`),
+    );
     expect(details.data.rows.map((day) => day.date)).toEqual([
       '2025-12-29',
       '2025-12-30',

@@ -84,7 +84,7 @@ describe('calendar selected-date completeness', () => {
         stationId: 'P0260',
         interval: '60m',
         startDate: '2026-01-01',
-        endDate,
+        endDate: '2026-09-28',
       });
     }
   });

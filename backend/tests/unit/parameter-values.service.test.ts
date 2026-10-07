@@ -1009,9 +1009,10 @@ describe('parameterValuesService', () => {
       stationId: 'S0001',
       interval: '60m',
       startDate: '2026-01-01',
-      endDate: '2026-06-10',
+      endDate: '2026-06-30',
     });
-    expect(result.data.calendar).toMatchObject({
+    expect(result.data.calendar.days.at(-1)?.date).toBe('2026-06-30');
+    expect({ ...result.data.calendar, days: result.data.calendar.days.slice(0, 2) }).toMatchObject({
       year: 2026,
       month: 6,
       days: [
@@ -1253,10 +1254,10 @@ describe('parameterValuesService', () => {
       stationId: 'S1125',
       interval: '60m',
       startDate: '2025-01-01',
-      endDate: '2025-08-10',
+      endDate: '2025-08-31',
     });
-    expect(result.data.calendar.days).toHaveLength(10);
-    expect(result.data.calendar.days.slice(-2).map((day) => day.date)).toEqual([
+    expect(result.data.calendar.days).toHaveLength(31);
+    expect(result.data.calendar.days.slice(8, 10).map((day) => day.date)).toEqual([
       '2025-08-09',
       '2025-08-10',
     ]);
@@ -1644,7 +1645,8 @@ describe('parameterValuesService', () => {
       },
     );
 
-    expect(result.data.calendar.days).toMatchObject([
+    expect(result.data.calendar.days.at(-1)?.date).toBe('2026-06-30');
+    expect(result.data.calendar.days.slice(0, 3)).toMatchObject([
       {
         date: '2026-06-09',
         dataCompletenessPercent: 100,
@@ -1719,7 +1721,7 @@ describe('parameterValuesService', () => {
 
     expect(calendar.data.metadata.valueDefinitions).toMatchObject({
       summaryPeriod:
-        'calendar.days แสดงเดือนที่ขอถึง endDate; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคม ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี',
+        'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี',
       dataCompletenessStatus: {
         lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
         highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
@@ -1734,7 +1736,8 @@ describe('parameterValuesService', () => {
           'ไม่มีค่าจาก source status Normal, Ok หรือ code 1 ที่ใช้ประเมินได้ หรือมีเฉพาะค่าราย row ที่ความครบถ้วนต่ำกว่า 80%',
       },
     });
-    expect(calendar.data.calendar.days).toMatchObject([
+    expect(calendar.data.calendar.days.at(-1)?.date).toBe('2026-08-31');
+    expect(calendar.data.calendar.days.slice(0, 1)).toMatchObject([
       {
         date: '2026-08-05',
         dataCompletenessPercent: 45.83,
@@ -1858,7 +1861,8 @@ describe('parameterValuesService', () => {
       options,
     );
 
-    expect(calendar.data.calendar.days).toMatchObject([
+    expect(calendar.data.calendar.days.at(-1)?.date).toBe('2026-08-31');
+    expect(calendar.data.calendar.days.slice(0, 1)).toMatchObject([
       {
         date: '2026-08-05',
         dataCompletenessPercent: 83.33,
@@ -1969,7 +1973,12 @@ describe('parameterValuesService', () => {
       },
     );
 
-    expect(result.data.calendar.days.slice(-4)).toMatchObject([
+    expect(result.data.calendar.days.at(-1)?.date).toBe('2026-08-31');
+    expect(
+      result.data.calendar.days.filter(
+        (day) => day.date >= '2026-08-09' && day.date <= '2026-08-12',
+      ),
+    ).toMatchObject([
       {
         date: '2026-08-09',
         pollutionStatus: 'normal',
@@ -2050,7 +2059,8 @@ describe('parameterValuesService', () => {
       },
     );
 
-    expect(result.data.calendar.days).toMatchObject([
+    expect(result.data.calendar.days.at(-1)?.date).toBe('2026-08-31');
+    expect(result.data.calendar.days.slice(0, 2)).toMatchObject([
       {
         date: '2026-08-09',
         pollutionStatus: 'insufficient',

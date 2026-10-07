@@ -320,19 +320,21 @@ export const parameterValuesService = {
     } = monthRange(query.month);
     const current = toBangkokDateHour(new Date());
     const endDate = resolveHomeEndDate(query.endDate, monthStartDate, monthEndDate, current);
-    const loaded = await loadHomeMeasurementRows(query.stationId, endDate, access, options);
+    const calendarEndDate = resolveHomeEndDate(undefined, monthStartDate, monthEndDate, current);
+    const loaded = await loadHomeMeasurementRows(query.stationId, calendarEndDate, access, options);
     const { result, registeredParameters, definitions, expectedStartDate } = loaded;
     const dailySummaries = buildDailySummaries(
       result.rows,
       definitions,
       current,
       expectedStartDate,
-      endDate,
+      calendarEndDate,
     );
     const requestedMonthSummaries = dailySummaries.filter(
       (summary) => summary.date >= monthStartDate && summary.date <= monthEndDate,
     );
-    const summaryPeriod = endDate < monthStartDate ? [] : dailySummaries;
+    const summaryPeriod =
+      endDate < monthStartDate ? [] : dailySummaries.filter((summary) => summary.date <= endDate);
 
     return {
       data: {
@@ -340,6 +342,7 @@ export const parameterValuesService = {
           description: 'DateCalendar รายเดือนและตารางสรุปสถานะของปีที่เลือก',
           month: query.month,
           endDate,
+          calendarEndDate,
           valueDefinitions: calendarStatusValueDefinitions(),
         },
         summary: buildHomeMeasurementSummary(summaryPeriod, endDate),
@@ -369,6 +372,7 @@ export const parameterValuesService = {
         tableName: result.tableName,
         month: query.month,
         endDate,
+        calendarEndDate,
         count: result.rows.length,
         registeredParameters,
       },
@@ -1702,7 +1706,7 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
 function calendarStatusValueDefinitions(): Record<string, unknown> {
   return {
     summaryPeriod:
-      'calendar.days แสดงเดือนที่ขอถึง endDate; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคม ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี',
+      'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี',
     dataCompletenessStatus: {
       lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
       highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',

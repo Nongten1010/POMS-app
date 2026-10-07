@@ -176,13 +176,27 @@ export const homeHandoffSchemas: Record<string, Schema> = {
   }),
   HomeCalendarStatusResponse: response(
     object({
-      metadata: object({ description: text, month: text, endDate: date, valueDefinitions }),
+      metadata: object({
+        description: text,
+        month: text,
+        endDate: { ...date, description: 'วันที่เลือกสำหรับ summary และ monthlySummary' },
+        calendarEndDate: {
+          ...date,
+          description:
+            'วันสิ้นสุดของปฏิทิน ใช้วันนี้ตาม Asia/Bangkok หรือวันสิ้นเดือนที่ถึงก่อน เป็นอิสระจาก endDate',
+        },
+        valueDefinitions,
+      }),
       factory: measurementFactory,
       summary: ref('HomeMeasurementSummary'),
       calendar: object({
         year: { type: 'integer' },
         month: { type: 'integer', minimum: 1, maximum: 12 },
-        days: array(ref('HomeCalendarDay')),
+        days: {
+          ...array(ref('HomeCalendarDay')),
+          description:
+            'สถานะรายวันในเดือนที่ขอถึง calendarEndDate ไม่ตัดตาม endDate ของวันที่เลือก และไม่สร้างวันอนาคต',
+        },
       }),
       monthlySummary: {
         ...array(ref('HomeParameterSummary')),
@@ -190,7 +204,19 @@ export const homeHandoffSchemas: Record<string, Schema> = {
           'ชื่อ field เดิมเพื่อ compatibility; exceededDays สะสมในปีถึง endDate และ lowDataDays เป็นช่วงต่อเนื่องล่าสุด',
       },
     }),
-    object({ ...sourceMeta, month: text, endDate: date }),
+    object({
+      ...sourceMeta,
+      month: text,
+      endDate: { ...date, description: 'วันสิ้นสุดที่ใช้คำนวณ summary และ monthlySummary' },
+      calendarEndDate: {
+        ...date,
+        description: 'วันสิ้นสุดที่แสดงในปฏิทิน ตรงกับ data.metadata.calendarEndDate',
+      },
+      count: {
+        ...count,
+        description: 'จำนวน source rows ที่โหลดถึง calendarEndDate สำหรับปฏิทินและสถิติ',
+      },
+    }),
   ),
   HomeCalendarExceededDetailRow: object({
     date,
@@ -328,7 +354,7 @@ export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<
         in: 'query',
         required: false,
         schema: { ...date, pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-        description: `วันสิ้นสุดที่รวมในการสรุป ต้องเป็นวันจริงใน ${endDatePeriod} ที่ขอและไม่เกินวันนี้ตาม Asia/Bangkok; ไม่ส่งใช้วันที่น้อยกว่าระหว่างวันนี้กับวันสุดท้ายของ ${endDatePeriod}; ไม่ถูกต้องคืน 400 VALIDATION_ERROR${endDatePeriod === 'month' ? '; เมื่อคลิกวันในปฏิทิน ต้องส่ง endDate ของวันนั้นพร้อม month เพื่อคำนวณ todayDataCompletenessPercent และ lateDataPercent ของวันที่เลือก' : ''}`,
+        description: `วันสิ้นสุดที่รวมในการสรุป ต้องเป็นวันจริงใน ${endDatePeriod} ที่ขอและไม่เกินวันนี้ตาม Asia/Bangkok; ไม่ส่งใช้วันที่น้อยกว่าระหว่างวันนี้กับวันสุดท้ายของ ${endDatePeriod}; ไม่ถูกต้องคืน 400 VALIDATION_ERROR${endDatePeriod === 'month' ? '; เมื่อคลิกวันในปฏิทิน ต้องส่ง endDate ของวันนั้นพร้อม month เพื่อคำนวณ todayDataCompletenessPercent และ lateDataPercent ของวันที่เลือก; calendar.days แสดงถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตาม endDate' : ''}`,
         example: '2026-09-23',
       });
     }
@@ -410,6 +436,7 @@ const calendarExample: CalendarStatusResultDTO = {
       description: 'ปฏิทินรายเดือน',
       month: '2026-09',
       endDate: '2026-09-23',
+      calendarEndDate: '2026-09-23',
       valueDefinitions: {},
     },
     summary: summaryExample,
@@ -437,7 +464,7 @@ const calendarExample: CalendarStatusResultDTO = {
       },
     ],
   },
-  meta: { ...metaExample, month: '2026-09', endDate: '2026-09-23' },
+  meta: { ...metaExample, month: '2026-09', endDate: '2026-09-23', calendarEndDate: '2026-09-23' },
 };
 const detailsExample: CalendarStatusDetailsResultDTO = {
   data: {

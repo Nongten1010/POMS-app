@@ -361,24 +361,26 @@ curl --request GET \
 | --- | --- | --- | --- | --- |
 | `stationId` | path | string | Yes | รหัส connected measurement point ที่อยู่ใน data scope ของผู้เรียก |
 | `month` | query | `YYYY-MM` | Yes | เดือนตามคริสต์ศักราช เช่น `2025-08`; เดือนต้องอยู่ระหว่าง `01` ถึง `12` |
-| `endDate` | query | `YYYY-MM-DD` | No | วันสิ้นสุดที่เลือก ต้องเป็นวันที่จริงใน `month` ที่ขอและไม่เกินวันนี้ตาม `Asia/Bangkok`; ถ้าไม่ส่ง ใช้วันสิ้นเดือนหรือวันนี้ แล้วแต่ว่าวันใดถึงก่อน |
+| `endDate` | query | `YYYY-MM-DD` | No | วันสิ้นสุดของสถิติที่เลือก ไม่ใช้ตัดวันในปฏิทิน ต้องเป็นวันที่จริงใน `month` ที่ขอและไม่เกินวันนี้ตาม `Asia/Bangkok`; ถ้าไม่ส่ง ใช้วันสิ้นเดือนหรือวันนี้ แล้วแต่ว่าวันใดถึงก่อน |
 
 #### Request Example
 
 ```bash
 curl --request GET \
-  --url '<BASE_URL>/api/v1/connected-measurement-points/S1125/calendar-status?month=2025-08&endDate=2025-08-10' \
+  --url '<BASE_URL>/api/v1/connected-measurement-points/P0260/calendar-status?month=2026-10&endDate=2026-10-01' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Accept: application/json'
 ```
 
-เมื่อคลิกวันที่ในปฏิทิน ต้องส่งทั้ง `month` และ `endDate` ของวันที่เลือกทุกครั้ง เช่นเลือกวันที่ 27 กันยายน 2026 ของจุด `P0260`:
+เมื่อคลิกวันที่ในปฏิทิน ต้องส่งทั้ง `month` และ `endDate` ของวันที่เลือกทุกครั้ง เช่นเลือกวันที่ 1 ตุลาคม 2026 ของจุด `P0260`:
 
 ```http
-GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&endDate=2026-09-27
+GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-10&endDate=2026-10-01
 ```
 
-`data.summary` และ `data.monthlySummary[]` จะคืน `todayDataCompletenessPercent` และ `lateDataPercent` ของวันที่ `2026-09-27` แม้ชื่อ field แรกยังมีคำว่า `today`; ตรวจวันที่ที่ใช้คำนวณได้จาก `meta.endDate` หรือ `data.metadata.endDate` หากส่งเพียง `month=2026-09` โดยเดือนนั้นเป็นเดือนปัจจุบัน API จะใช้วันนี้ จึงต้องส่ง `endDate` เมื่อเลือกวันย้อนหลัง
+`data.summary` และ `data.monthlySummary[]` จะคืน `todayDataCompletenessPercent` และ `lateDataPercent` ของวันที่ `2026-10-01` แม้ชื่อ field แรกยังมีคำว่า `today`; ตรวจวันที่ที่ใช้คำนวณได้จาก `meta.endDate` หรือ `data.metadata.endDate` หากส่งเพียง `month=2026-10` โดยเดือนนั้นเป็นเดือนปัจจุบัน API จะใช้วันนี้ จึงต้องส่ง `endDate` เมื่อเลือกวันย้อนหลัง
+
+ปฏิทินใช้ `calendarEndDate` แยกจากวันที่เลือก: เช่นวันนี้ตาม `Asia/Bangkok` คือ `2026-10-07` และเลือก `endDate=2026-10-01` สถิติคำนวณถึงวันที่ 1 แต่ `data.calendar.days` ยังคืนสถานะวันที่ 1–7 ตามวันเริ่มคาดหวังข้อมูล เมื่อเปิดเดือนกันยายนที่จบแล้วจะคืนถึงวันที่ 30 แม้เลือกวันที่ 1; เดือนอนาคตยังคืน `days: []` ไม่สร้างสถานะวันอนาคต ใช้ `endDate` เดิมส่งให้ `calendar-status/details` เพื่อให้รายละเอียดตรงกับยอดสถิติ ห้ามใช้ `calendarEndDate` แทนวันที่เลือกในการขอรายละเอียด
 
 #### Success Response Fields
 
@@ -388,6 +390,7 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&end
 | `data.metadata.description` | string | No | คำอธิบายชุดข้อมูล calendar status |
 | `data.metadata.month` | string | No | เดือนเดียวกับ query ในรูปแบบ `YYYY-MM` |
 | `data.metadata.endDate` | string | No | วันสิ้นสุดที่ใช้คำนวณจริงในรูปแบบ `YYYY-MM-DD`; ส่งวันนี้ได้แม้เดือนที่ขอเป็นเดือนอนาคตเมื่อไม่ระบุ `endDate` |
+| `data.metadata.calendarEndDate` | string | No | วันสิ้นสุดของปฏิทินในรูปแบบ `YYYY-MM-DD`; ใช้วันนี้ตาม `Asia/Bangkok` หรือวันสุดท้ายของเดือนที่ถึงก่อน ไม่เปลี่ยนตามวันที่เลือก |
 | `data.metadata.valueDefinitions` | object | No | คำอธิบายความหมายของ calendar statuses |
 | `data.factory` | object | No | โรงงาน current/live ของจุดตรวจวัดที่เลือก |
 | `data.factory.factoryId` | string | No | รหัสโรงงาน current/live |
@@ -395,7 +398,7 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&end
 | `data.factory.systemType` | string | No | ประเภทระบบของจุด เช่น `CEMS` หรือ `WPMS` |
 | `data.calendar.year` | number | No | ปีคริสต์ศักราชจาก `month` |
 | `data.calendar.month` | number | No | เลขเดือน `1` ถึง `12` จาก `month` |
-| `data.calendar.days` | object[] | No | สถานะรายวันในเดือนที่เลือกถึง `endDate` เรียงเก่าไปใหม่ รวมวันไม่มี source row ที่มี expected data; ไม่สร้างวันขาดก่อนวันเริ่มคาดหวังข้อมูลหรือหลังวันนี้ |
+| `data.calendar.days` | object[] | No | สถานะรายวันในเดือนที่เลือกถึง `calendarEndDate` เป็นอิสระจาก `endDate` ของสถิติ เรียงเก่าไปใหม่ รวมวันไม่มี source row ที่มี expected data; ไม่สร้างวันขาดก่อนวันเริ่มคาดหวังข้อมูลหรือหลังวันนี้ |
 | `data.calendar.days[].date` | string | No | วันที่ในรูปแบบ `YYYY-MM-DD` |
 | `data.calendar.days[].dataCompletenessPercent` | number \| null | Yes | ร้อยละข้อมูลรายวัน; นับเฉพาะส่งตรงเวลาทุกวันทุกสถานะ; วันย้อนหลังใช้ 24 ชั่วโมงต่อพารามิเตอร์ วันนี้ใช้เฉพาะชั่วโมงที่จบแล้วตาม `Asia/Bangkok`; `null` เมื่อไม่มี expected buckets |
 | `data.calendar.days[].lateDataPercent` | number \| null | Yes | ร้อยละส่งช้าทุกสถานะรวม SHTDWN ใช้ expected data ชุดเดียวกับเปอร์เซ็นต์ส่งตรงเวลา; ไม่รวม bucket ที่มีรายการตรงเวลาแล้ว แยกจาก `dataCompletenessPercent` และบวกกันได้ยอดรับรวม; `null` เมื่อไม่มี expected buckets |
@@ -422,10 +425,13 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&end
 | `meta.tableName` | string | No | ตาราง `{stationId}_data_60m` ที่ใช้ |
 | `meta.month` | string | No | เดือนเดียวกับ query ในรูปแบบ `YYYY-MM` |
 | `meta.endDate` | string | No | วันสิ้นสุดเดียวกับ `data.metadata.endDate` |
-| `meta.count` | number | No | จำนวน source rows รายชั่วโมงที่ repository คืนสำหรับช่วงที่อ่านใน request นี้ |
+| `meta.calendarEndDate` | string | No | วันสิ้นสุดเดียวกับ `data.metadata.calendarEndDate` |
+| `meta.count` | number | No | จำนวน source rows รายชั่วโมงที่โหลดถึง `calendarEndDate` สำหรับปฏิทินและสถิติ ไม่ใช่จำนวนเฉพาะถึง `endDate` |
 | `meta.registeredParameters` | string[] | No | พารามิเตอร์ที่ลงทะเบียน โดยชื่อที่อ่านได้ต้องมีหน่วยเมื่อ source ระบุได้ |
 
 #### Success Response Example
+
+ตัวอย่างเมื่อวันนี้คือ `2026-10-07 10:30 Asia/Bangkok` ขอ `month=2026-10&endDate=2026-10-01` เริ่มคาดหวังข้อมูลวันที่ 1 และรับข้อมูลหนึ่งชั่วโมงตรงเวลาในวันที่ 1 และ 7:
 
 ```json
 {
@@ -433,86 +439,132 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&end
   "data": {
     "metadata": {
       "description": "DateCalendar รายเดือนและตารางสรุปสถานะของปีที่เลือก",
-      "month": "2025-08",
+      "month": "2026-10",
+      "endDate": "2026-10-01",
+      "calendarEndDate": "2026-10-07",
       "valueDefinitions": {
-        "summaryPeriod": "calendar.days แสดงเดือนที่ขอถึง endDate; exceededDays สะสมตั้งแต่ต้นปี ส่วน lowDataDays เป็นช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดที่สิ้นสุด ณ endDate",
-        "dataCompletenessStatus": {
-          "lowData": "ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ",
-          "highData": "ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า"
-        },
-        "pollutionStatus": {
-          "normal": "ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 อยู่ในเกณฑ์ปกติ ใช้เส้นขอบสีเขียว",
-          "warning": "ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 อยู่ในเกณฑ์เฝ้าระวัง ใช้เส้นขอบสีส้ม",
-          "exceeded": "ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 เกินมาตรฐาน ใช้เส้นขอบสีแดง",
-          "insufficient": "ไม่มีค่าจาก source status Normal, Ok หรือ code 1 ที่ใช้ประเมินได้ หรือมีเฉพาะค่าราย row ที่ความครบถ้วนต่ำกว่า 80%",
-          "lateData": "ค่าปกติที่ส่งหลังเส้นตาย ใช้เส้นขอบสีน้ำเงิน; warning และ exceeded มีลำดับสูงกว่า"
-        }
-      },
-      "endDate": "2025-08-10"
+        "summaryPeriod": "calendar.days แสดงเดือนที่ขอถึง calendarEndDate; summary และ monthlySummary คำนวณถึง endDate"
+      }
     },
     "factory": {
       "factoryId": "10120000325542",
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
-      "systemType": "CEMS"
+      "systemType": "WPMS"
     },
     "calendar": {
-      "year": 2025,
-      "month": 8,
+      "year": 2026,
+      "month": 10,
       "days": [
         {
-          "date": "2025-08-09",
-          "dataCompletenessPercent": 83,
-          "dataCompletenessStatus": "highData",
-          "pollutionStatus": "exceeded",
+          "date": "2026-10-01",
+          "dataCompletenessPercent": 4.17,
+          "lateDataPercent": 0,
+          "dataCompletenessStatus": "lowData",
+          "pollutionStatus": "normal",
           "display": {
-            "backgroundStatus": "highData",
-            "borderStatus": "exceeded"
-          },
-          "lateDataPercent": 0
+            "backgroundStatus": "lowData",
+            "borderStatus": "normal"
+          }
         },
         {
-          "date": "2025-08-10",
-          "dataCompletenessPercent": 42,
+          "date": "2026-10-02",
+          "dataCompletenessPercent": 0,
+          "lateDataPercent": 0,
+          "dataCompletenessStatus": "lowData",
+          "pollutionStatus": "insufficient",
+          "display": {
+            "backgroundStatus": "lowData",
+            "borderStatus": "insufficient"
+          }
+        },
+        {
+          "date": "2026-10-03",
+          "dataCompletenessPercent": 0,
+          "lateDataPercent": 0,
+          "dataCompletenessStatus": "lowData",
+          "pollutionStatus": "insufficient",
+          "display": {
+            "backgroundStatus": "lowData",
+            "borderStatus": "insufficient"
+          }
+        },
+        {
+          "date": "2026-10-04",
+          "dataCompletenessPercent": 0,
+          "lateDataPercent": 0,
+          "dataCompletenessStatus": "lowData",
+          "pollutionStatus": "insufficient",
+          "display": {
+            "backgroundStatus": "lowData",
+            "borderStatus": "insufficient"
+          }
+        },
+        {
+          "date": "2026-10-05",
+          "dataCompletenessPercent": 0,
+          "lateDataPercent": 0,
+          "dataCompletenessStatus": "lowData",
+          "pollutionStatus": "insufficient",
+          "display": {
+            "backgroundStatus": "lowData",
+            "borderStatus": "insufficient"
+          }
+        },
+        {
+          "date": "2026-10-06",
+          "dataCompletenessPercent": 0,
+          "lateDataPercent": 0,
+          "dataCompletenessStatus": "lowData",
+          "pollutionStatus": "insufficient",
+          "display": {
+            "backgroundStatus": "lowData",
+            "borderStatus": "insufficient"
+          }
+        },
+        {
+          "date": "2026-10-07",
+          "dataCompletenessPercent": 10,
+          "lateDataPercent": 0,
           "dataCompletenessStatus": "lowData",
           "pollutionStatus": "exceeded",
           "display": {
             "backgroundStatus": "lowData",
             "borderStatus": "exceeded"
-          },
-          "lateDataPercent": 0
+          }
         }
       ]
     },
     "monthlySummary": [
       {
-        "parameterCode": "CO",
-        "parameterName": "CO",
-        "parameterLabel": "CO (ppm)",
-        "unit": "ppm",
-        "exceededDays": 2,
+        "parameterCode": "BOD",
+        "parameterName": "BOD",
+        "parameterLabel": "BOD (mg/l)",
+        "unit": "mg/l",
+        "exceededDays": 0,
         "lowDataDays": 1,
-        "todayDataCompletenessPercent": 42,
+        "todayDataCompletenessPercent": 4.17,
         "lateDataPercent": 0
       }
     ],
     "summary": {
-      "exceededDays": 2,
+      "exceededDays": 0,
       "lowDataDays": 1,
-      "todayDataCompletenessPercent": 42,
+      "todayDataCompletenessPercent": 4.17,
       "lateDataPercent": 0
     }
   },
   "meta": {
-    "stationId": "S1125",
+    "stationId": "P0260",
     "interval": "60m",
     "schemaName": "ingest",
-    "tableName": "S1125_data_60m",
-    "month": "2025-08",
-    "count": 60,
+    "tableName": "P0260_data_60m",
+    "month": "2026-10",
+    "count": 2,
     "registeredParameters": [
-      "CO (ppm)"
+      "BOD (mg/l)"
     ],
-    "endDate": "2025-08-10"
+    "endDate": "2026-10-01",
+    "calendarEndDate": "2026-10-07"
   }
 }
 ```
@@ -520,7 +572,7 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-09&end
 #### Validation And Business Rules
 
 - `month=2025-08&endDate=2025-08-10` นับวันเกินมาตรฐานตั้งแต่ `2025-01-01` ถึง `2025-08-10` และอ่านข้อมูลก่อนต้นปีได้เมื่อใช้หาช่วงต่ำกว่า 80% ต่อเนื่อง; ถ้าไม่ส่ง `endDate` ใช้วันที่น้อยกว่าระหว่างวันนี้ตาม `Asia/Bangkok` กับวันสุดท้ายของเดือน
-- `data.calendar.days` กรองเฉพาะเดือนที่ขอและไม่เกิน `endDate`; การขอเดือนอนาคตโดยไม่ระบุ `endDate` ยังคงทำได้ แต่ไม่สร้างวันอนาคตเป็นวันที่ข้อมูลขาด
+- `data.calendar.days` กรองเฉพาะเดือนที่ขอและไม่เกิน `calendarEndDate` ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน โดยไม่ตัดตาม `endDate`; การขอเดือนอนาคตโดยไม่ระบุ `endDate` ยังคงทำได้ แต่ไม่สร้างวันอนาคตเป็นวันที่ข้อมูลขาด
 - `monthlySummary[].exceededDays` สะสมรายพารามิเตอร์จากต้นปีถึง `endDate`; `data.summary.exceededDays` นับวันไม่ซ้ำรวมทุกพารามิเตอร์ในช่วงเดียวกัน จึงไม่ใช่ผลบวกของ counters รายพารามิเตอร์
 - `data.calendar.days[].pollutionStatus` และ `monthlySummary[].exceededDays` ประเมินเฉพาะค่าของพารามิเตอร์ที่ source row มี `<parameter>_status` เป็น `Normal`, `Ok` หรือ code `1`; `null`, ค่าว่าง, สถานะที่ไม่รู้จัก, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround`, `Etc.` และ `No Discharge` ไม่ถูกนำไปเทียบเกณฑ์
 - กฎ source status ข้างต้นใช้สถานะของค่าตรวจวัดแต่ละ row ไม่ใช่ `channelStatus` จาก device config
