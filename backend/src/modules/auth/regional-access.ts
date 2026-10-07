@@ -53,24 +53,17 @@ export function serializeRegionalAccess(
 }
 
 /**
- * Resolves an IN_REGION permission against the profile assignment.
- * The profile assignment is the security boundary: an explicit per-permission
- * region may narrow it, but can never replace or widen it.
+ * Explicit menu regions take precedence over the profile default.
+ * Unqualified role scopes still use assigned profile regions and fail closed
+ * when neither a menu region nor a profile default is available.
  */
 export function resolveAssignedRegions(
   explicitRegion: string | null | undefined,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): string[] {
-  const assignedRegions = uniqueTrimmed(regionalAccess?.regions ?? []);
-  if (assignedRegions.length === 0) return [];
-
   const explicit = explicitRegion?.trim();
-  if (!explicit || explicit.toLowerCase() === 'all') return assignedRegions;
-
-  const matched = assignedRegions.find(
-    (assignedRegion) => assignedRegion.toLowerCase() === explicit.toLowerCase(),
-  );
-  return matched ? [matched] : [];
+  if (explicit && explicit.toLowerCase() !== 'all') return [explicit];
+  return uniqueTrimmed(regionalAccess?.regions ?? []);
 }
 
 export function inferRegionalAccessFromText(

@@ -197,7 +197,7 @@ Request fields:
 | `permissions[].code` | string | yes | no | raw backend permission code ยาว `1-64` และต้องมีอยู่ในระบบ เช่น `cems_wpms_requests:view`; field นี้ไม่รับ `permissions.connection.view` |
 | `permissions[].effect` | `allow` \| `deny` | yes | no | `allow` ใช้ลด/คงสิทธิ์; `deny` ใช้ปิดสิทธิ์ |
 | `permissions[].scope` | scope | no | yes | `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, `FACTORY_TYPE_88`; ถ้า `allow` แล้วไม่ส่ง จะใช้ scope ของ role |
-| `permissions[].region` | string | conditional | yes | ใช้เมื่อ `scope=IN_REGION`; ยาว `1-128` และต้องอยู่ใน profile assignment |
+| `permissions[].region` | string | conditional | yes | ใช้เมื่อ `scope=IN_REGION`; ยาว `1-128`; ภาคเมนูมีผลก่อนภาคเริ่มต้นจากโปรไฟล์และไม่ต้องตรงกัน |
 | `permissions[].province` | string | conditional | yes | ใช้เมื่อ `scope=IN_PROVINCE`; รับชื่อหรือรหัสจังหวัด ยาว `1-128` |
 | `permissions[].estateCode` | string | conditional | yes | ใช้เมื่อ `scope=IN_ESTATE`; รหัสหรือชื่อที่ resolve กับ master ได้ ยาว `1-32` |
 | `permissions[].estate` | string | no | yes | compatibility alias ของ `estateCode`; client ใหม่ควรส่ง `estateCode` |
@@ -290,12 +290,14 @@ Validation and limitation notes:
 - `allow` ใช้ได้เฉพาะ code ที่ role มี และ scope ต้องเท่ากับหรือแคบกว่า role; การเพิ่ม action ใหม่หรือขยาย scope ตอบ `400 BAD_REQUEST`
 - `deny` ไม่ต้องส่ง `scope`/location; backend normalize ค่าเหล่านี้เป็น `null`
 - location ที่ไม่ส่งจะอิง profile assignment ไม่ได้หมายถึง scope ไม่จำกัด
-- ถ้า profile assignment ที่จำเป็นหายหรือขัดกับ override ระบบต้อง fail closed และไม่คืนข้อมูลนอกขอบเขต
+- พื้นที่ override ที่ระบุมีผลก่อน profile assignment; ถ้าไม่ระบุทั้งสองแหล่ง ระบบต้อง fail closed และไม่คืนข้อมูล ดู [กติกาพื้นที่รายเมนู](./README.md#region-and-location-rules)
 - `province` และ `estateCode` ต้อง resolve กับ master data ได้ มิฉะนั้นตอบ `400 BAD_REQUEST`
 
 ### Create local account
 
 #### `POST /api/v1/users/local-accounts`
+
+การสร้างบัญชีพร้อม `permissionOverrides` ที่ไม่ว่าง หรือ grouped `permissions` ที่แปลงเป็น overrides ไม่ว่าง ต้องมี `permissions:manage` เพิ่มจาก `users:edit`; บัญชีที่ใช้ role defaults โดยไม่เพิ่ม overrides ยังใช้สิทธิ์สร้างบัญชีเดิมได้
 
 - Permission: `users:edit` **หรือ** `permissions:manage`
 - ใช้สร้างบัญชี POMS local ที่ login ด้วย `username`/`password`
@@ -537,7 +539,7 @@ Response (`201 Created`) คืน `Location: /api/v1/users/<id>` และ `Man
 #### `PATCH /api/v1/users/:id`
 
 - Permission: `users:edit` **หรือ** `permissions:manage`
-- การแก้ `regionalAccess`, จังหวัด หรือนิคม ต้องมี `permissions:manage` เพิ่ม แม้ route guard จะผ่านด้วย `users:edit`
+- การแก้ `regionalAccess`, จังหวัด หรือนิคม และการส่ง `permissions` (รวมชุดว่างเพื่อล้าง) ต้องมี `permissions:manage` เพิ่ม แม้ route guard จะผ่านด้วย `users:edit`
 - Path: `id` เป็นจำนวนเต็มบวก
 - Request body: บังคับ และรับได้ 2 shapes; ห้ามผสมสอง shape ใน request เดียว
 
@@ -636,6 +638,8 @@ curl --request PATCH \
 - API/IdP account: เปลี่ยน `username`, `externalId`, ข้อมูลบุคลากร, email, phone หรือ password ไม่ได้; Shape A ส่งค่าเดิมของ `username`, `fullName`, `department`, `lineNameTh`, `levelNameTh` กลับมาได้และ backend จะไม่นำ provider-owned fields เหล่านี้ไปเขียนทับ
 - เมื่อส่ง Shape A สำหรับ API/IdP account ให้ส่ง `source: "api"` หรือ `accountType: "api"` ตามค่าจาก `GET /users/:id` เพื่อให้ backend แยก provider-owned fields ออกจาก authorization assignment ถูกต้อง
 - API/IdP account ยังแก้ role, `isActive` และ authorization assignment (`regionalAccess`, จังหวัด, นิคม) ได้เมื่อผู้เรียกมีสิทธิ์ครบ
+- พื้นที่ในแต่ละเมนูไม่ต้องตรงโปรไฟล์ และไม่อัปเดตโปรไฟล์อัตโนมัติ เช่นบัญชี `diw_central` ส่ง `permissions.dashboard.region: "ภาคตะวันออก"` และ `permissions.factories.province: "ระยอง"` ได้โดยไม่ส่ง `user.regionName`; ตัวอย่างเต็มอยู่ใน runtime OpenAPI ของ PATCH
+- หลังแก้สิทธิ์ให้ login ใหม่เพื่อรับ token ล่าสุด; token เดิมและ `/auth/me` ที่อิง session ยังใช้สิทธิ์ของ token เดิม
 - เปลี่ยน role แล้วต้องมี assignment ที่ role ใหม่บังคับ มิฉะนั้นตอบ `400 BAD_REQUEST`
 - ถ้าส่ง `permissions` backend แปลง grouped booleans เป็น override และแทนที่เฉพาะ editable overrides; internal/hidden overrides เช่น `cems_wpms_requests:direct_connect`, `statistics:export`, `permissions:manage` ถูกเก็บไว้หากยังใช้ได้กับ role ใหม่ ถ้าไม่ต้องการเปลี่ยน editable overrides ให้ละ field นี้
 
@@ -734,7 +738,7 @@ curl --request DELETE \
 Route-specific notes:
 
 - `GET /api/v1/users/:id/permissions` และ `PUT /api/v1/users/:id/permissions` ไม่ fallback เป็น `users:view`; ถ้าไม่มี `permissions:manage` จะตอบ `403`
-- `PATCH /api/v1/users/:id` ถ้าพยายามแก้ region, province หรือ estate assignment โดยไม่มี `permissions:manage` จะตอบ `403`
+- `PATCH /api/v1/users/:id` ถ้าแก้พื้นที่โปรไฟล์หรือส่ง `permissions` โดยไม่มี `permissions:manage` จะตอบ `403`; create ที่ส่ง overrides ไม่ว่างใช้กติกาเดียวกัน
 - `DELETE /api/v1/users/:id` ถ้า `:id` ตรงกับผู้ใช้ที่ login อยู่จะตอบ `403`
 
 

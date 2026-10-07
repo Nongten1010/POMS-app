@@ -1267,7 +1267,13 @@ function applyFactoryRegionalAccessFilter(
   scope: AccessScope,
   regionalAccess?: RegionalAccessDTO | null,
 ): void {
-  if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
+  // Menu location scopes already apply their own explicit qualifier or profile default.
+  if (
+    ['ALL', 'FACTORY_TYPE_88', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(
+      getAccessScopeValue(scope) ?? '',
+    )
+  )
+    return;
   const regions = regionalAccess?.regions?.map((value) => value.trim()).filter(Boolean) ?? [];
   if (regions.length > 0) builder.whereIn('p.region', [...new Set(regions)]);
 }

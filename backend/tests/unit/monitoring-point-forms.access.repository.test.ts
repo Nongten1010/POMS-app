@@ -16,7 +16,7 @@ describe('monitoring point form repository access filters', () => {
     expect(compiled.bindings).toContain('ภาคตะวันออก');
   });
 
-  it('fails closed when explicit region conflicts with regionalAccess', () => {
+  it('uses the form menu region independently of regionalAccess', () => {
     const compiled = buildFormsQueryForTests(
       {},
       {
@@ -26,7 +26,9 @@ describe('monitoring point form repository access filters', () => {
       },
     ).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = 0');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = 0');
+    expect(compiled.bindings).toContain('ภาคเหนือ');
+    expect(compiled.bindings).not.toContain('ภาคใต้');
   });
 
   it('fails closed when province or estate qualifiers are missing', () => {

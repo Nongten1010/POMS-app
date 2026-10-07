@@ -2707,7 +2707,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('fails closed for explicit IN_REGION request reads without a profile assignment', async () => {
+  it('rejects detail when the access-filtered repository returns no request', async () => {
     mockedRepository.findByIdForReadAccess.mockResolvedValue(null);
 
     await expect(
@@ -5075,40 +5075,43 @@ describe('connectionRequestsService', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
-  it('does not let regional access narrow ALL-scoped status approvals', async () => {
-    mockedRepository.findById.mockResolvedValue(
-      requestDto({
-        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
-        createdBy: 99,
-        regionName: 'ภาคเหนือ',
-        regionCode: 'ภาคเหนือ',
-      }),
-    );
-    mockedRepository.updateStatus.mockResolvedValue(
-      requestDto({
-        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-        connectionDueAt: dueAt,
-        createdBy: 99,
-        regionName: 'ภาคเหนือ',
-        regionCode: 'ภาคเหนือ',
-      }),
-    );
+  it.each(['ALL', { scope: 'IN_REGION', region: 'ภาคเหนือ', province: null }] as const)(
+    'does not let the profile region narrow status approvals for %j',
+    async (scope) => {
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+          createdBy: 99,
+          regionName: 'ภาคเหนือ',
+          regionCode: 'ภาคเหนือ',
+        }),
+      );
+      mockedRepository.updateStatus.mockResolvedValue(
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+          connectionDueAt: dueAt,
+          createdBy: 99,
+          regionName: 'ภาคเหนือ',
+          regionCode: 'ภาคเหนือ',
+        }),
+      );
 
-    await connectionRequestsService.changeStatus(1, { action: 'APPROVE_FORM' }, 7, 'ALL', {
-      regions: ['ภาคตะวันออก'],
-    });
+      await connectionRequestsService.changeStatus(1, { action: 'APPROVE_FORM' }, 7, scope, {
+        regions: ['ภาคตะวันออก'],
+      });
 
-    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
-      1,
-      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-      7,
-      {
-        officerNote: null,
-        revisionReason: null,
-        connectionDueAt: dueAt,
-      },
-    );
-  });
+      expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+        1,
+        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        7,
+        {
+          officerNote: null,
+          revisionReason: null,
+          connectionDueAt: dueAt,
+        },
+      );
+    },
+  );
 
   it('moves a request back to factory revision when officer requests changes', async () => {
     mockedRepository.findById.mockResolvedValue(
@@ -6492,37 +6495,40 @@ describe('connectionRequestsService', () => {
     expect(mockedRepository.connect).not.toHaveBeenCalled();
   });
 
-  it('does not let regional access narrow ALL-scoped connection verification', async () => {
-    mockedRepository.findById.mockResolvedValue(
-      requestDto({
-        status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
-        createdBy: 99,
-        regionName: 'ภาคเหนือ',
-        regionCode: 'ภาคเหนือ',
-      }),
-    );
-    mockedRepository.connect.mockResolvedValue(
-      requestDto({
-        status: CONNECTION_REQUEST_STATUS.CONNECTED,
-        createdBy: 99,
-        regionName: 'ภาคเหนือ',
-        regionCode: 'ภาคเหนือ',
-      }),
-    );
+  it.each(['ALL', { scope: 'IN_REGION', region: 'ภาคเหนือ', province: null }] as const)(
+    'does not let the profile region narrow connection verification for %j',
+    async (scope) => {
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+          createdBy: 99,
+          regionName: 'ภาคเหนือ',
+          regionCode: 'ภาคเหนือ',
+        }),
+      );
+      mockedRepository.connect.mockResolvedValue(
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.CONNECTED,
+          createdBy: 99,
+          regionName: 'ภาคเหนือ',
+          regionCode: 'ภาคเหนือ',
+        }),
+      );
 
-    await connectionRequestsService.verifyConnection(
-      1,
-      { verifiedAt: '2026-05-27T11:00:00.000Z' },
-      7,
-      'ALL',
-      { regions: ['ภาคตะวันออก'] },
-    );
+      await connectionRequestsService.verifyConnection(
+        1,
+        { verifiedAt: '2026-05-27T11:00:00.000Z' },
+        7,
+        scope,
+        { regions: ['ภาคตะวันออก'] },
+      );
 
-    expect(mockedRepository.connect).toHaveBeenCalledWith(1, 7, {
-      verifiedAt: '2026-05-27T11:00:00.000Z',
-      officerNote: null,
-    });
-  });
+      expect(mockedRepository.connect).toHaveBeenCalledWith(1, 7, {
+        verifiedAt: '2026-05-27T11:00:00.000Z',
+        officerNote: null,
+      });
+    },
+  );
 });
 
 function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRequestDTO {

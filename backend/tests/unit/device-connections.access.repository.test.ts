@@ -17,14 +17,16 @@ describe('device connection repository access filters', () => {
     expect(compiled.bindings).toContain('ภาคตะวันตก');
   });
 
-  it('fails closed on a conflicting explicit and profile region', () => {
+  it('uses the device menu region independently of the profile region', () => {
     const compiled = buildDeviceConnectionAccessQueryForTests({
       actorUserId: 42,
       scope: { scope: 'IN_REGION', region: 'ภาคเหนือ' },
       regionalAccess: { regions: ['ภาคใต้'] },
     }).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = 0');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = 0');
+    expect(compiled.bindings).toContain('ภาคเหนือ');
+    expect(compiled.bindings).not.toContain('ภาคใต้');
   });
 
   it('filters province and estate scopes by request or factory location', () => {

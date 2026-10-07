@@ -115,7 +115,7 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(compiled.bindings).toContain('ภาคเหนือ');
   });
 
-  it('fails closed when the explicit BOD/COD region is outside assigned profile regions', () => {
+  it('uses the BOD/COD menu region instead of the profile regions', () => {
     const compiled = buildBodCodDeviationReportQueryForTests(
       {},
       {
@@ -125,14 +125,13 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       },
     ).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
-    expect(compiled.bindings).toContain(0);
-    expect(compiled.bindings).not.toContain('ภาคตะวันออกเฉียงเหนือ');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = ?');
+    expect(compiled.bindings).toContain('ภาคตะวันออกเฉียงเหนือ');
     expect(compiled.bindings).not.toContain('ภาคเหนือ');
     expect(compiled.bindings).not.toContain('ภาคกลาง');
   });
 
-  it('fails closed when BOD/COD IN_REGION has no assigned profile region', () => {
+  it('uses the BOD/COD menu region without a profile region', () => {
     const compiled = buildBodCodDeviationReportQueryForTests(
       {},
       {
@@ -142,9 +141,8 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       },
     ).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
-    expect(compiled.bindings).toContain(0);
-    expect(compiled.bindings).not.toContain('ภาคกลาง');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = ?');
+    expect(compiled.bindings).toContain('ภาคกลาง');
   });
 
   it('filters report requests by status and parameter code', () => {

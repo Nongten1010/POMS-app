@@ -2687,7 +2687,12 @@ function applyRequestRegionalAccessFilter(
   scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
-  if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
+  if (
+    ['ALL', 'FACTORY_TYPE_88', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(
+      getAccessScopeValue(scope) ?? '',
+    )
+  )
+    return;
   const regionValues = getRegionalFilterValues(regionalAccess);
   if (regionValues.length === 0) return;
 
@@ -2761,7 +2766,12 @@ function applyFactoryRegionalAccessFilter(
   scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
-  if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
+  if (
+    ['ALL', 'FACTORY_TYPE_88', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(
+      getAccessScopeValue(scope) ?? '',
+    )
+  )
+    return;
   const regionValues = getRegionalFilterValues(regionalAccess);
   if (regionValues.length === 0) return;
   builder.whereIn('p.region', regionValues);

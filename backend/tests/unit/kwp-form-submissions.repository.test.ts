@@ -167,30 +167,28 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
   });
 
-  it('fails closed when the KWP workflow region is outside assigned profile regions', () => {
+  it('uses the KWP menu region independently of assigned profile regions', () => {
     const compiled = buildKwpFormSubmissionWorkflowQueryForTests(12, {
       actorUserId: 42,
       scope: { scope: 'IN_REGION', region: 'ภาคใต้' },
       regionalAccess: { regions: ['ภาคกลาง', 'ภาคเหนือ'] },
     }).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
-    expect(compiled.bindings).toContain(0);
-    expect(compiled.bindings).not.toContain('ภาคใต้');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = ?');
+    expect(compiled.bindings).toContain('ภาคใต้');
     expect(compiled.bindings).not.toContain('ภาคกลาง');
     expect(compiled.bindings).not.toContain('ภาคเหนือ');
   });
 
-  it('fails closed when a KWP workflow IN_REGION scope has no assigned profile region', () => {
+  it('uses an explicit KWP region without a profile region', () => {
     const compiled = buildKwpFormSubmissionWorkflowQueryForTests(12, {
       actorUserId: 42,
       scope: { scope: 'IN_REGION', region: 'ภาคกลาง' },
       regionalAccess: null,
     }).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
-    expect(compiled.bindings).toContain(0);
-    expect(compiled.bindings).not.toContain('ภาคกลาง');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = ?');
+    expect(compiled.bindings).toContain('ภาคกลาง');
   });
 
   it('uses estateCode before legacy estate keys for KWP detail reads', () => {

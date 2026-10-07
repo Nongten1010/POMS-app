@@ -453,11 +453,12 @@ const createManagedUserExample = {
 
 const updateManagedUserExample = {
   user: {
+    accountType: 'api',
+    source: 'api',
     fullName: 'สมชาย แก้ไข',
-    username: 'local_officer',
-    roles: 'monitoring_5_centers',
+    username: 'api_officer',
+    roles: 'diw_central',
     isActive: true,
-    regionName: 'ภาคตะวันออก',
   },
   permissions: {
     dashboard: {
@@ -466,8 +467,12 @@ const updateManagedUserExample = {
       export: true,
       region: 'ภาคตะวันออก',
     },
+    factories: { data: 'IN_PROVINCE', province: 'ระยอง', view: true },
   },
 };
+
+const menuLocationAssignmentDescription =
+  'บทบาทเป็นค่าเริ่มต้นและเพดาน permission/action กับชนิด scope; พื้นที่รายเมนูที่ระบุมีผลก่อนพื้นที่โปรไฟล์และไม่ต้องตรงกัน ไม่แก้โปรไฟล์ตามเมนูอัตโนมัติ. ถ้าไม่ระบุพื้นที่ให้ใช้ค่าเริ่มต้นจากโปรไฟล์; ถ้าไม่มีทั้งสองแหล่งให้ไม่คืนข้อมูล. PATCH ที่ส่ง permissions (รวมชุดว่างเพื่อล้าง) และการสร้างบัญชีพร้อม overrides ที่ไม่ว่าง ต้องมี permissions:manage เพิ่มจาก users:edit มิฉะนั้นตอบ 403 FORBIDDEN. token เดิมคงสิทธิ์เดิมจน login ใหม่; ข้อจำกัดบทบาทและสถานะของ workflow ยังมีผล';
 
 const replacePermissionsExample = {
   permissions: [
@@ -497,8 +502,19 @@ function editablePermissionGroupSchema(module: string, complete: boolean): OpenA
     ...(isLocationScoped
       ? {
           data: permissionDataScopeSchema,
-          region: { type: 'string', maxLength: 128, nullable: true },
-          province: { type: 'string', maxLength: 128, nullable: true },
+          region: {
+            type: 'string',
+            maxLength: 128,
+            nullable: true,
+            description: 'พื้นที่เมนูเมื่อ data=IN_REGION; มีผลก่อนภาคเริ่มต้นจากโปรไฟล์',
+          },
+          province: {
+            type: 'string',
+            maxLength: 128,
+            nullable: true,
+            description:
+              'พื้นที่เมนูเมื่อ data=IN_PROVINCE; รับชื่อหรือรหัสจังหวัดและมีผลก่อนจังหวัดเริ่มต้นจากโปรไฟล์',
+          },
         }
       : {}),
     ...Object.fromEntries(actions.map((action) => [action, { type: 'boolean' }])),
@@ -1767,10 +1783,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
   UpdateManagedUserRequest: {
     oneOf: [schemaRef('LegacyUpdateManagedUserRequest'), schemaRef('EditResponseUpdateRequest')],
     description:
-      'รับได้ทั้ง legacy partial payload และ payload รูปแบบหน้า edit ที่มี user/permissions',
+      'รับได้ทั้ง legacy partial payload และ payload รูปแบบหน้า edit ที่มี user/permissions. ' +
+      menuLocationAssignmentDescription,
   },
   PermissionOverride: {
     type: 'object',
+    description: menuLocationAssignmentDescription,
     additionalProperties: false,
     required: ['code', 'effect'],
     properties: {
@@ -1804,7 +1822,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       estate: { type: 'string', maxLength: 32, nullable: true },
     },
     description:
-      'Grouped effective permissions สำหรับ runtime/auth และ endpoint raw permission; หน้า Permission Management ใช้ EditablePermissionGroups แทน',
+      'Grouped effective permissions สำหรับ runtime/auth และ endpoint raw permission; หน้า Permission Management ใช้ EditablePermissionGroups แทน. ' +
+      menuLocationAssignmentDescription,
   },
   ReplaceUserPermissionsRequest: {
     type: 'object',
@@ -5492,7 +5511,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Create local POMS account',
       operationId: 'createLocalAccount',
-      description: `${userIdentityConflictDescription}; ${localAccountCreatedDescription}`,
+      description:
+        `${userIdentityConflictDescription}; ${localAccountCreatedDescription}. ` +
+        menuLocationAssignmentDescription,
       requestBody: jsonRequestBody(
         schemaRef('CreateLocalAccountRequest'),
         createLocalAccountExample,
@@ -5508,6 +5529,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Get managed user detail',
       operationId: 'getUserById',
+      description: menuLocationAssignmentDescription,
       parameters: [userIdParameter],
       successSchema: schemaRef('ManagedUserEditResponse'),
     }),
@@ -5515,7 +5537,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Update managed user',
       operationId: 'updateUser',
-      description: `${userIdentityConflictDescription}; PATCH บัญชี local เปลี่ยน username ไปใช้ชื่อของบัญชีที่ soft-delete แล้วได้ โดยคง user ID ของบัญชีที่กำลังแก้ไขและไม่รับสิทธิ์/ประวัติจากบัญชีที่ลบแล้ว; provider อื่นเปลี่ยน identity ไม่ได้`,
+      description:
+        `${userIdentityConflictDescription}; PATCH บัญชี local เปลี่ยน username ไปใช้ชื่อของบัญชีที่ soft-delete แล้วได้ โดยคง user ID ของบัญชีที่กำลังแก้ไขและไม่รับสิทธิ์/ประวัติจากบัญชีที่ลบแล้ว; provider อื่นเปลี่ยน identity ไม่ได้. ` +
+        menuLocationAssignmentDescription,
       parameters: [userIdParameter],
       requestBody: jsonRequestBody(schemaRef('UpdateManagedUserRequest'), updateManagedUserExample),
       extraResponses: { '409': userIdentityConflictResponse },
@@ -5543,6 +5567,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Replace user permission overrides',
       operationId: 'replaceUserPermissions',
+      description: 'ต้องมี permissions:manage. ' + menuLocationAssignmentDescription,
       parameters: [userIdParameter],
       requestBody: jsonRequestBody(
         schemaRef('ReplaceUserPermissionsRequest'),

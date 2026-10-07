@@ -108,6 +108,67 @@ describe('authService login completion', () => {
     jest.clearAllMocks();
   });
 
+  it('preserves independent menu locations in login tokens and authenticated me responses', async () => {
+    const user = {
+      id: 45,
+      external_id: 'menu_officer',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'menu_officer',
+      first_name: 'Test',
+      last_name: 'User',
+      is_active: true,
+      password_hash: Buffer.from('fixture-hash'),
+    } as never;
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue(user);
+    mockedAuthRepository.findUserById.mockResolvedValue(user);
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      province_name_th: 'กรุงเทพมหานคร',
+      estate_code: 'OLD',
+      regional_access_json: JSON.stringify({ regions: ['ภาคกลาง'] }),
+    } as never);
+    const scopeDetails = {
+      'dashboard:view': { scope: 'IN_REGION', region: 'ภาคตะวันออก' },
+      'factories:view': { scope: 'IN_PROVINCE', province: 'ระยอง' },
+      'eligible_factories:view': { scope: 'IN_ESTATE', estateCode: 'NEW', estate: 'NEW' },
+    } as const;
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['diw_central'],
+      scopes: scopeDetails,
+    });
+    const result = await authService.login({
+      accountType: 'poms',
+      userType: 'officer',
+      username: 'menu_officer',
+      [passwordField]: validTestPassword,
+    } as never);
+    expect(result.permissions.dashboard).toMatchObject({ region: 'ภาคตะวันออก' });
+    expect(result.permissions.factories).toMatchObject({ province: 'ระยอง' });
+    expect(result.permissions.eligible_factories).toMatchObject({ estateCode: 'NEW' });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeDetails: expect.objectContaining({
+          'dashboard:view': expect.objectContaining(scopeDetails['dashboard:view']),
+          'factories:view': expect.objectContaining(scopeDetails['factories:view']),
+          'eligible_factories:view': expect.objectContaining(
+            scopeDetails['eligible_factories:view'],
+          ),
+        }),
+      }),
+    );
+    const me = await authService.me(45, {
+      userType: 'officer',
+      roles: ['diw_central'],
+      scopes: {
+        'dashboard:view': 'IN_REGION',
+        'factories:view': 'IN_PROVINCE',
+        'eligible_factories:view': 'IN_ESTATE',
+      },
+      scopeDetails,
+    });
+    expect(me.permissions).toEqual(result.permissions);
+  });
+
   it('resolves an explicit POMS account with a provider-scoped local identity', async () => {
     mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
       id: 41,

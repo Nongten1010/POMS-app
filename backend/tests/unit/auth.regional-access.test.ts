@@ -20,10 +20,7 @@ describe('regional access inference', () => {
 
   it('does not add central access when a regional center appears with the parent division name', () => {
     expect(
-      inferRegionalAccessFromText(
-        'กองวิจัยและเตือนภัยมลพิษโรงงาน',
-        'เจ้าหน้าที่ ศวภ.ต.',
-      ),
+      inferRegionalAccessFromText('กองวิจัยและเตือนภัยมลพิษโรงงาน', 'เจ้าหน้าที่ ศวภ.ต.'),
     ).toEqual({ regions: ['ภาคใต้'] });
   });
 
@@ -34,17 +31,22 @@ describe('regional access inference', () => {
   });
 });
 
-describe('regional access intersection', () => {
+describe('menu regional assignments', () => {
   it('returns only an explicit region that is part of the profile assignment', () => {
     expect(resolveAssignedRegions('ภาคเหนือ', { regions: ['ภาคเหนือ', 'ภาคกลาง'] })).toEqual([
       'ภาคเหนือ',
     ]);
   });
 
-  it('fails closed for conflicting or missing profile assignments', () => {
-    expect(resolveAssignedRegions('ภาคเหนือ', { regions: ['ภาคใต้'] })).toEqual([]);
-    expect(resolveAssignedRegions('ภาคเหนือ', null)).toEqual([]);
+  it('uses the explicit menu region even when the profile differs or has no assignment', () => {
+    expect(resolveAssignedRegions('ภาคเหนือ', { regions: ['ภาคใต้'] })).toEqual(['ภาคเหนือ']);
+    expect(resolveAssignedRegions(' ภาคเหนือ ', null)).toEqual(['ภาคเหนือ']);
+  });
+
+  it('fails closed when both the menu and profile have no region', () => {
     expect(resolveAssignedRegions(null, null)).toEqual([]);
+    expect(resolveAssignedRegions('all', null)).toEqual([]);
+    expect(resolveAssignedRegions(' ', null)).toEqual([]);
   });
 
   it('uses all assigned profile regions when the permission has no explicit qualifier', () => {

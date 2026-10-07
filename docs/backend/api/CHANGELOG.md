@@ -1,5 +1,14 @@
 # API Breaking Changes
 
+<a id="menu-location-assignments"></a>
+
+## 2026-10-07 — มอบหมายพื้นที่รายเมนูแยกจากโปรไฟล์ผู้ใช้
+
+- **Affected canonical docs:** [กติกาสิทธิ์และพื้นที่](./menus/permissions/README.md#region-and-location-rules), [API จัดการผู้ใช้](./menus/permissions/user-management-api.md), [คำขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `PATCH /users/:id` และ `PUT /users/:id/permissions` รับภาค/จังหวัด/นิคมรายเมนูที่ต่างจากโปรไฟล์ได้ โดยยังคงเพดาน permission/action และชนิด scope ของ role; การเปิด editor, login/token และการกรองข้อมูลใช้พื้นที่เมนูก่อน profile default. PATCH ที่ส่ง overrides รวมชุดว่าง และ create ที่ส่ง overrides ไม่ว่าง ต้องมี `permissions:manage` เพิ่มจาก `users:edit` มิฉะนั้นตอบ `403 FORBIDDEN`.
+- **Migration:** ไม่ต้อง migrate/backfill ฐานข้อมูล; ตรวจ overrides ที่เก็บไว้ก่อนเปิดใช้ เพราะพื้นที่ที่ต่างจากโปรไฟล์จะเริ่มมีผลจริง ให้ผู้ใช้ login ใหม่หลังปรับสิทธิ์; client ไม่ต้องเพิ่มพื้นที่โปรไฟล์เพื่อให้พื้นที่เมนูบันทึกผ่าน และบัญชีที่เคยมีเพียง `users:edit` ต้องได้รับ `permissions:manage` หากต้องจัดการ overrides. เมื่อไม่ระบุพื้นที่รายเมนูยังใช้ค่าเริ่มต้นจากโปรไฟล์; ถ้าไม่มีทั้งสองแหล่งให้ไม่คืนข้อมูล.
+- **Breaking change:** yes — เปลี่ยนการตีความพื้นที่และเพิ่มข้อกำหนดสิทธิ์ของผู้แก้ overrides; ข้อจำกัดบทบาท/สถานะของ workflow และ factory ownership คงเดิม. ตรวจ runtime OpenAPI หลัง deploy ก่อนถือว่า release เสร็จ.
+
 <a id="alert-email-pdf-letter-contract"></a>
 
 ## 2026-10-05 — ข้อความอีเมลทั้งหกแบบตรงแม่แบบ PDF

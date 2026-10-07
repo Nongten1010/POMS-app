@@ -293,10 +293,11 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     }
   });
 
-  it('filters province scope and fails closed when estate details are missing', () => {
+  it('filters the menu province independently and fails closed when estate details are missing', () => {
     const province = buildConnectedFactoryRowsQueryForTests({
       actorUserId: 77,
       scope: { scope: 'IN_PROVINCE', province: 'ระยอง' },
+      regionalAccess: { regions: ['ภาคเหนือ'] },
     }).toSQL();
     const missingEstate = buildEditRequestsQueryForTests({
       actorUserId: 77,
@@ -305,18 +306,20 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
 
     expect(province.sql.toLowerCase()).toContain('[ef].[province_name] = ?');
     expect(province.bindings).toContain('ระยอง');
+    expect(province.bindings).not.toContain('ภาคเหนือ');
     expect(missingEstate.sql.toLowerCase()).toContain('1 = 0');
   });
 
-  it('fails closed when a requested region is outside the actor regional assignment', () => {
+  it('uses the requested menu region instead of the actor profile region', () => {
     const compiled = buildConnectedFactoryRowsQueryForTests({
       actorUserId: 77,
       scope: { scope: 'IN_REGION', region: 'ภาคเหนือ' },
       regionalAccess: { regions: ['ภาคตะวันออก'] },
     }).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = 0');
-    expect(compiled.bindings).not.toContain('ภาคเหนือ');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = 0');
+    expect(compiled.bindings).toContain('ภาคเหนือ');
+    expect(compiled.bindings).not.toContain('ภาคตะวันออก');
   });
 
   it('limits ERC reads to eligible factories with factory type 88', () => {

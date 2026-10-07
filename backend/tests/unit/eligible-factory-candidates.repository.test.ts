@@ -509,7 +509,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     });
   });
 
-  it('fails closed when candidate scope.region conflicts with regionalAccess', async () => {
+  it('uses the candidate menu region independently of regionalAccess', async () => {
     const { countQuery, facImportQuery, provinceQuery } = mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
 
@@ -522,13 +522,13 @@ describe('eligibleFactoryCandidatesRepository', () => {
       },
     );
 
-    expect(result).toEqual({ data: [], meta: { total: 0, source: 'external' } });
-    expect(provinceQuery.whereIn).not.toHaveBeenCalled();
-    expect(countQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.anything());
-    expect(facImportQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.anything());
+    expect(result.meta.source).toBe('external');
+    expect(provinceQuery.whereIn).toHaveBeenCalledWith('region', ['ภาคกลาง']);
+    expect(countQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
+    expect(facImportQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
   });
 
-  it('fails closed when candidate IN_REGION scope has no assigned profile region', async () => {
+  it('uses the candidate menu region without a profile region', async () => {
     const { countQuery, facImportQuery, provinceQuery } = mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
 
@@ -541,10 +541,10 @@ describe('eligibleFactoryCandidatesRepository', () => {
       },
     );
 
-    expect(result).toEqual({ data: [], meta: { total: 0, source: 'external' } });
-    expect(provinceQuery.whereIn).not.toHaveBeenCalled();
-    expect(countQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.anything());
-    expect(facImportQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.anything());
+    expect(result.meta.source).toBe('external');
+    expect(provinceQuery.whereIn).toHaveBeenCalledWith('region', ['ภาคกลาง']);
+    expect(countQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
+    expect(facImportQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
   });
 
   it('filters external candidates by authoritative estate code when provided', async () => {

@@ -176,7 +176,7 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 
 การบังคับ data scope แตกต่างกันตาม endpoint และห้ามเหมารวมว่าใช้ location intersection ทุก route:
 
-- route อ่านรายการ/รายละเอียดและ route ของเจ้าหน้าที่ใช้ permission scope ตาม implementation; เมื่อเป็น location scope จะตัดกับ profile assignment และอาจคืนรายการว่างหรือ `404`
+- route อ่านรายการ/รายละเอียดและ route ของเจ้าหน้าที่ใช้ permission scope ตาม implementation; location scope ใช้พื้นที่เมนูก่อนค่าเริ่มต้นจากโปรไฟล์ตาม [กติกาพื้นที่รายเมนู](../permissions/README.md#region-and-location-rules) และรายการนอกพื้นที่คืนรายการว่างหรือ `404`
 - `POST /measurement-points` และ `POST /parameters` ตรวจว่า identifier resolve เป็น active row ใน `eligible_factories`; เมื่อเจ้าหน้าที่ส่ง `submissionAction` ใน `POST /measurement-points` backend จะตัด edit scope/region ของเจ้าหน้าที่ด้วย
 - เฉพาะเจ้าหน้าที่ใน `POST /measurement-points` สามารถส่ง `submissionAction=REQUEST_FACTORY_REVISION|CONNECT`; ค่า `CONNECT` ต้องมี direct-connect permission และผ่าน eligible-factory scope ของ permission นั้น
 - `PUT /:id/form` ใช้ edit scope/assignment และสถานะ `WAITING_FACTORY_REVISION`; cancel, ตั้งค่าอุปกรณ์ และ confirm ใช้ edit scope/assignment กับข้อจำกัดสถานะของแต่ละ action

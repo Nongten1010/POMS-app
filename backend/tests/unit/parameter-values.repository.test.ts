@@ -217,14 +217,16 @@ describe('parameterValuesRepository', () => {
     expect(compiled.sql.toLowerCase()).not.toContain('user_juristics');
   });
 
-  it('fails closed when explicit region conflicts with regionalAccess', () => {
+  it('filters by the menu region independently of regionalAccess', () => {
     const compiled = buildStationAccessQueryForTests({
       actorUserId: 42,
       scope: { scope: 'IN_REGION', region: 'ภาคเหนือ' },
       regionalAccess: { regions: ['ภาคใต้'] },
     }).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = 0');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = 0');
+    expect(compiled.bindings).toContain('ภาคเหนือ');
+    expect(compiled.bindings).not.toContain('ภาคใต้');
   });
 
   it('filters IN_ESTATE station access by canonical estateCode', () => {

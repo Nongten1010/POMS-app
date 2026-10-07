@@ -4106,7 +4106,12 @@ function requestMatchesRegionalAccess(
   scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): boolean {
-  if (getAccessScopeValue(scope) === 'ALL') return true;
+  if (
+    ['ALL', 'FACTORY_TYPE_88', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(
+      getAccessScopeValue(scope) ?? '',
+    )
+  )
+    return true;
   const allowedRegions = new Set(normalizedRegionalValues(regionalAccess));
   if (allowedRegions.size === 0) return true;
   return Boolean(

@@ -279,7 +279,12 @@ function applyRegionalAccessFilter(
   scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
-  if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
+  if (
+    ['ALL', 'FACTORY_TYPE_88', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(
+      getAccessScopeValue(scope) ?? '',
+    )
+  )
+    return;
   const regionValues = [
     ...new Set((regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean)),
   ];

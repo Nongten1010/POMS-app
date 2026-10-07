@@ -5,6 +5,22 @@ import {
 } from '../../src/modules/alert-events/alert-events.repository';
 
 describe('alertEventsRepository query helpers', () => {
+  it.each([
+    { scope: 'IN_REGION', region: 'ภาคตะวันออก' },
+    { scope: 'IN_PROVINCE', province: 'ระยอง' },
+    { scope: 'IN_ESTATE', estateCode: 'MTP' },
+  ] as const)('keeps notification location %j independent of the profile region', (scope) => {
+    const compiled = buildAlertEventsAccessQueryForTests({
+      actorUserId: 42,
+      scope,
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    }).toSQL();
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = 0');
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+    expect(compiled.bindings).toContain(
+      'region' in scope ? scope.region : 'province' in scope ? scope.province : scope.estateCode,
+    );
+  });
   it('builds the paginated list query with one alert projection and qualified ordering', () => {
     const compiled = buildAlertEventsListQueryForTests(
       {

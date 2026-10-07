@@ -580,12 +580,7 @@ function enrichRoleScopeDetails(
       }
       if (details.scope === 'IN_PROVINCE') {
         const requestedProvince = normalizeOptionalText(details.province);
-        const effectiveProvince =
-          requestedProvince && province && requestedProvince.toLowerCase() === province.toLowerCase()
-            ? province
-            : requestedProvince === null
-              ? province
-              : null;
+        const effectiveProvince = requestedProvince ?? province;
         return [
           code,
           { ...details, region: details.region ?? null, province: effectiveProvince ?? null },
@@ -593,12 +588,7 @@ function enrichRoleScopeDetails(
       }
       if (details.scope === 'IN_ESTATE') {
         const requestedEstate = normalizeOptionalText(details.estateCode ?? details.estate);
-        const effectiveEstate =
-          requestedEstate && estateCode && requestedEstate.toLowerCase() === estateCode.toLowerCase()
-            ? estateCode
-            : requestedEstate === null
-              ? estateCode
-              : null;
+        const effectiveEstate = requestedEstate ?? estateCode;
         return [
           code,
           {

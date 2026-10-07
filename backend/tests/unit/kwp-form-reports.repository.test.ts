@@ -157,7 +157,7 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(compiled.bindings).toEqual(expect.arrayContaining(['KWP03', 'UNDER_REVIEW', 'ภาคกลาง']));
   });
 
-  it('fails closed when the explicit scope region is outside assigned profile regions', () => {
+  it('uses the KWP report menu region independently of the profile regions', () => {
     const compiled = buildKwpFormRequestQueryForTests(
       {},
       {
@@ -167,14 +167,13 @@ describe('kwpFormReportsRepository access filters', () => {
       },
     ).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
-    expect(compiled.bindings).toContain(0);
-    expect(compiled.bindings).not.toContain('ภาคใต้');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = ?');
+    expect(compiled.bindings).toContain('ภาคใต้');
     expect(compiled.bindings).not.toContain('ภาคกลาง');
     expect(compiled.bindings).not.toContain('ภาคเหนือ');
   });
 
-  it('fails closed when IN_REGION has no assigned profile region', () => {
+  it('uses the KWP report menu region without a profile region', () => {
     const compiled = buildKwpFormRequestQueryForTests(
       {},
       {
@@ -184,9 +183,8 @@ describe('kwpFormReportsRepository access filters', () => {
       },
     ).toSQL();
 
-    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
-    expect(compiled.bindings).toContain(0);
-    expect(compiled.bindings).not.toContain('ภาคกลาง');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = ?');
+    expect(compiled.bindings).toContain('ภาคกลาง');
   });
 
   it('filters industrial-estate-scoped request rows by estateCode before legacy estate keys', () => {

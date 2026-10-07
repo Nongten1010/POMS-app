@@ -70,7 +70,7 @@ export const usersController = {
       if (!actorUserId) throw new Error('Authenticated user missing from request');
       const { id } = userIdParamSchema.parse(req.params);
       const payload = updateManagedUserSchema.parse(req.body);
-      ensureCanManageRegionalAccess(req, payload);
+      ensureCanManageRegionalAccess(req, payload, true);
       const data = await usersService.update(id, payload, actorUserId);
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -116,9 +116,13 @@ export const usersController = {
 
 function ensureCanManageRegionalAccess(
   req: Request,
-  payload: { profile?: unknown },
+  payload: { profile?: unknown; permissionOverrides?: unknown },
+  replaceOverrides = false,
 ): void {
-  if (!hasAccessAssignmentPatch(payload.profile)) return;
+  const changesOverrides =
+    Array.isArray(payload.permissionOverrides) &&
+    (replaceOverrides || payload.permissionOverrides.length > 0);
+  if (!hasAccessAssignmentPatch(payload.profile) && !changesOverrides) return;
   if (req.user?.scopes['permissions:manage'] !== undefined) return;
   throw new ForbiddenError('Missing required permission: permissions:manage');
 }

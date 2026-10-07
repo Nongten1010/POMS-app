@@ -96,7 +96,7 @@ describe('eligibleFactoriesRepository access filtering', () => {
     expect(baseQuery.whereRaw).toHaveBeenCalledWith('1 = 0');
   });
 
-  it('fails closed when explicit scope.region conflicts with regionalAccess', async () => {
+  it('uses the eligible-factory menu region independently of regionalAccess', async () => {
     const { baseQuery } = mockEligibleFactoriesQueries();
 
     await eligibleFactoriesRepository.list({}, {
@@ -105,11 +105,11 @@ describe('eligibleFactoriesRepository access filtering', () => {
       regionalAccess: { regions: ['ภาคตะวันออก'] },
     });
 
-    expect(baseQuery.whereRaw).toHaveBeenCalledWith('1 = 0');
-    expect(baseQuery.whereIn).not.toHaveBeenCalledWith('p.region', expect.anything());
+    expect(baseQuery.whereRaw).not.toHaveBeenCalledWith('1 = 0');
+    expect(baseQuery.whereIn).toHaveBeenCalledWith('p.region', ['ภาคกลาง']);
   });
 
-  it('fails closed when selected eligible factories have no assigned IN_REGION profile', async () => {
+  it('uses the eligible-factory menu region without a profile region', async () => {
     const { baseQuery } = mockEligibleFactoriesQueries();
 
     await eligibleFactoriesRepository.list({}, {
@@ -118,8 +118,8 @@ describe('eligibleFactoriesRepository access filtering', () => {
       regionalAccess: null,
     });
 
-    expect(baseQuery.whereRaw).toHaveBeenCalledWith('1 = 0');
-    expect(baseQuery.whereIn).not.toHaveBeenCalledWith('p.region', expect.anything());
+    expect(baseQuery.whereRaw).not.toHaveBeenCalledWith('1 = 0');
+    expect(baseQuery.whereIn).toHaveBeenCalledWith('p.region', ['ภาคกลาง']);
   });
 
   it('filters selected eligible factories by authoritative estate code when provided', async () => {

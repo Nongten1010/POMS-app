@@ -56,7 +56,7 @@ Target model ของเมนูนี้คือ:
 
 1. managed officer/admin หนึ่งบัญชีต้องมี system role เดียวใน `user_roles`; login จะ fail closed หากบัญชี legacy มีหลาย role
 2. แต่ละ role ให้ permission codes พร้อม data scope ตาม approved matrix ด้านล่าง
-3. regional assignment ของ role บางกลุ่มไม่ได้แปลว่า “scope กว้างที่สุด” แต่ต้องตรง region assignment ของผู้ใช้หรือค่าที่ policy ระบุ
+3. พื้นที่โปรไฟล์เป็นค่าเริ่มต้นของ role; พื้นที่ที่มอบหมายรายเมนูมีผลก่อนและไม่ต้องตรงกับโปรไฟล์ โดยยังคงเพดาน permission/action และชนิด scope ของ role
 4. `user_permissions` ใช้เป็น per-user override เพิ่มเติม
 5. `deny` ตัด permission code นั้นออกจาก effective result
 6. `allow` ใช้ได้เฉพาะ permission ที่ role มีอยู่แล้ว และจำกัด scope ได้เท่าเดิมหรือแคบลงเท่านั้น; backend ปฏิเสธการเพิ่ม permission หรือขยาย scope
@@ -69,7 +69,7 @@ Account and assignment invariants:
 - `monitoring_kpm` และ `kpm_director` ใช้ `ภาคกลาง` เป็น assignment ที่ระบบกำหนด
 - `provincial_office` ต้องมี assigned province หนึ่งจังหวัด
 - `industrial_estate` ต้องมี `estateCode` หนึ่งนิคม; เจ้าหน้าที่เห็นโรงงานทุกแห่งที่ผูกกับนิคมนั้น ไม่ได้จำกัดเพียงโรงงานเดียว
-- per-menu override เป็นเพียงการลดสิทธิ์ภายใน assignment ข้างต้น ไม่สามารถแทนที่หรือขยาย profile assignment
+- per-menu override ระบุพื้นที่ต่างจาก profile assignment ได้ เช่น `diw_central` ให้ dashboard เป็นภาคตะวันออกและ factories เป็นจังหวัดระยอง โดยไม่เปลี่ยนโปรไฟล์; ไม่เพิ่ม action หรือขยายชนิด scope เกิน role
 
 Data scope keywords ที่ target รองรับ:
 
@@ -240,19 +240,20 @@ Frontend ต้องใช้ grouped response เป็น canonical UI contra
 
 | Case | Request / storage rule | Response rule |
 | --- | --- | --- |
-| `IN_REGION` | รับ `region` เป็น string; ถ้าไม่ส่งให้ใช้ assigned region จาก profile แต่ถ้าค่าขัดกับ profile หรือ profile ไม่มี assignment ต้อง fail closed | grouped permissions คืน effective assigned region; `monitoring_kpm`/`kpm_director` เป็นภาคกลาง ส่วน 5 ศูนย์/ผอ.ศูนย์เป็นภาคที่มอบหมาย |
-| `IN_PROVINCE` | รับ `province` เป็นชื่อหรือรหัสจังหวัดและ resolve เป็น province id; ค่าต้องตรง assigned province | grouped permissions คืนชื่อจังหวัดไทย; qualifier หายหรือขัดกันทำให้ไม่มีข้อมูล |
-| `IN_ESTATE` | profile/raw override API รับ `estateCode` หรือ compatibility field `estate` และ resolve กับ industrial estate master; grouped Permission Management payload ไม่รับสอง field นี้ | Permission Management group คืนเพียง `data: "IN_ESTATE"` และใช้ estate assignment ระดับ profile ภายใน; runtime/raw contract อาจยังมี qualifier |
+| `IN_REGION` | รับ `region` เป็น string; ใช้ภาคที่ระบุรายเมนูก่อน ถ้าไม่ส่งให้ใช้ภาคเริ่มต้นจากโปรไฟล์ ถ้าไม่มีทั้งสองแหล่งต้อง fail closed | grouped permissions คืนภาคเมนูเดิมแม้ต่างจากโปรไฟล์; ค่าเริ่มต้นของ `monitoring_kpm`/`kpm_director` ยังเป็นภาคกลาง |
+| `IN_PROVINCE` | รับ `province` เป็นชื่อหรือรหัสจังหวัดและ resolve เป็น province id; ใช้จังหวัดเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ | grouped permissions คืนชื่อจังหวัดไทย; ถ้าไม่มีทั้ง qualifier และค่าเริ่มต้นให้ไม่มีข้อมูล |
+| `IN_ESTATE` | raw override API รับ `estateCode` หรือ compatibility field `estate` และ resolve กับ master; ใช้นิคมรายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์; grouped Permission Management payload ไม่รับสอง field นี้ | Permission Management group คืนเพียง `data: "IN_ESTATE"`; runtime/raw contract คืน qualifier ที่มอบหมายไว้ |
 | `OWN_FACTORY` | ไม่มี field location เพิ่มเติม | client เห็นเพียง `data: "OWN_FACTORY"` |
 | `FACTORY_TYPE_88` | ไม่มี field location เพิ่มเติม; filter จาก factory type ที่เก็บใน eligible/snapshot/form | client เห็น `data: "FACTORY_TYPE_88"`; scope นี้แคบกว่า `ALL` แต่เทียบลำดับกับ region/province/estate ไม่ได้ |
 | profile-level regional access | `profile.regionalAccess` เป็นคนละชั้นกับ per-menu permission scope | ใช้กับการกำหนดพื้นที่เจ้าหน้าที่ ไม่ใช่รายการ `permissions.<module>.region` |
 
 `profile.regionalAccess` กับ `permissions.<module>.region` จึงไม่ใช่ field แทนกัน:
 
-- `profile.regionalAccess`, `profile.provinceId` และ `profile.estateCode` เป็นเพดานพื้นที่ระดับ profile
+- `profile.regionalAccess`, `profile.provinceId` และ `profile.estateCode` เป็นค่าเริ่มต้นสำหรับ permission ที่ไม่ได้ระบุพื้นที่รายเมนู
 - `permissions.<module>.region` ใช้บันทึก override เฉพาะเมนู
-- effective location เป็นจุดตัดของ role scope, profile assignment และ per-menu qualifier; ค่าใดหายหรือขัดกันต้องไม่คืนข้อมูล
-- การแก้ region/province/estate assignment ต้องมี `permissions:manage` แม้ route จะ authorize ด้วย `users:edit` ได้อยู่แล้ว
+- effective location ใช้ per-menu qualifier ก่อน profile default; ไม่มีทั้งสองแหล่งต้องไม่คืนข้อมูล และ location scopes ไม่ถูกกรองซ้ำด้วยภาคโปรไฟล์
+- การแก้ region/province/estate assignment หรือส่ง `permissions` ผ่าน PATCH (รวมชุดว่างเพื่อล้าง) ต้องมี `permissions:manage` แม้ route จะ authorize ด้วย `users:edit` ได้อยู่แล้ว; การสร้างบัญชีพร้อม overrides ที่ไม่ว่างใช้กติกาเดียวกัน
+- ข้อจำกัดบทบาท/สถานะของ workflow เช่น direct connection โดย `monitoring_kpm` เฉพาะภาคกลางยังมีผล พื้นที่เมนูไม่ให้สิทธิ์ข้ามขั้นตอนเหล่านี้
 
 ### Detailed API contract
 
@@ -266,7 +267,7 @@ Frontend ต้องใช้ grouped response เป็น canonical UI contra
 | Runtime role count | target ใช้ 13 roles รวม `erc_office`; `public_anonymous` ยังเป็น system role แต่ frontend ไม่ต้องแสดงใน dropdown สร้างผู้ใช้ |
 | Regional roles | `monitoring_kpm` และ `kpm_director` target เป็น `IN_REGION` ภาคกลาง; `monitoring_5_centers` และ `center_director` target เป็น assigned region |
 | One-role policy | managed account รับ role เดียว; IdP sync คง specialized role ที่ Admin มอบหมายและไม่เติม base role ซ้ำ |
-| Assignment ceiling | per-menu location ต้องอยู่ภายใน profile assignment; missing/conflict เป็น no data |
+| Menu assignment | พื้นที่รายเมนูมีผลก่อน profile default; ถ้าไม่ระบุทั้งสองแหล่งเป็น no data และต้องรับ token ใหม่หลังเปลี่ยนสิทธิ์ |
 | New codes | เพิ่ม `statistics:view`, `conditional_search:view`, `chat:view`, `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve` ใน target contract |
 | Grouped permission aliases | `dashboard.search`, `dashboard.advanced_search`, `dashboard.statistics`, `dashboard.export`, `statistics.*`, `conditional_search.view`, `permissions.*`, `chat.edit` |
 | Estate location detail | ใช้ `estateCode`/`estate` เฉพาะ profile และ raw override API; ไม่อยู่ใน Permission Management group |
@@ -275,7 +276,7 @@ Migration guidance:
 
 - หาก client เดิมสร้าง UI จากเอกสาร legacy ให้ย้ายมาอ่าน canonical page นี้
 - ถ้า admin UI แก้สิทธิ์รายเมนู ให้ส่ง grouped permission shape ผ่าน `PATCH /api/v1/users/:id` หรือส่ง permission code ดิบผ่าน `PUT /api/v1/users/:id/permissions`
-- token ที่ออกก่อนเปลี่ยน role/override จะไม่เปลี่ยนย้อนหลังจนกว่าจะ login หรือ refresh ใหม่ตาม auth flow ของ client
+- token ที่ออกก่อนเปลี่ยน role/override จะไม่เปลี่ยนย้อนหลัง ให้ login ใหม่เพื่อรับ token ตามสิทธิ์ล่าสุด
 - token ที่ออกก่อน migration หรือก่อนเปลี่ยน role/override ต้อง login หรือ refresh ใหม่เพื่อรับ scope ล่าสุด
 
 ### Implementation status notes

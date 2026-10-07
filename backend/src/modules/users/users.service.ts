@@ -121,7 +121,6 @@ export const usersService = {
       ? await validatePermissionOverridesForRoleCodes(
           resolvedInput.permissionOverrides,
           resolvedInput.roleCodes,
-          resolvedInput.profile,
         )
       : undefined;
 
@@ -176,7 +175,6 @@ export const usersService = {
         : await validatePermissionOverridesForRoleCodes(
             resolvedInput.permissionOverrides,
             resolvedInput.roleCodes ?? existing.roleCodes,
-            resolvedInput.profile ?? existing.profile,
             userId,
           );
 
@@ -234,8 +232,6 @@ export const usersService = {
     const permissions = validatePermissionOverridesAgainstRole(
       resolvedPermissions,
       rolePermissions,
-      existing.roleCodes,
-      existing.profile,
     );
     await usersRepository.replaceUserPermissionOverrides(userId, permissions, actorUserId);
     return this.getPermissions(userId);
@@ -311,7 +307,7 @@ function projectManagedPermissionAssignments(
           module,
           {
             ...group,
-            region: intersectAssignedLocation(group.region, assignedRegion),
+            region: resolveMenuLocation(group.region, assignedRegion),
           },
         ];
       }
@@ -320,15 +316,12 @@ function projectManagedPermissionAssignments(
           module,
           {
             ...group,
-            province: intersectAssignedLocation(group.province, assignedProvince),
+            province: resolveMenuLocation(group.province, assignedProvince),
           },
         ];
       }
       if (group.data === 'IN_ESTATE') {
-        const estateCode = intersectAssignedLocation(
-          group.estateCode ?? group.estate,
-          assignedEstate,
-        );
+        const estateCode = resolveMenuLocation(group.estateCode ?? group.estate, assignedEstate);
         return [module, { ...group, estateCode, estate: estateCode }];
       }
       return [module, group];
@@ -336,15 +329,13 @@ function projectManagedPermissionAssignments(
   );
 }
 
-function intersectAssignedLocation(
+function resolveMenuLocation(
   requested: string | PermissionScope | boolean | undefined,
   assigned: string | null,
 ): string | null {
   const requestedLocation =
     typeof requested === 'string' ? normalizeLocationValue(requested) : null;
-  if (!assigned) return null;
-  if (!requestedLocation) return assigned;
-  return sameLocation(requestedLocation, assigned) ? assigned : null;
+  return requestedLocation ?? assigned;
 }
 
 function joinNamePrefix(prenameTh: string | null, firstName: string): string {
@@ -463,7 +454,6 @@ async function ensureRolesExist(roleCodes: string[]): Promise<void> {
 async function validatePermissionOverridesForRoleCodes(
   permissions: PermissionOverrideInput[],
   roleCodes: string[],
-  profile?: OfficerProfileInput,
   preserveHiddenOverridesForUserId?: number,
 ): Promise<PermissionOverrideInput[]> {
   const rolePermissions = await usersRepository.getRolePermissionsByRoleCodes(roleCodes);
@@ -475,12 +465,7 @@ async function validatePermissionOverridesForRoleCodes(
           permissions,
           rolePermissions,
         );
-  return validatePermissionOverridesAgainstRole(
-    effectivePermissions,
-    rolePermissions,
-    roleCodes,
-    profile,
-  );
+  return validatePermissionOverridesAgainstRole(effectivePermissions, rolePermissions);
 }
 
 async function mergePreservedHiddenPermissionOverrides(
@@ -520,8 +505,6 @@ async function mergePreservedHiddenPermissionOverrides(
 function validatePermissionOverridesAgainstRole(
   permissions: PermissionOverrideInput[],
   rolePermissions: PermissionGrantDTO[],
-  roleCodes: string[] = [],
-  profile?: OfficerProfileInput,
 ): PermissionOverrideInput[] {
   const roleScopes = new Map<string, PermissionScope>();
   for (const permission of rolePermissions) {
@@ -556,66 +539,10 @@ function validatePermissionOverridesAgainstRole(
         status: StatusCodes.BAD_REQUEST,
       });
     }
-    ensurePermissionLocationWithinProfile(permission, scope, roleCodes, profile);
     validated.push({ ...permission, scope });
   }
 
   return validated;
-}
-
-function ensurePermissionLocationWithinProfile(
-  permission: PermissionOverrideInput,
-  scope: PermissionScope,
-  roleCodes: string[],
-  profile?: OfficerProfileInput,
-): void {
-  if (scope === 'IN_REGION') {
-    const requestedRegion = normalizeLocationValue(permission.region);
-    if (!requestedRegion) return;
-    const assignedRegions =
-      roleCodes.includes('monitoring_kpm') || roleCodes.includes('kpm_director')
-        ? ['ภาคกลาง']
-        : (profile?.regionalAccess?.regions ?? []);
-    if (!assignedRegions.some((region) => sameLocation(region, requestedRegion))) {
-      throw new BadRequestError('Permission region must be inside the user profile assignment', {
-        permission: permission.code,
-        requestedRegion,
-        status: StatusCodes.BAD_REQUEST,
-      });
-    }
-    return;
-  }
-
-  if (scope === 'IN_PROVINCE') {
-    const requestedProvince = normalizeLocationValue(permission.province);
-    if (!requestedProvince) return;
-    const assignedProvince = normalizeLocationValue(profile?.provinceId ?? profile?.provinceName);
-    if (!assignedProvince || !sameLocation(assignedProvince, requestedProvince)) {
-      throw new BadRequestError('Permission province must match the user profile assignment', {
-        permission: permission.code,
-        requestedProvince,
-        status: StatusCodes.BAD_REQUEST,
-      });
-    }
-    return;
-  }
-
-  if (scope === 'IN_ESTATE') {
-    const requestedEstate = normalizeLocationValue(permission.estateCode ?? permission.estate);
-    if (!requestedEstate) return;
-    const assignedEstate = normalizeLocationValue(profile?.estateCode);
-    if (!assignedEstate || !sameLocation(assignedEstate, requestedEstate)) {
-      throw new BadRequestError('Permission estate must match the user profile assignment', {
-        permission: permission.code,
-        requestedEstate,
-        status: StatusCodes.BAD_REQUEST,
-      });
-    }
-  }
-}
-
-function sameLocation(left: string, right: string): boolean {
-  return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
 async function ensurePermissionsExist(permissionCodes: string[]): Promise<void> {

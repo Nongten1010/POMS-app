@@ -150,7 +150,8 @@ describe('connectionRequestsRepository query helpers', () => {
 
     expect(sql).toContain('[p].[name_th] = [ef].[province_name]');
     expect(sql).toContain('[p].[region]');
-    expect(compiled.bindings).toEqual(expect.arrayContaining(['นนทบุรี', 'ภาคกลาง']));
+    expect(compiled.bindings).toContain('นนทบุรี');
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
   });
 
   it('filters ERC connected factories and request rows by factory type 88', () => {
@@ -228,7 +229,7 @@ describe('connectionRequestsRepository query helpers', () => {
     const sql = compiled.sql.toLowerCase();
 
     expect(sql).toContain('[p].[region]');
-    expect(compiled.bindings.filter((binding: unknown) => binding === 'ภาคกลาง')).toHaveLength(2);
+    expect(compiled.bindings.filter((binding: unknown) => binding === 'ภาคกลาง')).toHaveLength(1);
   });
 
   it('uses regional access for IN_REGION direct connections when the scope omits region details', () => {
@@ -386,7 +387,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings).toContain('ภาคตะวันออก');
   });
 
-  it('fails closed when explicit request region conflicts with the assigned regional access', () => {
+  it('uses the explicit request menu region independently of the profile', () => {
     const compiled = buildBaseQueryForTests(
       {},
       {
@@ -397,7 +398,9 @@ describe('connectionRequestsRepository query helpers', () => {
     ).toSQL();
     const sql = compiled.sql.toLowerCase();
 
-    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('1 = 0');
+    expect(compiled.bindings).toContain('ภาคเหนือ');
+    expect(compiled.bindings).not.toContain('ภาคตะวันออก');
     expect(sql).not.toContain('[created_by] = ?');
   });
 
@@ -613,7 +616,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings).toContain('ภาคตะวันออก');
   });
 
-  it('fails closed when explicit factory region conflicts with the assigned regional access', () => {
+  it('uses the explicit factory menu region independently of the profile', () => {
     const compiled = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
       scope: { scope: 'IN_REGION', region: 'ภาคเหนือ', province: null },
@@ -621,7 +624,9 @@ describe('connectionRequestsRepository query helpers', () => {
     }).toSQL();
     const sql = compiled.sql.toLowerCase();
 
-    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('1 = 0');
+    expect(compiled.bindings).toContain('ภาคเหนือ');
+    expect(compiled.bindings).not.toContain('ภาคตะวันออก');
     expect(sql).not.toContain('user_juristics');
   });
 
