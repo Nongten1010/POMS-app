@@ -93,6 +93,7 @@ const datePickerStatusStyles = {
 const statisticParameters = ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m3/hr)']
 const statisticStatusColors = {
   normal: '#46b529',
+  lateData: '#2563eb',
   warning: '#f59e0b',
   exceeded: '#ef4444',
   unavailable: '#9ca3af',
@@ -283,7 +284,7 @@ function toFiniteNumber(value) {
 }
 
 function normalizeStatus(status) {
-  return ['normal', 'warning', 'exceeded'].includes(status) ? status : 'unavailable'
+  return ['normal', 'lateData', 'warning', 'exceeded'].includes(status) ? status : 'unavailable'
 }
 
 function getParameterLabelFromThreshold(threshold) {
