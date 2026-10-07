@@ -932,7 +932,7 @@ function buildHourlyStatisticRows(
     const onTimeParameters = definitions.filter((definition) =>
       hourRows.some(
         (row) =>
-          readParameterNumber(row, definition) !== null &&
+          hasCountableHomeMeasurement(row, definition) &&
           homeMeasurementReceiptStatus(row) === 'onTime',
       ),
     ).length;
@@ -1059,8 +1059,10 @@ function buildDailySummary(
       const value = readParameterNumber(row, definition);
       if (hour === null || value === null) continue;
       const receiptStatus = homeMeasurementReceiptStatus(row);
-      if (receiptStatus === 'onTime') onTimeHours.add(hour);
-      if (receiptStatus === 'late') lateHours.add(hour);
+      if (hasCountableHomeMeasurement(row, definition)) {
+        if (receiptStatus === 'onTime') onTimeHours.add(hour);
+        if (receiptStatus === 'late') lateHours.add(hour);
+      }
       if (!hasNormalMeasurementStatus(row, definition)) continue;
       const completeness = readParameterCompletenessPercent(row, definition) ?? 100;
       statuses.push(
@@ -1446,6 +1448,21 @@ function readPomsClientStatus(row: Record<string, unknown>, definition: Paramete
   }
 
   return null;
+}
+
+function hasCountableHomeMeasurement(
+  row: Record<string, unknown>,
+  definition: ParameterDefinition,
+): boolean {
+  for (const prefix of definition.prefixes) {
+    if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
+    if (toNumber(row[`${prefix}_value`]) === null) continue;
+
+    const status = resolvePomsClientParameterStatus(row[`${prefix}_status`]);
+    return status?.code === 1 || status?.code === 6;
+  }
+
+  return false;
 }
 
 function hasNormalMeasurementStatus(

@@ -1462,6 +1462,7 @@ describe('parameterValuesService', () => {
       rows: Array.from({ length: 365 }, (_, offset) => ({
         station_id: 'S1125',
         co_value: 60,
+        co_status: 'Normal',
         co_units: 'ppm',
         cdate: new Date(Date.UTC(2025, 0, offset + 1)).toISOString().slice(0, 10),
         ctime: '00:00:00',
@@ -1547,8 +1548,10 @@ describe('parameterValuesService', () => {
       rows: Array.from({ length: 24 }, (_, hour) => ({
         station_id: 'S1125',
         co_value: 60,
+        co_status: 'Normal',
         co_units: 'ppm',
         nox_value: hour < 10 ? 40 : null,
+        nox_status: 'Normal',
         nox_units: 'ppm',
         cdate: '2025-08-10',
         ctime: `${String(hour).padStart(2, '0')}:00:00`,
@@ -2078,8 +2081,8 @@ describe('parameterValuesService', () => {
         parameterName: 'CO',
         unit: 'ppm',
         exceededDays: 0,
-        lowDataDays: 0,
-        todayDataCompletenessPercent: 100,
+        lowDataDays: 2,
+        todayDataCompletenessPercent: 0,
       },
     ]);
   });

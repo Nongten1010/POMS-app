@@ -65,10 +65,15 @@ describe('home handoff OpenAPI contract', () => {
     ]) {
       const description = objectAt(propertiesFor(schema), field).description;
       expect(description).toContain('ส่งตรงเวลาเท่านั้น');
+      expect(description).toContain('เฉพาะ Normal/Ok (code 1) และ Shut Down (code 6)');
+      expect(description).toContain('สถานะอื่นไม่นับแม้มีค่า 0');
       expect(description).toContain('วันย้อนหลังใช้ฐาน 24 ชั่วโมง');
       expect(description).toContain('วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้ว');
       expect(description).toContain('Shut Down (code 6) ที่ส่งช้าถือเป็นย้อนหลัง');
     }
+    expect(
+      objectAt(propertiesFor('HomeMeasurementSummary'), 'lateDataPercent').description,
+    ).toContain('ส่งช้าเฉพาะ Normal/Ok (code 1) และ Shut Down (code 6)');
     expect(objectAt(propertiesFor('HomeMeasurementValue'), 'status').description).toContain(
       'Shut Down ที่ส่งล่าช้าใช้ lateData',
     );

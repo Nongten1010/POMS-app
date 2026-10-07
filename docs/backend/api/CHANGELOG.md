@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="countable-measurement-statuses"></a>
+
+## 2026-10-07 — นับการส่งข้อมูลเฉพาะ Normal/Ok และ SHTDWN
+
+- **Affected canonical docs:** [สถิติและปฏิทินจุดตรวจวัด](./shared/connected-measurement-points/README.md#home-measurement-rules), [ข้อมูลหน้าหลัก](./menus/home/README.md#กติกาข้อมูลหน้าหลัก)
+- **Impact:** `measurement-statistics`, `calendar-status`, `calendar-status/details` รวม annual aliases นับเฉพาะ parameter-hours ที่มีค่าตัวเลขตรงหน่วย สถานะต้นทาง Normal/Ok (code 1) หรือ Shut Down/SHTDWN (code 6) สถานะอื่นรวม Etc. และ NoData ไม่นับแม้มีค่า 0 ทั้งยอดส่งตรงเวลาและ `lateDataPercent` ใช้เงื่อนไขเดียวกัน รวม lowData/lowDataDays/details และเปอร์เซ็นต์รายชั่วโมง ค่าสถานะยังแสดงตามเดิม
+- **Migration:** ไม่ต้อง migrate ฐานข้อมูล; client ใช้เปอร์เซ็นต์ API โดยตรงและล้าง cache หลัง deploy เกณฑ์มลพิษและสีไม่ใช่เกณฑ์นับการส่งข้อมูล ตรวจ runtime OpenAPI หลัง deploy
+- **Old contract:** ตัวเลข 0 ของ Etc. หรือ NoData อาจถูกนับเป็นการส่งข้อมูล
+- **New contract:** เวลา 23:15 มี Normal ส่งตรงเวลา BOD 4 ชั่วโมง, Watt 4 ชั่วโมง, Flow 1 ชั่วโมง ได้ 17.39%, 17.39%, 4.35% ตามลำดับ ยอดรวมจุด 13.04%; วันย้อนหลังยังใช้ฐาน 24 ชั่วโมง
+- **Breaking change:** yes — เปอร์เซ็นต์และ low-data ลดลงเมื่อมีตัวเลขจากสถานะที่ไม่นับ; response fields และสถานะสีคงเดิม
+
 <a id="calendar-visible-through-latest-day"></a>
 
 ## 2026-10-07 — ปฏิทินแสดงสถานะถึงวันนี้แยกจากวันที่เลือกดูสถิติ

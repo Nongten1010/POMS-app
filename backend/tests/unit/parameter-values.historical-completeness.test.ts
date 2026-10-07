@@ -70,6 +70,150 @@ describe('on-time data completeness', () => {
     jest.useRealTimers();
   });
 
+  it('counts only Normal and Shut Down data, excluding numeric placeholders for other statuses', async () => {
+    jest.setSystemTime(new Date('2026-10-06T16:15:00Z'));
+    repository.listRegisteredParameters.mockResolvedValue([
+      'BOD (mg/l)',
+      'Watt (kW/hr)',
+      'Flow rate (m3/hr)',
+    ]);
+    loadRows(
+      Array.from({ length: 8 }, (_, index) => {
+        const hour = index + 15;
+        const normal = [18, 20, 21, 22].includes(hour);
+        return {
+          ...hourRow(hour),
+          bod_value: normal ? '5.58' : '0',
+          bod_status: normal ? 'Normal' : '8',
+          watt_value: '0',
+          watt_units: 'kW/hr',
+          watt_status: normal ? '1' : 'Etc.',
+          flow_value: '0',
+          flow_units: 'm3/hr',
+          flow_status: hour === 18 ? 'Ok' : [16, 17].includes(hour) ? '8' : '0',
+        };
+      }),
+    );
+    const { statistics, calendar, details } = await results();
+    expect(statistics.data.summary).toMatchObject({
+      todayDataCompletenessPercent: 13.04,
+      lateDataPercent: 0,
+    });
+    expect(calendar.data.summary).toEqual(statistics.data.summary);
+    expect(
+      calendar.data.monthlySummary.map((parameter) => parameter.todayDataCompletenessPercent),
+    ).toEqual([17.39, 17.39, 4.35]);
+    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 17.39 }]);
+    const rows = statistics.data.measurementPoints[0].rows;
+    expect(rows[16].dataCompletenessPercent).toBe(0);
+    expect(rows[18].dataCompletenessPercent).toBe(100);
+    expect(rows[20].dataCompletenessPercent).toBe(66.67);
+    expect(rows[16].values['BOD (mg/l)'].displayValue).toBe('Etc.');
+    jest.setSystemTime(new Date('2026-10-06T17:15:00Z'));
+    const yesterday = await results();
+    expect(
+      yesterday.calendar.data.monthlySummary.map(
+        (parameter) => parameter.todayDataCompletenessPercent,
+      ),
+    ).toEqual([16.67, 16.67, 4.17]);
+  });
+
+  it('does not count an Etc. numeric placeholder as a received hour', async () => {
+    loadRows([{ ...hourRow(0), bod_status: '8' }]);
+    const { statistics } = await results();
+    expect(statistics.data.summary.todayDataCompletenessPercent).toBe(0);
+    expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(0);
+  });
+
+  it('does not let an ineligible on-time duplicate suppress a valid late reading', async () => {
+    loadRows([
+      { ...hourRow(0), bod_status: '8' },
+      { ...hourRow(0, true), bod_status: 'Normal' },
+    ]);
+    const { statistics } = await results();
+    expect(statistics.data.summary).toMatchObject({
+      todayDataCompletenessPercent: 0,
+      lateDataPercent: 4.17,
+    });
+    expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(0);
+  });
+
+  it.each([
+    0,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+    9,
+    'NoData',
+    'Calibration',
+    'Defective',
+    'Maintenance',
+    'Start up',
+    'Turnaround',
+    'Etc.',
+    'No Discharge',
+    null,
+    'unknown',
+  ])('excludes source status %s from both on-time and late totals', async (status) => {
+    loadRows([
+      { ...hourRow(0), bod_status: status },
+      { ...hourRow(1, true), bod_status: status },
+    ]);
+    const { statistics, calendar } = await results();
+    expect(statistics.data.summary).toMatchObject({
+      todayDataCompletenessPercent: 0,
+      lateDataPercent: 0,
+    });
+    expect(calendar.data.summary).toEqual(statistics.data.summary);
+    expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(0);
+  });
+
+  it.each([1, '1', 'Normal', 'Ok', 6, '6', 'Shut Down'])(
+    'counts source status %s with numeric zero, distinguishing on-time and late delivery',
+    async (status) => {
+      loadRows([
+        { ...hourRow(0), bod_status: status },
+        { ...hourRow(1, true), bod_status: status },
+      ]);
+      const { statistics, calendar } = await results();
+      expect(statistics.data.summary).toMatchObject({
+        todayDataCompletenessPercent: 4.17,
+        lateDataPercent: 4.17,
+      });
+      expect(calendar.data.summary).toEqual(statistics.data.summary);
+      expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(100);
+    },
+  );
+
+  it('counts on-time Normal values independently of their pollution level', async () => {
+    loadRows([{ ...hourRow(0), bod_value: '99999', bod_status: 'Normal' }]);
+    const statistics = await parameterValuesService.measurementStatistics(
+      { stationId: 'P0446', date },
+      access,
+      {
+        parameterEvaluations: [
+          {
+            parameter: 'BOD (mg/l)',
+            standardCriteria: {
+              rows: [
+                { level: 'normal', min: 0, max: 79.99 },
+                { level: 'warning', min: 80, max: 99.99 },
+                { level: 'critical', min: 100, max: null },
+              ],
+            },
+          },
+        ],
+      },
+    );
+    expect(statistics.data.summary.todayDataCompletenessPercent).toBe(4.17);
+    expect(statistics.data.measurementPoints[0].rows[0].values['BOD (mg/l)'].status).toBe(
+      'exceeded',
+    );
+  });
+
   it('shows 12/22 on-time normal hours as 54.55 percent while keeping ten late hours visible', async () => {
     jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
     const lateHours = [3, 4, 5, 6, 7, 13, 14, 15, 16, 21];
@@ -124,14 +268,14 @@ describe('on-time data completeness', () => {
   });
 
   it.each([
-    ['Normal', 0],
+    ['Normal', 100],
     ['Calibration', 0],
-    ['6', 0],
-    [6, 0],
-    ['Shut Down', 0],
+    ['6', 100],
+    [6, 100],
+    ['Shut Down', 100],
   ])(
     'handles all-late status %s today and still counts 24-hour on-time data after midnight',
-    async (status, delivery) => {
+    async (status, latePercent) => {
       jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
       loadRows(
         Array.from({ length: 22 }, (_, hour) => ({
@@ -141,8 +285,8 @@ describe('on-time data completeness', () => {
       );
       const today = await results();
       expect(today.statistics.data.summary).toMatchObject({
-        todayDataCompletenessPercent: delivery,
-        lateDataPercent: 100,
+        todayDataCompletenessPercent: 0,
+        lateDataPercent: latePercent,
         lowDataDays: 1,
       });
       expect(today.calendar.data.summary).toEqual(today.statistics.data.summary);

@@ -494,9 +494,20 @@ describe('home handoff measurement calculations', () => {
           ...hourRow(hour),
           cdate: '2026-09-22',
           udate: '2026-09-22',
-          ...Object.fromEntries(parameters.map((_, index) => [`p${index}_value`, 1])),
+          ...Object.fromEntries(
+            parameters.flatMap((_, index) => [
+              [`p${index}_value`, 1],
+              [`p${index}_status`, 'Normal'],
+            ]),
+          ),
         })),
-        { ...hourRow(19), cdate: '2026-09-22', udate: '2026-09-22', p0_value: 1 },
+        {
+          ...hourRow(19),
+          cdate: '2026-09-22',
+          udate: '2026-09-22',
+          p0_value: 1,
+          p0_status: 'Normal',
+        },
       ],
     });
     const calendar = await parameterValuesService.calendarStatus(
