@@ -742,7 +742,7 @@ criteria normalization สำคัญ
 - ผู้เรียกต้องมี `cems_wpms_requests:edit` ที่ครอบคลุมคำขอ; `OWN_FACTORY` ตรวจ assignment ผ่าน `user_juristics` หรือ `user_factory_access` โดยไม่ใช้ `createdBy` เป็นทางลัด ผู้สร้างเดิมที่ไม่มี assignment แล้วแก้ไม่ได้
 - เจ้าหน้าที่ใช้ edit scope และ `regionalAccess` ของตน สิทธิ์ view/approve อย่างเดียวไม่เพียงพอ
 - `factoryId`, `factoryRegistrationNo` และ `systemType` ต้องตรงคำขอเดิม เพื่อป้องกันย้ายคำขอไปโรงงานอื่น
-- คง `createdBy` เดิม บันทึก `updated_by` และ `statusHistory.changedById` เป็น ID ผู้แก้จริง (`changedBy` เป็นชื่อแสดง) พร้อม note ระบุคอลัมน์ข้อมูลทั่วไปที่เปลี่ยนและส่วนฟอร์มที่แทนที่
+- คง `createdBy` เดิม บันทึก `updated_by` และ `statusHistory.changedById` เป็น ID ผู้แก้จริง (`changedBy` เป็นชื่อแสดง) พร้อม `statusHistory[].note` เป็น `โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง` โดยไม่ต่อท้ายชื่อ field ภายใน; ดู [กติกาหมายเหตุและการแสดงประวัติเก่า](./README.md#หมายเหตุในประวัติสถานะ)
 - ตรวจสิทธิ์ สถานะและ `updatedAt` ซ้ำภายใน transaction ที่ล็อกคำขอ เพื่อป้องกันการบันทึกพร้อมกัน
 - `GET /:id/form` คืน `expectedUpdatedAt`; ส่งค่านี้กลับโดยไม่เปลี่ยนเพื่อป้องกันฟอร์มเก่าข้ามรอบแก้ไข หากไม่ส่ง backend ยังตรวจการเปลี่ยนระหว่างประมวลผล แต่ไม่ทราบรุ่นที่ client เปิดอ่าน
 - request เดิมต้องอยู่สถานะ `WAITING_FACTORY_REVISION`

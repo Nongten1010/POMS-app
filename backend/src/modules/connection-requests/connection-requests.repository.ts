@@ -82,6 +82,7 @@ import {
 const FACTORY_TYPE_CODE_LENGTH = 5;
 const POINT_CODE_INITIAL_SEQUENCE = 2000;
 const POINT_CODE_MAX_SEQUENCE = 9999;
+const RESUBMITTED_FORM_HISTORY_NOTE = 'โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง';
 
 interface ConnectionRequestRow {
   source_factory_profile_revision?: number | string | null;
@@ -1397,17 +1398,12 @@ export const connectionRequestsRepository = {
         }
       }
       await upsertFactorySnapshot(trx, id, input, actorUserId);
-      const changedFields = Object.entries(toRequestRow(input))
-        .filter(
-          ([key, value]) => JSON.stringify(Reflect.get(current, key)) !== JSON.stringify(value),
-        )
-        .map(([key]) => key);
       await insertHistory(
         trx,
         id,
         nextStatus,
         actorUserId,
-        `แก้ไขและส่งฟอร์มอีกครั้ง; fields: ${[...changedFields, 'measurementPoints', 'factorySnapshot'].join(', ')}`,
+        RESUBMITTED_FORM_HISTORY_NOTE,
       );
 
       const updated = await findByIdInTransaction(trx, id);
@@ -4178,10 +4174,34 @@ async function insertHistory(
 }
 
 function buildStatusHistoryNote(update: StatusUpdate): string | null {
-  const notes = [update.revisionReason, update.officerNote].filter((value): value is string =>
-    Boolean(value),
-  );
+  const notes = [
+    ...new Set(
+      [update.revisionReason, update.officerNote]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
   return notes.length > 0 ? notes.join('\n') : null;
+}
+
+function toReadableStatusHistoryNote(row: StatusHistoryRow): string | null {
+  if (
+    row.status === CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW &&
+    row.note?.startsWith('แก้ไขและส่งฟอร์มอีกครั้ง; fields: ')
+  ) {
+    return RESUBMITTED_FORM_HISTORY_NOTE;
+  }
+  if (row.status === CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION && row.note) {
+    // Older clients sent the same multiline reason in both fields. Only collapse
+    // two identical whole blocks in the response; leave the stored note intact.
+    const lines = row.note.split('\n');
+    if (lines.length % 2 === 0) {
+      const half = lines.length / 2;
+      const reason = lines.slice(0, half).join('\n');
+      if (reason === lines.slice(half).join('\n')) return reason;
+    }
+  }
+  return row.note;
 }
 
 export function shouldIssueWaitingConnectionSideEffectsForTests(
@@ -4380,7 +4400,7 @@ function toStatusHistoryDTO(
     id: Number(row.id),
     status: row.status,
     statusLabel: CONNECTION_REQUEST_STATUS_LABELS[row.status],
-    note: row.note,
+    note: toReadableStatusHistoryNote(row),
     changedById: Number(row.changed_by),
     changedBy: toChangedByName(row),
     changedAt,

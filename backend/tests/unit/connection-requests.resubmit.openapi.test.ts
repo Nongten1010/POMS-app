@@ -27,6 +27,27 @@ describe('collaborative resubmission contract', () => {
   const schemas = obj(obj(pomsOpenApiDocument.components).schemas);
   const operation = obj(obj(obj(pomsOpenApiDocument.paths)['/cems-wpms-requests/{id}/form']).put);
 
+  it('publishes readable history notes for new and legacy request responses', () => {
+    const data = obj(obj(obj(schemas.ConnectionRequestResponse).properties).data);
+    const history = obj(obj(data.properties).statusHistory);
+    const note = obj(obj(obj(history.items).properties).note);
+    expect(note).toMatchObject({ type: 'string', nullable: true });
+    expect(note.description).toEqual(expect.stringContaining('ข้อความเดิมในฐานข้อมูล'));
+    expect(history.example).toEqual([
+      expect.objectContaining({
+        status: 'WAITING_FACTORY_REVISION',
+        note: 'กรุณาแก้ไขรายการพารามิเตอร์และแนบเอกสารเพิ่มเติม',
+      }),
+      expect.objectContaining({
+        status: 'REVISED_PENDING_DESIGN_REVIEW',
+        note: 'โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง',
+      }),
+    ]);
+    expect(operation.description).toEqual(
+      expect.stringContaining('โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง'),
+    );
+  });
+
   it('publishes the same optional concurrency token on GET form and PUT input', () => {
     const formToken = obj(obj(schemas.ConnectionRequestForm).properties).expectedUpdatedAt;
     const inputToken = obj(obj(schemas.ResubmitConnectionRequest).properties).expectedUpdatedAt;

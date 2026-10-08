@@ -717,7 +717,7 @@ describe('connection profile persistence with a stale submitted factory', () => 
         expect(persisted).toMatchObject({ created_by: 99, updated_by: 7 });
         expect(fixture.tables.cems_wpms_request_status_history[0]).toMatchObject({
           changed_by: 7,
-          note: expect.stringContaining('measurementPoints'),
+          note: 'โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง',
         });
         expect(
           String(fixture.tables.cems_wpms_request_status_history[0].note).length,
@@ -727,6 +727,20 @@ describe('connection profile persistence with a stale submitted factory', () => 
       expect(result.measurementPoints).toHaveLength(1);
     },
   );
+
+  it('persists a readable resubmission history note without technical field names', async () => {
+    const fixture = resubmissionFixture();
+    const result = await fixture.resubmit();
+    expect(fixture.tables.cems_wpms_request_status_history).toEqual([
+      expect.objectContaining({
+        request_id: 10037,
+        status: 'REVISED_PENDING_DESIGN_REVIEW',
+        changed_by: 7,
+        note: 'โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง',
+      }),
+    ]);
+    expect(result.statusHistory[0].note).toBe('โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง');
+  });
 
   it('preserves the officer-assigned point and registry through resubmission and approval', async () => {
     const fixture = resubmissionFixture();

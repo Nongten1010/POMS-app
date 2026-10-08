@@ -790,6 +790,12 @@ const annualDeviceConnectionExample = {
   stationId: 'CEMS-0001/2569',
   deviceCode: 'CEMS-0001/2569/01',
 };
+const statusHistoryNoteSchema: OpenApiObject = {
+  type: 'string',
+  nullable: true,
+  description:
+    'หมายเหตุสำหรับแสดงผล: เหตุผลกับหมายเหตุที่เหมือนกันหลัง trim บันทึกครั้งเดียว; ข้อความต่างกันคั่นด้วย newline และไม่มีข้อความคืน null. เมื่อส่งฟอร์มซ้ำใช้ โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง. ประวัติเก่า WAITING_FACTORY_REVISION ที่เป็นข้อความสองบล็อกเหมือนกันทุกบรรทัดแสดงบล็อกเดียว; REVISED_PENDING_DESIGN_REVIEW ที่ขึ้นต้น แก้ไขและส่งฟอร์มอีกครั้ง; fields: แสดงข้อความส่งฟอร์มซ้ำแบบใหม่ โดยเก็บข้อความเดิมในฐานข้อมูลไว้ ไม่เขียนทับหรือลบประวัติ',
+};
 const componentSchemas: Record<string, OpenApiObject> = {
   ErrorEnvelope: {
     type: 'object',
@@ -1135,6 +1141,37 @@ const componentSchemas: Record<string, OpenApiObject> = {
             ),
           },
           statusLabel: { type: 'string' },
+          statusHistory: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'integer' },
+                status: { type: 'string', enum: Object.keys(CONNECTION_REQUEST_STATUS_LABELS) },
+                statusLabel: { type: 'string' },
+                note: statusHistoryNoteSchema,
+                changedById: { type: 'integer' },
+                changedBy: { type: 'string' },
+                changedAt: { type: 'string', format: 'date-time', nullable: true },
+                endedAt: { type: 'string', format: 'date-time', nullable: true },
+                durationDays: { type: 'integer', nullable: true },
+                durationText: { type: 'string', nullable: true },
+                isTerminal: { type: 'boolean' },
+              },
+            },
+            example: [
+              {
+                status: 'WAITING_FACTORY_REVISION',
+                statusLabel: 'รอโรงงานแก้ไข',
+                note: 'กรุณาแก้ไขรายการพารามิเตอร์และแนบเอกสารเพิ่มเติม',
+              },
+              {
+                status: 'REVISED_PENDING_DESIGN_REVIEW',
+                statusLabel: 'แก้ไขแล้ว/รอพิจารณาแบบ',
+                note: 'โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง',
+              },
+            ],
+          },
           measurementPoints: {
             type: 'array',
             items: {
@@ -1188,7 +1225,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
                   properties: {
                     status: { type: 'string', enum: Object.keys(CONNECTION_REQUEST_STATUS_LABELS) },
                     statusLabel: { type: 'string' },
-                    note: { type: 'string', nullable: true },
+                    note: statusHistoryNoteSchema,
                     changedById: { type: 'integer', nullable: true },
                     changedAt: { type: 'string', format: 'date-time' },
                     isTerminal: { type: 'boolean' },
@@ -2721,6 +2758,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ส่งแบบใหม่หลังถูกแจ้งแก้ไข',
       operationId: 'resubmitConnectionRequestForm',
       description:
+        'บันทึก statusHistory[].note เป็น โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง โดยไม่ต่อท้ายชื่อ field ภายใน. ' +
         'Permission: cems_wpms_requests:edit ตาม data scope. OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access; createdBy อย่างเดียวไม่ให้สิทธิ์แก้ไข. เจ้าหน้าที่ต้องมี edit scope ครอบคลุมคำขอและผ่าน regionalAccess. ใช้ได้เฉพาะ WAITING_FACTORY_REVISION; factoryId, factoryRegistrationNo, systemType และ requestType ถ้าส่งต้องตรงเดิม. เก็บ createdBy เดิมและบันทึกผู้แก้จริงใน updated_by/ประวัติ. ตรวจสิทธิ์ สถานะและ updatedAt ซ้ำภายใต้ transaction lock. แนะนำส่ง expectedUpdatedAt จาก GET form เพื่อป้องกันฟอร์มเก่าข้ามรอบแก้ไข; ถ้าไม่ส่งยังตรวจการเปลี่ยนระหว่างประมวลผล แต่ไม่ทราบรุ่นที่ client เปิดอ่าน. ข้อมูลเปลี่ยนตอบ 409 CONFLICT พร้อม reason REQUEST_CHANGED. ' +
         resubmitPointReplacementDescription +
         ' ' +
