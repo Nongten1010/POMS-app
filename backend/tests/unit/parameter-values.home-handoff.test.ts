@@ -444,7 +444,7 @@ describe('home handoff measurement calculations', () => {
       access,
       { ...options, expectedStartDate: '2026-09-23' },
     );
-    expect(result.data.summary).toMatchObject({ exceededDays: 1, lowDataDays: 0 });
+    expect(result.data.summary).toMatchObject({ exceededDays: 1, lowDataDays: 265 });
   });
 
   it('keeps popup and table source-quality status identical and reports a truly absent popup parameter as noData', async () => {

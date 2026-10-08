@@ -103,7 +103,7 @@ describe('on-time data completeness', () => {
     expect(
       calendar.data.monthlySummary.map((parameter) => parameter.todayDataCompletenessPercent),
     ).toEqual([17.39, 17.39, 4.35]);
-    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 17.39 }]);
+    expect(details.data.rows).toEqual([]);
     const rows = statistics.data.measurementPoints[0].rows;
     expect(rows[16].dataCompletenessPercent).toBe(0);
     expect(rows[18].dataCompletenessPercent).toBe(100);
@@ -227,7 +227,7 @@ describe('on-time data completeness', () => {
     expect(statistics.data.summary).toMatchObject({
       todayDataCompletenessPercent: 54.55,
       lateDataPercent: 45.45,
-      lowDataDays: 1,
+      lowDataDays: 0,
     });
     expect(calendar.data.summary).toEqual(statistics.data.summary);
     expect(calendar.data.monthlySummary[0].todayDataCompletenessPercent).toBe(54.55);
@@ -235,7 +235,7 @@ describe('on-time data completeness', () => {
       dataCompletenessPercent: 54.55,
       dataCompletenessStatus: 'lowData',
     });
-    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 54.55 }]);
+    expect(details.data.rows).toEqual([]);
     const rows = statistics.data.measurementPoints[0].rows;
     expect(
       rows.flatMap((row, hour) => (row.values['BOD (mg/l)'].status === 'lateData' ? [hour] : [])),
@@ -287,13 +287,17 @@ describe('on-time data completeness', () => {
       expect(today.statistics.data.summary).toMatchObject({
         todayDataCompletenessPercent: 0,
         lateDataPercent: latePercent,
-        lowDataDays: 1,
+        lowDataDays: 0,
       });
       expect(today.calendar.data.summary).toEqual(today.statistics.data.summary);
       expect(today.calendar.data.calendar.days[0].dataCompletenessPercent).toBe(0);
       jest.setSystemTime(new Date('2026-10-06T17:01:00Z'));
       const yesterday = await results();
-      expect(yesterday.statistics.data.summary.todayDataCompletenessPercent).toBe(0);
+      expect(yesterday.statistics.data.summary).toMatchObject({
+        todayDataCompletenessPercent: 0,
+        lowDataDays: 1,
+      });
+      expect(yesterday.details.data.rows).toEqual([{ date, dataCompletenessPercent: 0 }]);
       expect(yesterday.calendar.data.summary).toEqual(yesterday.statistics.data.summary);
     },
   );
@@ -477,17 +481,21 @@ describe('on-time data completeness', () => {
     }
   });
 
-  it('uses completed on-time hours for today low-data streaks and drill-down', async () => {
+  it('shows today on-time percentage but waits until midnight to finalize low-data streaks and drill-down', async () => {
     loadRows(Array.from({ length: 18 }, (_, hour) => hourRow(hour, hour === 1)));
     jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
     const { statistics, calendar, details } = await results();
     expect(statistics.data.summary).toMatchObject({
       todayDataCompletenessPercent: 77.27,
-      lowDataDays: 1,
+      lowDataDays: 0,
     });
     expect(calendar.data.summary).toEqual(statistics.data.summary);
-    expect(calendar.data.monthlySummary[0].lowDataDays).toBe(1);
-    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 77.27 }]);
+    expect(calendar.data.monthlySummary[0].lowDataDays).toBe(0);
+    expect(details.data.rows).toEqual([]);
+    jest.setSystemTime(new Date('2026-10-06T17:01:00Z'));
+    const yesterday = await results();
+    expect(yesterday.calendar.data.monthlySummary[0].lowDataDays).toBe(1);
+    expect(yesterday.details.data.rows).toEqual([{ date, dataCompletenessPercent: 70.83 }]);
   });
 
   it('uses completed on-time hours today and switches to the full 24-hour denominator after midnight', async () => {

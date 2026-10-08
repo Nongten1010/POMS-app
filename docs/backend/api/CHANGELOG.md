@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="low-data-completed-days"></a>
+
+## 2026-10-08 — สรุปวันข้อมูลต่ำกว่า 80% เฉพาะวันที่จบแล้ว
+
+- **Affected canonical docs:** [สถิติและปฏิทินจุดตรวจวัด](./shared/connected-measurement-points/README.md#home-measurement-rules), [ข้อมูลหน้าหลัก](./menus/home/README.md#กติกาข้อมูลหน้าหลัก)
+- **Impact:** `measurement-statistics.summary.lowDataDays`, `calendar-status.summary.lowDataDays`, `monthlySummary[].lowDataDays` และ `calendar-status/details?summaryType=lowData` รวม annual aliases เริ่มนับช่วงต่อเนื่องจาก `min(วันสิ้นสุดที่เลือก, เมื่อวานตาม Asia/Bangkok)` โดยวันนี้ไม่เพิ่มวันและไม่ตัดช่วงของวันก่อนหน้า ทุกวันในรายละเอียดใช้ฐาน 24 ชั่วโมง
+- **Migration:** ไม่ต้อง migrate ฐานข้อมูลหรือเปลี่ยน query/response fields; client ส่ง `endDate` เดียวกันให้ calendar และ details ใช้จำนวนวันจาก API และล้าง cache หลัง deploy `meta.endDate` ยังคงวันที่เลือก ส่วนเปอร์เซ็นต์การส่งข้อมูลวันนี้ ปฏิทิน และวันเกินมาตรฐานใช้วันเดิม ตรวจ runtime OpenAPI หลัง deploy
+- **Old contract:** วันนี้ต่ำกว่า 80% ถูกนับเพิ่ม และวันนี้ถึง 80% อาจทำให้ช่วงต่ำกว่า 80% ของวันก่อนหน้ากลายเป็น 0
+- **New contract:** เมื่อวาน 4.17% และวันนี้ 10% คืน 1 วันและรายละเอียดเฉพาะเมื่อวาน; วันนี้เปลี่ยนเป็น 80% หรือ 100% ยังคืน 1 วัน เมื่อผ่านเที่ยงคืนไทยจึงประเมินวันที่เพิ่งจบด้วยฐาน 24 ชั่วโมง
+- **Breaking change:** yes — จำนวนและรายละเอียด low-data เปลี่ยนตามข้อกำหนดรอให้จบวัน โดยคง URL, fields, authentication, permissions และ error envelope
+
 <a id="countable-measurement-statuses"></a>
 
 ## 2026-10-07 — นับการส่งข้อมูลเฉพาะ Normal/Ok และ SHTDWN

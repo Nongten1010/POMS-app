@@ -1112,7 +1112,7 @@ describe('parameterValuesService', () => {
         },
       ]);
       expect(calendar.data.monthlySummary[0]).toMatchObject({
-        lowDataDays: 0,
+        lowDataDays: 1,
         todayDataCompletenessPercent: 100,
       });
 
@@ -1129,7 +1129,7 @@ describe('parameterValuesService', () => {
         options,
       );
 
-      expect(details.data.rows).toEqual([]);
+      expect(details.data.rows).toEqual([{ date: '2026-08-09', dataCompletenessPercent: 45.83 }]);
     } finally {
       jest.useRealTimers();
     }
@@ -1724,7 +1724,7 @@ describe('parameterValuesService', () => {
 
     expect(calendar.data.metadata.valueDefinitions).toMatchObject({
       summaryPeriod:
-        'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี',
+        'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี; lowDataDays นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok เมื่อ endDate เป็นวันนี้เริ่มย้อนจากเมื่อวาน โดยไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง',
       dataCompletenessStatus: {
         lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
         highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
@@ -1781,7 +1781,7 @@ describe('parameterValuesService', () => {
         exceeded:
           'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%',
         lowData:
-          'คืนหนึ่งแถวต่อวันในช่วงข้อมูลต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ ย้อนจาก endDate โดยไม่คืนเวลา; ทุกวันนับเฉพาะส่งตรงเวลา; วันย้อนหลังหารด้วย 24 ชั่วโมง ส่วนวันนี้ใช้เฉพาะชั่วโมงที่จบแล้ว',
+          'คืนหนึ่งแถวต่อวันในช่วงข้อมูลต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ เฉพาะวันที่จบแล้วตาม Asia/Bangkok ย้อนจาก endDate หรือเมื่อวานเมื่อ endDate เป็นวันนี้ โดยไม่คืนเวลา; ทุกวันนับเฉพาะส่งตรงเวลาและหารด้วย 24 ชั่วโมง ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง',
       },
       rows: 'เรียงวันที่จากเก่าไปใหม่ หนึ่งแถวต่อวัน; exceeded จำกัดปีที่ขอถึง endDate ส่วน lowData ต่อเนื่องข้ามปีได้',
       displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',

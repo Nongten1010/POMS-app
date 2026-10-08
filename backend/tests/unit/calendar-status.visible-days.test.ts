@@ -84,7 +84,7 @@ describe('calendar visible days are independent of the selected statistics date'
       expect(result.data.summary.exceededDays).toBe(endDate === '2026-10-01' ? 0 : 6);
       expect(result.data.monthlySummary[0]).toMatchObject({
         exceededDays: endDate === '2026-10-01' ? 0 : 6,
-        lowDataDays: endDate === '2026-10-01' ? 1 : 7,
+        lowDataDays: endDate === '2026-10-01' ? 1 : 6,
         todayDataCompletenessPercent: endDate === '2026-10-01' ? 4.17 : 10,
       });
       expect(repository.listRows).toHaveBeenLastCalledWith({

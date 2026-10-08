@@ -53,6 +53,7 @@
 - [ล้างข้อมูลทดสอบด้วย SQL](./shared/test-data-cleanup.tdd.md)
 - [Frontend monitoring contract 05082026](./shared/frontend-monitoring-contract-05082026.tdd.md)
 - [ปฏิทินรายเดือนและจำนวนวันสรุปทั้งปี](./shared/calendar-summary-requested-year-counts.tdd.md)
+- [สรุปวันข้อมูลต่ำกว่า 80% เฉพาะวันที่จบแล้ว](./shared/calendar-low-data-completed-days.tdd.md)
 - [รายละเอียดรายวันทั้งปีสำหรับคลิกสรุป Calendar Status](./shared/calendar-status-details.tdd.md)
 - [กรอง Source Status ก่อนประเมิน Calendar](./shared/calendar-normal-status-filter.tdd.md)
 - [คำนวณ Calendar completeness ของวันปัจจุบันถึงชั่วโมงปัจจุบัน](./shared/calendar-current-day-completeness.tdd.md)

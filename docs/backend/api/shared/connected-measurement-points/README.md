@@ -234,7 +234,7 @@ GET /api/v1/connected-measurement-points/S1125/requests
 - เปอร์เซ็นต์หลักใน `summary.todayDataCompletenessPercent`, `monthlySummary[].todayDataCompletenessPercent` และ `calendar.days[].dataCompletenessPercent` นับเฉพาะส่งตรงเวลาเท่านั้นทุกวัน จาก `Normal`/`Ok` (code `1`) และ `Shut Down` (code `6`) ที่ส่งช้าถือเป็นย้อนหลังและไม่นับส่งตรงเวลา ไม่ซ้ำชั่วโมง
 - สูตรวันนี้ = `round2(onTimeParameterHours / (completedHours * visibleParameterCount) * 100)`; วันย้อนหลัง = `round2(onTimeParameterHours / (24 * visibleParameterCount) * 100)`; `lateDataPercent` = `round2(lateParameterHours / expectedParameterHours * 100)` แยกจากเปอร์เซ็นต์หลักทั้งวันนี้และย้อนหลัง โดย `round2` ปัดสองตำแหน่ง บวกเปอร์เซ็นต์ตรงเวลากับส่งช้าได้ยอดรับรวม ไม่ใช้ field completeness ต้นทางแทนหลักฐาน `udate`/`utime`
 - เปอร์เซ็นต์รายชั่วโมง `rows[].dataCompletenessPercent` = จำนวนพารามิเตอร์ที่มีค่าตัวเลขตรงหน่วย สถานะ Normal/Ok หรือ SHTDWN และส่งตรงเวลา / จำนวนพารามิเตอร์ที่แสดง × 100; ชั่วโมงที่มีเฉพาะข้อมูลส่งช้าได้ `0` แต่ยังแสดงค่าหรือข้อความสถานะตามเดิม การซ่อนค่าจากความครบถ้วนต้นทางต่ำกว่า 80% เป็นอีกเงื่อนไขหนึ่ง
-- ตัวอย่างวันปัจจุบัน S1128 เวลา `22:15`: สถานะปกติส่งตรงเวลา 12 ชั่วโมง ส่งย้อนหลัง 10 ชั่วโมง ได้เปอร์เซ็นต์การส่งข้อมูล `12 / 22 * 100 = 54.55`, `lateDataPercent: 45.45`, ปฏิทิน `dataCompletenessPercent: 54.55` และ `lowDataDays: 1`; ตารางยังแสดงค่าที่ส่งย้อนหลังเป็นสีน้ำเงิน
+- ตัวอย่างวันปัจจุบัน S1128 เวลา `22:15`: สถานะปกติส่งตรงเวลา 12 ชั่วโมง ส่งย้อนหลัง 10 ชั่วโมง ได้เปอร์เซ็นต์การส่งข้อมูล `12 / 22 * 100 = 54.55`, `lateDataPercent: 45.45`, ปฏิทิน `dataCompletenessPercent: 54.55` ส่วน `lowDataDays` นับช่วงต่อเนื่องถึงเมื่อวานและไม่ใช้เปอร์เซ็นต์วันนี้มาตัดสินจำนวนวัน; ตารางยังแสดงค่าที่ส่งย้อนหลังเป็นสีน้ำเงิน
 - bucket ที่นับได้ต้องมีค่าตัวเลขของพารามิเตอร์ที่ตรงหน่วย (รวม `0`) สถานะต้นทาง `Normal`/`Ok` (code `1`) หรือ `Shut Down`/SHTDWN (code `6`) และวัน/เวลาส่งข้อมูลที่อ่านได้; `NoData`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Turnaround`, `Etc.`, `No Discharge`, สถานะว่างและสถานะที่ไม่รู้จักไม่นับทั้งตรงเวลาและส่งช้า แม้มีตัวเลข `0`; operational status ที่ไม่มีค่าตัวเลขไม่ถือเป็น measurement bucket การนับการส่งข้อมูลแยกจากการอนุญาตนำค่าไปประเมินมลพิษ และไม่ใช้เวลาปัจจุบันทดแทน `udate`/`utime` ที่หาย/อ่านไม่ได้
 - การนับข้อมูลของ `Normal`/`Ok` ใช้สถานะต้นทาง ไม่ใช้สีจากเกณฑ์มลพิษ: ค่าที่อยู่ระดับ `warning` หรือ `exceeded` ยังนับการส่งข้อมูลเมื่อส่งตรงเวลา ส่วนข้อความสถานะเครื่องอื่นยังแสดงตามเดิมแต่ไม่นับเปอร์เซ็นต์
 - ตัวอย่างตามภาพเวลา `23:15`: BOD และ Watt มี Normal ส่งตรงเวลา 4 ชั่วโมง ได้ `4/23 = 17.39%`; Flow มี 1 ชั่วโมง ได้ `1/23 = 4.35%`; `Etc.` และ `NoData` ไม่นับ ยอดรวมจุดคือ `(4+4+1)/(23*3) = 13.04%` ถ้าเป็นวันย้อนหลังใช้ฐาน 24 ได้รายพารามิเตอร์ `16.67%`, `16.67%`, `4.17%` ตามลำดับ
@@ -244,10 +244,10 @@ GET /api/v1/connected-measurement-points/S1125/requests
 - กรอง visibility ตามลำดับโรงงาน → จุด → พารามิเตอร์ และกรองจุดที่ยกเว้นทั้งหมด ก่อนคืนค่า/สถานะและก่อนคำนวณจำนวน เปอร์เซ็นต์ วันต่ำกว่า 80% หรือวันเกินมาตรฐาน การเรียก `stationId` โดยตรงไม่ทำให้เข้าถึงค่าที่ถูกซ่อนได้
 - ค่าปกติที่ส่งช้า และข้อความสถานะเครื่องเช่น `Shut Down` ที่ส่งช้าคืน `status: "lateData"` เพื่อให้เป็นสีน้ำเงิน โดยคง `displayValue` เดิมและ `value: null` ของสถานะเครื่อง; ค่าที่ประเมินมลพิษแล้วเป็น `warning` หรือ `exceeded` คงสถานะตามเกณฑ์ และ source `NoData` (code `0`) คง `noData`; ไม่ส่งชื่อ `latData` เพราะ contract และ client ใช้ `lateData`
 - `lateData` เป็นสถานะสำหรับการแสดงผล ไม่ใช่ source operational status ของเครื่องตรวจวัด และไม่เปลี่ยนค่า `<parameter>_status` ที่จัดเก็บไว้ Frontend ใช้สีน้ำเงินสำหรับ `lateData`
-- `dataCompletenessStatus`, `lowDataDays` และ low-data details ใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกับเปอร์เซ็นต์หลักทุกวัน รวมรายละเอียดวันต่ำกว่า 80% จำนวนวันต่ำกว่า 80% เป็นช่วงต่อเนื่องล่าสุด: เริ่มที่วันสิ้นสุดที่เลือกแล้วย้อนกลับจนถึงวันแรกที่ได้อย่างน้อย 80%; ถ้าวันสิ้นสุดได้อย่างน้อย 80% คืน `0`
+- `dataCompletenessStatus`, `lowDataDays` และ low-data details ใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกับเปอร์เซ็นต์หลักทุกวัน รวมรายละเอียดวันต่ำกว่า 80% จำนวนวันต่ำกว่า 80% เป็นช่วงต่อเนื่องล่าสุดของวันที่จบแล้วตาม `Asia/Bangkok`: เริ่มที่ `min(วันสิ้นสุดที่เลือก, เมื่อวาน)` แล้วย้อนกลับจนถึงวันแรกที่ได้อย่างน้อย 80%; ไม่รวมวันนี้และไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง ถ้าวันสิ้นสุดที่จบแล้วได้อย่างน้อย 80% คืน `0`
 - ช่วงต่ำกว่า 80% ต่อเนื่องข้ามปีได้และวันไม่มี source row เป็น `0%` เมื่อมี expected data ขอบเขตเริ่มต้นใช้วันที่เก่ากว่าระหว่างวันเชื่อมต่อกับวันที่ source แรกที่มีอยู่ เพื่อไม่ให้วันเชื่อมต่อจากการเพิ่มพารามิเตอร์รอบหลังตัดประวัติเดิมทิ้ง หากมีเพียงค่าใดค่าหนึ่งให้ใช้ค่านั้น และไม่สมมติวันขาดก่อนขอบเขตที่มีหลักฐาน การนับวันเกินมาตรฐานยังเริ่ม 1 มกราคมของปีที่เลือก
 - จำนวนวันเกินมาตรฐานนับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึงวันสิ้นสุดที่เลือก ระดับ `warning` ไม่นับ และข้อมูลส่งช้าที่เกินมาตรฐานยังนำมาประเมินมลพิษได้
-- เมื่อไม่มี expected buckets เช่นวันปัจจุบันเวลา `00:xx` หรือไม่มีพารามิเตอร์ที่แสดงผล เปอร์เซ็นต์หลัก/ส่งช้าเป็น `null`, `dataCompletenessStatus` และ `display.backgroundStatus` เป็น `null`, `pollutionStatus` เป็น `insufficient` และ `lowDataDays` เป็น `0`; ไม่นับกรณีนี้เป็นข้อมูลขาด
+- เมื่อไม่มี expected buckets เช่นวันปัจจุบันเวลา `00:xx` หรือไม่มีพารามิเตอร์ที่แสดงผล เปอร์เซ็นต์หลัก/ส่งช้าเป็น `null`, `dataCompletenessStatus` และ `display.backgroundStatus` เป็น `null`, `pollutionStatus` เป็น `insufficient` ส่วน `lowDataDays` ยังนับช่วงต่อเนื่องถึงเมื่อวานเมื่อมี expected data ของวันก่อนหน้า และคืน `0` เมื่อไม่มีพารามิเตอร์หรือไม่มี expected data ของวันที่จบแล้ว; ไม่นับวันนี้ที่ยังไม่มีชั่วโมงจบแล้วเป็นวันข้อมูลขาด
 
 หลักฐานของกติกาปัจจุบัน: [แผนและหลักฐานตรวจรับ handoff หน้าหลัก](../../../evidence/home/home-handoff-2026-09-23.md) หลักฐาน TDD รุ่นก่อนใน sections ด้านล่างอธิบายที่มาของ behavior เดิม แต่ไม่แทนที่กติกาหน้าหลักส่วนนี้
 
@@ -284,7 +284,7 @@ curl --request GET \
 | `success` | boolean | No | `true` เมื่อสำเร็จ |
 | `meta.registeredParameters` | string[] | No | พารามิเตอร์ที่ลงทะเบียน โดยชื่อ Flow จะถูก normalize เป็น `Flow Rate (m3/hr)` และไม่ซ้ำ |
 | `data.summary.exceededDays` | number | No | จำนวนวันเกินมาตรฐานไม่ซ้ำของจุด ตั้งแต่ 1 มกราคมถึง `date`; หลายพารามิเตอร์เกินวันเดียวกันนับหนึ่งวัน |
-| `data.summary.lowDataDays` | number | No | จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุดของจุด ย้อนจาก `date` |
+| `data.summary.lowDataDays` | number | No | จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุดของจุด เฉพาะวันที่จบแล้ว ย้อนจาก `date` หรือเมื่อวานเมื่อเลือกวันนี้ |
 | `data.summary.todayDataCompletenessPercent` | number \| null | Yes | ร้อยละการส่งข้อมูลของจุดใน `date`; ทุกวันนับเฉพาะส่งตรงเวลาจาก Normal/Ok และ SHTDWN เท่านั้น; วันย้อนหลังใช้ 24 ชั่วโมงต่อพารามิเตอร์ วันนี้ใช้เฉพาะชั่วโมงที่จบแล้ว |
 | `data.summary.lateDataPercent` | number \| null | Yes | ร้อยละข้อมูลที่ได้รับหลังเส้นตายของจุดใน `date` ใช้ฐาน expected data เดียวกับเปอร์เซ็นต์หลัก; แยกจากเปอร์เซ็นต์ส่งตรงเวลาทั้งวันนี้และวันย้อนหลัง และบวกกันได้ยอดรับรวม |
 | `data.measurementPoints[].rows[].time` | string | No | ชั่วโมงของข้อมูล เช่น `00:00` |
@@ -349,7 +349,7 @@ curl --request GET \
 
 ### `GET /api/v1/connected-measurement-points/:stationId/calendar-status`
 
-คืนสถานะรายวันของปฏิทินเฉพาะเดือนที่เลือกถึงวันสิ้นสุดที่ใช้คำนวณ `monthlySummary[].exceededDays` สะสมจากต้นปีถึงวันสิ้นสุด และ `monthlySummary[].lowDataDays` เป็นช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดที่สิ้นสุดวันเดียวกัน
+คืนสถานะรายวันของปฏิทินเฉพาะเดือนที่เลือกถึงวันสิ้นสุดที่ใช้คำนวณ `monthlySummary[].exceededDays` สะสมจากต้นปีถึงวันสิ้นสุด และ `monthlySummary[].lowDataDays` เป็นช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดเฉพาะวันที่จบแล้ว สิ้นสุดที่วันเลือกหรือเมื่อวานเมื่อเลือกวันนี้
 
 #### Authentication And Permission
 
@@ -391,7 +391,7 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-10&end
 | `success` | boolean | No | `true` เมื่อสำเร็จ |
 | `data.metadata.description` | string | No | คำอธิบายชุดข้อมูล calendar status |
 | `data.metadata.month` | string | No | เดือนเดียวกับ query ในรูปแบบ `YYYY-MM` |
-| `data.metadata.endDate` | string | No | วันสิ้นสุดที่ใช้คำนวณจริงในรูปแบบ `YYYY-MM-DD`; ส่งวันนี้ได้แม้เดือนที่ขอเป็นเดือนอนาคตเมื่อไม่ระบุ `endDate` |
+| `data.metadata.endDate` | string | No | วันสิ้นสุดที่เลือกในรูปแบบ `YYYY-MM-DD`; `lowData` ใช้ `min(endDate, เมื่อวาน)` สำหรับจำนวนวันและรายละเอียด; ส่งวันนี้ได้แม้เดือนที่ขอเป็นเดือนอนาคตเมื่อไม่ระบุ `endDate` |
 | `data.metadata.calendarEndDate` | string | No | วันสิ้นสุดของปฏิทินในรูปแบบ `YYYY-MM-DD`; ใช้วันนี้ตาม `Asia/Bangkok` หรือวันสุดท้ายของเดือนที่ถึงก่อน ไม่เปลี่ยนตามวันที่เลือก |
 | `data.metadata.valueDefinitions` | object | No | คำอธิบายความหมายของ calendar statuses |
 | `data.factory` | object | No | โรงงาน current/live ของจุดตรวจวัดที่เลือก |
@@ -418,7 +418,7 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-10&end
 | `data.monthlySummary[].parameterLabel` | string | No | ชื่อแสดงผลพร้อมหน่วย เช่น `CO (ppm)`; client ใช้ label นี้ในตารางและ dialog |
 | `data.monthlySummary[].unit` | string | No | หน่วยของพารามิเตอร์ เช่น `ppm` |
 | `data.monthlySummary[].exceededDays` | number | No | จำนวนวันของพารามิเตอร์นั้นที่มีค่า source status ปกติและประเมินเป็น `exceeded` ตั้งแต่ 1 มกราคมถึง `endDate` รวมวันที่เป็น `lowData`; วันเดียวกันนับสูงสุดหนึ่งครั้ง |
-| `data.monthlySummary[].lowDataDays` | number | No | จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุด โดยเริ่มจาก `endDate` และหยุดเมื่อถึงวันที่ได้อย่างน้อย 80% |
+| `data.monthlySummary[].lowDataDays` | number | No | จำนวนวันต่ำกว่า 80% ต่อเนื่องล่าสุดเฉพาะวันที่จบแล้ว โดยเริ่มจาก `min(endDate, เมื่อวานตาม Asia/Bangkok)` และหยุดเมื่อถึงวันที่ได้อย่างน้อย 80% |
 | `data.monthlySummary[].todayDataCompletenessPercent` | number | Yes | ร้อยละการส่งข้อมูลของพารามิเตอร์ ณ `endDate`; ทุกวันนับเฉพาะส่งตรงเวลาจาก Normal/Ok และ SHTDWN เท่านั้น; วันนี้ใช้ชั่วโมงที่จบแล้ว วันย้อนหลังใช้ 24 ชั่วโมง; ชื่อ field คงใช้คำว่า `today` แม้เลือกวันย้อนหลัง |
 | `data.monthlySummary[].lateDataPercent` | number \| null | Yes | ร้อยละข้อมูลย้อนหลังของพารามิเตอร์ ณ `endDate`; denominator เป็นชั่วโมงที่คาดว่าจะได้รับของพารามิเตอร์นั้น |
 | `meta.stationId` | string | No | รหัสจุดตรวจวัดที่อ่านข้อมูล |
@@ -581,7 +581,7 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-10&end
 - `dataCompletenessStatus` กับ `pollutionStatus` คำนวณแยกกัน: `lowData` ใช้กำหนดพื้นหลังและ `lowDataDays` เท่านั้น ส่วนค่าที่ประเมินได้จาก source status ปกติยังกำหนดเส้นขอบเป็น `normal`, `lateData`, `warning` หรือ `exceeded` ตาม precedence ใน [กติกาหน้าหลัก](#home-measurement-rules)
 - `insufficient` ใช้เมื่อวันนั้นไม่มีค่าตัวเลขจาก source status ปกติให้ประเมิน หรือมีเฉพาะค่าที่ใช้ไม่ได้เพราะความครบถ้วนระดับ row ต่ำกว่า 80%; การเป็น `lowData` ระดับวันเพียงอย่างเดียวไม่ทำให้เป็น `insufficient`
 - `exceededDays` แยกตามพารามิเตอร์และใช้เกณฑ์ของ connected point หลังกรอง source status; วันเดียวกันนับได้สูงสุดหนึ่งวันต่อพารามิเตอร์ และยังนับเมื่อวันนั้นเป็น `lowData`
-- `lowDataDays` ย้อนจาก `endDate` จนถึงวันแรกที่ได้อย่างน้อย 80%; หาก `endDate` ได้อย่างน้อย 80% คืน `0` วันเดียวกันอาจอยู่ในช่วง `lowDataDays` และเป็นวัน `exceededDays` ด้วย
+- `lowDataDays` ย้อนจาก `min(endDate, เมื่อวานตาม Asia/Bangkok)` จนถึงวันแรกที่ได้อย่างน้อย 80%; หากวันสิ้นสุดที่จบแล้วได้อย่างน้อย 80% คืน `0` โดยเปอร์เซ็นต์วันนี้ไม่ตัดช่วงต่อเนื่อง วันเดียวกันอาจอยู่ในช่วง `lowDataDays` และเป็นวัน `exceededDays` ด้วย
 - วันปัจจุบันอ้างอิง `Asia/Bangkok` และใช้เฉพาะชั่วโมงที่จบแล้ว เช่นเวลา `10:25` ชั่วโมงล่าสุดคือ `09:00–09:59`; ชั่วโมงปัจจุบันไม่อยู่ทั้งตัวตั้งและตัวหาร
 - `todayDataCompletenessPercent` ใช้วันที่ `endDate` ไม่ fallback ไปวันที่มีข้อมูลล่าสุด จึงไม่ทำให้วันที่ขาดข้อมูลหายไปจากผลสรุป
 - ชื่อพารามิเตอร์ที่อ่านได้ต้องคืนพร้อม `unit`; client ใช้ `parameterCode` เมื่อต้องการ key ที่คงที่
@@ -614,7 +614,7 @@ GET /api/v1/connected-measurement-points/P0260/calendar-status?month=2026-10&end
 | --- | --- | --- | --- | --- |
 | `stationId` | path | string | Yes | รหัส connected measurement point ที่อยู่ใน data scope ของผู้เรียก |
 | `year` | query | `YYYY` | Yes | ปีคริสต์ศักราช เช่น `2025`; ค่า `month` ไม่รองรับใน endpoint นี้ |
-| `endDate` | query | `YYYY-MM-DD` | No | วันสิ้นสุด ต้องเป็นวันที่จริงใน `year` ที่ขอและไม่เกินวันนี้ตาม `Asia/Bangkok`; default วันที่น้อยกว่าระหว่างวันนี้กับวันสิ้นปี ต้องส่งวันเดียวกับ calendar เพื่อให้จำนวนแถวตรงกับ counter ที่คลิก |
+| `endDate` | query | `YYYY-MM-DD` | No | วันสิ้นสุด ต้องเป็นวันที่จริงใน `year` ที่ขอและไม่เกินวันนี้ตาม `Asia/Bangkok`; default วันที่น้อยกว่าระหว่างวันนี้กับวันสิ้นปี ต้องส่งวันเดียวกับ calendar เพื่อให้จำนวนแถวตรงกับ counter ที่คลิก; `lowData` ใช้ `min(endDate, เมื่อวาน)` แต่ `meta.endDate` ยังคงวันที่เลือก |
 | `summaryType` | query | `exceeded` \| `lowData` | Yes | `exceeded` สำหรับรายละเอียดค่าที่เกินมาตรฐาน หรือ `lowData` สำหรับรายละเอียดวันที่ข้อมูลต่ำกว่า 80% |
 | `parameterCode` | query | string | Yes | รหัสจาก `calendar-status.data.monthlySummary[].parameterCode` |
 | `unit` | query | string | No | หน่วยจาก `monthlySummary[].unit`; ควรส่งทุกครั้งและต้องส่งเมื่อ `parameterCode` เดียวกันมีหลายหน่วย |
@@ -656,7 +656,7 @@ curl --get \
 | `success` | boolean | No | `true` เมื่อสำเร็จ |
 | `data.metadata.description` | string | No | คำอธิบายชุดข้อมูล detail |
 | `data.metadata.year` | number | No | ปีเดียวกับ query |
-| `data.metadata.endDate` | string | No | วันสิ้นสุดที่ใช้คำนวณจริงในรูปแบบ `YYYY-MM-DD` |
+| `data.metadata.endDate` | string | No | วันสิ้นสุดที่เลือกในรูปแบบ `YYYY-MM-DD`; `lowData` ใช้ `min(endDate, เมื่อวาน)` สำหรับจำนวนวันและรายละเอียด |
 | `data.metadata.summaryType` | `exceeded` \| `lowData` | No | ประเภท drill-down ที่ร้องขอ |
 | `data.metadata.valueDefinitions` | object | No | คำอธิบาย semantics ของ detail fields |
 | `data.factory` | object | No | โรงงาน current/live ของจุดตรวจวัดที่เลือก |
@@ -704,7 +704,7 @@ curl --get \
       "valueDefinitions": {
         "summaryType": {
           "exceeded": "คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%",
-          "lowData": "คืนหนึ่งแถวต่อวันในช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดที่สิ้นสุด ณ endDate โดยไม่คืนเวลา"
+          "lowData": "คืนหนึ่งแถวต่อวันในช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดเฉพาะวันที่จบแล้ว สิ้นสุด ณ endDate หรือเมื่อวานเมื่อเลือกวันนี้ โดยไม่คืนเวลา"
         },
         "rows": "เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวัน; exceeded จำกัดปีที่ขอ ส่วน lowData ต่อเนื่องข้ามปีได้",
         "displayTime": "ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.",
@@ -785,7 +785,7 @@ curl --get \
       "valueDefinitions": {
         "summaryType": {
           "exceeded": "คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%",
-          "lowData": "คืนหนึ่งแถวต่อวันในช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดที่สิ้นสุด ณ endDate โดยไม่คืนเวลา"
+          "lowData": "คืนหนึ่งแถวต่อวันในช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดเฉพาะวันที่จบแล้ว สิ้นสุด ณ endDate หรือเมื่อวานเมื่อเลือกวันนี้ โดยไม่คืนเวลา"
         },
         "rows": "เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวัน; exceeded จำกัดปีที่ขอ ส่วน lowData ต่อเนื่องข้ามปีได้",
         "displayTime": "ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.",
@@ -841,10 +841,12 @@ curl --get \
 - `rows` เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวัน โดย low-data rows รวมวันไม่มี source row แต่มี expected data
 - `summaryType=exceeded` ใช้กฎ source status เดียวกับ `monthlySummary[].exceededDays` และเลือกเฉพาะค่าที่ source status ปกติซึ่งประเมินเป็น `exceeded` รายการแรกตาม `ctime` ของแต่ละวัน เวลา normalize เป็น `HH:mm:ss` และ `displayTime` เป็นช่วง `HH.00-HH.59 น.`; วันที่เป็น `lowData` ต้องยังอยู่ในผลลัพธ์เมื่อมีค่าที่เกินและใช้ประเมินได้
 - ค่าเกณฑ์ใช้ `critical.min` และ operator `>=` เมื่อ connected point มี criteria; ถ้าไม่มี critical threshold จะ fallback ไป `warningMax` และ operator `>` ตาม status logic เดิม
-- `summaryType=lowData` คืนเฉพาะ `date` และ `dataCompletenessPercent` ของช่วงวันที่ต่ำกว่า 80% ต่อเนื่องล่าสุดที่สิ้นสุด ณ `endDate` ตามกฎเดียวกับ `monthlySummary[].lowDataDays`; object จะไม่มี `time` หรือ `displayTime`
+- `summaryType=lowData` คืนเฉพาะ `date` และ `dataCompletenessPercent` ของช่วงวันที่ต่ำกว่า 80% ต่อเนื่องล่าสุดเฉพาะวันที่จบแล้วตาม `Asia/Bangkok` สิ้นสุด ณ `min(endDate, เมื่อวาน)` ตามกฎเดียวกับ `monthlySummary[].lowDataDays`; object จะไม่มี `time` หรือ `displayTime`
 - วันเดียวกันอาจอยู่ในทั้ง `summaryType=exceeded` และ `summaryType=lowData` เพราะสถานะมลพิษกับความครบถ้วนของข้อมูลเป็นคนละมิติ เมื่อส่ง `endDate` เดียวกับ calendar แล้ว `data.summary.affectedDays` ของแต่ละประเภทต้องตรงกับ counter รายพารามิเตอร์ที่เกี่ยวข้องใน `monthlySummary`
 - ถ้า `parameterCode` ตรงกับหลายพารามิเตอร์ต่างหน่วย ต้องส่ง `unit`; client ควรส่ง `parameterCode` และ `unit` จาก monthly summary เดียวกันเสมอ
 - response ไม่มี pagination; dialog ฝั่ง frontend ควรใช้พื้นที่ scroll และ sticky header เมื่อรายการยาว
+- ไม่ตัดแถวสุดท้ายทิ้งเพียงเพราะเป็นข้อมูลล่าสุด: วันที่ย้อนหลังที่จบแล้วนับตามปกติ แต่วันนี้ไม่เพิ่มจำนวนและไม่ตัดช่วงต่อเนื่องไม่ว่าจะได้ต่ำกว่า/เท่ากับ/สูงกว่า 80%; ทุกแถวของ `lowData` ใช้ฐาน 24 ชั่วโมง
+- หลักฐาน TDD: [วันข้อมูลต่ำกว่า 80% ที่จบแล้ว](../../../evidence/shared/calendar-low-data-completed-days.tdd.md)
 - หลักฐาน TDD: [Calendar status details](../../../evidence/shared/calendar-status-details.tdd.md)
 - หลักฐาน TDD: [Calendar Normal-status filter](../../../evidence/shared/calendar-normal-status-filter.tdd.md)
 

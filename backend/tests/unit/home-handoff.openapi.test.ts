@@ -25,6 +25,31 @@ const annualStationPath = `${stationPath}/{buddhistYear}`;
 const responseSchema = (path: string): unknown => objectAt(responseFor(path), 'schema').$ref;
 
 describe('home handoff OpenAPI contract', () => {
+  it('documents completed Bangkok days for low-data counts and both detail aliases', () => {
+    for (const schema of ['HomeMeasurementSummary', 'HomeParameterSummary']) {
+      expect(objectAt(propertiesFor(schema), 'lowDataDays').description).toContain(
+        'นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok',
+      );
+    }
+    const data = objectAt(propertiesFor('HomeCalendarStatusDetailsResponse'), 'data', 'properties');
+    expect(objectAt(data, 'rows').description).toContain('เมื่อวานเมื่อ endDate เป็นวันนี้');
+    expect(objectAt(propertiesFor('HomeCalendarLowDataDetailRow'), 'date').description).toContain(
+      'ไม่คืนวันปัจจุบัน',
+    );
+    for (const prefix of [stationPath, annualStationPath]) {
+      expect(operationFor(`${prefix}/calendar-status/details`).parameters).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'endDate',
+            description: expect.stringContaining(
+              'เมื่อ endDate เป็นวันนี้ใช้เมื่อวานเป็นวันสุดท้าย',
+            ),
+          }),
+        ]),
+      );
+    }
+  });
+
   it('documents independent calendar and summary dates for both calendar aliases', () => {
     const data = objectAt(propertiesFor('HomeCalendarStatusResponse'), 'data', 'properties');
     const metadata = objectAt(data, 'metadata', 'properties');

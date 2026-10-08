@@ -69,7 +69,7 @@ export const homeHandoffSchemas: Record<string, Schema> = {
     lowDataDays: {
       ...count,
       description:
-        'จำนวนวันส่งตรงเวลาต่ำกว่า 80% ต่อเนื่องล่าสุด ใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกับเปอร์เซ็นต์หลัก ย้อนจากวันสิ้นสุดได้ข้ามปี หยุดเมื่อถึงอย่างน้อย 80% หรือวันเริ่มเชื่อมต่อ; วันสิ้นสุดถึง 80% หรือไม่มี expected bucket คืน 0',
+        'จำนวนวันส่งตรงเวลาต่ำกว่า 80% ต่อเนื่องล่าสุด ใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกับเปอร์เซ็นต์หลัก ย้อนจากวันสิ้นสุดได้ข้ามปี หยุดเมื่อถึงอย่างน้อย 80% หรือวันเริ่มเชื่อมต่อ; นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok เริ่มย้อนจากวันสิ้นสุดหรือเมื่อวานเมื่อวันสิ้นสุดเป็นวันนี้ ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง; วันสิ้นสุดที่จบแล้วถึง 80% หรือไม่มี expected data คืน 0',
     },
     todayDataCompletenessPercent: dailyCompleteness,
     lateDataPercent: lateCompleteness,
@@ -166,7 +166,7 @@ export const homeHandoffSchemas: Record<string, Schema> = {
     lowDataDays: {
       ...count,
       description:
-        'ช่วงส่งตรงเวลาต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์นี้สิ้นสุดที่ endDate ใช้เปอร์เซ็นต์เดียวกับเปอร์เซ็นต์หลัก',
+        'ช่วงส่งตรงเวลาต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์นี้ นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok ย้อนจาก endDate หรือเมื่อวานเมื่อ endDate เป็นวันนี้ ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง ใช้ฐาน 24 ชั่วโมงและเปอร์เซ็นต์ส่งตรงเวลาเดียวกับเปอร์เซ็นต์หลัก',
     },
     todayDataCompletenessPercent: {
       ...dailyCompleteness,
@@ -229,7 +229,13 @@ export const homeHandoffSchemas: Record<string, Schema> = {
     exceededBy: { type: 'number' },
     displayExceededBy: text,
   }),
-  HomeCalendarLowDataDetailRow: object({ date, dataCompletenessPercent: dailyCompleteness }),
+  HomeCalendarLowDataDetailRow: object({
+    date: { ...date, description: 'วันที่จบแล้วตาม Asia/Bangkok ไม่คืนวันปัจจุบัน' },
+    dataCompletenessPercent: {
+      ...dailyCompleteness,
+      description: `${dailyCompleteness.description} รายละเอียด lowData คืนเฉพาะวันที่จบแล้วตาม Asia/Bangkok จึงใช้ฐาน 24 ชั่วโมงทุกแถว`,
+    },
+  }),
   HomeCalendarStatusDetailsResponse: response(
     object({
       metadata: object({
@@ -255,7 +261,7 @@ export const homeHandoffSchemas: Record<string, Schema> = {
       rows: {
         type: 'array',
         description:
-          'exceeded คืนวันเกินมาตรฐานตั้งแต่ 1 มกราคมถึง endDate; lowData คืนเฉพาะช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดที่สิ้นสุด endDate',
+          'exceeded คืนวันเกินมาตรฐานตั้งแต่ 1 มกราคมถึง endDate; lowData คืนเฉพาะช่วงต่ำกว่า 80% ต่อเนื่องล่าสุดของวันที่จบแล้วตาม Asia/Bangkok สิ้นสุด endDate หรือเมื่อวานเมื่อ endDate เป็นวันนี้ ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง',
         items: {
           oneOf: [ref('HomeCalendarExceededDetailRow'), ref('HomeCalendarLowDataDetailRow')],
         },
@@ -321,7 +327,7 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
 }
 
 const timestampRules =
-  'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง รวมกรณีข้ามวัน/ปี ข้อมูลส่งช้าแสดงค่าได้; เปอร์เซ็นต์หลักรวมถึงเปอร์เซ็นต์แถวสถิติ ปฏิทิน lowData/lowDataDays/lowData details นับเฉพาะส่งตรงเวลาจาก Normal/Ok (code 1) และ Shut Down (code 6) ที่มีค่าตัวเลขตรงหน่วย สถานะอื่นไม่นับแม้มีค่า 0; วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์ วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้ว เช่น 22:15 ใช้ถึง 21:59; ตารางคง 24 แถว แต่ชั่วโมง 22–23 คืน value: null, displayValue: -, status: noData; lateDataPercent แยกจากเปอร์เซ็นต์หลักทุกวัน บวกกับเปอร์เซ็นต์ส่งตรงเวลาได้ยอดรับรวม; สถานะ Normal ส่งตรงเวลา 12/22 ชั่วโมงได้ 54.55% และ lateDataPercent 45.45%; Shut Down ส่งตรงเวลา 21/22 ชั่วโมงและส่งช้า 1 ชั่วโมงได้ 95.45% และ lateDataPercent 4.55%; ข้อความสถานะเครื่องที่ส่งช้าเช่น Shut Down คืน value:null, displayValue:Shut Down, status:lateData; source NoData คง noData และ warning/exceeded คงระดับมลพิษ; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup ใช้ชั่วโมงล่าสุด 23 ของวันก่อนหน้า กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ตัดจุดที่ยกเว้นทั้งหมด และถ้าไม่เหลือจุดไม่คืนโรงงาน';
+  'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง รวมกรณีข้ามวัน/ปี ข้อมูลส่งช้าแสดงค่าได้; เปอร์เซ็นต์หลักรวมถึงเปอร์เซ็นต์แถวสถิติ ปฏิทิน lowData/lowDataDays/lowData details นับเฉพาะส่งตรงเวลาจาก Normal/Ok (code 1) และ Shut Down (code 6) ที่มีค่าตัวเลขตรงหน่วย สถานะอื่นไม่นับแม้มีค่า 0; วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์ วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้ว เช่น 22:15 ใช้ถึง 21:59; lowDataDays และ lowData details นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok ย้อนจากวันสิ้นสุดหรือเมื่อวานเมื่อเลือกวันนี้ ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง; ตารางคง 24 แถว แต่ชั่วโมง 22–23 คืน value: null, displayValue: -, status: noData; lateDataPercent แยกจากเปอร์เซ็นต์หลักทุกวัน บวกกับเปอร์เซ็นต์ส่งตรงเวลาได้ยอดรับรวม; สถานะ Normal ส่งตรงเวลา 12/22 ชั่วโมงได้ 54.55% และ lateDataPercent 45.45%; Shut Down ส่งตรงเวลา 21/22 ชั่วโมงและส่งช้า 1 ชั่วโมงได้ 95.45% และ lateDataPercent 4.55%; ข้อความสถานะเครื่องที่ส่งช้าเช่น Shut Down คืน value:null, displayValue:Shut Down, status:lateData; source NoData คง noData และ warning/exceeded คงระดับมลพิษ; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup ใช้ชั่วโมงล่าสุด 23 ของวันก่อนหน้า กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ตัดจุดที่ยกเว้นทั้งหมด และถ้าไม่เหลือจุดไม่คืนโรงงาน';
 
 export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<string, Schema> {
   const result = { ...paths };
@@ -354,7 +360,7 @@ export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<
         in: 'query',
         required: false,
         schema: { ...date, pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-        description: `วันสิ้นสุดที่รวมในการสรุป ต้องเป็นวันจริงใน ${endDatePeriod} ที่ขอและไม่เกินวันนี้ตาม Asia/Bangkok; ไม่ส่งใช้วันที่น้อยกว่าระหว่างวันนี้กับวันสุดท้ายของ ${endDatePeriod}; ไม่ถูกต้องคืน 400 VALIDATION_ERROR${endDatePeriod === 'month' ? '; เมื่อคลิกวันในปฏิทิน ต้องส่ง endDate ของวันนั้นพร้อม month เพื่อคำนวณ todayDataCompletenessPercent และ lateDataPercent ของวันที่เลือก; calendar.days แสดงถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตาม endDate' : ''}`,
+        description: `วันสิ้นสุดที่รวมในการสรุป ต้องเป็นวันจริงใน ${endDatePeriod} ที่ขอและไม่เกินวันนี้ตาม Asia/Bangkok; ไม่ส่งใช้วันที่น้อยกว่าระหว่างวันนี้กับวันสุดท้ายของ ${endDatePeriod}; ไม่ถูกต้องคืน 400 VALIDATION_ERROR; lowDataDays และ lowData details นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok เมื่อ endDate เป็นวันนี้ใช้เมื่อวานเป็นวันสุดท้าย โดย meta.endDate ยังคงเป็นวันที่เลือก${endDatePeriod === 'month' ? '; เมื่อคลิกวันในปฏิทิน ต้องส่ง endDate ของวันนั้นพร้อม month เพื่อคำนวณ todayDataCompletenessPercent และ lateDataPercent ของวันที่เลือก; calendar.days แสดงถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตาม endDate' : ''}`,
         example: '2026-09-23',
       });
     }

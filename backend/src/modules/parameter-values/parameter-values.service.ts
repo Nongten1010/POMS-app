@@ -273,7 +273,7 @@ export const parameterValuesService = {
           date: query.date,
           valueDefinitions: measurementStatisticsValueDefinitions(),
         },
-        summary: buildHomeMeasurementSummary(dailySummaries, query.date),
+        summary: buildHomeMeasurementSummary(dailySummaries, query.date, current),
         thresholds: definitions.map(toThreshold).filter(isMeasurementParameterThreshold),
         measurementPoints: [
           {
@@ -345,7 +345,7 @@ export const parameterValuesService = {
           calendarEndDate,
           valueDefinitions: calendarStatusValueDefinitions(),
         },
-        summary: buildHomeMeasurementSummary(summaryPeriod, endDate),
+        summary: buildHomeMeasurementSummary(summaryPeriod, endDate, current),
         calendar: {
           year,
           month,
@@ -362,7 +362,7 @@ export const parameterValuesService = {
           })),
         },
         monthlySummary: definitions.map((definition) =>
-          buildYearlyParameterSummary(definition, summaryPeriod, endDate),
+          buildYearlyParameterSummary(definition, summaryPeriod, endDate, current),
         ),
       },
       meta: {
@@ -420,7 +420,7 @@ export const parameterValuesService = {
       endDate < startDate
         ? []
         : query.summaryType === 'lowData'
-          ? trailingLowDataSummaries(dailySummaries, endDate, definition.label)
+          ? trailingLowDataSummaries(dailySummaries, endDate, current, definition.label)
           : dailySummaries.filter((summary) => summary.date >= startDate);
     const exceededStandard = resolveExceededStandard(definition);
     const rowsByDate = groupRowsByDate(annualRows);
@@ -1107,11 +1107,15 @@ function percentOfExpected(received: number, expected: number): number | null {
 function trailingLowDataSummaries(
   summaries: DailySummary[],
   endDate: string,
+  current: DateHour | null,
   parameterLabel?: string,
 ): DailySummary[] {
   const byDate = new Map(summaries.map((summary) => [summary.date, summary]));
   const streak: DailySummary[] = [];
-  for (let date = endDate; ; date = previousCalendarDate(date)) {
+  // Today's partial completeness must neither add a day nor interrupt a completed streak.
+  const completedEndDate =
+    current && endDate >= current.date ? previousCalendarDate(current.date) : endDate;
+  for (let date = completedEndDate; ; date = previousCalendarDate(date)) {
     const summary = byDate.get(date);
     if (!summary) break;
     const lowData = parameterLabel
@@ -1126,6 +1130,7 @@ function trailingLowDataSummaries(
 function buildHomeMeasurementSummary(
   summaries: DailySummary[],
   endDate: string,
+  current: DateHour | null,
 ): HomeMeasurementSummaryDTO {
   const selected = summaries.find((summary) => summary.date === endDate);
   const yearStart = `${endDate.slice(0, 4)}-01-01`;
@@ -1136,7 +1141,7 @@ function buildHomeMeasurementSummary(
         summary.date <= endDate &&
         summary.pollutionStatus === 'exceeded',
     ).length,
-    lowDataDays: trailingLowDataSummaries(summaries, endDate).length,
+    lowDataDays: trailingLowDataSummaries(summaries, endDate, current).length,
     todayDataCompletenessPercent: selected?.dataCompletenessPercent ?? null,
     lateDataPercent: selected?.lateDataPercent ?? null,
   };
@@ -1146,6 +1151,7 @@ function buildYearlyParameterSummary(
   definition: ParameterDefinition,
   summaries: DailySummary[],
   endDate: string,
+  current: DateHour | null,
 ) {
   const selected = summaries.find((summary) => summary.date === endDate);
   const yearStart = `${endDate.slice(0, 4)}-01-01`;
@@ -1160,7 +1166,7 @@ function buildYearlyParameterSummary(
         summary.date <= endDate &&
         (summary.parameterStatuses.get(definition.label) ?? []).includes('exceeded'),
     ).length,
-    lowDataDays: trailingLowDataSummaries(summaries, endDate, definition.label).length,
+    lowDataDays: trailingLowDataSummaries(summaries, endDate, current, definition.label).length,
     todayDataCompletenessPercent:
       selected?.parameterCompleteness.get(definition.label)?.completeness ?? null,
     lateDataPercent: selected?.parameterCompleteness.get(definition.label)?.late ?? null,
@@ -1384,7 +1390,8 @@ export function readRegisteredAlertMeasurement(
     if ((typeof unit !== 'string' || !unit.trim()) && toNumber(row[`${prefix}_value`]) !== null) {
       unidentifiedUnit = true;
     }
-    if (typeof unit !== 'string' || normalizeUnit(unit) !== normalizeUnit(definition.unit)) continue;
+    if (typeof unit !== 'string' || normalizeUnit(unit) !== normalizeUnit(definition.unit))
+      continue;
     const value = toNumber(row[`${prefix}_value`]);
     const status = resolvePomsClientParameterStatus(row[`${prefix}_status`])?.code ?? null;
     if (value !== null || status !== null) return { value, status };
@@ -1723,7 +1730,7 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
 function calendarStatusValueDefinitions(): Record<string, unknown> {
   return {
     summaryPeriod:
-      'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี',
+      'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี; lowDataDays นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok เมื่อ endDate เป็นวันนี้เริ่มย้อนจากเมื่อวาน โดยไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง',
     dataCompletenessStatus: {
       lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
       highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
@@ -1747,7 +1754,7 @@ function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
       exceeded:
         'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%',
       lowData:
-        'คืนหนึ่งแถวต่อวันในช่วงข้อมูลต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ ย้อนจาก endDate โดยไม่คืนเวลา; ทุกวันนับเฉพาะส่งตรงเวลา; วันย้อนหลังหารด้วย 24 ชั่วโมง ส่วนวันนี้ใช้เฉพาะชั่วโมงที่จบแล้ว',
+        'คืนหนึ่งแถวต่อวันในช่วงข้อมูลต่ำกว่า 80% ต่อเนื่องล่าสุดของพารามิเตอร์ เฉพาะวันที่จบแล้วตาม Asia/Bangkok ย้อนจาก endDate หรือเมื่อวานเมื่อ endDate เป็นวันนี้ โดยไม่คืนเวลา; ทุกวันนับเฉพาะส่งตรงเวลาและหารด้วย 24 ชั่วโมง ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง',
     },
     rows: 'เรียงวันที่จากเก่าไปใหม่ หนึ่งแถวต่อวัน; exceeded จำกัดปีที่ขอถึง endDate ส่วน lowData ต่อเนื่องข้ามปีได้',
     displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',
