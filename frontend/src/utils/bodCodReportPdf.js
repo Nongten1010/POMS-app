@@ -4,7 +4,8 @@ import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
 import locationOptions from '../option/locationOptions.json'
 import { calculateBodCodErrorValue, formatBodCodStandardDeviation } from './bodCodDeviationCriteria'
-import { formatBodCodDate, getBodCodSequenceLabel, getBodCodStatus } from './bodCodReportRules'
+import { formatBodCodDate, getBodCodSequenceLabel } from './bodCodReportRules'
+import { getPdfRequestStatusLabel } from './requestProcessStatus.mjs'
 
 const colors = {
   black: rgb(0, 0, 0),
@@ -357,8 +358,9 @@ function drawDocumentMetadata(layout, report = {}, y = layout.y) {
   const size = textSizes.body
   const numberText = `เลขที่ ${requestNo}`
   layout.drawText(numberText, x, y, { size })
-  if (getBodCodStatus(report) === 'APPROVED') {
-    layout.drawText('ผ่านการพิจารณา', x + layout.textWidth(numberText, size) + 8, y, { size, bold: true })
+  const statusText = getPdfRequestStatusLabel(report)
+  if (statusText) {
+    layout.drawText(statusText, x + layout.textWidth(numberText, size) + 8, y, { size, bold: true })
   }
   const dateText = `วันที่ยื่นคำขอ ${submittedDate}`
   layout.drawText(dateText, right - layout.textWidth(dateText, size), y, { size })

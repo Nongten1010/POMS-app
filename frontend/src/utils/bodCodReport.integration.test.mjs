@@ -248,7 +248,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         assert.equal(button.includes('disabled=""'), false)
       }
     })
-    await t.test('PDF metadata has bold final approval only and real Thai dates', () => {
+    await t.test('PDF metadata has normalized bold final statuses and real Thai dates', () => {
       const output = []
       const layout = { margin: { left: 32, right: 32 }, width: 595, y: 800,
         textWidth: (value) => value.length * 4,
@@ -261,6 +261,11 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
       output.length = 0
       pdf.drawDocumentMetadata(layout, { ...fixture, statusCode: 'WAITING_APPROVAL' })
       assert.ok(!output.some((text) => text.value === 'ผ่านการพิจารณา'))
+      for (const [statusCode, expected] of [['REJECTED', 'ไม่ผ่านการพิจารณา'], ['CANCELLED', 'ยกเลิกคำขอ']]) {
+        output.length = 0
+        pdf.drawDocumentMetadata(layout, { ...fixture, statusCode })
+        assert.ok(output.some((text) => text.value === expected && text.options.bold), statusCode)
+      }
     })
     await t.test('reporter name and signature date are centered on their dotted lines', () => {
       for (const reporterName of ['ผู้รายงาน ทดสอบ', 'ชื่อผู้รายงานที่ยาวมาก '.repeat(5), '']) {

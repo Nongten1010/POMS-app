@@ -60,10 +60,11 @@ import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
 import { buildPreviousConnectionRequestPrefill, loadPreviousConnectionRequest } from '../utils/previousConnectionRequest.mjs'
 import { canCancelConnectionRequest } from '../utils/connectionRequestCancellation.mjs'
-import { isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
+import { getPdfRequestStatusLabel, isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
 import { buildEligibleFactoryAddRequestDraft } from '../utils/eligibleFactoryAddRequest.mjs'
 import { isModbusParameterRow } from '../utils/modbusAddress.mjs'
 import { getAddParameterGroups } from '../utils/addParameterPrefill.mjs'
+import { getIndustrialEstateInfo } from '../utils/industrialEstate.mjs'
 import {
   EIA_ASSESSMENT_OPTIONS as eiaAssessmentOptions,
   buildConnectionEnvironmentalAssessment,
@@ -1124,6 +1125,7 @@ function normalizeEmailList(value) {
 
 function mapOperatorFactoryRow(row) {
   const monitoringPointCount = Number(row.monitoringPointCount ?? 0)
+  const industrialEstateInfo = getIndustrialEstateInfo(row) ?? {}
 
   return {
     id: row.id,
@@ -1143,6 +1145,7 @@ function mapOperatorFactoryRow(row) {
     latitude: row.latitude ?? '',
     longitude: row.longitude ?? '',
     province: row.province ?? '',
+    ...industrialEstateInfo,
     officerNotificationEmails: normalizeEmailList(row.officerNotificationEmails),
     monitoringPointCount,
     isEligible: row.isEligible === true,
@@ -1241,6 +1244,7 @@ function mapConnectedMeasurementPointRow(row) {
 
 function mapRequestDetailRow(detail = {}, row = {}) {
   const factory = detail.factory ?? {}
+  const industrialEstateInfo = getIndustrialEstateInfo(detail, factory, row) ?? {}
   const sourceMeasurementPoints = Array.isArray(detail.measurementPoints) ? detail.measurementPoints : row.measurementPoints
   const requestDocuments = mergeDocumentItems(
     getDocumentItemsFromSource(row),
@@ -1290,6 +1294,7 @@ function mapRequestDetailRow(detail = {}, row = {}) {
     statusLabel: detail.statusLabel ?? row.statusLabel ?? '',
     waitingConnectionText: detail.waitingConnectionText ?? row.waitingConnectionText ?? '',
     requestType: detail.requestType ?? row.requestType ?? '',
+    ...industrialEstateInfo,
   }
 }
 
@@ -1303,6 +1308,7 @@ function getInitialRequestFactory(request = {}, fallbackFactory = {}) {
   const safeRequest = request ?? {}
   const safeFallbackFactory = fallbackFactory ?? {}
   const factory = safeRequest.factory ?? {}
+  const industrialEstateInfo = getIndustrialEstateInfo(safeRequest, factory, safeFallbackFactory) ?? {}
 
   return {
     ...safeFallbackFactory,
@@ -1320,6 +1326,7 @@ function getInitialRequestFactory(request = {}, fallbackFactory = {}) {
     address: safeRequest.address ?? factory.address ?? safeFallbackFactory.address ?? '',
     latitude: safeRequest.latitude ?? factory.latitude ?? safeFallbackFactory.latitude ?? '',
     longitude: safeRequest.longitude ?? factory.longitude ?? safeFallbackFactory.longitude ?? '',
+    ...industrialEstateInfo,
   }
 }
 
@@ -2183,6 +2190,8 @@ function buildMeasurementPointRequestBody(
     industryMainOrder: factory.industryMainOrder ?? factory.industryMainOrderNo ?? null,
     industrySubOrder: factory.industrySubOrder ?? factory.industrySubOrderNo ?? null,
     businessActivity: factory.businessActivity ?? null,
+    industrialEstateCode: factory.industrialEstateCode ?? null,
+    industrialEstateName: factory.industrialEstateName ?? null,
     ...buildConnectionEnvironmentalAssessment(formData, factory, { readOnly: options.generalFactoryFieldsReadOnly }),
     address: factory.address ?? null,
     latitude: toNumberOrNull(getFormValue(formData, 'latitude', factory.latitude ?? '')),
@@ -2962,11 +2971,9 @@ function getConnectedPointTabLabel(row, index) {
 }
 
 function getConnectionRequestPdfOptions(request) {
-  const isConnected = [request?.status, request?.statusCode, request?.statusLabel]
-    .some((value) => ['CONNECTED', 'เชื่อมต่อแล้ว'].includes(String(value ?? '').trim()))
   return {
     showRequestMetaHeader: true,
-    approvalStatusLabel: isConnected ? 'ผ่านการพิจารณา' : '',
+    approvalStatusLabel: getPdfRequestStatusLabel(request),
   }
 }
 
@@ -3074,9 +3081,11 @@ function getConnectedPointRequestRowsFromPayload(payload) {
 function getParameterFormDefaultsFromPayload(payload, point = {}) {
   const data = payload?.data ?? {}
   const formDefaults = data?.formDefaults ?? data?.defaults ?? {}
+  const industrialEstateInfo = getIndustrialEstateInfo(formDefaults, data) ?? {}
   const mergedDefaults = {
     ...compactDefinedObject(data),
     ...compactDefinedObject(formDefaults),
+    ...industrialEstateInfo,
   }
   const stationId = point?.pointCode ?? point?.code ?? point?.stationId ?? ''
   const pointName = point?.pointName ?? point?.name ?? ''
@@ -7011,6 +7020,7 @@ export function RequestFormBottomSheet({
   customSubmit = null,
   documentImagesUploadUrl = '',
   generalFactoryFieldsReadOnly: requestedGeneralFactoryFieldsReadOnly = false,
+  showIndustrialEstateFields = false,
   factoryProfilePatchMode = false,
   monitoringPointTypeReadOnly: requestedMonitoringPointTypeReadOnly = false,
   pointCodeReadOnly = false,
@@ -7039,6 +7049,12 @@ export function RequestFormBottomSheet({
     getDocumentItemsFromSource(mode === 'create' ? previousRequestFormData : null),
   )
   const formFactory = useInitialRequestValues ? getInitialRequestFactory(initialRequest, factory) : factory
+  const industrialEstateInfo = getIndustrialEstateInfo(formFactory) ?? {
+    industrialEstateCode: null,
+    industrialEstateName: null,
+    industrialAreaType: 'OUTSIDE_INDUSTRIAL_ESTATE',
+    industrialAreaTypeLabel: 'นอกนิคมอุตสาหกรรม',
+  }
   const latestRevisionMessage = isEditMode ? getLatestRevisionMessage(initialRequest) : ''
   const initialContacts = useInitialRequestValues ? initialRequest : previousRequestFormData
   const initialContactPersons = Array.isArray(initialContacts?.contactPersons)
@@ -7552,6 +7568,29 @@ export function RequestFormBottomSheet({
                   <Grid size={{ xs: 12, md: 3 }}>
                     <ReadOnlyField label="ลำดับประเภทโรงงาน (รอง)" value={formFactory?.industrySubOrder ?? ''} />
                   </Grid>
+                  {showIndustrialEstateFields ? (
+                    <>
+                      <Grid size={{ xs: 12, md: 3 }}>
+                        <TextField
+                          select
+                          disabled
+                          label="พื้นที่ประกอบกิจการ"
+                          size="small"
+                          value={industrialEstateInfo.industrialAreaType}
+                          fullWidth
+                        >
+                          <MenuItem value="INDUSTRIAL_ESTATE">ในนิคมอุตสาหกรรม</MenuItem>
+                          <MenuItem value="OUTSIDE_INDUSTRIAL_ESTATE">นอกนิคมอุตสาหกรรม</MenuItem>
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 3 }}>
+                        <ReadOnlyField
+                          label="ชื่อนิคมอุตสาหกรรม"
+                          value={isBlankValue(industrialEstateInfo.industrialEstateName) ? '-' : industrialEstateInfo.industrialEstateName}
+                        />
+                      </Grid>
+                    </>
+                  ) : null}
                   <Grid size={{ xs: 12, md: 3 }}>
                     {generalFactoryFieldsReadOnly ? (
                       <ReadOnlyField name={readOnlyPreview ? 'eia' : undefined} label="การประเมินผลกระทบสิ่งแวดล้อม" value={eiaAssessment} />
@@ -9198,6 +9237,7 @@ function ConnectionRequestPage({
         initialRequest={requestForm?.initialRequest}
         previousRequestFormData={requestForm?.previousRequestFormData}
         generalFactoryFieldsReadOnly={Boolean(requestForm?.previousRequestFormData)}
+        showIndustrialEstateFields
         slideOnMount={Boolean(requestForm?.formSessionId)}
         loading={requestForm?.loading}
         loadError={requestFormError}

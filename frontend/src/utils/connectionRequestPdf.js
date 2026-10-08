@@ -3,6 +3,7 @@ import { PDFDocument, PDFName, PDFString, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
 import { getEiaAssessmentValue, getEnvironmentalAssessmentValues } from './environmentalAssessment.mjs'
+import { formatIndustrialEstate, getIndustrialEstateInfo } from './industrialEstate.mjs'
 
 const colors = {
   black: rgb(0, 0, 0),
@@ -1582,6 +1583,7 @@ function mergeDocumentItems(...documentGroups) {
 
 function renderGeneralFactorySection(layout, request, context, options = {}) {
   const { factory } = context
+  const industrialEstateInfo = getIndustrialEstateInfo(request, factory)
   const showExtendedFields = options.showExtendedFields === true
   layout.sectionTitle('1. ข้อมูลทั่วไปของโรงงาน')
   if (showExtendedFields) {
@@ -1601,7 +1603,7 @@ function renderGeneralFactorySection(layout, request, context, options = {}) {
     { label: 'ลำดับประเภทโรงงาน (รอง) : ', value: request?.industrySubOrder ?? factory.industrySubOrder },
   ])
   layout.labelValue('ประกอบกิจการ : ', request?.businessActivity ?? factory.businessActivity)
-  layout.labelValue('เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี) : ', request?.industrialEstate ?? factory.industrialEstate)
+  layout.labelValue('เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี) : ', formatIndustrialEstate(industrialEstateInfo))
   const assessment = getEnvironmentalAssessmentValues(request, factory)
   const eia = getEiaAssessmentValue(assessment)
   layout.labelValue('การประเมินผลกระทบสิ่งแวดล้อม : ', eia)

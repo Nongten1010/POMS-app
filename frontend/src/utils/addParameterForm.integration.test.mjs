@@ -33,10 +33,10 @@ test('add-parameter form and payload preserve live groups without affecting othe
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/utils/connectionRequestPdf.js')) {
-          return `${code}\nexport { renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
+          return `${code}\nexport { renderGeneralFactorySection, renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
         }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
+          return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapOperatorFactoryRow, mapRequestDetailRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
         }
       },
     }],
@@ -46,8 +46,44 @@ test('add-parameter form and payload preserve live groups without affecting othe
       RequestFormBottomSheet, validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody,
       syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload,
       MeasurementInstrumentSection, getFactoryColumns, isAddParameterRequest, buildRequestApprovalPayload, mapRequestDetailRow,
-      OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, getAssignedRequestPointCodes,
+      mapOperatorFactoryRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
+      getAssignedRequestPointCodes,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('industrial-estate mapper, snapshot and PDF keep one authoritative source', async () => {
+      const current = mapOperatorFactoryRow({
+        id: 1, factoryId: 'TEST', industrialEstateCode: 'IEAT001', industrialEstateName: 'นิคมทดสอบ',
+        industrialAreaType: 'INDUSTRIAL_ESTATE', industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
+      })
+      assert.equal(current.industrialEstateCode, 'IEAT001')
+      assert.equal(current.industrialEstateName, 'นิคมทดสอบ')
+      assert.equal(current.industrialAreaTypeLabel, 'ในนิคมอุตสาหกรรม')
+
+      const detail = mapRequestDetailRow({
+        id: 2, industrialEstateCode: null, industrialEstateName: null,
+        factory: { industrialEstateCode: 'NESTED', industrialEstateName: 'นิคมจาก factory' },
+      }, current)
+      const snapshot = getInitialRequestFactory(detail, current)
+      assert.equal(snapshot.industrialEstateCode, null)
+      assert.equal(snapshot.industrialEstateName, null)
+      assert.equal(snapshot.industrialAreaTypeLabel, 'นอกนิคมอุตสาหกรรม')
+
+      const lines = []
+      const layout = {
+        sectionTitle: () => {},
+        labelValue: (label, value) => lines.push([label, value]),
+        labelValueRow: (items) => lines.push(...items.map(({ label, value }) => [label, value])),
+      }
+      const { renderGeneralFactorySection } = await server.ssrLoadModule('/src/utils/connectionRequestPdf.js')
+      renderGeneralFactorySection(layout, current, { factory: {} }, { showExtendedFields: true })
+      assert.deepEqual(lines.find(([label]) => label.includes('นิคมอุตสาหกรรม')), [
+        'เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี) : ', 'นิคมทดสอบ (IEAT001)',
+      ])
+      renderGeneralFactorySection(layout, detail, { factory: current }, { showExtendedFields: true })
+      assert.deepEqual(lines.filter(([label]) => label.includes('นิคมอุตสาหกรรม')).at(-1), [
+        'เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี) : ', '-',
+      ])
+    })
 
     await t.test('PDF instrument headers use IEE/EIA/HEIA and fit both CEMS and WPMS columns', async () => {
       const { renderInstrumentTable } = await server.ssrLoadModule('/src/utils/connectionRequestPdf.js')
@@ -349,6 +385,8 @@ test('add-parameter form and payload preserve live groups without affecting othe
         const initialRequest = getParameterFormDefaultsFromPayload({ data: { formDefaults: {
           id: 1, factoryId: 'TEST', systemType,
           eia: 'อื่นๆ', eiaOther: 'Other assessment', projectName: 'Saved project', latitude: 13.5, longitude: 100.5,
+          industrialEstateCode: 'IEAT001', industrialEstateName: 'นิคมทดสอบ',
+          industrialAreaType: 'INDUSTRIAL_ESTATE', industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
           measurementPoints: [{ pointCode: 'S123', pointName: 'Test point', details,
             documentsAndImages: [
               { title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', fileName: 'front.jpg', fileUrl: 'https://example.com/front.jpg', fileType: 'image/jpeg' },
@@ -361,6 +399,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
         const render = (mode, props = {}) => renderToStaticMarkup(React.createElement(RequestFormBottomSheet, {
           open: true, embedded: true, mode, initialRequest, factory: { factoryId: 'TEST' }, isOperator: true,
           formType: mode === 'add-parameter' ? 'เพิ่มพารามิเตอร์' : 'เพิ่มจุดตรวจวัด',
+          showIndustrialEstateFields: true,
           ...props,
         }))
         const generalSection = (markup) => markup.slice(markup.indexOf('ข้อมูลทั่วไปของโรงงาน'), markup.indexOf('data-field-name="contactPersons"'))
@@ -379,6 +418,15 @@ test('add-parameter form and payload preserve live groups without affecting othe
         assert.ok(html.includes('Saved brand'))
         assert.ok(!html.includes('Old brand'))
         assert.ok(!html.includes('จัดการข้อมูล'))
+        for (const value of ['พื้นที่ประกอบกิจการ', 'ในนิคมอุตสาหกรรม', 'นิคมทดสอบ']) {
+          assert.ok(generalSection(html).includes(value), `industrial-estate value must remain visible: ${value}`)
+        }
+        assert.ok(!generalSection(html).includes('รหัสนิคมอุตสาหกรรม'))
+        assert.ok(!generalSection(html).includes('IEAT001'))
+        const sharedFormWithoutConnectionFields = render('add-parameter', { showIndustrialEstateFields: false })
+        assert.ok(!generalSection(sharedFormWithoutConnectionFields).includes('พื้นที่ประกอบกิจการ'))
+        assert.ok(!generalSection(sharedFormWithoutConnectionFields).includes('รหัสนิคมอุตสาหกรรม'))
+        assert.ok(!generalSection(sharedFormWithoutConnectionFields).includes('ชื่อนิคมอุตสาหกรรม'))
         const edit = render('edit')
         assert.deepEqual(hiddenValues(edit, 'requestedParameters'), ['STALE'])
         assert.deepEqual(hiddenValues(edit, 'pendingParameters'), ['STALE'])
@@ -400,7 +448,9 @@ test('add-parameter form and payload preserve live groups without affecting othe
           const uploads = inputs.filter((input) => input.includes('type="file"'))
           assert.equal(uploads.length, 2)
           assert.ok(uploads.every((input) => input.includes('disabled=""')))
-          assert.ok(inputs.filter((input) => !input.includes('type="file"')).every((input) => input.includes('readOnly=""')))
+          assert.ok(inputs.filter((input) => !input.includes('type="file"')).every((input) => (
+            input.includes('readOnly=""') || input.includes('disabled=""')
+          )))
           for (const value of ['Other assessment', 'Saved project', '13.5', '100.5', 'front.jpg', 'logo.jpg']) {
             assert.ok(locked.includes(value), `locked factory data must remain visible: ${value}`)
           }
@@ -437,8 +487,33 @@ test('add-parameter form and payload preserve live groups without affecting othe
         assert.equal(lockedPayload.projectName, 'Saved project')
         assert.equal(lockedPayload.latitude, 13.5)
         assert.equal(lockedPayload.longitude, 100.5)
+        assert.equal(lockedPayload.industrialEstateCode, 'IEAT001')
+        assert.equal(lockedPayload.industrialEstateName, 'นิคมทดสอบ')
+        assert.equal(lockedPayload.industrialAreaType, undefined)
+        assert.equal(lockedPayload.industrialAreaTypeLabel, undefined)
         assert.ok(lockedPayload.measurementPoints[0].documentsAndImages.some((document) => document.fileName === 'front.jpg'))
         assert.ok(lockedPayload.measurementPoints[0].documentsAndImages.some((document) => document.fileName === 'logo.jpg'))
+
+        const nullEstateDefaults = getParameterFormDefaultsFromPayload({ data: { formDefaults: {
+          factoryId: 'TEST', systemType, industrialEstateCode: null, industrialEstateName: null,
+          measurementPoints: [{ pointCode: 'S123', details }],
+        } } }, { pointCode: 'S123', type: systemType })
+        const nullEstateFactory = getInitialRequestFactory(nullEstateDefaults, {
+          industrialEstateCode: 'CURRENT', industrialEstateName: 'นิคมปัจจุบัน',
+          industrialAreaType: 'INDUSTRIAL_ESTATE',
+        })
+        assert.equal(nullEstateFactory.industrialEstateCode, null)
+        assert.equal(nullEstateFactory.industrialEstateName, null)
+        assert.equal(nullEstateFactory.industrialAreaTypeLabel, 'นอกนิคมอุตสาหกรรม')
+        const nullEstateHtml = render('add-parameter', {
+          initialRequest: nullEstateDefaults,
+          factory: nullEstateFactory,
+        })
+        assert.ok(generalSection(nullEstateHtml).includes('นอกนิคมอุตสาหกรรม'))
+        assert.ok(generalSection(nullEstateHtml).includes('value="-"'))
+        const nullEstatePayload = buildMeasurementPointRequestBody(nullEstateFactory, systemType, new FormData())
+        assert.equal(nullEstatePayload.industrialEstateCode, null)
+        assert.equal(nullEstatePayload.industrialEstateName, null)
 
         const formData = new FormData()
         for (const [name, values] of Object.entries({

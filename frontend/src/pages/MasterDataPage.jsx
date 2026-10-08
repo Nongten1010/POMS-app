@@ -35,7 +35,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestDocumentDialog, RequestFormBottomSheet } from './ConnectionRequestPage'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
-import { isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
+import { getPdfRequestStatusLabel, isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
 import { getContactComparison, getMeasurementPointComparisonPair, getMeasurementPointComparisonPairs } from '../utils/contactComparison.mjs'
 import {
   FACTORY_BASIC_INFO_EIA_OPTIONS,
@@ -2100,13 +2100,7 @@ function RequestPdfPreviewDialog({
     () => request ? mapEditRequestToPdfRequest(request) : request,
     [request],
   )
-  const isApproved = [
-    request?.statusCode,
-    request?.status,
-    request?.statusLabel,
-    request?.raw?.status,
-    request?.raw?.statusLabel,
-  ].some((status) => ['APPROVED', 'อนุมัติ', 'อนุมัติแล้ว', 'ผ่านการพิจารณา'].includes(status))
+  const pdfStatusLabel = getPdfRequestStatusLabel(request)
 
   useEffect(() => {
     if (!open || !request || missingSnapshotMessage) {
@@ -2122,7 +2116,7 @@ function RequestPdfPreviewDialog({
     createConnectionRequestPdf(documentRequest, {
       showRequestMetaHeader,
       contentMode,
-      approvalStatusLabel: isApproved ? 'ผ่านการพิจารณา' : '',
+      approvalStatusLabel: pdfStatusLabel,
     })
       .then((pdfBytes) => {
         nextUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }))
@@ -2149,7 +2143,7 @@ function RequestPdfPreviewDialog({
         URL.revokeObjectURL(nextUrl)
       }
     }
-  }, [documentRequest, isApproved, missingSnapshotMessage, open, previewKey, request, showRequestMetaHeader])
+  }, [documentRequest, missingSnapshotMessage, open, pdfStatusLabel, previewKey, request, showRequestMetaHeader])
 
   return (
     <RequestDocumentDialog

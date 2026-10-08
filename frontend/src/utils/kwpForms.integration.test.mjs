@@ -450,7 +450,7 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
       assert.ok(findButtons(busy).every((button) => button.props.disabled))
     })
 
-    await t.test('all five PDFs contain metadata, bold approval, reporter name, dates and correct report period', async () => {
+    await t.test('all five PDFs contain metadata, normalized final status, reporter name, dates and correct report period', async () => {
       globalThis.fetch = async (url) => new Response(await readFile(new URL(
         String(url).includes('Bold') ? '../assets/fonts/THSarabunNew-Bold.ttf' : '../assets/fonts/THSarabunNew.ttf', import.meta.url,
       )))
@@ -505,6 +505,11 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
         drawn.length = 0
         await pdf.createKwpFormPdf({ formType: 'kwp01', status: 'SUBMITTED' })
         assert.ok(!drawn.some(({ text }) => text === 'ผ่านการพิจารณา'))
+        for (const [status, expected] of [['REJECTED', 'ไม่ผ่านการพิจารณา'], ['ไม่อนุมัติ', 'ไม่ผ่านการพิจารณา'], ['CANCELLED', 'ยกเลิกคำขอ'], ['ยกเลิกคำขอ', 'ยกเลิกคำขอ']]) {
+          drawn.length = 0
+          await pdf.createKwpFormPdf({ formType: 'kwp01', status })
+          assert.ok(drawn.some(({ text, options }) => text === expected && options.bold === true), status)
+        }
         for (const code of ['01', '02', '03', '04', '05']) {
           for (const missing of [undefined, null, '', '   ']) {
             drawn.length = 0

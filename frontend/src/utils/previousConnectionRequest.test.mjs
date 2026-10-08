@@ -6,10 +6,15 @@ import {
   loadPreviousConnectionRequest,
 } from './previousConnectionRequest.mjs'
 
-const factory = { factoryId: 'factory/1', factoryName: 'Current', eia: 'มี EIA', projectName: 'Current project', latitude: 14, officerNotificationEmails: ['current-officer@example.com'] }
+const factory = {
+  factoryId: 'factory/1', factoryName: 'Current', eia: 'มี EIA', projectName: 'Current project', latitude: 14,
+  industrialEstateCode: 'CURRENT', industrialEstateName: 'นิคมปัจจุบัน', industrialAreaType: 'INDUSTRIAL_ESTATE',
+  industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม', officerNotificationEmails: ['current-officer@example.com'],
+}
 const formData = {
   factoryId: 'factory/1', factoryName: 'Previous', factoryRegistrationNo: 'old-registration',
   eia: null, eiaOther: null, projectName: null, latitude: null, longitude: null,
+  industrialEstateCode: null, industrialEstateName: null,
   factoryFrontPhotos: [{ fileUrl: 'https://example.com/front.jpg', fileName: 'front.jpg', fileType: 'image/jpeg', fileSize: 100 }],
   factoryLogo: { fileUrl: 'https://example.com/logo.jpg', fileName: 'logo.jpg' },
   contactPersons: [{ name: 'Contact', phone: '0812345678', position: 'Engineer', email: 'contact@example.com' }],
@@ -76,6 +81,10 @@ test('prefills snapshot values including explicit nulls, keeping old and new reg
   assert.equal(result.factory.eia, null)
   assert.equal(result.factory.projectName, null)
   assert.equal(result.factory.latitude, null)
+  assert.equal(result.factory.industrialEstateCode, null)
+  assert.equal(result.factory.industrialEstateName, null)
+  assert.equal(result.factory.industrialAreaType, 'OUTSIDE_INDUSTRIAL_ESTATE')
+  assert.equal(result.factory.industrialAreaTypeLabel, 'นอกนิคมอุตสาหกรรม')
   assert.deepEqual(result.previousRequestFormData.contactPersons, formData.contactPersons)
   assert.deepEqual(result.previousRequestFormData.notificationEmails, ['factory@example.com'])
   assert.equal(factory.eia, 'มี EIA')

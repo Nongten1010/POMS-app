@@ -4,6 +4,7 @@ import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
 import { formatKwpDocumentDate } from './kwpFormPresentation.mjs'
 import { KwpPdfTemplate } from './kwpPdfTemplate.mjs'
+import { getPdfRequestStatusLabel } from './requestProcessStatus.mjs'
 
 const colors = {
   black: rgb(0, 0, 0),
@@ -250,16 +251,14 @@ class KwpPdfLayout {
     const y = this.pageSize[1] - 24
     const left = `เลขที่ : ${getRequestNo(data) || '-'}`
     const right = `วันที่ยื่นคำขอ : ${displayValue(data.submittedDate)}`
-    const approved = [data.statusCode, data.status, data.statusLabel].includes('APPROVED')
-      || [data.statusCode, data.status, data.statusLabel].includes('ผ่านการพิจารณา')
     const rightWidth = this.textWidth(right, size)
     const leftWidth = this.textWidth(left, size)
-    const approvalText = approved ? 'ผ่านการพิจารณา' : ''
-    const approvalWidth = approvalText ? this.textWidth(approvalText, size, true) + 10 : 0
-    const leftAvailable = this.contentWidth - rightWidth - approvalWidth - 14
+    const statusText = getPdfRequestStatusLabel(data)
+    const statusWidth = statusText ? this.textWidth(statusText, size, true) + 10 : 0
+    const leftAvailable = this.contentWidth - rightWidth - statusWidth - 14
     const leftSize = leftWidth > leftAvailable ? Math.max(9, size * leftAvailable / leftWidth) : size
     this.drawTextAt(left, this.margin.left, y, { size: leftSize })
-    if (approved) this.drawTextAt(approvalText, this.margin.left + this.textWidth(left, leftSize) + 10, y, { size, bold: true })
+    if (statusText) this.drawTextAt(statusText, this.margin.left + this.textWidth(left, leftSize) + 10, y, { size, bold: true })
     this.drawTextAt(right, this.width - this.margin.right - rightWidth, y, { size })
     this.y = Math.min(this.y, y - 18)
   }

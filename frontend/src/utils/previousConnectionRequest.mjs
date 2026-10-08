@@ -1,4 +1,5 @@
 import { buildContentApiHeaders, getContentApiUrl, readContentApiResponse } from './contentApi.mjs'
+import { getIndustrialEstateInfo } from './industrialEstate.mjs'
 
 const factoryFields = [
   'factoryId', 'factoryName', 'factoryRegistrationNo',
@@ -37,6 +38,12 @@ export async function loadPreviousConnectionRequest(factoryId, accessToken, { si
 export function buildPreviousConnectionRequestPrefill(factory, formData) {
   if (!formData) return { factory, previousRequestFormData: null }
   const snapshot = Object.fromEntries(factoryFields.map((field) => [field, formData[field] ?? null]))
+  const industrialEstateInfo = getIndustrialEstateInfo(formData) ?? {
+    industrialEstateCode: null,
+    industrialEstateName: null,
+    industrialAreaType: 'OUTSIDE_INDUSTRIAL_ESTATE',
+    industrialAreaTypeLabel: 'นอกนิคมอุตสาหกรรม',
+  }
   const document = (item, title) => ({
     title,
     ...Object.fromEntries(['description', 'link', 'fileName', 'fileUrl', 'fileType', 'fileSize']
@@ -56,6 +63,7 @@ export function buildPreviousConnectionRequestPrefill(factory, formData) {
     factory: {
       ...factory,
       ...snapshot,
+      ...industrialEstateInfo,
       newRegistrationNo: snapshot.factoryId,
       oldRegistrationNo: snapshot.factoryRegistrationNo,
       province: snapshot.provinceName,
