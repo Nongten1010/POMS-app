@@ -569,7 +569,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
         const groups = { eligibleParameters: [connected, additional], connectedParameters: [connected],
           pendingParameters: [additional], requestedParameters: [connected, additional] }
         assert.deepEqual(validateParameterGroups(groups, instruments, {}, { isAddParameterMode: true }), [])
-        assert.ok(validateParameterGroups(groups, instruments).some((error) => error.includes('ยังไม่เชื่อมต่อเท่านั้น')))
+        assert.deepEqual(validateParameterGroups(groups, instruments), [])
         assert.deepEqual(validateParameterGroups({ ...groups, pendingParameters: [], requestedParameters: [connected] },
           [{ parameter: connected }], {}, { isAddParameterMode: true }), [])
         assert.deepEqual(validateParameterGroups({ ...groups, connectedParameters: [], requestedParameters: [additional] },

@@ -1686,20 +1686,12 @@ function validateParameterGroups(details = {}, instrumentParameters = [], point 
 
   const requestedParameters = Array.isArray(details.requestedParameters) ? details.requestedParameters : []
   const actualRequestedParameters = requestedParameters.filter((parameter) => !isRequestedParameterSpecialOption(parameter))
-  const pendingParameters = Array.isArray(details.pendingParameters) ? details.pendingParameters : []
   if (requestedParameters.includes(parameterNoneOption)) {
     errors.push('พารามิเตอร์ที่ขอเชื่อมต่อห้ามเลือก "ไม่มี"')
   }
   if (requestedParameters.includes(requestedParametersExemptAllOption) && requestedParameters.length > 1) {
     errors.push('พารามิเตอร์ที่ขอเชื่อมต่อถ้าเลือก "ได้รับการยกเว้นทั้งหมด" ต้องเลือกเพียงตัวเดียว')
   }
-  if (!isAddParameterMode && actualRequestedParameters.length && pendingParameters.length) {
-    const invalidRequestedParameters = actualRequestedParameters.filter((parameter) => !pendingParameters.includes(parameter))
-    if (invalidRequestedParameters.length) {
-      errors.push(`พารามิเตอร์ที่ขอเชื่อมต่อต้องเลือกจากพารามิเตอร์ที่ยังไม่เชื่อมต่อเท่านั้น (${invalidRequestedParameters.join(', ')})`)
-    }
-  }
-
   if (actualRequestedParameters.length) {
     const instrumentParameterNames = instrumentParameters.map((parameter) => parameter.parameter).filter(Boolean)
     const missingInstrumentRows = actualRequestedParameters.filter((parameter) => !instrumentParameterNames.includes(parameter))
