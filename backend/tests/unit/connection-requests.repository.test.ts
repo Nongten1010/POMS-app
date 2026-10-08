@@ -749,6 +749,67 @@ describe('connectionRequestsRepository query helpers', () => {
     ).toBe('ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง\nแก้ mapping channel แล้วส่งยืนยันอีกครั้ง');
   });
 
+  it.each(['1111\n- 22222', 'กรุณาแก้ไขรายการพารามิเตอร์และแนบเอกสารเพิ่มเติม'])(
+    'records an identical revision reason and officer note only once: %s',
+    (reason) => {
+      expect(
+        buildStatusHistoryNoteForTests({ revisionReason: reason, officerNote: ` ${reason} ` }),
+      ).toBe(reason);
+    },
+  );
+
+  it('omits blank status history notes', () => {
+    expect(buildStatusHistoryNoteForTests({ revisionReason: ' ', officerNote: '\n' })).toBeNull();
+  });
+
+  it.each([
+    ['WAITING_FACTORY_REVISION', '1111\n- 22222\n1111\n- 22222', '1111\n- 22222'],
+    ['WAITING_FACTORY_REVISION', 'ขอเอกสาร\nขอเอกสาร', 'ขอเอกสาร'],
+    [
+      'WAITING_FACTORY_REVISION',
+      'ขอเอกสาร\nแก้รายการพารามิเตอร์',
+      'ขอเอกสาร\nแก้รายการพารามิเตอร์',
+    ],
+    ['WAITING_FACTORY_REVISION', 'หัวข้อ\nหัวข้อ\nรายละเอียด', 'หัวข้อ\nหัวข้อ\nรายละเอียด'],
+    [
+      'REVISED_PENDING_DESIGN_REVIEW',
+      'แก้ไขและส่งฟอร์มอีกครั้ง; fields: remarks, measurementPoints, factorySnapshot',
+      'โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง',
+    ],
+    [
+      'REVISED_PENDING_DESIGN_REVIEW',
+      'เจ้าหน้าที่ระบุ fields: remarks',
+      'เจ้าหน้าที่ระบุ fields: remarks',
+    ],
+    ['PENDING_DESIGN_REVIEW', 'ขอเอกสาร\nขอเอกสาร', 'ขอเอกสาร\nขอเอกสาร'],
+    ['REVISED_PENDING_DESIGN_REVIEW', null, null],
+  ] as const)(
+    'formats legacy history notes for %s without changing stored history',
+    (status, note, expected) => {
+      const row = Object.freeze({
+        id: 1,
+        request_id: 10,
+        status,
+        note,
+        changed_by: 7,
+        changed_by_username: 'officer_demo',
+        changed_by_prename_th: null,
+        changed_by_first_name: null,
+        changed_by_last_name: null,
+        changed_at: '2026-10-06T14:31:57.698Z',
+      });
+      const { statusHistory } = buildStatusHistoryTimelineForTests([row]);
+      expect(statusHistory[0]).toMatchObject({
+        id: 1,
+        status,
+        note: expected,
+        changedById: 7,
+        changedAt: row.changed_at,
+      });
+      expect(row.note).toBe(note);
+    },
+  );
+
   it('builds status history durations and summary from inclusive status dates', () => {
     const timeline = buildStatusHistoryTimelineForTests([
       {

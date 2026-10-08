@@ -726,7 +726,7 @@ Relevant response fields (`200 OK`):
 | `data.statusLabel` | string | `ไม่อนุมัติ` |
 | `data.revisionReason`, `data.officerNote` | string/null | เหตุผลและหมายเหตุที่ส่งมา; omitted/null/blank คืน `null` |
 | `data.statusHistory[].status` | string | เพิ่มรายการประวัติ `REJECTED` |
-| `data.statusHistory[].note` | string/null | เหตุผลและหมายเหตุรวมสูงสุด 2001 ตัวอักษร คั่นด้วย newline |
+| `data.statusHistory[].note` | string/null | เหตุผลและหมายเหตุรวมสูงสุด 2001 ตัวอักษร; ข้อความเหมือนกันบันทึกครั้งเดียว ข้อความต่างกันคั่นด้วย newline ตามกติกาหมายเหตุประวัติด้านล่าง |
 | `data.statusHistory[].changedById` | integer/null | ID ผู้ทำรายการจาก access token |
 | `data.statusHistory[].isTerminal` | boolean | รายการ `REJECTED` เป็น `true` |
 
@@ -913,6 +913,40 @@ Minimal response:
   }
 }
 ```
+
+### หมายเหตุในประวัติสถานะ
+
+`statusHistory[].note` ใน response คำขอ เช่น `GET /api/v1/cems-wpms-requests/:id/detail` เป็นข้อความสำหรับแสดงผลในหน้าประวัติ:
+
+| กรณี | ข้อความที่แสดง |
+| --- | --- |
+| แจ้งแก้ไขด้วย `revisionReason` และ `officerNote` ที่เหมือนกันหลัง trim | บันทึกและแสดงเพียงครั้งเดียว; รองรับข้อความหลายบรรทัด |
+| เหตุผลกับหมายเหตุเป็นคนละข้อความ | แสดงทั้งสองข้อความ คั่นด้วย newline |
+| ไม่มีเหตุผลหรือหมายเหตุ | `null` |
+| ส่งแบบแก้ไขผ่าน `PUT /:id/form` | `โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง` โดยไม่ต่อท้าย `fields: ...` |
+
+ประวัติเก่าปรับเฉพาะข้อความใน response โดยไม่เขียนทับหรือลบข้อความเดิมในฐานข้อมูล: รายการ `WAITING_FACTORY_REVISION` ที่มีสองบล็อกเหมือนกันทุกบรรทัดแสดงเพียงบล็อกเดียว และรายการ `REVISED_PENDING_DESIGN_REVIEW` ที่ขึ้นต้นด้วย `แก้ไขและส่งฟอร์มอีกครั้ง; fields: ` แสดงข้อความส่งแบบแก้ไขตามตาราง ข้อความอื่นคงเดิม ไม่ตัดบรรทัดซ้ำทั่วไป และไม่เปลี่ยนสถานะ ผู้บันทึก วันที่ หรือการคำนวณระยะเวลา
+
+ตัวอย่างส่วนประวัติใน response:
+
+```json
+{
+  "statusHistory": [
+    {
+      "status": "WAITING_FACTORY_REVISION",
+      "statusLabel": "รอโรงงานแก้ไข",
+      "note": "กรุณาแก้ไขรายการพารามิเตอร์และแนบเอกสารเพิ่มเติม"
+    },
+    {
+      "status": "REVISED_PENDING_DESIGN_REVIEW",
+      "statusLabel": "แก้ไขแล้ว/รอพิจารณาแบบ",
+      "note": "โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง"
+    }
+  ]
+}
+```
+
+Frontend ใช้ `statusHistory[].note` ได้โดยตรง และส่งข้อความแจ้งแก้ไขผ่าน `revisionReason` ครั้งเดียว; ส่ง `officerNote` เมื่อมีหมายเหตุเพิ่มเติมต่างจากเหตุผลเท่านั้น การเปลี่ยนหมายเหตุนี้ไม่เปลี่ยน validation พารามิเตอร์หรือเพิ่ม endpoint
 
 ### Connection-request form prefill
 
