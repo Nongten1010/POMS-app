@@ -3,6 +3,7 @@ import { PDFDocument, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
 import locationOptions from '../option/locationOptions.json'
+import { calculateBodCodErrorValue, formatBodCodStandardDeviation } from './bodCodDeviationCriteria'
 import { formatBodCodDate, getBodCodSequenceLabel, getBodCodStatus } from './bodCodReportRules'
 
 const colors = {
@@ -761,6 +762,7 @@ function drawMeasurementTable(layout, report = {}) {
     { label: 'ค่าความคลาดเคลื่อน\nตามประกาศฯ' },
   ]
   const colWidths = columns.map(() => width / columns.length)
+  const parameter = report.parameter ?? report.selectedParameterCode
   const headerHeight = 86
   const rowHeight = 56
   layout.ensureSpace(headerHeight + rowHeight)
@@ -808,8 +810,8 @@ function drawMeasurementTable(layout, report = {}) {
       row.sampleTime,
       row.deviceValue,
       row.labValue,
-      row.errorValue,
-      row.standardErrorValue,
+      calculateBodCodErrorValue(parameter, row.deviceValue, row.labValue),
+      formatBodCodStandardDeviation(parameter, row.labValue),
     ]
     cellX = x
     cells.forEach((cell, index) => {

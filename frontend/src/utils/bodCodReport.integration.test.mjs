@@ -15,13 +15,14 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
     cacheDir, optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'bod-cod-test-exports', enforce: 'pre', transform(code, id) {
-      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, StatusChip, getReportColumns, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus, ResultNoticePaperDocument };`
-      if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, drawSignature, drawResultNoticeSignature, BodCodPdfLayout };`
+      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, StatusChip, getReportColumns, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus, BodCodPaperDocument, ResultNoticePaperDocument };`
+      if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, drawMeasurementTable, drawSignature, drawResultNoticeSignature, BodCodPdfLayout };`
     } }],
   })
   try {
     const page = await server.ssrLoadModule('/src/pages/BodCodReportPage.jsx')
     const pdf = await server.ssrLoadModule('/src/utils/bodCodReportPdf.js')
+    const criteria = await server.ssrLoadModule('/src/utils/bodCodDeviationCriteria.js')
     const permissions = { bod_cod_errors: { view: true, edit: true, approve: true } }
     const fixture = {
       id: 5, factoryId: 'F1', factoryName: 'โรงงานทดสอบ', factoryRegistration: 'F1',
@@ -36,6 +37,49 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
         decidedAt: `2026-09-${17 + index}T01:00:00Z`,
       })),
     }
+    await t.test('deviation criteria use the configured inclusive upper bounds and requested precision', () => {
+      for (const [parameter, labValue, expected] of [
+        ['BOD', 0, 7.0], ['BOD', 20, 7.0], ['BOD', 20.1, 7.5], ['BOD', 120, 41.1],
+        ['COD', 0, 24], ['COD', 120, 24], ['COD', 120.1, 26], ['COD', 800, 158],
+      ]) {
+        assert.equal(criteria.getBodCodStandardDeviation(parameter, labValue), expected)
+      }
+      for (const [parameter, labValue] of [['BOD', 120.1], ['COD', 800.1], ['BOD', -1], ['COD', '']]) {
+        assert.equal(criteria.getBodCodStandardDeviation(parameter, labValue), null)
+        assert.equal(criteria.formatBodCodStandardDeviation(parameter, labValue), '')
+      }
+      assert.equal(criteria.formatBodCodStandardDeviation('BOD', 20), '± 7.0')
+      assert.equal(criteria.formatBodCodStandardDeviation('COD', 120.1), '± 26')
+      assert.equal(criteria.calculateBodCodErrorValue('BOD', 21.26, 20), '1.3')
+      assert.equal(criteria.calculateBodCodErrorValue('COD', 122.6, 120), '3')
+      assert.equal(criteria.calculateBodCodErrorValue('BOD', '', 20), '')
+    })
+    await t.test('preview, payload and PDF derive deviation values instead of using saved manual values', async () => {
+      const measurementRows = [{
+        id: 'measurement-1', sampleDate: '08/10/2569', sampleTime: '10:00',
+        deviceValue: '21.26', labValue: '20', errorValue: 'old', standardErrorValue: '999',
+      }]
+      const report = { ...fixture, parameter: 'BOD', selectedParameterCode: 'BOD', measurementRows }
+      const previewHtml = renderToStaticMarkup(createElement(page.BodCodPaperDocument, { report }))
+      assert.ok(previewHtml.includes('1.3'))
+      assert.ok(previewHtml.includes('± 7.0'))
+      assert.ok(!previewHtml.includes('999'))
+
+      const payload = await page.buildBodCodReportPayload(report, 'test')
+      assert.equal(payload.measurements[0].standardDeviationMgL, 7)
+
+      const drawn = []
+      const layout = {
+        margin: { left: 20, bottom: 20 }, contentWidth: 600, y: 700,
+        ensureSpace: () => {}, addPage: () => {}, drawRect: () => {},
+        wrapText: (value) => [value], textWidth: (value) => String(value).length * 4,
+        drawText: (value) => drawn.push(value),
+      }
+      pdf.drawMeasurementTable(layout, report)
+      assert.ok(drawn.includes('1.3'))
+      assert.ok(drawn.includes('± 7.0'))
+      assert.ok(!drawn.includes('999'))
+    })
     await t.test('status chips use the approved palette for both codes and Thai labels', () => {
       for (const [statusCode, value, color] of [
         ['REVISION_REQUESTED', 'รอโรงงานแก้ไข', '#f97316'],

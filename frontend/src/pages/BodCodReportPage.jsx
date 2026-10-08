@@ -42,6 +42,7 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import locationOptions from '../option/locationOptions.json'
+import { calculateBodCodErrorValue, formatBodCodStandardDeviation, getBodCodStandardDeviation } from '../utils/bodCodDeviationCriteria'
 import { createBodCodReportPdf, createBodCodResultNoticePdf, getBodCodInspectorPosition, getBodCodResultNoticeSigners } from '../utils/bodCodReportPdf'
 import { findPendingBodCodReport, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodStatus, getBodCodSubmissionError, hasBodCodIdentityChanged } from '../utils/bodCodReportRules'
 import { bodCodDeviationReportsApiBaseUrl, cancelBodCodReport, readBodCodApiResponse } from '../utils/bodCodReportApi'
@@ -327,6 +328,7 @@ function mapBodCodReportRow(row = {}, index = 0, options = {}) {
 
 function mapBodCodReportDetail(detail = {}, row = {}, options = {}) {
   const mappedRow = mapBodCodReportRow({ ...row, ...detail }, 0, options)
+  const parameter = detail.selectedParameterCode ?? row.selectedParameterCode ?? row.parameter ?? ''
   const measurements = Array.isArray(detail.measurements) ? detail.measurements : []
   const measurementRows = measurements.map((measurement, index) => ({
     id: measurement.id ?? `measurement-${index + 1}`,
@@ -334,8 +336,8 @@ function mapBodCodReportDetail(detail = {}, row = {}, options = {}) {
     sampleTime: measurement.sampleTime ?? '',
     deviceValue: measurement.deviceValueMgL ?? '',
     labValue: measurement.labValueMgL ?? '',
-    errorValue: measurement.deviationValueMgL ?? calculateErrorValue(measurement.deviceValueMgL, measurement.labValueMgL),
-    standardErrorValue: measurement.standardDeviationMgL ?? '',
+    errorValue: calculateBodCodErrorValue(parameter, measurement.deviceValueMgL, measurement.labValueMgL),
+    standardErrorValue: getBodCodStandardDeviation(parameter, measurement.labValueMgL) ?? '',
   }))
 
   return {
@@ -354,7 +356,7 @@ function mapBodCodReportDetail(detail = {}, row = {}, options = {}) {
     deviceBrand: detail.deviceBrand ?? row.deviceBrand ?? '',
     deviceModel: detail.deviceModel ?? row.deviceModel ?? '',
     serialNo: detail.deviceSerialNo ?? row.serialNo ?? '',
-    parameter: detail.selectedParameterCode ?? row.selectedParameterCode ?? row.parameter ?? '',
+    parameter,
     reporterName: detail.reporterName ?? row.reporterName ?? '',
     reporterPosition: detail.reporterPosition ?? row.reporterPosition ?? '',
     measurementRows,
@@ -415,6 +417,7 @@ async function buildBodCodReportPayload(report = {}, accessToken = '') {
     ...(await buildBodCodAttachmentMetadata(attachmentFiles.devicePhotos ?? [], 'DEVICE_PHOTO', accessToken)),
     ...(await buildBodCodAttachmentMetadata(attachmentFiles.labReports ?? [], 'LAB_REPORT', accessToken)),
   ]
+  const selectedParameterCode = report.parameter ?? report.selectedParameterCode ?? ''
 
   return {
     reportRoundNo: Number(report.roundNo ?? report.reportRoundNo ?? String(report.reportRound ?? '').replace('ครั้งที่ ', '')) || null,
@@ -438,7 +441,7 @@ async function buildBodCodReportPayload(report = {}, accessToken = '') {
     deviceBrand: report.deviceBrand ?? null,
     deviceModel: report.deviceModel ?? null,
     deviceSerialNo: report.serialNo ?? null,
-    selectedParameterCode: report.parameter ?? report.selectedParameterCode ?? '',
+    selectedParameterCode,
     reporterName: report.reporterName ?? null,
     reporterPosition: report.reporterPosition ?? null,
     revisionNote: report.revisionNote ?? undefined,
@@ -447,7 +450,7 @@ async function buildBodCodReportPayload(report = {}, accessToken = '') {
       sampleTime: measurement.sampleTime || null,
       deviceValueMgL: toNumberOrNull(measurement.deviceValue),
       labValueMgL: toNumberOrNull(measurement.labValue),
-      standardDeviationMgL: toNumberOrNull(measurement.standardErrorValue),
+      standardDeviationMgL: getBodCodStandardDeviation(selectedParameterCode, measurement.labValue),
     })),
     attachments,
   }
@@ -971,8 +974,8 @@ function BodCodPaperDocument({ report }) {
                     <TableCell>{row.sampleTime}</TableCell>
                     <TableCell>{row.deviceValue}</TableCell>
                     <TableCell>{row.labValue}</TableCell>
-                    <TableCell>{row.errorValue}</TableCell>
-                    <TableCell>{row.standardErrorValue}</TableCell>
+                    <TableCell>{calculateBodCodErrorValue(report.parameter, row.deviceValue, row.labValue)}</TableCell>
+                    <TableCell>{formatBodCodStandardDeviation(report.parameter, row.labValue)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -2080,17 +2083,6 @@ function SectionPaper({ title, children }) {
   )
 }
 
-function calculateErrorValue(deviceValue, labValue) {
-  const deviceNumber = Number(deviceValue)
-  const labNumber = Number(labValue)
-
-  if (!Number.isFinite(deviceNumber) || !Number.isFinite(labNumber)) {
-    return ''
-  }
-
-  return (deviceNumber - labNumber).toFixed(2)
-}
-
 const emptyMeasurementResult = {
   sampleDate: '',
   sampleTime: '',
@@ -2234,7 +2226,9 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview, validationErr
   const [attachmentFiles, setAttachmentFiles] = useState(() => getBodCodAttachmentFiles(report))
   const latestRevisionMessage = getLatestReportRevisionMessage(report)
   const isEditMode = report?.mode === 'edit'
-  const measurementErrorValue = calculateErrorValue(measurementResult.deviceValue, measurementResult.labValue)
+  const measurementErrorValue = calculateBodCodErrorValue(form.parameter, measurementResult.deviceValue, measurementResult.labValue)
+  const standardErrorValue = getBodCodStandardDeviation(form.parameter, measurementResult.labValue)
+  const standardErrorDisplay = formatBodCodStandardDeviation(form.parameter, measurementResult.labValue)
 
   if (!report) {
     return null
@@ -2258,7 +2252,12 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview, validationErr
       ...form,
       attachmentFiles,
       measurementRows: hasMeasurementResult
-        ? [{ ...measurementResult, id: 'measurement-1', errorValue: measurementErrorValue }]
+        ? [{
+            ...measurementResult,
+            id: 'measurement-1',
+            errorValue: measurementErrorValue,
+            standardErrorValue: standardErrorValue ?? '',
+          }]
         : [],
     })
   }
@@ -2469,13 +2468,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview, validationErr
                   <ReadOnlyField label="ค่าความคลาดเคลื่อน (E)" value={measurementErrorValue} />
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <TextField
-                    label="ค่าความคลาดเคลื่อนตามประกาศฯ"
-                    size="small"
-                    value={measurementResult.standardErrorValue}
-                    onChange={(event) => updateMeasurementResult('standardErrorValue', event.target.value)}
-                    fullWidth
-                  />
+                  <ReadOnlyField label="ค่าความคลาดเคลื่อนตามประกาศฯ" value={standardErrorDisplay} />
                 </Grid>
               </Grid>
             </SectionPaper>
