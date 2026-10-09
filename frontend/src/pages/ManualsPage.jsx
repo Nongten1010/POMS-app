@@ -12,7 +12,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 
 const officerManualUrl = new URL('../manuals/คู่มือ สำหรับเจ้าหน้าที่.pdf', import.meta.url).href
-const operatorManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ประกอบการ-v2.pdf', import.meta.url).href
+const operatorManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ประกอบการ-v3.pdf', import.meta.url).href
 const adminManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ดูแลระบบ.pdf', import.meta.url).href
 
 function getAvailableManuals(userType = '', roleCode = '') {
@@ -24,7 +24,7 @@ function getAvailableManuals(userType = '', roleCode = '') {
   return [
     {
       id: 'operator',
-      title: 'คู่มือ สำหรับผู้ประกอบการ-v2.pdf',
+      title: 'คู่มือ สำหรับผู้ประกอบการ-v3.pdf',
       description: 'คู่มือการใช้งานระบบสำหรับผู้ประกอบการ',
       url: operatorManualUrl,
       visible: true,
