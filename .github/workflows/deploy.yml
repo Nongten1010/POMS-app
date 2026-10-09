@@ -45,6 +45,7 @@ jobs:
         with:
           fetch-depth: 0
           clean: false
+          lfs: true
 
       - name: Trust runner workspace
         run: |
@@ -143,6 +144,15 @@ jobs:
         working-directory: frontend
         timeout-minutes: 15
         run: |
+          $clientArchive = [System.IO.File]::OpenRead((Join-Path $PWD 'src\download\DPOMS_Client_v0.8.3b.zip'))
+          try {
+            if ($clientArchive.ReadByte() -ne 0x50 -or $clientArchive.ReadByte() -ne 0x4B) {
+              throw 'DPOMS-Client is not a ZIP archive. Ensure Git LFS files were downloaded.'
+            }
+          } finally {
+            $clientArchive.Dispose()
+          }
+
           $sourceEnv = "C:\apps\POMS-app\frontend\.env.production"
           $workspaceEnv = ".env.production"
 

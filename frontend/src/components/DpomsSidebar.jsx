@@ -120,7 +120,7 @@ const menuItems = [
     icon: <FactoryIcon />,
   },
   {
-    label: 'คู่มือการใช้งาน',
+    label: 'คู่มือการใช้งานและดาวน์โหลด',
     value: 'manuals',
     icon: <MenuBookIcon />,
     alwaysVisible: true,

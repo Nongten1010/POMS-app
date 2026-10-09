@@ -10,10 +10,12 @@ import {
 } from '@mui/material'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import DownloadIcon from '@mui/icons-material/Download'
 
 const officerManualUrl = new URL('../manuals/คู่มือ สำหรับเจ้าหน้าที่.pdf', import.meta.url).href
 const operatorManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ประกอบการ-v3.pdf', import.meta.url).href
 const adminManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ดูแลระบบ.pdf', import.meta.url).href
+const dpomsClientUrl = new URL('../download/DPOMS_Client_v0.8.3b.zip', import.meta.url).href
 
 function getAvailableManuals(userType = '', roleCode = '') {
   const isOperator = userType === 'operator'
@@ -67,13 +69,23 @@ function ManualsPage({ userType = '', roleCode = '' }) {
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', md: 'center' } }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>
-                คู่มือการใช้งาน
+                คู่มือการใช้งานและดาวน์โหลด
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 เลือกคู่มือที่ต้องการเปิดดูภายในระบบ
               </Typography>
             </Box>
-            {selectedManual ? (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button
+                component="a"
+                href={dpomsClientUrl}
+                download="DPOMS_Client_v0.8.3b.zip"
+                variant="contained"
+                startIcon={<DownloadIcon />}
+              >
+                DPOMS-Client
+              </Button>
+              {selectedManual ? (
               <Button
                 component="a"
                 href={selectedManual.url}
@@ -84,7 +96,8 @@ function ManualsPage({ userType = '', roleCode = '' }) {
               >
                 เปิดในแท็บใหม่
               </Button>
-            ) : null}
+              ) : null}
+            </Stack>
           </Stack>
         </Paper>
 
