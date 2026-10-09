@@ -112,7 +112,7 @@ const managedUserPayloadShape = {
   username: z.string().trim().min(3).max(64),
   externalId: z.string().trim().min(1).max(32).optional(),
   userType: z.enum(['officer', 'admin']),
-  prenameTh: z.string().trim().min(1).max(16).nullable().optional(),
+  prenameTh: z.string().trim().min(1).max(64).nullable().optional(),
   firstName: z.string().trim().min(1).max(128),
   lastName: z.string().trim().min(1).max(128),
   email: z.string().trim().email().max(255).nullable().optional(),

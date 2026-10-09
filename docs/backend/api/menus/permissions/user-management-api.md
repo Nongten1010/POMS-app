@@ -444,7 +444,7 @@ Top-level request fields:
 | `username` | string | yes | no | trim แล้ว `3-64`; ไม่ซ้ำกับบัญชี local ที่ยังไม่ถูก soft-delete |
 | `externalId` | string | no | no | `1-32`; ถ้าส่งต้องเท่ากับ `username`; ถ้าไม่ส่งใช้ `username` |
 | `userType` | `officer` \| `admin` | no | no | default `officer` |
-| `prenameTh` | string | no | yes | ไม่เกิน `16` |
+| `prenameTh` | string | no | yes | trim แล้ว `1-64` ตัวอักษร; `null` ใช้ล้างคำนำหน้า |
 | `firstName` | string | yes | no | trim แล้ว `1-128` |
 | `lastName` | string | yes | no | trim แล้ว `1-128` |
 | `email` | string(email) | no | yes | ไม่เกิน `255` |
@@ -452,6 +452,8 @@ Top-level request fields:
 | `isActive` | boolean | no | no | default `true` |
 | `roleCodes` | array<string> | yes | no | ต้องมี 1 ค่าเท่านั้น; code แต่ละค่ายาว `1-32` |
 | `profile` | object | no | no | officer profile; ไม่รับ field นอก schema |
+
+`prenameTh` รองรับคำนำหน้าบุคลากรภาษาไทยแบบยาว เช่น `ผู้ช่วยศาสตราจารย์ ดร.` โดยเก็บและคืนค่าครบตามขีดจำกัด 64 ตัวอักษร ขีดจำกัดเดียวกันใช้กับข้อมูลเจ้าหน้าที่จาก external identity provider ที่ sync ระหว่าง [login](../../shared/authentication/README.md)
 
 `profile` fields:
 
@@ -619,6 +621,8 @@ curl --request PATCH \
 
 ส่งอย่างน้อย 1 field และใช้ field เดียวกับ `POST /users` โดยทุก field เป็น optional พร้อม `password` เพิ่มเติม:
 
+สำหรับ local/POMS account ค่า `prenameTh` ใช้กติกาเดียวกับการสร้าง: trim แล้วต้องยาว `1-64` ตัวอักษร หรือส่ง `null` เพื่อล้างคำนำหน้า; ถ้าเกิน 64 ตัวอักษรจะตอบ `400 VALIDATION_ERROR`
+
 ```json
 {
   "isActive": false,
@@ -750,6 +754,7 @@ Route-specific notes:
 - Service: [backend/src/modules/users/users.service.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.service.ts:1)
 - Types: [backend/src/modules/users/users.types.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.types.ts:1)
 - Runtime OpenAPI: [backend/src/modules/api-docs/poms.openapi.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/api-docs/poms.openapi.ts:1)
+- คำนำหน้า 64 ตัวอักษร: [validator tests](../../../../../backend/tests/unit/users.validator.test.ts) และ [OpenAPI contract tests](../../../../../backend/tests/unit/user-prename.openapi.test.ts)
 - Identity conflict regression: [users.identity-conflicts.test.ts](../../../../../backend/tests/unit/users.identity-conflicts.test.ts)
 - Identity conflict OpenAPI: [users.openapi.test.ts](../../../../../backend/tests/unit/users.openapi.test.ts)
 - Local account reuse regression: [users.local-account-reuse.test.ts](../../../../../backend/tests/unit/users.local-account-reuse.test.ts)

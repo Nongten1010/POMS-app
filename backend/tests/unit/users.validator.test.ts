@@ -51,6 +51,50 @@ describe('managed users validators', () => {
     }
   });
 
+  describe.each([
+    [
+      'create',
+      createManagedUserSchema,
+      {
+        username: 'officer-prename-test',
+        firstName: 'ทดสอบ',
+        lastName: 'คำนำหน้า',
+        roleCodes: ['admin'],
+      },
+    ],
+    ['update', updateManagedUserSchema, {}],
+  ] as const)('%s prenameTh', (_action, schema, basePayload) => {
+    it('accepts a Thai officer title longer than 16 characters without truncating it', () => {
+      const prenameTh = 'ผู้ช่วยศาสตราจารย์ ดร.';
+      expect(prenameTh.length).toBeGreaterThan(16);
+
+      const result = schema.parse({ ...basePayload, prenameTh });
+
+      expect(result).toMatchObject({ prenameTh });
+    });
+
+    it('accepts 64 characters after trimming', () => {
+      const prenameTh = 'ก'.repeat(64);
+
+      const result = schema.parse({ ...basePayload, prenameTh: ` ${prenameTh} ` });
+
+      expect(result).toMatchObject({ prenameTh });
+    });
+
+    it('rejects 65 characters with a prenameTh validation error', () => {
+      const result = schema.safeParse({ ...basePayload, prenameTh: 'ก'.repeat(65) });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ path: ['prenameTh'], code: 'too_big', maximum: 64 }),
+          ]),
+        );
+      }
+    });
+  });
+
   it('rejects assigning more than one system role to a managed user', () => {
     const result = createManagedUserSchema.safeParse({
       username: 'officer-multi-role',

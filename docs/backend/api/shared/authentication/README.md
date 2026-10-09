@@ -42,6 +42,7 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 | `user`                 | `object`      | ข้อมูลผู้ใช้, role และ factory IDs ที่เข้าถึงได้       |
 | `user.accountType`     | `poms \| api` | External i-Industry account คืน `api`                                             |
 | `user.userType`        | `string`      | Effective persona ของ session; operator request อาจคืน `citizen` ตาม fallback rule |
+| `user.prenameTh`, `user.name.prenameTh` | `string \| null` | คำนำหน้าภาษาไทย; รองรับได้ถึง 64 ตัวอักษร รวมคำนำหน้าเจ้าหน้าที่แบบยาวจาก external identity provider |
 | `user.roleCodes`       | `string[]`    | `public_user` สำหรับ citizen หรือ `factory_operator` สำหรับ operator persona       |
 | `user.ownedFactoryIds` | `string[]`    | มีเฉพาะ operator persona และคำนวณจากสิทธิ์โรงงานปัจจุบัน                           |
 | `permissions`          | `object`      | Permission groups ของ persona เดียว พร้อม data scope                               |
@@ -68,6 +69,8 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 5. Login ซ้ำจะ update ข้อมูลเดิมแบบ idempotent ไม่สร้าง identity, role หรือ access row ซ้ำ
 6. บัญชี inactive, soft-deleted หรือ identity เดียวกันที่เป็น user type อื่นนอกเหนือจาก `citizen`/`operator` จะไม่ถูกเปิดใช้งานหรือเขียนทับ และคืน generic `401`
 7. วันที่ DIW แบบ `DD/MM/YYYY HH:mm:ss` จะถูก normalize เป็น SQL-safe ISO datetime ก่อนบันทึก
+
+สำหรับ external officer login คำนำหน้าภาษาไทยจาก DIW เช่น `ผู้ช่วยศาสตราจารย์ ดร.` รองรับได้ถึง 64 ตัวอักษร โดย provisioning ครั้งแรกและการ sync เมื่อล็อกอินซ้ำเก็บค่าเต็มใน `users.prename_th` และคืนใน `user.prenameTh` กับ `user.name.prenameTh` ของ login และ `/auth/me`
 
 ### Success response (`200 OK`)
 
@@ -173,4 +176,5 @@ Backend ตั้งใจเก็บ `401` เป็นข้อความ�
 - [Service](../../../../../backend/src/modules/auth/auth.service.ts)
 - [Repository provisioning](../../../../../backend/src/modules/auth/auth.repository.ts)
 - [DIW identity mapping](../../../../../backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts)
+- คำนำหน้า 64 ตัวอักษร: [migration 0135](../../../../../backend/src/db/migrations/0135_expand_user_prename.ts) และ [migration regression](../../../../../backend/tests/unit/user-prename-migration.test.ts)
 - Tests: [route persona](../../../../../backend/tests/unit/auth.login-personas.route.test.ts), [service](../../../../../backend/tests/unit/auth.service.test.ts), [repository](../../../../../backend/tests/unit/auth.repository.test.ts), [provider](../../../../../backend/tests/unit/diw-user-login.identity-provider.test.ts)
