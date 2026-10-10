@@ -281,7 +281,7 @@ function App() {
         }}
       >
         {visibleSelectedMenu === 'home' ? (
-          <HomePage accessToken={accessToken} permissions={activePermissions} />
+          <HomePage accessToken={accessToken} userType={userType} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'master-data' ? (
           <MasterDataPage userType={userType} roleCode={roleCode} roleCodes={roleCodes} accessToken={accessToken} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'permissions' ? (
@@ -325,7 +325,7 @@ function App() {
         ) : visibleSelectedMenu === 'manuals' ? (
           <ManualsPage userType={userType} roleCode={roleCode} />
         ) : (
-          <HomePage accessToken={accessToken} permissions={activePermissions} />
+          <HomePage accessToken={accessToken} userType={userType} permissions={activePermissions} />
         )}
       </Container>
     </Box>

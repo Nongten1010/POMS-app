@@ -708,7 +708,7 @@ function loadLongdoMapScript() {
   })
 }
 
-function HomePage({ accessToken = '', permissions }) {
+function HomePage({ accessToken = '', userType = '', permissions }) {
   const [factoryType, setFactoryType] = useState('all')
   const [sortBy, setSortBy] = useState('reference')
   const [searchValue, setSearchValue] = useState('')
@@ -719,6 +719,7 @@ function HomePage({ accessToken = '', permissions }) {
   const [factoryOrderFilter, setFactoryOrderFilter] = useState('all')
   const [industrialEstateFilter, setIndustrialEstateFilter] = useState('all')
   const canUseFavorite = permissions?.dashboard?.favorite === true
+  const canViewDetails = Boolean(accessToken) && userType !== 'citizen'
   const canUseSearch = permissions?.dashboard?.search === true
   const canUseAdvancedSearch = permissions?.dashboard?.advanced_search === true
   const [industrialEstateNameFilter, setIndustrialEstateNameFilter] = useState('all')
@@ -1036,7 +1037,7 @@ function HomePage({ accessToken = '', permissions }) {
           error={favoriteError || effectiveFactoriesError}
           isMobileExpanded={isMobileListExpanded}
           canUseFavorite={canUseFavorite}
-          canViewDetails={Boolean(accessToken)}
+          canViewDetails={canViewDetails}
           favoriteUpdatingFactoryId={favoriteUpdatingFactoryId}
           onMobileToggle={() => setIsMobileListExpanded((current) => !current)}
           onFactorySelect={setSelectedFactory}
@@ -1046,7 +1047,7 @@ function HomePage({ accessToken = '', permissions }) {
         <FactoryMap
           factories={filteredFactories}
           focusedFactory={focusedFactory}
-          canViewDetails={Boolean(accessToken)}
+          canViewDetails={canViewDetails}
           onFactorySelect={setSelectedFactory}
         />
       </Box>
