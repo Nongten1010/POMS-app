@@ -39,7 +39,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
     }
     await t.test('deviation criteria use the configured inclusive upper bounds and requested precision', () => {
       for (const [parameter, labValue, expected] of [
-        ['BOD', 0, 7.0], ['BOD', 20, 7.0], ['BOD', 20.1, 7.5], ['BOD', 120, 41.1],
+        ['BOD', 0, 7.0], ['BOD', 20, 7.0], ['BOD', 20.1, 7.9], ['BOD', 120, 41.1],
         ['COD', 0, 24], ['COD', 120, 24], ['COD', 120.1, 26], ['COD', 800, 158],
       ]) {
         assert.equal(criteria.getBodCodStandardDeviation(parameter, labValue), expected)
@@ -54,19 +54,35 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
       assert.equal(criteria.calculateBodCodErrorValue('COD', 122.6, 120), '3')
       assert.equal(criteria.calculateBodCodErrorValue('BOD', '', 20), '')
     })
+    await t.test('corrected Thai digit nine values preserve exclusive lower and inclusive upper bounds', () => {
+      for (const [lower, upper, previous, expected, next] of [
+        [20, 25, 7.0, 7.9, 9.6],
+        [25, 30, 7.9, 9.6, 11.4],
+        [40, 45, 13.1, 14.9, 16.6],
+        [60, 65, 20.1, 21.9, 23.6],
+        [80, 85, 27.1, 28.9, 30.6],
+        [100, 105, 34.1, 35.9, 37.6],
+      ]) {
+        assert.equal(criteria.getBodCodStandardDeviation('BOD', lower), previous)
+        assert.equal(criteria.getBodCodStandardDeviation('BOD', lower + 0.1), expected)
+        assert.equal(criteria.getBodCodStandardDeviation('BOD', upper), expected)
+        assert.equal(criteria.getBodCodStandardDeviation('BOD', upper + 0.1), next)
+        assert.equal(criteria.formatBodCodStandardDeviation('BOD', upper), `± ${expected.toFixed(1)}`)
+      }
+    })
     await t.test('preview, payload and PDF derive deviation values instead of using saved manual values', async () => {
       const measurementRows = [{
         id: 'measurement-1', sampleDate: '08/10/2569', sampleTime: '10:00',
-        deviceValue: '21.26', labValue: '20', errorValue: 'old', standardErrorValue: '999',
+        deviceValue: '26.26', labValue: '25', errorValue: 'old', standardErrorValue: '999',
       }]
       const report = { ...fixture, parameter: 'BOD', selectedParameterCode: 'BOD', measurementRows }
       const previewHtml = renderToStaticMarkup(createElement(page.BodCodPaperDocument, { report }))
       assert.ok(previewHtml.includes('1.3'))
-      assert.ok(previewHtml.includes('± 7.0'))
+      assert.ok(previewHtml.includes('± 7.9'))
       assert.ok(!previewHtml.includes('999'))
 
       const payload = await page.buildBodCodReportPayload(report, 'test')
-      assert.equal(payload.measurements[0].standardDeviationMgL, 7)
+      assert.equal(payload.measurements[0].standardDeviationMgL, 7.9)
 
       const drawn = []
       const layout = {
@@ -77,7 +93,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
       }
       pdf.drawMeasurementTable(layout, report)
       assert.ok(drawn.includes('1.3'))
-      assert.ok(drawn.includes('± 7.0'))
+      assert.ok(drawn.includes('± 7.9'))
       assert.ok(!drawn.includes('999'))
     })
     await t.test('status chips use the approved palette for both codes and Thai labels', () => {
