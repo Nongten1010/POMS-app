@@ -4302,13 +4302,21 @@ function isPointCodeRegistryUniqueViolation(error: unknown): boolean {
   return message.includes('uq_cems_wpms_point_code_registry_normalized');
 }
 
-async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {
-  const date = new Date();
+async function nextRequestNo(
+  trx: Knex.Transaction,
+  systemType: 'CEMS' | 'WPMS',
+  date = new Date(),
+): Promise<string> {
   const buddhistYear = buddhistCalendarYear(date);
   const requestNoPatterns = requestNoPrefixes(systemType).map(
     (prefix) => `${prefix}-%/${buddhistYear}`,
   );
-  const totalRow = await trx('cems_wpms_connection_requests')
+  // Hold the matching number range until the request insert commits, including
+  // the empty range at the start of a year. Purged rows must not shift the next
+  // number back onto an existing request; closed/soft-deleted rows still count.
+  const sequenceRow = await trx(
+    trx.raw('?? WITH (UPDLOCK, HOLDLOCK)', ['cems_wpms_connection_requests']),
+  )
     .where((query) => {
       requestNoPatterns.forEach((pattern, index) => {
         if (index === 0) {
@@ -4318,14 +4326,23 @@ async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS')
         query.orWhere('request_no', 'like', pattern);
       });
     })
-    .count<{ total: number | string }>('id as total')
-    .first();
-  const sequence = Number(totalRow?.total ?? 0) + 1;
+    .whereRaw(
+      "SUBSTRING(??, 6, CASE WHEN LEN(??) >= 14 THEN LEN(??) - 10 ELSE 0 END) COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9]%' AND LEN(??) >= 14",
+      ['request_no', 'request_no', 'request_no', 'request_no'],
+    )
+    .select(
+      trx.raw(
+        'MAX(TRY_CONVERT(BIGINT, SUBSTRING(??, 6, CASE WHEN LEN(??) >= 14 THEN LEN(??) - 10 ELSE 0 END))) AS ??',
+        ['request_no', 'request_no', 'request_no', 'last_sequence'],
+      ),
+    )
+    .first<{ last_sequence: number | string | null }>();
+  const sequence = Number(sequenceRow?.last_sequence ?? 0) + 1;
   return buildRequestNo(systemType, sequence, date);
 }
 
 function buildRequestNo(systemType: 'CEMS' | 'WPMS', sequence: number, date = new Date()): string {
-  if (!Number.isInteger(sequence) || sequence < 1) {
+  if (!Number.isSafeInteger(sequence) || sequence < 1) {
     throw new RangeError('Connection request sequence must be a positive integer');
   }
   return `${requestNoPrefix(systemType)}-${String(sequence).padStart(4, '0')}/${buddhistCalendarYear(date)}`;
@@ -4345,6 +4362,14 @@ export function buildRequestNoForTests(
   date = new Date(),
 ): string {
   return buildRequestNo(systemType, sequence, date);
+}
+
+export function nextRequestNoForTests(
+  trx: Knex.Transaction,
+  systemType: 'CEMS' | 'WPMS',
+  date = new Date(),
+): Promise<string> {
+  return nextRequestNo(trx, systemType, date);
 }
 
 export function buildRequestNoLikePatternsForTests(

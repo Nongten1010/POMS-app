@@ -1054,7 +1054,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
       industryType: { type: 'string', nullable: true },
       province: { type: 'string', nullable: true },
       type: { type: 'string', enum: ['CEMS', 'WPMS'] },
-      requestNo: { type: 'string' },
+      requestNo: {
+        type: 'string',
+        description:
+          'เลขคำขอแบบ opaque string; คำขอใหม่ใช้ CEMS-NNNN/YYYY หรือ WPMS-NNNN/YYYY โดยใช้เลขลำดับสูงสุดที่มีรูปแบบถูกต้องของประเภทและปี พ.ศ. ตาม Asia/Bangkok บวกหนึ่ง รวมคำขอที่ปิดแล้วหรือ soft-delete; WPMS รวมเลขเดิม WEMS ในปีเดียวกันด้วย ลำดับอาจมีช่องว่าง',
+      },
       submittedAt: { type: 'string', format: 'date-time' },
       submittedDate: { type: 'string', description: 'วันที่แบบ DD/MM/พ.ศ.' },
       monitoringPointCode: {
@@ -1110,7 +1114,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
           requestNo: {
             type: 'string',
             description:
-              'เลขที่คำขอแบบ opaque string; คำขอใหม่ใช้ CEMS-NNNN/YYYY หรือ WPMS-NNNN/YYYY',
+              'เลขที่คำขอแบบ opaque string; คำขอใหม่ใช้ CEMS-NNNN/YYYY หรือ WPMS-NNNN/YYYY โดยใช้เลขลำดับสูงสุดที่มีรูปแบบถูกต้องของประเภทและปี พ.ศ. ตาม Asia/Bangkok บวกหนึ่ง รวมคำขอที่ปิดแล้วหรือ soft-delete; WPMS รวมเลขเดิม WEMS ในปีเดียวกันด้วย ลำดับอาจมีช่องว่าง',
             example: 'WPMS-0001/2569',
           },
           requestType: {

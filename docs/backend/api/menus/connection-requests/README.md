@@ -196,7 +196,8 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 - `POST /api/v1/cems-wpms-requests/direct-connections` ใช้ลำดับเดียวกับคำขอของผู้ประกอบการ ไม่ใช้ prefix `OLDC` หรือ `OLDW` สำหรับคำขอใหม่.
 - ค่า `submissionSource` ยังคงแยกแหล่งที่มา: ผู้ประกอบการเป็น `OPERATOR_FORM` และเจ้าหน้าที่เชื่อมต่อโดยตรงเป็น `OFFICER_DIRECT_API`.
 - Direct Connection ใช้ `measurementPoints[0].pointCode` ที่เจ้าหน้าที่กรอกเอง แนะนำให้ client ส่ง `submissionAction`: `CONNECT` map เป็น `CONNECTED` และ `REQUEST_FACTORY_REVISION` map เป็น `WAITING_FACTORY_REVISION` พร้อม `revisionReason`. ถ้าไม่ส่งทั้ง action และ legacy `status` backend จะใช้ `CONNECTED`.
-- ระหว่าง rollout ตัวจัดสรรลำดับของ WPMS นับทั้ง `WPMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` เพื่อไม่ให้เริ่มลำดับซ้ำก่อน migration ทำงานครบ.
+- เลขคำขอใหม่ใช้เลขลำดับสูงสุดที่มีรูปแบบถูกต้องในประเภทและปี พ.ศ. นั้นบวกหนึ่ง รวมคำขอที่ปิดแล้วหรือ soft-delete; การลบคำขอแบบถาวรจึงไม่ทำให้เลขใหม่ชนกับคำขอที่ยังอยู่ ลำดับอาจมีช่องว่างและ client ต้องถือ `requestNo` เป็น opaque string.
+- ระหว่าง rollout ตัวจัดสรรลำดับของ WPMS ใช้เลขลำดับสูงสุดจากทั้ง `WPMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` เพื่อไม่ให้เริ่มลำดับซ้ำก่อน migration ทำงานครบ.
 - Migration `0094_backfill_wpms_request_number_prefix` แปลง `requestNo` เดิมของ `systemType = WPMS` จาก `WEMS-NNNN/YYYY` เป็น `WPMS-NNNN/YYYY`; หากพบเลข `WPMS-...` ปลายทางซ้ำ migration จะหยุดก่อนแก้ข้อมูล.
 - การแปลงข้อมูลเดิมมีผลเฉพาะ `cems_wpms_connection_requests.request_no`; ไม่เปลี่ยน `measurementPoints[].pointCode` หรือ `stationId` เดิมที่อาจใช้ `WEMS-...`.
 - คำขอเดิมที่มี `OLDC-*` หรือ `OLDW-*` ไม่ถูกแก้ย้อนหลัง.

@@ -42,7 +42,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         if (tableName === 'eligible_factories') return eligibleLookup;
         throw new Error(`Unexpected write or query for ${tableName}`);
       }),
-      { fn: { now: jest.fn(() => 'db-now') } },
+      { fn: { now: jest.fn(() => 'db-now') }, raw: fixtureRaw },
     );
     mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
       const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
@@ -110,7 +110,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
               ]
             : [],
       });
-      const requestNumberLookup = makeChain({ first: async () => ({ total: 0 }) });
+      const requestNumberLookup = makeChain({ first: async () => ({ last_sequence: 0 }) });
       const eligibleFactorySource = makeChain({
         first: async () => ({
           province_id: '10',
@@ -172,7 +172,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
           if (!builder) throw new Error(`Unexpected query for ${tableName}`);
           return builder;
         }),
-        { fn: { now: jest.fn(() => 'db-now') } },
+        { fn: { now: jest.fn(() => 'db-now') }, raw: fixtureRaw },
       );
       mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
         const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
@@ -302,7 +302,9 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       requestNoScope?.(scopedWhere);
       expect(scopedWhere.where).toHaveBeenCalledWith('request_no', 'like', 'WPMS-%/2569');
       expect(scopedWhere.orWhere).toHaveBeenCalledWith('request_no', 'like', 'WEMS-%/2569');
-      expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
+      expect(requestNumberLookup.select).toHaveBeenCalledWith(
+        expect.stringContaining('MAX(TRY_CONVERT(BIGINT'),
+      );
     },
   );
 
@@ -323,7 +325,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
 
     const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
     const activePointLookup = makeChain({ first: async () => undefined });
-    const requestNumberLookup = makeChain({ first: async () => ({ total: 0 }) });
+    const requestNumberLookup = makeChain({ first: async () => ({ last_sequence: 0 }) });
     const eligibleFactorySource = makeChain({
       first: async () => ({
         province_id: '10',
@@ -350,7 +352,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         if (!builder) throw new Error(`Unexpected query for ${tableName}`);
         return builder;
       }),
-      { fn: { now: jest.fn(() => 'db-now') } },
+      { fn: { now: jest.fn(() => 'db-now') }, raw: fixtureRaw },
     );
     mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
       const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
@@ -391,7 +393,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
 
     const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
     const duplicateLookup = makeChain({ first: async () => undefined });
-    const requestNumberLookup = makeChain({ first: async () => ({ total: 0 }) });
+    const requestNumberLookup = makeChain({ first: async () => ({ last_sequence: 0 }) });
     const eligibleFactorySource = makeChain({
       first: async () => ({
         province_id: '10',
@@ -442,7 +444,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         if (!builder) throw new Error(`Unexpected query for ${tableName}`);
         return builder;
       }),
-      { fn: { now: jest.fn(() => 'db-now') } },
+      { fn: { now: jest.fn(() => 'db-now') }, raw: fixtureRaw },
     );
     mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
       const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
@@ -560,6 +562,10 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     });
   });
 });
+
+function fixtureRaw(sql: string, bindings: unknown[]) {
+  return sql === '?? WITH (UPDLOCK, HOLDLOCK)' ? bindings[0] : sql;
+}
 
 function makeChain(options: {
   first?: () => Promise<unknown>;

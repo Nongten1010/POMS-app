@@ -108,6 +108,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
     (queryTable: string) => {
       const table =
         queryTable === 'current_eligible_factories as ef' ? 'eligible_factories' : queryTable;
+      let requestSequenceSelected = false;
       if (!tables[table]) throw new Error(`Unexpected table ${table}`);
       const predicates: Array<(row: Row) => boolean> = [];
       let columns: string[] = [];
@@ -214,6 +215,11 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
         },
         whereRaw(sql: string, bindings: unknown[] = []) {
           if (sql === '1 = 0') predicates.push(() => false);
+          if (sql.includes("NOT LIKE '%[^0-9]%'")) {
+            predicates.push((row) =>
+              /^(?:CEMS|WPMS|WEMS)-[0-9]{4,}\/[0-9]{4}$/.test(String(row.request_no ?? '')),
+            );
+          }
           const normalizedMatch = sql.match(/^UPPER\(LTRIM\(RTRIM\((\w+)\)\)\) = \?$/i);
           if (normalizedMatch) {
             predicates.push(
@@ -258,7 +264,10 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
           return builder;
         },
         select(...selected: string[]) {
-          columns = selected;
+          requestSequenceSelected = selected.some((column) =>
+            column.includes('MAX(TRY_CONVERT(BIGINT'),
+          );
+          if (!requestSequenceSelected) columns = selected;
           return builder;
         },
         forUpdate() {
@@ -267,6 +276,12 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
         },
         async first(...selected: string[]) {
           if (selected.length) columns = selected;
+          if (requestSequenceSelected) {
+            const numbers = rows().map((row) =>
+              Number(String(row.request_no).split('-')[1]?.split('/')[0]),
+            );
+            return { last_sequence: numbers.length ? Math.max(...numbers) : null };
+          }
           return counted ? { total: rows().length } : project(rows()[0]);
         },
         async update(patch: Row) {
@@ -320,7 +335,12 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
     },
     {
       fn: { now: () => '2026-09-11T00:00:00.000Z' },
-      async raw(sql: string, [requestId, actorUserId]: unknown[]) {
+      raw(sql: string, [requestId, actorUserId]: unknown[]) {
+        if (sql === '?? WITH (UPDLOCK, HOLDLOCK)') {
+          locks.push(String(requestId));
+          return String(requestId);
+        }
+        if (sql.includes('MAX(TRY_CONVERT(BIGINT')) return sql;
         if (!sql.includes('ranked_points')) throw new Error('Unsupported fixture raw query');
         const points = tables[POINTS].filter(
           (row) => row.request_id === requestId && row.deleted_at == null,
@@ -338,6 +358,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
           }
           names.add(name);
         }
+        return undefined;
       },
     },
   );
