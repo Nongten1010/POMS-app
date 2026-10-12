@@ -170,7 +170,7 @@ function validationFields(documentation: JsonObject): JsonObject[] {
 }
 
 describe('POMS OpenAPI contract', () => {
-  it.each(['post', 'put'])('documents monitoring_5_centers result-notice access for %s', (method) => {
+  it.each(['post', 'put'])('documents effective approve result-notice access for %s', (method) => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const endpoint = asObject(
@@ -178,7 +178,8 @@ describe('POMS OpenAPI contract', () => {
       'result notice',
     );
     const operation = asObject(endpoint[method], method);
-    expect(operation.description).toContain('monitoring_kpm/monitoring_5_centers/admin');
+    expect(operation.description).toContain('effective bod_cod_errors:approve');
+    expect(operation.description).toContain('ไม่จำกัด role');
     expect(operation.description).toContain('view + approve');
     expect(operation.description).toContain('WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING');
   });
@@ -251,8 +252,8 @@ describe('POMS OpenAPI contract', () => {
       edit: { type: 'boolean' },
     });
     expect(connectionInputProperties).toHaveProperty('data');
-    expect(connectionInputProperties).not.toHaveProperty('estateCode');
-    expect(connectionInputProperties).not.toHaveProperty('estate');
+    expect(connectionInputProperties).toHaveProperty('estateCode');
+    expect(connectionInputProperties).toHaveProperty('estate');
     expect(connectionInputProperties).not.toHaveProperty('direct_connect');
     expect(inputProperties).not.toHaveProperty('api_documentation');
 
@@ -272,8 +273,8 @@ describe('POMS OpenAPI contract', () => {
       eligibleFactoriesResponse.properties,
       'EditablePermissionGroupsResponse.eligible_factories.properties',
     );
-    expect(eligibleFactoriesResponseProperties).not.toHaveProperty('estateCode');
-    expect(eligibleFactoriesResponseProperties).not.toHaveProperty('estate');
+    expect(eligibleFactoriesResponseProperties).toHaveProperty('estateCode');
+    expect(eligibleFactoriesResponseProperties).toHaveProperty('estate');
 
     const paths = asObject(document.paths, 'paths');
     const getUser = asObject(asObject(paths['/users/{id}'], '/users/{id}').get, 'GET /users/{id}');
@@ -832,7 +833,8 @@ describe('POMS OpenAPI contract', () => {
       'x-poms-permissions': ['dashboard:view'],
       'x-poms-permission-mode': 'any',
     });
-    expect(operation.description).toContain('operator');
+    expect(operation.description).toContain('effective dashboard:view');
+    expect(operation.description).toContain('ไม่จำกัด role หรือ userType');
     expect(operation.description).toContain('OWN_FACTORY');
 
     expect(
@@ -1335,14 +1337,14 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('documents add-parameter optional sections only for authenticated officer actors', () => {
+  it('documents add-parameter optional sections by effective edit scope', () => {
     const document = asObject(pomsOpenApiDocument, 'document');
     const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
     const point = asObject(schemas.AddParameterMeasurementPoint, 'point');
     expect(point.required).not.toContain('details');
     expect(point.required).not.toContain('measurementInstruments');
-    expect(point.description).toContain('officer/admin');
-    expect(point.description).toContain('monitoring_kpm/admin');
+    expect(point.description).toContain('OWN_FACTORY');
+    expect(point.description).toContain('effective cems_wpms_requests:edit');
     const properties = asObject(point.properties, 'properties');
     for (const field of ['details', 'measurementInstruments']) {
       expect(asObject(properties[field], field).anyOf).toEqual(

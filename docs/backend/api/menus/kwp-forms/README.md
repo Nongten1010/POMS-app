@@ -595,6 +595,18 @@ Minimal response:
 
 ### `GET /api/v1/kwp-form-submissions/:id/workflow`
 
+อ่านคำขอตามขอบเขต `kwp_forms:view` แต่คำนวณ `allowedActions` จากสิทธิ์ล่าสุดที่ใช้จริงและขอบเขตของแต่ละคำสั่งแยกกัน ไม่จำกัดด้วย role หรือ `userType`:
+
+| คำสั่ง | สิทธิ์และขอบเขต | สถานะที่รองรับ |
+| --- | --- | --- |
+| `REQUEST_REVISION` | `kwp_forms:approve` | `SUBMITTED` |
+| `APPROVE` | `kwp_forms:approve` | `SUBMITTED`, `REVISION_REQUESTED` |
+| `REJECT` | `kwp_forms:approve` | ทุกสถานะ |
+| `RESUBMIT` | `kwp_forms:edit` | `REVISION_REQUESTED` |
+| `CANCEL` | `kwp_forms:edit` และ assignment โรงงานปัจจุบัน | ทุกสถานะยกเว้น `APPROVED`, `CANCELLED` |
+
+สิทธิ์อนุมัติที่กำหนดรายคนทำงานได้แม้เป็น `OWN_FACTORY` โดยตรวจ assignment ตามเดิม การมีสิทธิ์ดูขอบเขตกว้างไม่ได้ขยายขอบเขตแก้ไขหรืออนุมัติ และผู้มีสิทธิ์ดูอย่างเดียวได้รับ `allowedActions: []`
+
 Minimal response:
 
 ```json
@@ -618,7 +630,7 @@ Request fields:
 
 | Field | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `action` | body | `REQUEST_REVISION` \| `APPROVE` \| `REJECT` \| `CANCEL` | Yes | `REJECT` ปฏิเสธได้จากทุกสถานะ; `CANCEL` ใช้สิทธิ์ผู้ประกอบการและกฎด้านล่าง |
+| `action` | body | `REQUEST_REVISION` \| `APPROVE` \| `REJECT` \| `CANCEL` | Yes | `REJECT` ปฏิเสธได้จากทุกสถานะ; `CANCEL` ใช้ `kwp_forms:edit` และกฎ assignment ด้านล่าง |
 | `revisionReason` | body | string/null | Conditional | ต้องส่งข้อความ 1–1000 ตัวอักษรเมื่อ `action = REQUEST_REVISION`; สำหรับ `REJECT` เป็น optional และรับ `null`/ข้อความว่าง |
 | `officerNote` | body | string/null | No | หมายเหตุเจ้าหน้าที่ไม่เกิน 1000 ตัวอักษร ใช้กับ `APPROVE`/`REQUEST_REVISION`/`REJECT`; ข้อความว่างแปลงเป็น `null` |
 
@@ -646,7 +658,7 @@ Minimal response:
 
 #### ปฏิเสธแบบ กวภ.01–กวภ.05
 
-ส่ง `REJECT` ได้จาก `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED` และ `CANCELLED` โดยไม่บังคับเหตุผล ใช้สิทธิ์ `kwp_forms:approve` และบทบาท `monitoring_kpm`, `monitoring_5_centers` หรือ `admin` ภายในขอบเขตข้อมูลที่ได้รับสิทธิ์
+ส่ง `REJECT` ได้จาก `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED` และ `CANCELLED` โดยไม่บังคับเหตุผล ใช้สิทธิ์ล่าสุด `kwp_forms:approve` ภายในขอบเขตข้อมูลของสิทธิ์นั้น โดยไม่ตรวจ allowlist ของ role หรือ `userType`
 
 ```json
 { "action": "REJECT" }
@@ -667,7 +679,7 @@ Minimal response:
 
 หากส่ง `officerNote` จะคืนข้อความนั้นใน response; หากส่งเฉพาะ `revisionReason` จะคืนเป็น `officerNote` พร้อมบันทึกเหตุผลและหมายเหตุในประวัติ `kwp_form_status_history` การปฏิเสธบันทึกผู้พิจารณา/เวลา (`reviewed_by`, `reviewed_at`) และผู้แก้ไข (`updated_by`) โดย `statusHistory[].note` รองรับข้อความรวมสูงสุด 2001 ตัวอักษร (แต่ละช่องสูงสุด 1000 และคั่นด้วย newline)
 
-`GET workflow` คืน `REJECT` ใน `allowedActions` ของผู้มีสิทธิ์อนุมัติทุกสถานะ ผู้มีสิทธิ์ดูอย่างเดียวหรือผู้ประกอบการไม่สามารถปฏิเสธได้ ไม่พบคำขอในขอบเขตตอบ 404 `NOT_FOUND`; ไม่มีสิทธิ์หรือบทบาทตอบ 403 `FORBIDDEN`; สถานะเปลี่ยนระหว่างอ่านกับบันทึกตอบ 409 `CONFLICT` ให้โหลดใหม่และลองอีกครั้ง กฎสถานะของ `APPROVE`, `REQUEST_REVISION`, `CANCEL` และการส่งใหม่ยังใช้ตามเดิม
+`GET workflow` คืน `REJECT` ใน `allowedActions` ของผู้มีสิทธิ์อนุมัติทุกสถานะ รวมถึงผู้ประกอบการที่ได้รับสิทธิ์อนุมัติรายคน ผู้มีสิทธิ์ดูหรือแก้ไขอย่างเดียวไม่สามารถปฏิเสธได้ ไม่พบคำขอในขอบเขตตอบ 404 `NOT_FOUND`; ไม่มีสิทธิ์อนุมัติตอบ 403 `FORBIDDEN`; สถานะเปลี่ยนระหว่างอ่านกับบันทึกตอบ 409 `CONFLICT` ให้โหลดใหม่และลองอีกครั้ง กฎสถานะของ `APPROVE`, `REQUEST_REVISION`, `CANCEL` และการส่งใหม่ยังใช้ตามเดิม
 
 ### `GET /api/v1/kwp-form-reports/factories`
 
@@ -698,7 +710,7 @@ Response ใช้สำหรับรายชื่อโรงงานใ�
 
 `factoryName` ใช้ชื่อ current/live POMS จาก active row ล่าสุดใน
 `cems_wpms_connected_measurement_points` โดยเรียง `updated_at DESC, id DESC`
-เหมือนกันสำหรับผู้ประกอบการและเจ้าหน้าที่ ความแตกต่างระหว่างสองบทบาทมีเฉพาะขอบเขต
+เหมือนกันสำหรับผู้ประกอบการและเจ้าหน้าที่ โดยขอบเขตข้อมูลใช้สิทธิ์ล่าสุดที่ได้รับ ไม่จำกัดด้วยบทบาท
 โรงงานที่มองเห็นเท่านั้น หากไม่มีชื่อ current/live ให้ fallback ไปยัง
 `eligible_factories.factory_name` และ `factories.name` ตามลำดับ
 
@@ -936,14 +948,14 @@ curl '<BASE_URL>/api/v1/kwp-form-reports/factories/F000123/measurement-points' \
 { "action": "CANCEL" }
 ```
 
-ใช้ `kwp_forms:edit` และบัญชี `operator`; backend จำกัดเฉพาะโรงงานที่ผู้ทำรายการมี assignment ปัจจุบันเสมอ แม้ permission จะระบุขอบเขตกว้างกว่า ผู้มีสิทธิ์โรงงานทำแทนกันได้โดยไม่จำกัดผู้สร้างคำขอ
+ใช้ `kwp_forms:edit` ตามขอบเขตที่ได้รับ โดยไม่จำกัด role หรือ `userType`; backend ตรวจว่าคำขออยู่ทั้งในขอบเขตสิทธิ์แก้ไขและโรงงานที่ผู้ทำรายการมี assignment ปัจจุบันเสมอ แม้ permission จะระบุขอบเขตกว้างกว่า ผู้มีสิทธิ์โรงงานทำแทนกันได้โดยไม่จำกัดผู้สร้างคำขอ
 
 | เงื่อนไข | ผลลัพธ์ |
 | --- | --- |
 | `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `REJECTED` | ยกเลิกได้ |
 | `APPROVED`, `CANCELLED` | 409 `CONFLICT` |
-| ไม่มีสิทธิ์ edit หรือไม่ใช่ผู้ประกอบการ | 403 `FORBIDDEN` |
-| ไม่พบคำขอในขอบเขตโรงงานของผู้ใช้ | 404 `NOT_FOUND` |
+| ไม่มีสิทธิ์ edit | 403 `FORBIDDEN` |
+| ไม่พบคำขอในขอบเขตสิทธิ์แก้ไข หรือไม่มี assignment โรงงานปัจจุบัน | 404 `NOT_FOUND` |
 | สถานะเปลี่ยนระหว่างอ่านกับบันทึก | 409 `CONFLICT`; ให้โหลดใหม่ |
 
 การแก้ไข ส่งใหม่ อนุมัติ และยกเลิกใช้ transaction พร้อมตรวจสถานะตอนเขียน เพื่อไม่ให้คำสั่งที่ล่าช้าเขียนทับสถานะใหม่ การยกเลิกบันทึก actor/เวลาใน `kwp_form_status_history` และ `updated_by` โดยเก็บข้อมูลการพิจารณาก่อนหน้าไว้ List/detail คืน `CANCELLED` หลังสำเร็จ; GET workflow ไม่คืนคำสั่งแก้ไขหรือยกเลิกให้ผู้ที่มีสิทธิ์ดูอย่างเดียว

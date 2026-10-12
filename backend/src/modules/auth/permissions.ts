@@ -6,6 +6,7 @@ export type PermissionDataScope =
   | 'OWN_FACTORY'
   | 'FACTORY_TYPE_88'
   | null;
+export type PermissionMode = 'role_default' | 'custom';
 export interface PermissionScopeDetails {
   scope: PermissionDataScope;
   region?: string | null;
@@ -161,7 +162,12 @@ export function groupPermissions(
 ): PermissionGroups {
   const groups: PermissionGroups = {};
 
-  for (const [code, permissionScope] of Object.entries(scopes)) {
+  // A grouped menu has one display qualifier; stable ordering keeps equal-scope
+  // actions deterministic when database rows arrive in a different order.
+  const entries = Object.entries(scopes).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
+  for (const [code, permissionScope] of entries) {
     const permissions = toPermissionAliases(code);
     for (const permission of permissions) {
       if (!responseModules.has(permission.module)) continue;
@@ -194,6 +200,10 @@ export function projectEditablePermissionGroups(groups: PermissionGroups): Permi
         projected.data = current.data ?? null;
         projected.region = normalizeLocationValue(current.region) ?? null;
         projected.province = normalizeLocationValue(current.province) ?? null;
+        if (projected.data === 'IN_ESTATE') {
+          projected.estateCode =
+            normalizeLocationValue(current.estateCode ?? current.estate) ?? null;
+        }
       }
 
       for (const action of actions) {
@@ -315,20 +325,23 @@ export function flattenPermissionScopes(
 export function applyPersonaPermissionOverrides(
   roleScopes: Readonly<Record<string, PermissionDataScope>>,
   overrides: readonly PersonaPermissionOverride[],
+  permissionMode: PermissionMode = 'role_default',
 ): Record<string, PermissionDataScope | PermissionScopeDetails> {
   return mergePermissionScopesWithOverrides(
     Object.entries(roleScopes).map(([code, scope]) => ({ code, scope })),
     overrides,
+    permissionMode,
   );
 }
 
 export function mergePermissionScopesWithOverrides(
   rolePermissions: ReadonlyArray<{ code: string; scope: PermissionDataScope }>,
   overrides: readonly PersonaPermissionOverride[],
+  permissionMode: PermissionMode = 'role_default',
 ): Record<string, PermissionDataScope | PermissionScopeDetails> {
   const scopes: Record<string, PermissionDataScope | PermissionScopeDetails> = {};
 
-  for (const permission of rolePermissions) {
+  for (const permission of permissionMode === 'custom' ? [] : rolePermissions) {
     const current = scopes[permission.code];
     const currentScope = current && typeof current === 'object' ? current.scope : current;
     scopes[permission.code] = widestScope(currentScope, permission.scope);
@@ -342,14 +355,15 @@ export function mergePermissionScopesWithOverrides(
   );
 
   for (const override of overrides) {
-    if (!(override.code in baseScopes)) continue;
+    if (permissionMode !== 'custom' && !(override.code in baseScopes)) continue;
     if (override.effect === 'deny') {
       delete scopes[override.code];
       continue;
     }
 
     const roleScope = baseScopes[override.code];
-    if (!isSameOrNarrowerPermissionScope(override.scope, roleScope)) continue;
+    if (permissionMode !== 'custom' && !isSameOrNarrowerPermissionScope(override.scope, roleScope))
+      continue;
     const estateCode = normalizeLocationValue(override.estateCode ?? override.estate);
     scopes[override.code] = {
       scope: override.scope,
@@ -359,7 +373,52 @@ export function mergePermissionScopesWithOverrides(
     };
   }
 
-  return scopes;
+  return permissionMode === 'custom' ? resolveSavedCustomDataScopes(scopes) : scopes;
+}
+
+function resolveSavedCustomDataScopes(
+  savedScopes: Readonly<Record<string, PermissionDataScope | PermissionScopeDetails>>,
+): Record<string, PermissionDataScope | PermissionScopeDetails> {
+  const effectiveScopes: Record<string, PermissionDataScope | PermissionScopeDetails> = {};
+
+  for (const [code, value] of Object.entries(savedScopes)) {
+    const details = toScopeDetails(value);
+    if (isBinaryPermissionCode(code) || hasValidPermissionDataScope(details)) {
+      effectiveScopes[code] = value;
+      continue;
+    }
+
+    // Legacy mutation rows can store NULL to inherit their resource's data scope.
+    // A custom snapshot may inherit only from its own final saved view permission.
+    if (details.scope !== null && details.scope !== undefined) continue;
+    const separatorIndex = code.lastIndexOf(':');
+    const action = code.slice(separatorIndex + 1);
+    if (separatorIndex < 1 || (action !== 'edit' && action !== 'approve')) continue;
+    const savedView = savedScopes[`${code.slice(0, separatorIndex)}:view`];
+    if (savedView === undefined) continue;
+    const viewDetails = toScopeDetails(savedView);
+    if (!hasValidPermissionDataScope(viewDetails)) continue;
+    effectiveScopes[code] = { ...viewDetails };
+  }
+
+  return effectiveScopes;
+}
+
+/** Data-scoped permissions need a known dimension and its explicit saved location. */
+export function hasValidPermissionDataScope(details: PermissionScopeDetails): boolean {
+  if (typeof details.scope !== 'string' || !Object.hasOwn(scopePriority, details.scope)) {
+    return false;
+  }
+  if (details.scope === 'IN_REGION') {
+    return typeof normalizeLocationValue(details.region) === 'string';
+  }
+  if (details.scope === 'IN_PROVINCE') {
+    return typeof normalizeLocationValue(details.province) === 'string';
+  }
+  if (details.scope === 'IN_ESTATE') {
+    return typeof normalizeLocationValue(details.estateCode ?? details.estate) === 'string';
+  }
+  return true;
 }
 
 export function isSameOrNarrowerPermissionScope(
@@ -431,6 +490,10 @@ function groupedDataScope(module: string, scope: PermissionDataScope): Permissio
 
 function rawPermissionScope(code: string, scope: PermissionDataScope): PermissionDataScope {
   return binaryPermissionCodes.has(code) ? null : scope;
+}
+
+export function isBinaryPermissionCode(code: string): boolean {
+  return binaryPermissionCodes.has(code);
 }
 
 function toScopeDetails(value: string | null | PermissionScopeDetails): PermissionScopeDetails {

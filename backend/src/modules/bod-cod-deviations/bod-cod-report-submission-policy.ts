@@ -30,14 +30,17 @@ export function assertCurrentBodCodPeriod(
 }
 
 export function isBodCodOperator(access: BodCodDeviationAccess): boolean {
+  // Ownership is defined by the granted action scope and assigned factories, not account role.
   const scope =
     typeof access.scope === 'object' && access.scope !== null ? access.scope.scope : access.scope;
-  return scope === 'OWN_FACTORY' && (access.roles ?? []).includes('factory_operator');
+  return scope === 'OWN_FACTORY';
 }
 
 export function assertBodCodCreator(access: BodCodDeviationAccess): void {
-  if (!isBodCodOperator(access) && !(access.roles ?? []).includes('admin')) {
-    throw new ForbiddenError('Only own-factory operators or admins can create BOD/COD reports');
+  const scope =
+    typeof access.scope === 'object' && access.scope !== null ? access.scope.scope : access.scope;
+  if (scope == null || scope.length === 0) {
+    throw new ForbiddenError('BOD/COD edit permission is required to create reports');
   }
 }
 

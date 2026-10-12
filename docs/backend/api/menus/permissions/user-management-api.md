@@ -2,13 +2,13 @@
 
 [กลับไปหน้าเมนูสิทธิ์การใช้งาน](./README.md)
 
-เอกสารนี้อธิบายเฉพาะ 8 operations ที่มีจริงใน production ว่าต้องส่ง header, path, query และ JSON body อย่างไร รวม response, validation และ error ที่ client ต้องรองรับ ส่วน role catalog และ default permission matrix อยู่ใน [หน้าเมนูสิทธิ์การใช้งาน](./README.md#approved-role-catalog)
+เอกสารนี้อธิบาย 8 operations สำหรับการจัดการผู้ใช้และสิทธิ์ ว่าต้องส่ง header, path, query และ JSON body อย่างไร รวม response, validation และ error ที่ client ต้องรองรับ ส่วน role catalog และ default permission matrix อยู่ใน [หน้าเมนูสิทธิ์การใช้งาน](./README.md#approved-role-catalog)
 
 ## Contracts
 
 ### กติกาการเรียก API ร่วม
 
-[Production Swagger UI](https://d-poms.diw.go.th/api/v1/docs/) และ [OpenAPI JSON](https://d-poms.diw.go.th/api/v1/openapi.json) ปัจจุบันมี endpoint ในหมวด “สิทธิ์การใช้งาน” 8 operations ตาม [Endpoint Summary](./README.md#endpoint-summary) เท่านั้น โดยทุก operation ใช้กติกาต่อไปนี้:
+Runtime OpenAPI source อธิบาย endpoint ในหมวด “สิทธิ์การใช้งาน” 8 operations ตาม [Endpoint Summary](./README.md#endpoint-summary) หลังนำรุ่นนี้ขึ้นระบบ ต้องตรวจ [Production Swagger UI](https://d-poms.diw.go.th/api/v1/docs/) และ [OpenAPI JSON](https://d-poms.diw.go.th/api/v1/openapi.json) ว่าตรงกับ contract นี้ โดยทุก operation ใช้กติกาต่อไปนี้:
 
 | รายการ | ค่าที่ต้องส่ง |
 | --- | --- |
@@ -19,13 +19,16 @@
 | Permission guard แบบ `any` | ถ้า endpoint ระบุสอง permission ผู้เรียกมีอย่างใดอย่างหนึ่งก็ผ่าน เช่น `users:view` **หรือ** `permissions:manage` |
 | Unknown field | body แบบ create/update/replace ส่วนใหญ่ไม่รับ field นอก schema และตอบ `400 VALIDATION_ERROR` |
 
-การให้สิทธิ์ default ทำงานดังนี้:
+การเลือกสิทธิ์ที่มีผลทำงานดังนี้:
 
-1. เมื่อสร้างหรือเปลี่ยน role ให้ส่ง role code เดียว ระบบอ่าน role grants จาก [Backend raw role / action / scope matrix](./README.md#backend-raw-role--action--scope-matrix) อัตโนมัติ ไม่ต้องส่ง default permission ซ้ำ
-2. `permissionOverrides`/`permissions` เป็นส่วนต่างจาก role default เท่านั้น: `deny` ใช้ปิดสิทธิ์ และ `allow` ใช้คงสิทธิ์เดิมพร้อมลด scope ให้แคบลง
-3. override ห้ามเพิ่ม permission ที่ role ไม่มี และห้ามขยาย scope ให้กว้างกว่า role
-4. `PUT /users/:id/permissions` เป็น raw API ที่ **แทนที่ override ทั้งชุด**; ถ้าส่ง `[]` จะล้าง override และกลับไปใช้ role default ล้วน ส่วน grouped `permissions` ของ `PATCH /users/:id` แทนที่เฉพาะ editable actions และรักษา internal/hidden overrides เดิมไว้
-5. เปลี่ยน role หรือ override แล้ว access token เดิมไม่เปลี่ยนย้อนหลัง ผู้ใช้ต้อง login/refresh token ใหม่ตาม auth flow เพื่อรับ effective permission ล่าสุด
+1. บัญชีที่มี `permissionMode: "role_default"` อ่าน role grants จาก [Backend raw role / action / scope matrix](./README.md#backend-raw-role--action--scope-matrix) อัตโนมัติ ไม่ต้องส่ง default permission ซ้ำ
+2. การส่ง `permissionOverrides`/`permissions` อย่างชัดเจนเมื่อสร้าง local account หรือบันทึกสิทธิ์ภายหลัง เปลี่ยนบัญชีเป็น `custom`; `allow` ให้สิทธิ์และ `deny` ปิดสิทธิ์ โดยใช้ snapshot ทั้งชุด ไม่เติม action ที่ละไว้จาก role
+3. ผู้มี `permissions:manage` ให้ permission นอก role หรือเลือก scope กว้างกว่า role ได้ Backend ยังตรวจ code, scope, master location และขอบเขตข้อมูลจริง
+4. `PUT /users/:id/permissions` **แทนที่สิทธิ์ทั้งชุด** รวม internal actions; `[]` หมายถึง `custom` ที่ไม่มีสิทธิ์ ส่วน PATCH ทั้ง grouped `permissions` และ legacy raw `permissionOverrides` กำหนด editable permissions ทั้งชุดและเก็บ internal/hidden grants เดิมที่ไม่ได้ส่งไว้ใน snapshot Raw PATCH ใช้ scope ที่ระบุใน request; กฎรักษา scope เดิมที่แคบกว่ามีเฉพาะ grouped PATCH เมื่อขอบเขตเมนูไม่เปลี่ยน
+5. การเปลี่ยน role อย่างเดียวคง custom snapshot เดิม; คืนค่า role defaults ด้วย PATCH `{ "permissionMode": "role_default" }` โดยไม่ส่ง `permissions`
+6. Backend อ่านสิทธิ์ล่าสุดทุก authenticated request; token เดิมใช้สิทธิ์ที่เพิ่มหรือถอนตั้งแต่คำขอถัดไป Client อ่าน `/auth/me` เพื่อปรับเมนูและปุ่มได้โดยไม่ต้อง login ใหม่
+
+บัญชี managed officer/admin ที่มี `user_permissions` บันทึกไว้ก่อนขึ้นรุ่นนี้จะย้ายเป็น `custom` ด้วย migration `0136_add_user_permission_mode` โดยใช้สิทธิ์และพื้นที่ที่บันทึกไว้เหนือ role รวม action/scope ที่ role เดิมไม่อนุญาต `deny` ยังคงปิดสิทธิ์ ส่วน code ที่ไม่มีรายการบันทึกใช้ role default ตอนย้ายเพื่อให้ snapshot ครบ เมื่อย้ายแล้วไม่เติมสิทธิ์จาก role อีก ผู้ที่บันทึกสิทธิ์ไว้แล้วไม่ต้องกำหนดใหม่; หากคำขอเดิมถูกปฏิเสธก่อนบันทึก migration ไม่มีค่าใหม่ให้กู้คืน ดู [รายละเอียดการย้าย](./README.md#migration-and-client-impact)
 
 Production ยังไม่มี `GET /roles`, `GET /permissions` หรือ endpoint สำหรับอ่าน role-default catalog โดยตรง ตาราง default ในหน้าเมนูหลักจึงอ้างอิง seed/runtime canonical และ response ของ user แต่ละคนต้องอ่านผ่าน `GET /users/:id` หรือ `GET /users/:id/permissions`
 
@@ -75,6 +78,7 @@ Response (`200 OK`):
       "levelNameTh": "ชำนาญการ",
       "roles": "monitoring_5_centers",
       "roleCodes": ["monitoring_5_centers"],
+      "permissionMode": "role_default",
       "isActive": true
     }
   ],
@@ -103,7 +107,7 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
-Response นี้ใช้เติมหน้าแก้ไข โดยคืน grouped effective permissions หลังรวม role default และ per-user overrides แล้ว ทุก module/action ใน [editable contract](./README.md#permission-management-editable-contract) มีค่าครบเป็น boolean; scoped module มี `data`, `region`, `province` ส่วน binary module ไม่มี location fields:
+Response นี้ใช้เติมหน้าแก้ไข โดยคืน `user.permissionMode` และ grouped effective permissions ตามโหมดปัจจุบัน ทุก module/action ใน [editable contract](./README.md#permission-management-editable-contract) มีค่าครบเป็น boolean; scoped module มี `data`, `region`, `province` และคืน `estateCode` เมื่อนิคมเป็น `IN_ESTATE` ส่วน binary module ไม่มี location fields:
 
 ```json
 {
@@ -121,6 +125,7 @@ Response นี้ใช้เติมหน้าแก้ไข โดยค�
     "regionalAccess": { "regions": ["ภาคตะวันออก"] },
     "roles": "monitoring_5_centers",
     "roleCodes": ["monitoring_5_centers"],
+    "permissionMode": "role_default",
     "isActive": true,
     "source": "created"
   },
@@ -176,27 +181,28 @@ Response fields:
 | --- | --- | --- |
 | `success` | boolean | สำเร็จเป็น `true` |
 | `data.userId` | integer | user เป้าหมาย |
+| `data.permissionMode` | `role_default` \| `custom` | แหล่งสิทธิ์ที่ใช้จริง |
 | `data.rolePermissions[]` | array | grants ที่มากับ role default โดยตรง |
 | `data.rolePermissions[].code` | string | permission code |
-| `data.rolePermissions[].scope` | scope \| `null` | scope สูงสุดที่ role ให้; `null` หมายถึง binary action |
-| `data.overrides[]` | array | override ที่บันทึกใน `user_permissions` พร้อม `effect` และ location qualifier |
-| `data.effectiveScopes` | object | map `permissionCode -> scope` หลังรวม role และ override |
+| `data.rolePermissions[].scope` | scope \| `null` | scope เริ่มต้นของ role เพื่ออ้างอิง ไม่ใช่เพดานของ custom; `null` หมายถึง binary action |
+| `data.overrides[]` | array | สิทธิ์ที่บันทึกใน `user_permissions` พร้อม `effect` และ location qualifier; custom ใช้เป็น snapshot ทั้งชุด |
+| `data.effectiveScopes` | object | map `permissionCode -> scope` ที่ใช้จริงตามโหมด |
 | `data.permissions` | object | grouped effective permissions สำหรับ frontend |
 
 #### `PUT /api/v1/users/:id/permissions`
 
 - Permission: `permissions:manage` เท่านั้น
 - Path: `id` เป็นจำนวนเต็มบวก
-- Request body: บังคับ และเป็นการแทนที่ override ทั้งชุด
+- Request body: บังคับ และเป็นการแทนที่สิทธิ์ custom ทั้งชุด
 
 Request fields:
 
 | Field | Type | Required | Nullable | Rules / Meaning |
 | --- | --- | --- | --- | --- |
-| `permissions` | array<object> | yes | no | `0-200` รายการ; ห้าม `code` ซ้ำ; `[]` = ล้าง overrides ทั้งหมด |
+| `permissions` | array<object> | yes | no | `0-200` รายการ; ห้าม `code` ซ้ำ; `[]` = custom ไม่มีสิทธิ์ ไม่ใช่คืนค่า role defaults |
 | `permissions[].code` | string | yes | no | raw backend permission code ยาว `1-64` และต้องมีอยู่ในระบบ เช่น `cems_wpms_requests:view`; field นี้ไม่รับ `permissions.connection.view` |
-| `permissions[].effect` | `allow` \| `deny` | yes | no | `allow` ใช้ลด/คงสิทธิ์; `deny` ใช้ปิดสิทธิ์ |
-| `permissions[].scope` | scope | no | yes | `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, `FACTORY_TYPE_88`; ถ้า `allow` แล้วไม่ส่ง จะใช้ scope ของ role |
+| `permissions[].effect` | `allow` \| `deny` | yes | no | `allow` ให้สิทธิ์แม้ role ไม่มี; `deny` ปิดสิทธิ์ |
+| `permissions[].scope` | scope | conditional | ตาม code/effect | `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, `FACTORY_TYPE_88`; data-scoped `allow` ห้ามส่ง `null` แม้ code อยู่ใน role (`400 BAD_REQUEST`); ละ field ใช้ role scope ครั้งเดียวตอนบันทึก โดย edit/approve ที่ default เป็น null ใช้ role view scope ของ resource เดียวกัน ถ้าไม่มีตอบ `400`; code นอก role ต้องส่ง scope; binary code หรือ deny ใช้ `null` ได้ |
 | `permissions[].region` | string | conditional | yes | ใช้เมื่อ `scope=IN_REGION`; ยาว `1-128`; ภาคเมนูมีผลก่อนภาคเริ่มต้นจากโปรไฟล์และไม่ต้องตรงกัน |
 | `permissions[].province` | string | conditional | yes | ใช้เมื่อ `scope=IN_PROVINCE`; รับชื่อหรือรหัสจังหวัด ยาว `1-128` |
 | `permissions[].estateCode` | string | conditional | yes | ใช้เมื่อ `scope=IN_ESTATE`; รหัสหรือชื่อที่ resolve กับ master ได้ ยาว `1-32` |
@@ -232,6 +238,7 @@ Response (`200 OK`) ของ `GET` และ `PUT` ใช้ shape เดีย
   "success": true,
   "data": {
     "userId": 12,
+    "permissionMode": "custom",
     "rolePermissions": [
       {
         "code": "dashboard.stats:export",
@@ -287,22 +294,32 @@ Response (`200 OK`) ของ `GET` และ `PUT` ใช้ shape เดีย
 
 Validation and limitation notes:
 
-- `allow` ใช้ได้เฉพาะ code ที่ role มี และ scope ต้องเท่ากับหรือแคบกว่า role; การเพิ่ม action ใหม่หรือขยาย scope ตอบ `400 BAD_REQUEST`
+- `allow` ใช้ code ที่ backend รองรับโดยไม่จำกัดด้วย role และให้ scope กว้างกว่า role ได้; data-scoped code ต้องมี scope ที่ใช้ได้ การส่ง `scope: null` อย่างชัดเจนตอบ `400 BAD_REQUEST` แม้ code อยู่ใน role ส่วนการละ field ให้คัดลอก role scope ครั้งเดียวตอนบันทึก และ edit/approve ที่ default เป็น null ใช้ role view scope ของ resource เดียวกัน ถ้าไม่มี scope ให้คัดลอกตอบ `400 BAD_REQUEST`
 - `deny` ไม่ต้องส่ง `scope`/location; backend normalize ค่าเหล่านี้เป็น `null`
-- location ที่ไม่ส่งจะอิง profile assignment ไม่ได้หมายถึง scope ไม่จำกัด
+- location ที่ไม่ส่งจะอิง profile assignment ตอนบันทึก ไม่ได้หมายถึง scope ไม่จำกัด; `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE` ที่ยังไม่มี qualifier ใช้ได้หลังเติม defaults และ resolve master ตอบ `400 BAD_REQUEST` ไม่บันทึก snapshot ที่ใช้ไม่ได้
 - พื้นที่ override ที่ระบุมีผลก่อน profile assignment; ถ้าไม่ระบุทั้งสองแหล่ง ระบบต้อง fail closed และไม่คืนข้อมูล ดู [กติกาพื้นที่รายเมนู](./README.md#region-and-location-rules)
 - `province` และ `estateCode` ต้อง resolve กับ master data ได้ มิฉะนั้นตอบ `400 BAD_REQUEST`
+- ตัวอย่าง raw PUT ข้างบนให้สิทธิ์ export เพียงรายการเดียว ส่วน grants ของ role อื่นไม่ถูกนำมาเติม หากต้องการคงสิทธิ์อื่น ต้องส่ง `allow` ของสิทธิ์นั้นพร้อมกัน
+
+### Scope ที่เป็น null ในข้อมูลเดิม
+
+การบันทึก custom ใหม่ต้องใช้ data scope ที่ใช้ได้ตามตารางข้างต้น ส่วนรายการเดิมที่เก็บ scope เป็น `null` หรือไม่ได้ระบุ ใช้กติกาต่อไปนี้เมื่อคำนวณสิทธิ์:
+
+- Binary codes เช่น `permissions:manage`, `users:edit` และ `feedback:submit` ใช้ `null` ได้ตามเดิม
+- เฉพาะ data-scoped `edit` หรือ `approve` ใช้ scope และ qualifiers ทั้งชุดจาก saved `view` ของ resource เดียวกัน เมื่อ view ยังอนุญาตและ scope ถูกต้อง ไม่อ่าน role หรือ profile มาเติมตอน runtime
+- หาก saved view ไม่มี ถูก deny หรือ scope/qualifier ใช้ไม่ได้ ให้ปิด edit/approve ที่รอรับ scope นั้น โดยไม่ขึ้นกับลำดับแถวที่อ่าน
+- Data-scoped `view`, `search`, `export` หรือ `direct_connect` ที่ scope เป็น null/ไม่ถูกต้องไม่ให้สิทธิ์ และ `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE` ต้องมี region, province หรือ estateCode/estate ที่บันทึกไว้ตามมิติ ค่าเว้นวรรคและ `all` ไม่ใช้เป็น qualifier
+- Action ที่มี scope และ qualifier ที่ใช้ได้บันทึกชัดเจนยังคงใช้ scope ของตัวเอง สิทธิ์ default ของ role ไม่เติมเข้า custom snapshot
 
 ### Create local account
 
 #### `POST /api/v1/users/local-accounts`
 
-การสร้างบัญชีพร้อม `permissionOverrides` ที่ไม่ว่าง หรือ grouped `permissions` ที่แปลงเป็น overrides ไม่ว่าง ต้องมี `permissions:manage` เพิ่มจาก `users:edit`; บัญชีที่ใช้ role defaults โดยไม่เพิ่ม overrides ยังใช้สิทธิ์สร้างบัญชีเดิมได้
+การสร้างบัญชีโดยส่ง `permissionOverrides` หรือ grouped `permissions` อย่างชัดเจน รวม `[]`/`{}` ต้องมี `permissions:manage` เพิ่มจาก `users:edit` และบัญชีจะเป็น `custom` บัญชีที่ละ field นี้ใช้ `role_default` และสิทธิ์สร้างบัญชีเดิมได้
 
 - Permission: `users:edit` **หรือ** `permissions:manage`
 - ใช้สร้างบัญชี POMS local ที่ login ด้วย `username`/`password`
-- `username` ต้องไม่ซ้ำกับบัญชีใน provider `local` ที่ยังไม่ถูก soft-delete รวมบัญชี inactive/suspended; ถ้าบัญชีเดิมถูก soft-delete แล้ว สามารถใช้ชื่อเดิมสร้างบัญชีใหม่ได้
-- บัญชีที่สร้างใหม่ได้ user ID ใหม่ ใช้ password, profile, role และ permissions จากคำขอใหม่ตาม validation และ role defaults ปัจจุบัน ไม่คืนชีพหรือรับรหัสผ่าน สิทธิ์ หรือประวัติจากบัญชีเดิม ข้อมูลและประวัติของบัญชีเดิมยังผูกกับ user ID เดิม
+- `username` ต้องไม่ซ้ำภายใน provider `local` รวมบัญชีที่ถูก soft-delete แล้ว; ชื่อเดิมยังถูกสงวนไว้ ตอบ `409 CONFLICT` และให้ใช้ชื่อใหม่ ไม่คืนชีพหรือเปลี่ยนรหัสผ่าน/สิทธิ์ของบัญชีเดิม
 - Request body: บังคับ; รับ nested shape ของหน้า Permission Management (แนะนำ) และ legacy flat shape; ห้ามผสมสอง shape และไม่รับ field นอก schema
 
 #### Shape A: nested page payload (แนะนำ)
@@ -317,7 +334,7 @@ Validation and limitation notes:
 | `user.roleCodes` | array<string> | yes | ต้องมี role code 1 ค่า |
 | `user.userType` | `officer` \| `admin` | no | default `officer` |
 | `user.isActive` | boolean | no | default `true` |
-| `permissions` | object | no | grouped [editable permission matrix](./README.md#permission-management-editable-contract); default `{}` และแปลงเป็น per-user overrides |
+| `permissions` | object | no | grouped [editable permission matrix](./README.md#permission-management-editable-contract); ละ field = role defaults; ส่ง `{}` = custom ไม่มีสิทธิ์ทั้ง editable และ internal actions สำหรับบัญชีใหม่ |
 
 ```bash
 curl --request POST \
@@ -335,8 +352,7 @@ curl --request POST \
       "roleCodes": ["erc_office"],
       "userType": "officer",
       "isActive": true
-    },
-    "permissions": {}
+    }
   }'
 ```
 
@@ -395,11 +411,12 @@ curl --request POST \
   }'
 ```
 
-ไม่ส่ง `permissionOverrides` ในตัวอย่าง เพราะ role defaults ถูกให้โดยอัตโนมัติ หากต้องการปิดเฉพาะ `factories:edit` จึงค่อยเพิ่ม:
+ไม่ส่ง `permissionOverrides` ในตัวอย่าง เพราะ role defaults ถูกให้โดยอัตโนมัติ หากต้องการ custom ให้ส่ง grants ทั้งชุด ตัวอย่างต่อไปนี้ให้ดู dashboard ในภาคตะวันออกและปิด `factories:edit`; ไม่รับสิทธิ์อื่นเพิ่มจาก role:
 
 ```json
 {
   "permissionOverrides": [
+    { "code": "dashboard:view", "effect": "allow", "scope": "IN_REGION", "region": "ภาคตะวันออก" },
     { "code": "factories:edit", "effect": "deny" }
   ]
 }
@@ -423,6 +440,7 @@ Response (`201 Created`) พร้อม `Location: /api/v1/users/<id>`:
     "levelNameTh": "ชำนาญการ",
     "roles": "monitoring_5_centers",
     "roleCodes": ["monitoring_5_centers"],
+    "permissionMode": "role_default",
     "isActive": true
   }
 }
@@ -493,6 +511,7 @@ curl --request POST \
     "phone": "0812345678",
     "isActive": true,
     "roleCodes": ["monitoring_5_centers"],
+    "permissionMode": "role_default",
     "profile": {
       "lineNameTh": "นักวิทยาศาสตร์",
       "levelNameTh": "ชำนาญการ",
@@ -541,7 +560,7 @@ Response (`201 Created`) คืน `Location: /api/v1/users/<id>` และ `Man
 #### `PATCH /api/v1/users/:id`
 
 - Permission: `users:edit` **หรือ** `permissions:manage`
-- การแก้ `regionalAccess`, จังหวัด หรือนิคม และการส่ง `permissions` (รวมชุดว่างเพื่อล้าง) ต้องมี `permissions:manage` เพิ่ม แม้ route guard จะผ่านด้วย `users:edit`
+- การแก้ `regionalAccess`, จังหวัด หรือนิคม และการส่ง `permissions`/`permissionOverrides`/top-level `permissionMode` ต้องมี `permissions:manage` เพิ่ม แม้ route guard จะผ่านด้วย `users:edit`
 - Path: `id` เป็นจำนวนเต็มบวก
 - Request body: บังคับ และรับได้ 2 shapes; ห้ามผสมสอง shape ใน request เดียว
 
@@ -552,7 +571,8 @@ Top-level fields:
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `user` | object | yes | ข้อมูลที่หน้าแก้ไขส่งกลับ |
-| `permissions` | object | no | grouped editable matrix; ถ้าส่งจะแทนที่ editable overrides และรักษา internal/hidden overrides เดิมไว้ |
+| `permissions` | object | no | grouped editable matrix ทั้งชุด; เปลี่ยนเป็น custom, ปิด actions ที่ละไว้ และเก็บ internal/hidden effective grants เดิมไว้ |
+| `permissionMode` | `role_default` \| `custom` | no | root field: `role_default` คืนค่าเริ่มต้นและห้ามส่งพร้อม permissions; `custom` ต้องส่ง permissions ด้วย |
 
 `user` fields:
 
@@ -575,6 +595,7 @@ Top-level fields:
 | `accountType` | `poms` \| `api` | no | no | ใช้บอกชนิดบัญชีใน edit response |
 | `identityProvider` | string | no | no | `1-32`; field ประกอบจาก response |
 | `source` | `api` \| `created` | no | no | ใช้บอกว่า profile มาจาก IdP หรือสร้างใน POMS |
+| `permissionMode` | `role_default` \| `custom` | no | no | metadata จาก GET ที่ส่งกลับได้ ไม่มีผลเปลี่ยนโหมด; ใช้ root field เพื่อสั่ง reset |
 
 แต่ละ module ใน `permissions` ใช้รูปแบบต่อไปนี้:
 
@@ -585,11 +606,15 @@ Top-level fields:
 | `data` | scope \| `null` | conditional | บังคับสำหรับ scoped module; ห้ามส่งใน `permissions`, `helpdesk`, `feedback`, `laws`, `faq`, `chat` |
 | `region` | string | conditional | qualifier เมื่อ `data=IN_REGION` |
 | `province` | string | conditional | qualifier เมื่อ `data=IN_PROVINCE` |
-| `<action>` | boolean | no | `true` = allow ภายใน role; `false` = deny เช่น `view`, `edit`, `approve`, `export` |
+| `estateCode` | string \| `null` | no | qualifier ของหนึ่งนิคมเมื่อ `data=IN_ESTATE`; มีผลก่อนนิคมโปรไฟล์ รับรหัส/ชื่อที่ resolve กับ master ได้ `1-32` |
+| `estate` | string \| `null` | no | compatibility alias ของ `estateCode`; client ใหม่ใช้ `estateCode` |
+| `<action>` | boolean | no | `true` = allow แม้ role ไม่มี; `false` หรือ action ที่ละไว้ = ปิด เช่น `view`, `edit`, `approve`, `export` |
 
-Grouped permissions ไม่รับ `estateCode` หรือ `estate`; เมื่อ `data=IN_ESTATE` backend ใช้ estate assignment ระดับ user profile. `data` รองรับ `FACTORY_TYPE_88` ยกเว้น module `factories` ใน frontend. Binary modules ใช้ boolean action โดยตรงและ backend เก็บ raw action เป็น scope `null`. Module `chat` รับ action `edit` และ map ไป raw code `chat:answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย. Module/action/field นอก editable matrix ตอบ `400 VALIDATION_ERROR`.
+Grouped permissions รับ `estateCode` หรือ `estate` เมื่อ `data=IN_ESTATE` สำหรับนิคมหนึ่งแห่ง; ถ้าไม่ส่งใช้ estate assignment ระดับ user profile การคืน `estateCode` ใน grouped response ทำให้ส่งสิทธิ์กลับได้โดยไม่ทำ qualifier รายเมนูหาย `data` รองรับ `FACTORY_TYPE_88` ยกเว้น module `factories` ใน frontend. Binary modules ใช้ boolean action โดยตรงและ backend เก็บ raw action เป็น scope `null`. Module `chat` รับ action `edit` และ map ไป raw code `chat:answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย. Module/action/field นอก editable matrix ตอบ `400 VALIDATION_ERROR`.
 
-ตัวอย่างนี้คงสิทธิ์ dashboard ภายในภาคตะวันออก แต่ปิด export:
+Grouped `data` เป็นค่ารวมสำหรับแสดงเมนูและอาจกว้างกว่า scope บาง action เช่น `view=ALL`, `edit=IN_PROVINCE` การบันทึก grouped matrix ที่ไม่เปลี่ยนขอบเขตเมนูคง scope และ qualifier ราย action ที่แคบกว่าไว้ ไม่ขยายสิทธิ์นั้นด้วยค่ารวม ถ้าต้องการแก้ scope แยกราย action ให้อ่าน `data.overrides[]` ผ่าน raw GET แล้วส่ง raw PUT ทั้งชุดพร้อม scope ที่ตั้งใจให้แต่ละ code โดย PUT เป็น explicit replacement และไม่รักษา scope ที่ละไว้
+
+ตัวอย่างนี้บันทึก editable matrix ใหม่ ให้ดู dashboard ในภาคตะวันออกและปิด export; editable actions ที่ละไว้จะปิด ส่วน internal grants ที่มีผลเดิมจะคงอยู่:
 
 ```bash
 curl --request PATCH \
@@ -619,9 +644,15 @@ curl --request PATCH \
 
 #### Shape B: legacy partial payload
 
-ส่งอย่างน้อย 1 field และใช้ field เดียวกับ `POST /users` โดยทุก field เป็น optional พร้อม `password` เพิ่มเติม:
-
 สำหรับ local/POMS account ค่า `prenameTh` ใช้กติกาเดียวกับการสร้าง: trim แล้วต้องยาว `1-64` ตัวอักษร หรือส่ง `null` เพื่อล้างคำนำหน้า; ถ้าเกิน 64 ตัวอักษรจะตอบ `400 VALIDATION_ERROR`
+
+ส่งอย่างน้อย 1 field และใช้ field เดียวกับ `POST /users` โดยทุก field เป็น optional พร้อม fields เพิ่มเติม:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `password` | string | no | `8-128`; ใช้เปลี่ยนรหัสผ่าน local account |
+| `permissionMode` | `role_default` \| `custom` | no | `role_default` reset และห้ามส่งสิทธิ์พร้อมกัน; `custom` ต้องส่ง `permissionOverrides` ใน shape นี้ |
+| `permissionOverrides` | array<object> | no | `0-200` รายการตาม field/rules ของ raw PUT; code ห้ามซ้ำ; แทนที่ editable permissions ทั้งชุดและคง internal grants เดิมที่ไม่ได้ส่ง; `[]` ปิด editable actions |
 
 ```json
 {
@@ -635,6 +666,34 @@ curl --request PATCH \
 }
 ```
 
+ตัวอย่าง raw PATCH กำหนด scope ราย action: ดูโรงงานได้ทั้งหมดและแก้เฉพาะระยอง ผู้เรียกต้องมี `permissions:manage` สิทธิ์ editable อื่นที่ละไว้จะปิด ส่วน internal grants ที่ไม่ได้ส่งคงเดิม:
+
+```json
+{
+  "permissionMode": "custom",
+  "permissionOverrides": [
+    { "code": "factories:view", "effect": "allow", "scope": "ALL" },
+    { "code": "factories:edit", "effect": "allow", "scope": "IN_PROVINCE", "province": "ระยอง" }
+  ]
+}
+```
+
+Raw PATCH ใช้ scope/location ที่ส่งอย่างชัดเจนตาม request จึงขยาย scope ได้โดยไม่ใช้การคง scope ที่แคบกว่าของ grouped UI การส่ง `scope: null` ของ data-scoped allow ตอบ `400 BAD_REQUEST`; ถ้าละ scope ของ code ที่ role มีอยู่ backend เติม role default ครั้งเดียวตอนบันทึก โดย edit/approve ที่ default เป็น null ใช้ role view scope ของ resource เดียวกัน ถ้าไม่มี scope ที่ใช้ได้ตอบ `400` แล้วจึง resolve province/estate และเติม location fallback `PUT /users/:id/permissions` ต่างกันตรงที่แทนที่ทุก code รวม internal actions และไม่คง grants เดิมที่ไม่ได้ส่ง
+
+#### คืนค่าเริ่มต้นตาม role
+
+ทั้งสอง shapes รับ top-level `permissionMode: "role_default"` แต่การ reset อย่างเดียวใช้ legacy partial payload นี้ได้ ต้องมี `permissions:manage` และห้ามส่ง `permissions` หรือ `permissionOverrides` พร้อมกัน:
+
+```bash
+curl --request PATCH \
+  --url '<BASE_URL>/api/v1/users/12' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Content-Type: application/json' \
+  --data '{ "permissionMode": "role_default" }'
+```
+
+สำเร็จตอบ user ใน envelope เดิมพร้อม `data.permissionMode: "role_default"`; ระบบล้าง custom snapshot และใช้ role ปัจจุบัน การส่ง `permissionMode: "custom"` ต้องส่ง `permissions` ใน nested shape หรือ `permissionOverrides` ใน legacy shape มิฉะนั้นตอบ `400 VALIDATION_ERROR` การส่งสิทธิ์อย่างชัดเจนโดยละโหมดถือเป็น custom แม้ metadata `user.permissionMode` ที่ echo กลับมายังเป็น `role_default`
+
 ข้อจำกัดร่วมของ PATCH:
 
 - local/POMS account: ถ้าเปลี่ยน `username` ระบบทำให้ account key ตรงกัน; ถ้าส่งทั้ง `username` และ `externalId` ต้องเท่ากัน
@@ -643,9 +702,11 @@ curl --request PATCH \
 - เมื่อส่ง Shape A สำหรับ API/IdP account ให้ส่ง `source: "api"` หรือ `accountType: "api"` ตามค่าจาก `GET /users/:id` เพื่อให้ backend แยก provider-owned fields ออกจาก authorization assignment ถูกต้อง
 - API/IdP account ยังแก้ role, `isActive` และ authorization assignment (`regionalAccess`, จังหวัด, นิคม) ได้เมื่อผู้เรียกมีสิทธิ์ครบ
 - พื้นที่ในแต่ละเมนูไม่ต้องตรงโปรไฟล์ และไม่อัปเดตโปรไฟล์อัตโนมัติ เช่นบัญชี `diw_central` ส่ง `permissions.dashboard.region: "ภาคตะวันออก"` และ `permissions.factories.province: "ระยอง"` ได้โดยไม่ส่ง `user.regionName`; ตัวอย่างเต็มอยู่ใน runtime OpenAPI ของ PATCH
-- หลังแก้สิทธิ์ให้ login ใหม่เพื่อรับ token ล่าสุด; token เดิมและ `/auth/me` ที่อิง session ยังใช้สิทธิ์ของ token เดิม
-- เปลี่ยน role แล้วต้องมี assignment ที่ role ใหม่บังคับ มิฉะนั้นตอบ `400 BAD_REQUEST`
-- ถ้าส่ง `permissions` backend แปลง grouped booleans เป็น override และแทนที่เฉพาะ editable overrides; internal/hidden overrides เช่น `cems_wpms_requests:direct_connect`, `statistics:export`, `permissions:manage` ถูกเก็บไว้หากยังใช้ได้กับ role ใหม่ ถ้าไม่ต้องการเปลี่ยน editable overrides ให้ละ field นี้
+- หลังแก้สิทธิ์ token เดิมใช้สิทธิ์ล่าสุดตั้งแต่คำขอถัดไป; `/auth/me` โหลดสิทธิ์ปัจจุบันเพื่อ refresh เมนูและปุ่ม
+- บัญชี `role_default` ต้องมี assignment ที่ role ใหม่บังคับเมื่อเปลี่ยน role หรือคืนค่าเริ่มต้น มิฉะนั้นตอบ `400 BAD_REQUEST`; บัญชี `custom` คง scope และพื้นที่ใน snapshot แม้เปลี่ยน role
+- ถ้าส่ง `permissions` backend แปลง grouped booleans เป็น custom snapshot ทั้ง editable matrix; internal/hidden grants ที่มีผลเดิม เช่น `cems_wpms_requests:direct_connect`, `statistics:export`, `permissions:manage` ถูกเก็บไว้โดยไม่กรองด้วย role ใหม่ ถ้าไม่ต้องการเปลี่ยนสิทธิ์ให้ละ field นี้
+- Raw `permissionOverrides` มีผลแทนที่ editable permissions เช่นเดียวกันและคง internal grants ที่ไม่ได้ส่ง; scope ราย action ที่ส่งชัดเจนใช้ค่าตาม request โดยไม่รักษาค่าแคบกว่าอัตโนมัติ
+- เปลี่ยน role อย่างเดียวไม่เปลี่ยน custom snapshot; การใช้สิทธิ์ `approve` ยังต้องผ่าน scope และสถานะ/ขั้นตอนของ workflow
 
 Response (`200 OK`):
 
@@ -660,6 +721,7 @@ Response (`200 OK`):
     "fullName": "สมชาย แก้ไข",
     "roles": "monitoring_5_centers",
     "roleCodes": ["monitoring_5_centers"],
+    "permissionMode": "custom",
     "isActive": true,
     "profile": {
       "provinceName": null,
@@ -742,7 +804,7 @@ curl --request DELETE \
 Route-specific notes:
 
 - `GET /api/v1/users/:id/permissions` และ `PUT /api/v1/users/:id/permissions` ไม่ fallback เป็น `users:view`; ถ้าไม่มี `permissions:manage` จะตอบ `403`
-- `PATCH /api/v1/users/:id` ถ้าแก้พื้นที่โปรไฟล์หรือส่ง `permissions` โดยไม่มี `permissions:manage` จะตอบ `403`; create ที่ส่ง overrides ไม่ว่างใช้กติกาเดียวกัน
+- `PATCH /api/v1/users/:id` ถ้าแก้พื้นที่โปรไฟล์หรือส่ง `permissions`/`permissionOverrides`/top-level `permissionMode` โดยไม่มี `permissions:manage` จะตอบ `403`; create ที่ส่งสิทธิ์อย่างชัดเจนรวมชุดว่างใช้กติกาเดียวกัน
 - `DELETE /api/v1/users/:id` ถ้า `:id` ตรงกับผู้ใช้ที่ login อยู่จะตอบ `403`
 
 
@@ -757,6 +819,7 @@ Route-specific notes:
 - คำนำหน้า 64 ตัวอักษร: [validator tests](../../../../../backend/tests/unit/users.validator.test.ts) และ [OpenAPI contract tests](../../../../../backend/tests/unit/user-prename.openapi.test.ts)
 - Identity conflict regression: [users.identity-conflicts.test.ts](../../../../../backend/tests/unit/users.identity-conflicts.test.ts)
 - Identity conflict OpenAPI: [users.openapi.test.ts](../../../../../backend/tests/unit/users.openapi.test.ts)
+- Custom permission OpenAPI: [users.custom-permissions.openapi.test.ts](../../../../../backend/tests/unit/users.custom-permissions.openapi.test.ts)
 - Local account reuse regression: [users.local-account-reuse.test.ts](../../../../../backend/tests/unit/users.local-account-reuse.test.ts)
 - Migration และ rollback regression: [local-user-identity-reuse-migration.test.ts](../../../../../backend/tests/unit/local-user-identity-reuse-migration.test.ts)
 

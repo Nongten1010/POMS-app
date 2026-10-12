@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ForbiddenError } from '../../src/shared/errors/AppError';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.service', () => ({
   bodCodDeviationReportsService: {
@@ -60,6 +60,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.cancelReport).toHaveBeenCalledWith(9, {
       actorUserId: 42,
       scope: { scope: 'OWN_FACTORY' },
+      editScope: { scope: 'OWN_FACTORY' },
       viewScope: { scope: 'OWN_FACTORY' },
       roles: ['factory_operator'],
       regionalAccess: undefined,
@@ -635,6 +636,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.createReport).toHaveBeenCalledWith(createReportPayload(), {
       actorUserId: 42,
       scope: { scope: 'OWN_FACTORY' },
+      editScope: { scope: 'OWN_FACTORY' },
       viewScope: { scope: 'OWN_FACTORY' },
       roles: ['factory_operator'],
       regionalAccess: undefined,
@@ -716,6 +718,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.resubmitReport).toHaveBeenCalledWith(9, payload, {
       actorUserId: 42,
       scope: { scope: 'OWN_FACTORY' },
+      editScope: { scope: 'OWN_FACTORY' },
       viewScope: { scope: 'OWN_FACTORY' },
       roles: ['factory_operator'],
       regionalAccess: undefined,
@@ -770,6 +773,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.resubmitReport).toHaveBeenCalledWith(9, payload, {
       actorUserId: 42,
       scope: { scope: 'OWN_FACTORY' },
+      editScope: { scope: 'OWN_FACTORY' },
       viewScope: { scope: 'OWN_FACTORY' },
       roles: ['factory_operator'],
       regionalAccess: undefined,
@@ -797,6 +801,7 @@ describe('BOD/COD deviation report routes', () => {
       {
         actorUserId: 77,
         scope: { scope: 'ALL' },
+        approveScope: { scope: 'ALL' },
         viewScope: { scope: 'ALL' },
         regionalAccess: { regions: ['ภาคเหนือ'] },
         roles: ['monitoring_kpm'],
@@ -827,6 +832,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
       scope: { scope: 'ALL' },
+      approveScope: { scope: 'ALL' },
       viewScope: { scope: 'ALL' },
       regionalAccess: { regions: ['ภาคเหนือ'] },
       roles: ['monitoring_kpm'],
@@ -863,6 +869,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
       scope: { scope: 'ALL' },
+      approveScope: { scope: 'ALL' },
       viewScope: { scope: 'ALL' },
       regionalAccess: { regions: ['ภาคเหนือ'] },
       roles: ['monitoring_kpm'],
@@ -899,6 +906,7 @@ describe('BOD/COD deviation report routes', () => {
       expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(13, payload, {
         actorUserId: 77,
         scope: { scope: 'IN_REGION' },
+        approveScope: { scope: 'IN_REGION' },
         viewScope: { scope: 'IN_REGION' },
         regionalAccess: { regions: ['ภาคเหนือ'] },
         roles: ['monitoring_5_centers'],
@@ -924,6 +932,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
       scope: { scope: 'ALL' },
+      approveScope: { scope: 'ALL' },
       viewScope: { scope: 'ALL' },
       regionalAccess: { regions: ['ภาคเหนือ'] },
       roles: ['monitoring_kpm'],
@@ -960,6 +969,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.createReport).toHaveBeenCalledWith(createReportPayload(), {
       actorUserId: 77,
       scope: { scope: 'IN_REGION' },
+      editScope: { scope: 'IN_REGION' },
       viewScope: { scope: 'IN_REGION' },
       roles: ['admin'],
       regionalAccess: { regions: ['ภาคเหนือ'] },
@@ -987,6 +997,7 @@ describe('BOD/COD deviation report routes', () => {
       {
         actorUserId: 77,
         scope: { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
+        approveScope: { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
         viewScope: { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
         regionalAccess: { regions: ['ภาคเหนือ'] },
         roles: ['monitoring_5_centers'],

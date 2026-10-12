@@ -207,6 +207,51 @@ describe('authService login completion', () => {
     });
   });
 
+  it('uses the custom permission set at login without role or profile location restrictions', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 45,
+      external_id: 'custom_officer',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'custom_officer',
+      first_name: 'Test',
+      last_name: 'User',
+      is_active: true,
+      password_hash: Buffer.from('fixture-hash'),
+    } as never);
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      province_name_th: 'กรุงเทพมหานคร',
+      estate_code: 'OLD',
+      regional_access_json: JSON.stringify({ regions: ['ภาคกลาง'] }),
+    } as never);
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['monitoring_kpm'],
+      scopes: {
+        'factories:view': 'ALL',
+        'eligible_factories:edit': null,
+      },
+      permissionMode: 'custom',
+    } as never);
+
+    const result = await authService.login({
+      accountType: 'poms',
+      userType: 'officer',
+      username: 'custom_officer',
+      [passwordField]: validTestPassword,
+    } as never);
+
+    expect(result.user).toMatchObject({ permissionMode: 'custom', roles: 'monitoring_kpm' });
+    expect(result.user.regionalAccess).toBeUndefined();
+    expect(result.permissions.factories).toMatchObject({ data: 'ALL', view: true });
+    expect(result.permissions.eligible_factories).toMatchObject({ edit: true });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopes: { 'factories:view': 'ALL', 'eligible_factories:edit': null },
+        regionalAccess: null,
+      }),
+    );
+  });
+
   it('fails closed when a legacy local account has more than one system role', async () => {
     mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
       id: 42,
@@ -697,6 +742,7 @@ describe('authService login completion', () => {
       accessToken: 'signed-access-token',
       user: {
         accountType: 'api',
+        permissionMode: 'role_default',
         userType: 'officer',
         username: '1102001567054',
         fullName: 'นายทดสอบ ระบบ',

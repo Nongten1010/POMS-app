@@ -6,7 +6,7 @@ import { env } from '../../src/config/env';
 import type { PermissionScopeDetails } from '../../src/modules/auth/permissions';
 import { bodCodDeviationReportsRoutes } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.routes';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 import { createKnexSqliteFixture } from '../helpers/knex-sqlite-fixture';
 
 const originalMode = env.FACTORY_PROFILE_MODE;

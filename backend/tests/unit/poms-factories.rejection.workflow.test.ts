@@ -126,7 +126,7 @@ describe('POMS factory edit request rejection workflow', () => {
     });
   });
 
-  it('still requires an admin role for unrestricted rejection', async () => {
+  it('allows custom approval permission to reject regardless of role', async () => {
     rejectionDatabase('APPROVED');
 
     await expect(
@@ -137,11 +137,30 @@ describe('POMS factory edit request rejection workflow', () => {
         { roles: ['monitoring_kpm'] },
         { scope: 'ALL' },
       ),
+    ).resolves.toMatchObject({ status: 'REJECTED' });
+
+    const reloaded = await pomsFactoriesService.getEditRequest(11, 77, { scope: 'ALL' });
+    expect(reloaded.status).toBe('REJECTED');
+    expect(reloaded.events).toHaveLength(2);
+  });
+
+  it('denies an admin without approval permission before rejection persistence', async () => {
+    rejectionDatabase('APPROVED');
+
+    await expect(
+      pomsFactoriesService.reviewEditRequest(
+        11,
+        { decision: 'REJECT' },
+        77,
+        { roles: ['admin'] },
+        undefined,
+      ),
     ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
 
     const reloaded = await pomsFactoriesService.getEditRequest(11, 77, { scope: 'ALL' });
     expect(reloaded.status).toBe('APPROVED');
     expect(reloaded.events).toHaveLength(1);
+    expect(mockedDb.transaction).not.toHaveBeenCalled();
   });
 
   it.each(['APPROVE', 'REQUEST_REVISION'] as const)(

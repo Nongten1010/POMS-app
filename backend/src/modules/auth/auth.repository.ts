@@ -2,6 +2,7 @@ import { db } from '../../config/database';
 import { applyPersonaPermissionOverrides, mergePermissionScopesWithOverrides } from './permissions';
 import type {
   PermissionDataScope,
+  PermissionMode,
   PermissionScopeDetails,
   PersonaPermissionOverride,
 } from './permissions';
@@ -24,8 +25,57 @@ export interface UserRow {
   first_name: string;
   last_name: string;
   is_active: boolean;
+  permission_mode?: PermissionMode;
   password_hash: Buffer | null;
   deleted_at?: string | Date | null;
+}
+
+async function getSavedUserPermissionSet(userId: number): Promise<{
+  permissionMode: PermissionMode;
+  overrides: PersonaPermissionOverride[];
+}> {
+  // Read mode and rows in one statement so a concurrent save cannot combine the
+  // old role_default mode with a new custom set that intentionally omits a grant.
+  const rows: Array<{
+    permission_mode: PermissionMode;
+    code: string | null;
+    scope: PermissionDataScope;
+    effect: 'allow' | 'deny' | null;
+    region_name: string | null;
+    province_name: string | null;
+    estate_code: string | null;
+  }> = await db('users')
+    .from(db.raw('users WITH (HOLDLOCK)'))
+    .leftJoin('user_permissions', 'user_permissions.user_id', 'users.id')
+    .leftJoin('permissions', 'permissions.id', 'user_permissions.permission_id')
+    .leftJoin('provinces', 'provinces.id', 'user_permissions.province_id')
+    .where('users.id', userId)
+    .select(
+      'users.permission_mode',
+      'permissions.code as code',
+      'user_permissions.scope as scope',
+      'user_permissions.effect as effect',
+      'user_permissions.region_name as region_name',
+      'provinces.name_th as province_name',
+      'user_permissions.estate_code as estate_code',
+    );
+  return {
+    permissionMode: rows[0]?.permission_mode ?? 'role_default',
+    overrides: rows.flatMap((row) =>
+      row.code && row.effect
+        ? [
+            {
+              code: row.code,
+              effect: row.effect,
+              scope: row.scope,
+              region: row.region_name,
+              province: row.province_name,
+              estateCode: row.estate_code,
+            },
+          ]
+        : [],
+    ),
+  };
 }
 
 export interface OfficerProfileRow {
@@ -353,8 +403,10 @@ export const authRepository = {
 
   async getRolesAndPermissions(userId: number): Promise<{
     roles: string[];
+    permissionMode?: PermissionMode;
     scopes: Record<string, string | null | PermissionScopeDetails>;
   }> {
+    const { permissionMode, overrides } = await getSavedUserPermissionSet(userId);
     const roles: Array<{ code: string }> = await db('user_roles')
       .join('roles', 'user_roles.role_id', 'roles.id')
       .where('user_roles.user_id', userId)
@@ -367,41 +419,16 @@ export const authRepository = {
       .where('user_roles.user_id', userId)
       .select('permissions.code as code', 'role_permissions.scope as scope');
 
-    const userPerms: Array<{
-      code: string;
-      scope: string | null;
-      effect: 'allow' | 'deny';
-      region_name: string | null;
-      province_name: string | null;
-      estate_code: string | null;
-    }> = await db('user_permissions')
-      .join('permissions', 'user_permissions.permission_id', 'permissions.id')
-      .leftJoin('provinces', 'provinces.id', 'user_permissions.province_id')
-      .where('user_permissions.user_id', userId)
-      .select(
-        'permissions.code as code',
-        'user_permissions.scope as scope',
-        'user_permissions.effect as effect',
-        'user_permissions.region_name as region_name',
-        'provinces.name_th as province_name',
-        'user_permissions.estate_code as estate_code',
-      );
-
     return {
       roles: roles.map((r) => r.code),
+      permissionMode,
       scopes: mergePermissionScopesWithOverrides(
         perms.map((permission) => ({
           code: permission.code,
           scope: permission.scope as PermissionDataScope,
         })),
-        userPerms.map((override) => ({
-          code: override.code,
-          effect: override.effect,
-          scope: override.scope as PermissionDataScope,
-          region: override.region_name,
-          province: override.province_name,
-          estate: override.estate_code,
-        })),
+        overrides,
+        permissionMode,
       ),
     };
   },
@@ -411,8 +438,10 @@ export const authRepository = {
     roleCode: string,
   ): Promise<{
     roles: string[];
+    permissionMode?: PermissionMode;
     scopes: Record<string, string | null | PermissionScopeDetails>;
   }> {
+    const { permissionMode, overrides } = await getSavedUserPermissionSet(userId);
     const role = await db('roles').where({ code: roleCode }).whereNull('deleted_at').first('id');
     if (!role) throw new Error(`Role ${roleCode} is not provisioned`);
 
@@ -423,43 +452,14 @@ export const authRepository = {
       .where('role_permissions.role_id', role.id)
       .select('permissions.code as code', 'role_permissions.scope as scope');
 
-    const overrides: Array<{
-      code: string;
-      scope: PermissionDataScope;
-      effect: PersonaPermissionOverride['effect'];
-      region_name: string | null;
-      province_name: string | null;
-      estate_code: string | null;
-    }> = await db('user_permissions')
-      .join('permissions', 'user_permissions.permission_id', 'permissions.id')
-      .leftJoin('provinces', 'provinces.id', 'user_permissions.province_id')
-      .where('user_permissions.user_id', userId)
-      .select(
-        'permissions.code as code',
-        'user_permissions.scope as scope',
-        'user_permissions.effect as effect',
-        'user_permissions.region_name as region_name',
-        'provinces.name_th as province_name',
-        'user_permissions.estate_code as estate_code',
-      );
-
     const roleScopes = Object.fromEntries(
       permissions.map((permission) => [permission.code, permission.scope]),
     );
 
     return {
       roles: [roleCode],
-      scopes: applyPersonaPermissionOverrides(
-        roleScopes,
-        overrides.map((override) => ({
-          code: override.code,
-          effect: override.effect,
-          scope: override.scope,
-          region: override.region_name,
-          province: override.province_name,
-          estate: override.estate_code,
-        })),
-      ),
+      permissionMode,
+      scopes: applyPersonaPermissionOverrides(roleScopes, overrides, permissionMode),
     };
   },
 

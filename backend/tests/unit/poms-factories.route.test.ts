@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { pomsFactoriesRoutes } from '../../src/modules/poms-factories/poms-factories.routes';
 import { POMS_FACTORY_EDIT_REQUEST_FORM_TYPE } from '../../src/modules/poms-factories/poms-factories.types';
 import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/poms-factories/poms-factories.service', () => ({
   pomsFactoriesService: {
@@ -461,7 +461,7 @@ describe('POMS factory routes', () => {
     },
   );
 
-  it('rejects a monitoring officer even when the token has factories:approve', async () => {
+  it('allows a custom scoped approve grant regardless of monitoring role', async () => {
     const response = await request(createTestApp())
       .post('/api/v1/poms-factories/edit-requests/11/review')
       .set(
@@ -479,8 +479,8 @@ describe('POMS factory routes', () => {
       )
       .send({ decision: 'APPROVE', officerNote: 'ข้อมูลครบถ้วน' });
 
-    expect(response.status).toBe(403);
-    expect(mockedService.reviewEditRequest).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockedService.reviewEditRequest).toHaveBeenCalled();
   });
 
   it.each([
@@ -494,7 +494,7 @@ describe('POMS factory routes', () => {
       userType: 'officer' as const,
       roles: ['monitoring_kpm'],
     },
-  ])('rejects $label', async ({ userType, roles }) => {
+  ])('allows custom approve for $label', async ({ userType, roles }) => {
     const response = await request(createTestApp())
       .post('/api/v1/poms-factories/edit-requests/11/review')
       .set(
@@ -512,8 +512,8 @@ describe('POMS factory routes', () => {
       )
       .send({ decision: 'APPROVE' });
 
-    expect(response.status).toBe(403);
-    expect(mockedService.reviewEditRequest).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockedService.reviewEditRequest).toHaveBeenCalled();
   });
 
   it.each(['admin', 'officer'] as const)(

@@ -57,7 +57,7 @@ curl --request POST \
 
 ### กติกาการยื่นรายงานและเลขครั้งรายปี
 
-- สร้างรายงานใหม่ได้เฉพาะผู้ประกอบการ (`factory_operator`, scope `OWN_FACTORY`) หรือผู้มี role `admin` และต้องมี `bod_cod_errors:view` ร่วมกับ `bod_cod_errors:edit`; ข้อมูลต้องอยู่ภายใต้ scope ทั้งสองสิทธิ์
+- สร้างรายงานใหม่ได้เมื่อมีสิทธิ์ที่ใช้งานจริง `bod_cod_errors:view` ร่วมกับ `bod_cod_errors:edit` โดยไม่จำกัด role; ข้อมูลต้องอยู่ภายใต้ scope ทั้งสองสิทธิ์ และ `OWN_FACTORY` จำกัดเฉพาะโรงงานที่บัญชีได้รับมอบหมาย
 - `reportRoundNo` คือครึ่งปี `1` (ม.ค.-มิ.ย.) หรือ `2` (ก.ค.-ธ.ค.) และ `reportYear` คือปี พ.ศ. ปัจจุบันตาม `Asia/Bangkok`; backend ตรวจเวลาหลังรอ lock ก่อนบันทึก ไม่รับการสร้างย้อนหลังหรือข้ามรอบ
 - ต้องระบุ `connectedMeasurementPointId` หรือ `pointCode` ที่ระบุจุดปัจจุบันได้เพียงจุดเดียว จุดต้องเป็นของโรงงานที่เลือกและมีพารามิเตอร์ที่รายงาน หากส่งทั้งสอง field ต้องตรงกัน; รองรับพารามิเตอร์จุดที่เก็บเป็น code (`BOD`/`COD`) หรือชื่อรวมหน่วย (`BOD (mg/l)`/`COD (mg/l)`) โดย request ยังคงส่ง code
 - จุดเดียวกัน + พารามิเตอร์เดียวกัน + ปีเดียวกันมีคำขอค้างได้หนึ่งฉบับ โดย `APPROVED`, `REJECTED`, `CANCELLED` เป็นสถานะสิ้นสุด; `REVISION_REQUESTED` ยังเป็นคำขอค้าง การตรวจและสร้างทำภายใน transaction ที่ serialize การยื่นของจุดเดียวกัน
@@ -68,25 +68,24 @@ curl --request POST \
 
 ### สิทธิ์การพิจารณา
 
-ทุก mutation ต้องมี `view` ร่วมกับ `edit` หรือ `approve` ตามงาน และผ่าน data scope ทั้งสองสิทธิ์; หาก action เป็น binary grant (`scope: null`) ให้ใช้ scope ของ `view` โดยไม่ขยายพื้นที่ `APPROVE` และ `REQUEST_REVISION` ใช้ role + สถานะ + current step ร่วมกัน:
+ทุก mutation ต้องมีสิทธิ์ที่ใช้งานจริง `view` ร่วมกับ `edit` หรือ `approve` ตามงาน และผ่าน data scope ทั้งสองสิทธิ์; หาก action เป็น binary grant (`scope: null`) ให้ใช้ scope ของ `view` โดยไม่ขยายพื้นที่ การเพิ่มหรือถอนสิทธิ์รายคนมีผลโดยไม่ถูกจำกัดด้วย role ของผู้ใช้
 
-| ขั้น | Role ที่ใช้ได้ |
+| งาน | Permission และเงื่อนไข |
 | --- | --- |
-| `INSPECTOR` | `monitoring_kpm`, `monitoring_5_centers`, `admin` |
-| `RESULT_NOTICE` สำหรับ workflow action | `monitoring_kpm`, `admin` |
-| บันทึกแบบแจ้งผลผ่าน `POST`/`PUT /:id/result-notice` | `monitoring_kpm`, `monitoring_5_centers`, `admin` |
-| `REVIEWER` | `kpm_director` |
-| `APPROVER` | `center_director`, `kwp_director` |
+| `APPROVE`, `REQUEST_REVISION` | `bod_cod_errors:approve`; current step ต้องเป็น `PENDING` และชนิดขั้นตรงกับสถานะรายงาน |
+| บันทึกแบบแจ้งผลผ่าน `POST`/`PUT /:id/result-notice` | `bod_cod_errors:approve`; `WAITING_RESULT_NOTICE` และขั้น `RESULT_NOTICE` / `PENDING` |
+| `REJECT` | `bod_cod_errors:approve`; ไม่จำกัดสถานะหรือ current step |
+| `CANCEL` | `bod_cod_errors:edit` scope `OWN_FACTORY`; โรงงานอยู่ในรายการที่ได้รับมอบหมาย และสถานะไม่ใช่ `APPROVED`/`CANCELLED` |
 
-`admin` เพียงอย่างเดียวไม่ให้สิทธิ์ทบทวน/อนุมัติสุดท้าย; detail คืน `allowedActions` ตามสิทธิ์และ scope ของงานนั้นจริง
+`roleCode` ของขั้น เช่น `INSPECTOR`, `RESULT_NOTICE`, `REVIEWER`, `APPROVER` ยังคงระบุลำดับงาน แต่ไม่จำกัด role ของผู้ดำเนินการ; ผู้ที่ได้รับ `approve` สามารถทำขั้นปัจจุบันได้ รวมถึงเมื่อ scope เป็น `OWN_FACTORY` โดยยังต้องผ่านตัวกรองโรงงานที่ได้รับมอบหมาย Detail คืน `allowedActions` ตามสิทธิ์และ scope ของแต่ละงานจริง ผู้มีเฉพาะ `view` ได้ `[]`
 
-`REJECT` ใช้ role `monitoring_kpm`, `monitoring_5_centers`, `admin`, `kpm_director`, `center_director` หรือ `kwp_director` ที่มี `bod_cod_errors:view` + `bod_cod_errors:approve` และ scope ไม่ใช่ `OWN_FACTORY` ปฏิเสธได้ทุกสถานะ รวม `DRAFT`, `APPROVED`, `REJECTED` และ `CANCELLED` โดยไม่ต้องมี current step และไม่ต้องเป็นผู้รับผิดชอบขั้นปัจจุบัน
+`REJECT` ใช้ `bod_cod_errors:view` + `bod_cod_errors:approve` ภายใต้ scope ทั้งสองสิทธิ์ ปฏิเสธได้ทุกสถานะ รวม `DRAFT`, `APPROVED`, `REJECTED` และ `CANCELLED` โดยไม่ต้องมี current step
 
 ### ยกเลิกคำขอ
 
 `POST /api/v1/bod-cod-deviation-reports/:id/cancel` ไม่รับ request body (`id` เป็น positive integer) ใช้ Bearer token และ `bod_cod_errors:view` + `bod_cod_errors:edit`
 
-เฉพาะผู้ประกอบการเจ้าของโรงงาน (`factory_operator`, scope `OWN_FACTORY`) ยกเลิกได้ทุกสถานะยกเว้น `APPROVED`/`CANCELLED` รวมถึง `REJECTED`; ตรวจสถานะซ้ำหลัง lock ร่วมกับ workflow/resubmit/result-notice และบันทึก event `CANCEL` ใน transaction เดียวกัน ไม่ลบรายงานหรือประวัติเดิม
+ผู้ที่ได้รับ `edit` scope `OWN_FACTORY` ยกเลิกรายงานของโรงงานที่บัญชีได้รับมอบหมายได้ทุกสถานะยกเว้น `APPROVED`/`CANCELLED` รวมถึง `REJECTED` โดยไม่จำกัด role; ตรวจสถานะซ้ำหลัง lock ร่วมกับ workflow/resubmit/result-notice และบันทึก event `CANCEL` ใน transaction เดียวกัน ไม่ลบรายงานหรือประวัติเดิม
 
 ```json
 {
@@ -106,7 +105,7 @@ curl --request POST \
 
 สำเร็จตอบ `200`; `steps` คืนประวัติขั้นตอนจริงโดยไม่มี current step; ยกเลิกซ้ำหรือคำขออนุมัติแล้วตอบ `409 CONFLICT` โดยไม่เพิ่มประวัติซ้ำ ฝั่ง frontend ต้องเชื่อม dialog กับ route นี้ก่อนใช้งานยกเลิกได้ครบ flow
 
-กรณีสร้างผิดรอบหรือมีคำขอค้างตอบ `409 CONFLICT` พร้อม `error.details.reason` เป็น `REPORT_PERIOD_CLOSED` หรือ `PENDING_REPORT_EXISTS`; จุดไม่ถูกต้อง/พารามิเตอร์ไม่มีในจุดตอบ `400 BAD_REQUEST`; role ไม่ตรงตอบ `403 FORBIDDEN` และรายงานนอก scope ตอบ `404 NOT_FOUND`
+กรณีสร้างผิดรอบหรือมีคำขอค้างตอบ `409 CONFLICT` พร้อม `error.details.reason` เป็น `REPORT_PERIOD_CLOSED` หรือ `PENDING_REPORT_EXISTS`; จุดไม่ถูกต้อง/พารามิเตอร์ไม่มีในจุดตอบ `400 BAD_REQUEST`; ไม่มีสิทธิ์ action ตอบ `403 FORBIDDEN` และรายงานนอก scope ตอบ `404 NOT_FOUND`
 
 ## Endpoint Summary
 
@@ -390,7 +389,7 @@ Create สำเร็จตอบ `201 Created`, ส่ง `Location: /api/v1/b
 }
 ```
 
-Resubmit ทำได้เฉพาะผู้ประกอบการเจ้าของโรงงาน เมื่อรายงานเป็น `REVISION_REQUESTED`; identity ได้แก่โรงงาน เลขทะเบียน จุดตรวจวัด ปี รอบ และ parameter ต้องตรงกับรายงานเดิม
+Resubmit ทำได้เมื่อมี `bod_cod_errors:view` + `bod_cod_errors:edit` scope `OWN_FACTORY` สำหรับโรงงานที่บัญชีได้รับมอบหมาย และรายงานเป็น `REVISION_REQUESTED` โดยไม่จำกัด role; identity ได้แก่โรงงาน เลขทะเบียน จุดตรวจวัด ปี รอบ และ parameter ต้องตรงกับรายงานเดิม
 
 ### รายละเอียดรายงาน
 
@@ -513,7 +512,7 @@ Resubmit ทำได้เฉพาะผู้ประกอบการเ�
 
 `POST` และ `PUT /api/v1/bod-cod-deviation-reports/:id/result-notice` เป็น upsert alias ที่มี behavior เดียวกัน และบันทึกได้เฉพาะ current step `RESULT_NOTICE`
 
-อนุญาต role `monitoring_kpm`, `monitoring_5_centers` หรือ `admin` ที่มี `bod_cod_errors:view` + `bod_cod_errors:approve` และผ่าน data scope ทั้งสองสิทธิ์ โดย scope ต้องไม่เป็น `OWN_FACTORY`; รายงานต้องอยู่สถานะ `WAITING_RESULT_NOTICE` และ current step เป็น `RESULT_NOTICE` / `PENDING` การบันทึกไม่เปลี่ยนขั้น workflow และสิทธิ์ workflow action ยังเป็นไปตามตารางข้างต้น
+อนุญาตผู้ที่มี `bod_cod_errors:view` + `bod_cod_errors:approve` และผ่าน data scope ทั้งสองสิทธิ์ รวมถึง `OWN_FACTORY` โดยไม่จำกัด role; รายงานต้องอยู่สถานะ `WAITING_RESULT_NOTICE` และ current step เป็น `RESULT_NOTICE` / `PENDING` การบันทึกไม่เปลี่ยนขั้น workflow และสิทธิ์ workflow action เป็นไปตามตารางข้างต้น
 
 `id` เป็น path parameter ชนิด positive integer
 
@@ -547,7 +546,7 @@ Response `200 OK` เป็น workflow response และเพิ่ม `resul
 
 `approvalTrack` เป็น `CENTRAL` หรือ `REGIONAL`; steps ใช้ role `INSPECTOR`, `RESULT_NOTICE`, `REVIEWER`, `APPROVER` และ step status `PENDING`, `WAITING`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED`
 
-`allowedActions` อาจมี `CANCEL`, `APPROVE`, `REQUEST_REVISION`, `REJECT` ตามผู้ใช้และ data scope; `REJECT` ไม่ผูกสถานะหรือ current step ส่วน action อื่นยังใช้ข้อกำหนด workflow เดิม ใช้ route `/cancel` สำหรับ `CANCEL` ผู้มีเพียงสิทธิ์ดูหรือผู้ประกอบการไม่ได้รับ `REJECT`
+`allowedActions` อาจมี `CANCEL`, `APPROVE`, `REQUEST_REVISION`, `REJECT` ตามสิทธิ์ที่ใช้งานจริงและ data scope ของแต่ละ action โดยไม่จำกัด role; `REJECT` ไม่ผูกสถานะหรือ current step ส่วน action อื่นยังใช้ข้อกำหนด workflow เดิม ใช้ route `/cancel` สำหรับ `CANCEL` ผู้มีเพียงสิทธิ์ดูไม่ได้รับ action และการถอน `approve` ทำให้ action ที่ใช้สิทธิ์นั้นหายไป
 
 ## Errors
 
@@ -569,7 +568,7 @@ Error envelope:
 | `400` | `BAD_REQUEST` | ไม่มีไฟล์, ไฟล์ไม่รองรับ, จังหวัดไม่ตรงข้อมูลโรงงาน หรือหา region สำหรับออกเลขไม่ได้ | โหลดข้อมูลโรงงานใหม่หรือแก้ไฟล์/ข้อมูล |
 | `400` | `UPLOAD_ERROR` | เกินข้อจำกัด multer เช่นไฟล์ใหญ่กว่า 5 MB | เลือกไฟล์ใหม่ |
 | `401` | `UNAUTHORIZED` | token ขาด หมดอายุ หรือไม่ถูกต้อง | login ใหม่ |
-| `403` | `FORBIDDEN` | ไม่มี permission/data scope, ไม่ใช่เจ้าของโรงงาน หรือผู้ประกอบการเรียกงานเจ้าหน้าที่ | ซ่อน action และแจ้งเรื่องสิทธิ์ |
+| `403` | `FORBIDDEN` | ไม่มี permission ของ action หรือเรียก cancel/resubmit โดยไม่มี `edit` scope `OWN_FACTORY` | ซ่อน action และแจ้งเรื่องสิทธิ์ |
 | `404` | `NOT_FOUND` | ไม่พบรายงานภายใต้ data scope | กลับหน้ารายการ |
 | `409` | `CONFLICT` | รอบ/สถานะ/current step ไม่อนุญาต, identity ตอน resubmit เปลี่ยน หรือ sequence ของ region+ปีถึง `9999` | โหลดรายละเอียดล่าสุด; overflow ต้องติดต่อผู้ดูแล |
 

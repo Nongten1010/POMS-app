@@ -1798,7 +1798,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     required: ['pointName', 'pointCode'],
     description:
-      'ผู้ประกอบการต้องส่ง details และ measurementInstruments; เฉพาะ userType officer/admin ที่มี role monitoring_kpm/admin สามารถละทั้งสอง field หรือส่ง null ได้ โดยใช้ตัวตนจาก access token',
+      'OWN_FACTORY และ edit grant ที่ endpoint ได้เป็น scope null ต้องส่ง details และ measurementInstruments; effective cems_wpms_requests:edit scope ที่ระบุชัดเจน ไม่ใช่ OWN_FACTORY หรือ null สามารถละทั้งสอง field หรือส่ง null ได้โดยไม่จำกัด role หรือ userType',
     properties: {
       pointName: { type: 'string', minLength: 1, maxLength: 255 },
       pointCode: {
@@ -2569,7 +2569,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ขอเพิ่มจุดตรวจวัด',
       operationId: 'createMeasurementPointRequest',
       description:
-        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. default เป็น PENDING_DESIGN_REVIEW; officer/admin ส่ง submissionAction=REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission เพิ่ม',
+        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. default เป็น PENDING_DESIGN_REVIEW; ผู้มี effective permission ที่เกี่ยวข้องส่ง submissionAction=REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission เพิ่ม',
       requestBody: jsonRequestBody(schemaRef('AddMeasurementPointRequest'), officerAddPointExample),
       successStatus: '201',
       successDescription: 'สร้างคำขอเพิ่มจุดตรวจวัดแล้ว',
@@ -2583,7 +2583,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่',
       operationId: 'createDirectConnection',
       description:
-        'Permission: cems_wpms_requests:direct_connect. ต้องเป็น officer/admin ที่มี role monitoring_kpm/admin และ active eligible factory อยู่ใน scope; submissionAction=REQUEST_FACTORY_REVISION สร้างสถานะ WAITING_FACTORY_REVISION และ CONNECT สร้างสถานะ CONNECTED. หากไม่ส่ง action/status จะใช้ CONNECTED. เมื่อ CONNECT และ point มี pendingParameters จริง ต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า มิฉะนั้นตอบ 400 VALIDATION_ERROR' +
+        'Permission: cems_wpms_requests:direct_connect. ใช้ effective permission และ data scope ล่าสุดโดยไม่จำกัด role หรือ userType หรือภาคตาม role; active eligible factory ต้องอยู่ใน scope; submissionAction=REQUEST_FACTORY_REVISION สร้างสถานะ WAITING_FACTORY_REVISION และ CONNECT สร้างสถานะ CONNECTED. หากไม่ส่ง action/status จะใช้ CONNECTED. เมื่อ CONNECT และ point มี pendingParameters จริง ต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า มิฉะนั้นตอบ 400 VALIDATION_ERROR' +
         ` ${connectionProfileWriteDescription}`,
       requestBody: jsonRequestBody(schemaRef('DirectConnectionRequest'), directConnectionExample),
       successStatus: '201',
@@ -2645,7 +2645,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ขอเพิ่มพารามิเตอร์ให้จุดเดิม',
       operationId: 'createParameterRequest',
       description:
-        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องมี exactly 1 measurement point พร้อม pointCode เดิม. เฉพาะ userType officer/admin และ role monitoring_kpm/admin จาก access token ละ details และ measurementInstruments หรือส่ง null ได้; ผู้ประกอบการยังต้องส่งทั้งสองส่วน. ข้อมูลที่ส่งมาต้องผ่าน validation เดิม; การจับคู่ requestedParameters กับเครื่องมือใช้เมื่อมี measurementInstruments. สร้าง PENDING_DESIGN_REVIEW เหมือนเดิม. เมื่อ CONNECTED ให้รวมพารามิเตอร์เดิมของ active point กับรายการใหม่ ไม่แทนที่รายการเดิม; เก็บลำดับเดิมแล้วต่อท้ายตัวใหม่ ไม่ซ้ำเมื่อแตกต่างเพียงตัวพิมพ์หรือช่องว่างหัวท้าย และแยกหน่วยที่ต่างกัน. เก็บข้อมูลเครื่องมือเดิมที่ยังอยู่ในจุดปัจจุบันแม้ส่งเฉพาะเครื่องมือใหม่หรือละ/ส่ง null ตามสิทธิ์; ถ้าส่งพารามิเตอร์เดิมซ้ำ ใช้ค่าใหม่เฉพาะ field ที่ระบุรวม explicit null และเก็บ field ที่ละไว้ ไม่คืนเครื่องมือของพารามิเตอร์ที่ถูกนำออก. ตัวอย่างเดิม Flow Rate (m3/hr) เพิ่ม NOx (ppm), SO2 (ppm), O2 (%) แล้วจุดปัจจุบันมีครบ 4 ตัว. Response และประวัติคำขอยังคงเป็น snapshot ของคำขอ; การยื่นคำขอยังไม่เปลี่ยน active point. ' +
+        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องมี exactly 1 measurement point พร้อม pointCode เดิม. effective cems_wpms_requests:edit scope ที่ระบุชัดเจน ไม่ใช่ OWN_FACTORY หรือ null ละ details และ measurementInstruments หรือส่ง null ได้โดยไม่จำกัด role หรือ userType; OWN_FACTORY และ edit grant ที่ endpoint ได้เป็น scope null ยังต้องส่งทั้งสองส่วน. โรงงานต้องเป็น active eligible factory ภายใน effective edit scope; OWN_FACTORY ตรวจ assignment ปัจจุบันของโรงงานและนิติบุคคลจริง. Legacy edit grant ที่ endpoint ได้เป็น scope null ใช้ granted view scope เพื่อจำกัดข้อมูลเท่านั้น ไม่ลดรายละเอียดฟอร์ม; ไม่มี data scope ที่ใช้ได้ตอบ 403 FORBIDDEN และโรงงานนอก scope/assignment หรือไม่พบตอบ 404 NOT_FOUND ก่อนสร้างคำขอ. ข้อมูลที่ส่งมาต้องผ่าน validation เดิม; การจับคู่ requestedParameters กับเครื่องมือใช้เมื่อมี measurementInstruments. สร้าง PENDING_DESIGN_REVIEW เหมือนเดิม. เมื่อ CONNECTED ให้รวมพารามิเตอร์เดิมของ active point กับรายการใหม่ ไม่แทนที่รายการเดิม; เก็บลำดับเดิมแล้วต่อท้ายตัวใหม่ ไม่ซ้ำเมื่อแตกต่างเพียงตัวพิมพ์หรือช่องว่างหัวท้าย และแยกหน่วยที่ต่างกัน. เก็บข้อมูลเครื่องมือเดิมที่ยังอยู่ในจุดปัจจุบันแม้ส่งเฉพาะเครื่องมือใหม่หรือละ/ส่ง null ตามสิทธิ์; ถ้าส่งพารามิเตอร์เดิมซ้ำ ใช้ค่าใหม่เฉพาะ field ที่ระบุรวม explicit null และเก็บ field ที่ละไว้ ไม่คืนเครื่องมือของพารามิเตอร์ที่ถูกนำออก. ตัวอย่างเดิม Flow Rate (m3/hr) เพิ่ม NOx (ppm), SO2 (ppm), O2 (%) แล้วจุดปัจจุบันมีครบ 4 ตัว. Response และประวัติคำขอยังคงเป็น snapshot ของคำขอ; การยื่นคำขอยังไม่เปลี่ยน active point. ' +
         addParameterOwnershipDescription,
       requestBody: {
         required: true,

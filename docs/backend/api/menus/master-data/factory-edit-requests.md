@@ -10,9 +10,9 @@
 
 คู่มือสำหรับทีม frontend: [แบบฟอร์มแก้ไขข้อมูลทั่วไปของโรงงาน](../../../guides/frontend-handoffs/factory-basic-info/README.md) — จุดที่ต้องปรับ ตัวอย่าง payload และรายการตรวจรับ
 
-เมนูนี้ใช้ข้อมูลโรงงาน current/live จาก active rows ใน `cems_wpms_connected_measurement_points` เพื่อแสดงรายชื่อโรงงานและจุดตรวจวัดในระบบ POMS ผู้ประกอบการส่งคำขอแก้ไขได้ 2 แบบฟอร์มคือ `BASIC_INFO` และ `MEASUREMENT_POINTS` แต่ข้อมูลจริงจะยังไม่เปลี่ยนจนกว่า admin จะพิจารณาอนุมัติ
+เมนูนี้ใช้ข้อมูลโรงงาน current/live จาก active rows ใน `cems_wpms_connected_measurement_points` เพื่อแสดงรายชื่อโรงงานและจุดตรวจวัดในระบบ POMS ผู้ประกอบการส่งคำขอแก้ไขได้ 2 แบบฟอร์มคือ `BASIC_INFO` และ `MEASUREMENT_POINTS` แต่ข้อมูลจริงจะยังไม่เปลี่ยนจนกว่าผู้มี `factories:approve` จะพิจารณาอนุมัติ
 
-การอ่านข้อมูลและการกำหนดขอบเขตโรงงานใช้ `factories:view` การอัปโหลดเอกสารใช้ `factories:edit` ส่วนการส่ง ส่งกลับ หรือยกเลิกคำขอใช้ทั้ง `factories:view` และ `factories:edit` แต่การคัด resource สำหรับ mutation จะยึด data scope ของ `factories:edit` และการพิจารณาใช้ทั้ง `factories:view` และ `factories:approve` โดยยึด data scope ของ `factories:approve` พร้อมบังคับว่า reviewer ต้องมี role `admin` ทุก endpoint ต้องใช้ Bearer token
+การอ่านข้อมูลและการกำหนดขอบเขตโรงงานใช้ `factories:view` การอัปโหลดเอกสารใช้ `factories:edit` ส่วนการส่ง ส่งกลับ หรือยกเลิกคำขอใช้ทั้ง `factories:view` และ `factories:edit` แต่การคัด resource สำหรับ mutation จะยึด data scope ของ `factories:edit` และการพิจารณาใช้ทั้ง `factories:view` และ `factories:approve` โดยยึด data scope ของ `factories:approve` โดยใช้ effective permissions ล่าสุด ไม่จำกัด reviewer ด้วย role หรือ `userType` ทุก endpoint ต้องใช้ Bearer token
 
 ### ข้อมูลสามชุดและเวอร์ชัน
 
@@ -35,7 +35,7 @@
 2. เรียก `GET /api/v1/poms-factories/:factoryId/form` เพื่อลง current/live values ด้วยชื่อและ shape เดียวกับ `GET /api/v1/cems-wpms-requests/:id/form`
 3. ถ้ามีไฟล์ ผู้ประกอบการอัปโหลดทีละไฟล์ด้วย `POST /api/v1/poms-factories/document-images` แล้วนำ `RequestDocumentImage` metadata ที่ได้ไปใส่ใน `factoryFrontPhotos`, `factoryLogo` หรือ document field ที่รองรับ
 4. ผู้ประกอบการส่งคำขอแก้ไขด้วย `POST /api/v1/poms-factories/:factoryId/edit-requests` โดยเลือก `formType` เป็น `BASIC_INFO` หรือ `MEASUREMENT_POINTS`
-5. admin อ่านรายการและรายละเอียดคำขอ แล้วเลือก `APPROVE`, `REQUEST_REVISION` หรือ `REJECT`
+5. ผู้มี `factories:approve` อ่านรายการและรายละเอียดคำขอ แล้วเลือก `APPROVE`, `REQUEST_REVISION` หรือ `REJECT`
 6. ถ้าขอให้แก้ไข ผู้ประกอบการเรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values แล้วส่งกลับด้วย `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
 7. ผู้มี `factories:edit` ในขอบเขตโรงงานยกเลิกคำขอที่ยังเปิดอยู่แทนกันได้ด้วย `POST /api/v1/poms-factories/edit-requests/:id/cancel`
 8. เมื่ออนุมัติ backend อัปเดต current/live POMS data ตาม `formType`: `BASIC_INFO` sync active `cems_wpms_connected_measurement_points` และ active `eligible_factories`, ส่วน `MEASUREMENT_POINTS` sync จุดตรวจวัดและข้อมูลทั่วไปของโรงงานที่มีการแก้ไข โดยข้อมูลทั่วไป sync เป้าหมายเดียวกับ `BASIC_INFO` โดยไม่อัปเดตตาราง `factories`
@@ -47,7 +47,7 @@
 - binary upload รับครั้งละหนึ่งไฟล์และคืน metadata เท่านั้น การผูกไฟล์กับคำขอเกิดเมื่อ client ส่ง metadata นั้นใน create/resubmission payload
 - ผู้มี `factories:view` และ `factories:edit` ตาม scope/assignment ยกเลิกคำขอได้แม้ไม่ใช่ `createdBy` และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`
 - โรงงานที่อ่านหรือแก้ได้ต้องอยู่ใน effective data scope ของ permission ที่ endpoint ใช้ และหนึ่งโรงงานมี open request ได้สูงสุดหนึ่งรายการต่อ `formType`
-- การ review ทุก decision ต้องมี role `admin` ใน JWT พร้อม permissions `factories:view` และ `factories:approve`; บัญชี `userType = officer` ที่ได้รับ role `admin` ใช้งานได้ และ `userType = admin` อย่างเดียวไม่เพียงพอ ไม่ต้องเปลี่ยนประเภทบัญชีหรือ migrate ข้อมูลผู้ใช้
+- การ review ทุก decision ต้องมี effective permissions `factories:view` และ `factories:approve` ล่าสุด โดยไม่จำกัด role หรือ `userType`; role `admin` อย่างเดียวไม่เพียงพอเมื่อถอน permission แล้ว
 - ไม่อยู่ใน scope ของ capability นี้: การแก้ `pointCode`, `pointType`, `systemType`, `parameters`, device configuration, identity/audit fields, ตาราง `factories` และโค้ด frontend
 
 ```bash
@@ -129,7 +129,7 @@ curl --request POST \
 | อ่าน prefill รอบแก้ไข        | `GET`  | `/api/v1/poms-factories/edit-requests/:id/form`                  | `factories:view`                       | [Edit-request form prefill](#get-apiv1poms-factoriesedit-requestsidform)                                                               |
 | ส่งคำขอแก้ไขกลับเข้าพิจารณา    | `PUT`  | `/api/v1/poms-factories/edit-requests/:id/resubmission`          | `factories:view` + `factories:edit`    | [Resubmission](#put-apiv1poms-factoriesedit-requestsidresubmission)                                                                    |
 | ยกเลิกคำขอแก้ไข                | `POST` | `/api/v1/poms-factories/edit-requests/:id/cancel`                | `factories:view` + `factories:edit`    | [Cancel edit request](#post-apiv1poms-factoriesedit-requestsidcancel)                                                                  |
-| Admin พิจารณาคำขอ              | `POST` | `/api/v1/poms-factories/edit-requests/:id/review`                | `factories:view` + `factories:approve` | [Review](#post-apiv1poms-factoriesedit-requestsidreview)                                                                               |
+| ผู้มีสิทธิ์พิจารณาคำขอ              | `POST` | `/api/v1/poms-factories/edit-requests/:id/review`                | `factories:view` + `factories:approve` | [Review](#post-apiv1poms-factoriesedit-requestsidreview)                                                                               |
 | อ่านจุดที่เชื่อมต่อแล้วแบบเดิม | `GET`  | `/api/v1/connected-measurement-points`                           | `cems_wpms_requests:view`              | [Shared connected points](../../shared/connected-measurement-points/README.md)                                                         |
 | อ่านจุดของโรงงานแบบเดิม        | `GET`  | `/api/v1/connected-measurement-points/factories/:factoryId`      | `cems_wpms_requests:view`              | [Shared connected points](../../shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsfactoriesfactoryid) |
 | อ่านประวัติคำขอของจุด          | `GET`  | `/api/v1/connected-measurement-points/:stationId/requests`       | `cems_wpms_requests:view`              | [Shared connected points](../../shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidrequests)  |
@@ -144,9 +144,9 @@ curl --request POST \
 | Authentication       | ทุก endpoint ภายใต้ `/api/v1/poms-factories` ต้องมี Bearer token                                                                                                         |
 | Read scope           | `GET` ทั้งหมดใช้ scope ของ `factories:view`: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE` หรือ `OWN_FACTORY`                                                           |
 | Edit scope           | `POST .../document-images` ใช้ `factories:edit`; ส่วน `POST .../edit-requests`, `PUT .../resubmission` และ `POST .../cancel` ต้องผ่านทั้ง `factories:view` และ `factories:edit` โดยการคัด resource สำหรับ mutation ยึด scope ของ `factories:edit` |
-| Approval scope       | `POST .../review` ต้องผ่านทั้ง `factories:view` และ `factories:approve`, ยึด scope ของ `factories:approve` และบังคับ role `admin` ใน JWT (ไม่บังคับ `userType`)                |
+| Approval scope       | `POST .../review` ต้องผ่านทั้ง `factories:view` และ `factories:approve`, ยึด scope ของ `factories:approve` โดยไม่จำกัด role หรือ `userType`                |
 | Object scope         | รายการถูกกรองตาม effective scope ของ endpoint; detail หรือ mutation ที่อ้างโรงงาน/คำขอนอก scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่าข้อมูลมีอยู่                       |
-| Self-review | ผู้มี role `admin` พิจารณาคำขอของตนเองได้ แม้ตรงกับ `createdBy` หรือ `submittedBy`; ใช้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT` โดยยังต้องผ่าน permission และ data scope                     |
+| Self-review | ผู้มี `factories:approve` พิจารณาคำขอของตนเองได้ แม้ตรงกับ `createdBy` หรือ `submittedBy`; ใช้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT` โดยยังต้องผ่าน permission และ data scope                     |
 | Cancel ownership     | `POST .../cancel` ใช้ `factories:edit` ตาม scope/assignment และ `regionalAccess`; ตรวจซ้ำใน transaction โดยไม่บังคับ `createdBy`                                                              |
 
 ## Contracts
@@ -198,7 +198,7 @@ Minimal request JSON สำหรับ endpoint ที่ไม่มี body:
 | `data[].canRequestEligibility`               | boolean                                                     | no       | คงที่เป็น `false`                                                                                                       |
 | `data[].monitoringPointCount`                | integer                                                     | no       | จำนวน active connected points ของโรงงาน                                                                                 |
 | `data[].requestStatusCode`                   | `CONNECTED`                                                 | no       | derive จากการมี active connected point; ไม่อ่านสถานะจาก connection-request snapshot                                     |
-| `data[].status`                              | `แสดง` \| `ซ่อน` \| `ยกเลิกการเชื่อมต่อ`                                          | no       | อ่านค่าจัดการสถานะของ Admin; ดู [จัดการสถานะ](./status-management.md)                                                                                                        |
+| `data[].status`                              | `แสดง` \| `ซ่อน` \| `ยกเลิกการเชื่อมต่อ`                                          | no       | อ่านค่าจัดการสถานะตามสิทธิ์; ดู [จัดการสถานะ](./status-management.md)                                                                                                        |
 | `meta.total`                                 | integer                                                     | no       | จำนวนโรงงานใน `data`                                                                                                    |
 
 Minimal response (`200 OK`):
@@ -677,9 +677,9 @@ Frontend ใช้ `GET /poms-factories/:factoryId` อ่าน `data.measureme
 
 ก่อนอนุมัติ `GET /poms-factories/:factoryId` และ `/form` ยังคงค่าปัจจุบัน ขณะที่ `GET /poms-factories/edit-requests/:id` คืนค่าก่อน/หลังใน `currentMeasurementPoints[].officerNotificationEmails` และ `proposedMeasurementPoints[].officerNotificationEmails`; root `officerNotificationEmails` ของคำขอและ `/edit-requests/:id/form` ใช้รายชื่อ proposed ของระบบที่แก้ไข คำขอเก่าที่ไม่มี field นี้ยังอ่านได้และไม่ล้างอีเมลตอนอนุมัติ
 
-เมื่อ admin อนุมัติ จะบันทึก `cems_wpms_connected_measurement_points.officer_notification_emails_json` พร้อมการอนุมัติใน transaction เดียวกัน โดยไม่เขียนทับ snapshot คำขอเชื่อมต่อเดิม ค่า `NULL` ในจุดที่ยังไม่เคยตั้งค่าให้อ่านจาก source request ของจุดนั้น ส่วน JSON `[]` เป็นการล้างโดยชัดเจนและไม่ fallback กลับไปอีเมลเดิม การบันทึกรายชื่อไม่ส่งอีเมลทันที และไม่เปลี่ยน trigger/ระบบส่งการแจ้งเตือน
+เมื่อผู้มี `factories:approve` อนุมัติ จะบันทึก `cems_wpms_connected_measurement_points.officer_notification_emails_json` พร้อมการอนุมัติใน transaction เดียวกัน โดยไม่เขียนทับ snapshot คำขอเชื่อมต่อเดิม ค่า `NULL` ในจุดที่ยังไม่เคยตั้งค่าให้อ่านจาก source request ของจุดนั้น ส่วน JSON `[]` เป็นการล้างโดยชัดเจนและไม่ fallback กลับไปอีเมลเดิม การบันทึกรายชื่อไม่ส่งอีเมลทันที และไม่เปลี่ยน trigger/ระบบส่งการแจ้งเตือน
 
-`GET /poms-factories` รวมรายชื่อ current ของ active points ในแต่ละโรงงานแบบไม่ซ้ำ สิทธิ์เข้าถึง การตรวจ permission และ scope/assignment ของคำขอ การอนุมัติโดย admin และการปฏิเสธข้อมูลที่เปลี่ยนหลังสร้าง snapshot ยังคงใช้กติกาเดิม
+`GET /poms-factories` รวมรายชื่อ current ของ active points ในแต่ละโรงงานแบบไม่ซ้ำ สิทธิ์เข้าถึง การตรวจ permission และ scope/assignment ของคำขอ การอนุมัติตาม `factories:approve` และการปฏิเสธข้อมูลที่เปลี่ยนหลังสร้าง snapshot ยังคงใช้กติกาเดิม
 
 ### เปลี่ยนพารามิเตอร์หลังอนุมัติ
 
@@ -1303,7 +1303,7 @@ Minimal response (`200 OK`):
 
 ### `POST /api/v1/poms-factories/edit-requests/:id/review`
 
-admin ใช้ `REJECT` ได้จากทุกสถานะของคำขอ ได้แก่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW`, `APPROVED`, `REJECTED` และ `CANCELLED` โดยไม่บังคับเหตุผล ส่วน `APPROVE` และ `REQUEST_REVISION` ยังรับเฉพาะ `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` ทุก decision ต้องอยู่ใน data scope ของ `factories:approve` ผู้มี role `admin` พิจารณาคำขอของตนเองได้ แม้เป็นผู้สร้างคำขอครั้งแรก (`createdBy`) หรือผู้ส่งรอบล่าสุด (`submittedBy`)
+ผู้มี `factories:approve` ใช้ `REJECT` ได้จากทุกสถานะของคำขอ ได้แก่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW`, `APPROVED`, `REJECTED` และ `CANCELLED` โดยไม่บังคับเหตุผล ส่วน `APPROVE` และ `REQUEST_REVISION` ยังรับเฉพาะ `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` ทุก decision ต้องอยู่ใน data scope ของ `factories:approve` ผู้มี `factories:approve` พิจารณาคำขอของตนเองได้ แม้เป็นผู้สร้างคำขอครั้งแรก (`createdBy`) หรือผู้ส่งรอบล่าสุด (`submittedBy`)
 
 เมื่อพิจารณาสำเร็จ response ใช้ detail contract เดียวกับ `GET /api/v1/poms-factories/edit-requests/:id` จึงคืน `contactPersons`, `notificationEmails`, `informationProviderName` และ `informationProviderPosition` ที่ hydrate จาก source connection request แล้วด้วย
 
@@ -1382,11 +1382,11 @@ State transitions:
 | Current status                                 | Who                    | Operation/decision | Next status              | Effect                                                |
 | ---------------------------------------------- | ---------------------- | ------------------ | ------------------------ | ----------------------------------------------------- |
 | none                                           | ผู้มี `factories:edit` | create             | `PENDING_REVIEW`         | เก็บ current/proposed snapshot ตาม `formType` และเปิดคำขอ     |
-| `PENDING_REVIEW`                               | admin                  | `REQUEST_REVISION` | `REVISION_REQUESTED`     | บันทึก `revisionReason`; ยังไม่แก้ข้อมูลจริง                 |
+| `PENDING_REVIEW`                               | ผู้มี `factories:approve` | `REQUEST_REVISION` | `REVISION_REQUESTED`     | บันทึก `revisionReason`; ยังไม่แก้ข้อมูลจริง                 |
 | `REVISION_REQUESTED`                           | ผู้มี `factories:edit` | resubmission       | `REVISED_PENDING_REVIEW` | refresh current snapshot และส่ง proposed payload เดิมอีกครั้ง |
 | `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED` | ผู้มี `factories:edit` ตาม scope/assignment | `CANCEL` | `CANCELLED` | ปิดคำขอโดยไม่แก้ข้อมูล current/live |
-| `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `APPROVE`          | `APPROVED`               | sync ข้อมูลจริงแบบ atomic ตาม `formType`                    |
-| ทุกสถานะ รวม `APPROVED`, `REJECTED` และ `CANCELLED` | admin ตาม approval scope | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้หรือย้อนข้อมูล current/live; เหตุผล optional |
+| `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | ผู้มี `factories:approve` | `APPROVE`          | `APPROVED`               | sync ข้อมูลจริงแบบ atomic ตาม `formType`                    |
+| ทุกสถานะ รวม `APPROVED`, `REJECTED` และ `CANCELLED` | ผู้มี `factories:approve` ตาม approval scope | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้หรือย้อนข้อมูล current/live; เหตุผล optional |
 
 ใน canonical mode `BASIC_INFO` เขียนข้อมูลทั่วไปหลักและประวัติ revision ใน transaction เดียวกับ approval พร้อมอัปเดตสำเนาสำหรับรองรับระบบเดิมตามตารางด้านล่าง; ตารางนี้เป็น compatibility projection ไม่ใช่หลายแหล่งหลัก. ใน legacy mode ใช้ตารางเดิมตาม mapping นี้โดยตรง. ใช้ allowlist เดิมรวมถึงการอนุมัติคำขอเก่าที่ยังรอพิจารณา:
 
@@ -1416,7 +1416,7 @@ State transitions:
 | `400`       | `FILE_UPLOAD_FAILED` | multipart upload เกิน limit เช่นไฟล์เกิน 5 MiB หรือส่งไฟล์/part เกินจำนวน                                                            | แสดงข้อผิดพลาดอัปโหลดและให้เลือกไฟล์ใหม่        |
 | `400`       | `BAD_REQUEST`      | แก้ข้อมูลติดต่อโดยเลือกจุดข้าม CEMS/WPMS, upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
-| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกอยู่นอก edit scope/assignment, reviewer ไม่มี role `admin` หรือคำขอหลุดจาก approval scope หลังล็อก | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
+| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกอยู่นอก edit scope/assignment, reviewer ไม่มี `factories:approve` หรือคำขอหลุดจาก approval scope หลังล็อก | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
 | `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
 | `409`       | `CONFLICT`         | ไม่มีข้อมูลที่แก้ไขเปลี่ยน, ข้อมูลติดต่อเปลี่ยนหลังยื่นคำขอ, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version/revision เปลี่ยน, canonical profile ยังไม่พร้อม, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |
@@ -1451,7 +1451,7 @@ List summary ใช้ [ตัวระบุจุดเป้าหมาย](
 
 Breaking change ด้าน editable fields ของ `BASIC_INFO` ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-05--จำกัด-basic_info-ให้แก้ได้เฉพาะ-7-fields)
 
-Breaking change ด้านสิทธิ์ review ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-01--เพิ่ม-2-แบบฟอร์มคำขอแก้ไขข้อมูลพื้นฐานจาก-poms-และจำกัดผู้อนุมัติเป็น-admin)
+ประวัติการจำกัดสิทธิ์ review เดิมถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-01--เพิ่ม-2-แบบฟอร์มคำขอแก้ไขข้อมูลพื้นฐานจาก-poms-และจำกัดผู้อนุมัติเป็น-admin)
 
 ### สถานะบริหารในข้อมูลโรงงาน current/live
 

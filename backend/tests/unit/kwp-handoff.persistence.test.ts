@@ -32,6 +32,8 @@ const attachment = {
 };
 const access = {
   actorUserId: 42,
+  canEdit: true,
+  canApprove: false,
   scope: 'OWN_FACTORY',
   publicBaseUrl: 'https://example.com',
   publicPath: '/uploads',

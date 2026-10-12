@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/kwp-form-reports/kwp-form-reports.service', () => ({
   kwpFormReportsService: {

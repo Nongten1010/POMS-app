@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { alertEventsRoutes } from '../../src/modules/alert-events/alert-events.routes';
 import { integrationsRoutes } from '../../src/modules/integrations/integrations.routes';
 import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/alert-events/alert-events.service', () => ({
   alertEventsService: {

@@ -1257,13 +1257,37 @@ export const connectionRequestsService = {
     input: AddParameterRequestInput,
     actor: number | ParameterRequestActorContext,
   ): Promise<ConnectionRequestDTO> {
-    const actorUserId = typeof actor === 'number' ? actor : actor.actorUserId;
+    if (typeof actor === 'number' || actor.editScope === undefined) {
+      throw new ForbiddenError('Parameter request creation requires edit permission');
+    }
+    // Binary edit grants retain their granted view scope, never broadening data access.
+    const dataScope = getAccessScopeValue(actor.editScope) === null ? actor.viewScope : actor.editScope;
+    if (!getAccessScopeValue(dataScope)) {
+      throw new ForbiddenError('Parameter request edit permission requires a data scope');
+    }
+    const scope = typeof dataScope === 'string'
+      ? { scope: dataScope as PermissionScopeDetails['scope'] }
+      : dataScope;
+    const actorUserId = actor.actorUserId;
     ensureRequestFormSections(
       input,
       CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
-      canOmitParameterRequestSections(typeof actor === 'number' ? null : actor),
+      canOmitParameterRequestSections(actor),
     );
-    const eligibleFactory = await requireActiveEligibleFactory(input);
+    const factory = await connectionRequestsRepository.findDirectConnectionFactory(
+      { factoryId: input.factoryId, factoryRegistrationNo: input.factoryRegistrationNo },
+      { actorUserId, scope, regionalAccess: actor.regionalAccess },
+    );
+    if (!factory) {
+      throw new NotFoundError('Active eligible factory not found within parameter edit access scope');
+    }
+    const eligibleFactory = {
+      eligibleFactoryId: factory.eligibleFactoryId,
+      factoryId: /^\d{14}$/.test(factory.newRegistrationNo)
+        ? factory.newRegistrationNo
+        : input.factoryId,
+      factoryRegistrationNo: factory.oldRegistrationNo ?? input.factoryRegistrationNo ?? factory.newRegistrationNo,
+    };
 
     return connectionRequestsRepository.create(
       {
@@ -3438,43 +3462,14 @@ function ensureMeasurementPointWorkflowActor(
   if (!actor) {
     throw new ForbiddenError('Submission action requires an authenticated workflow actor');
   }
-
-  const isOfficerUser = actor.userType === 'officer' || actor.userType === 'admin';
-  const isAdmin = actor.roles.includes('admin');
-  const hasKpmRole = actor.roles.includes('monitoring_kpm');
-  if (!isOfficerUser || (!hasKpmRole && !isAdmin)) {
-    throw new ForbiddenError(
-      'Officer workflow submission is limited to monitoring_kpm and admin users',
-    );
+  if (actor.editScope === undefined || actor.editScope === null) {
+    throw new ForbiddenError('Measurement point workflow submission requires edit permission');
   }
 }
 
 function ensureDirectConnectionActor(actor: DirectConnectionActorContext): void {
-  const isOfficerUser = actor.userType === 'officer' || actor.userType === 'admin';
-  const isAdmin = actor.roles.includes('admin');
-  const hasKpmRole = actor.roles.includes('monitoring_kpm');
-  if (!isOfficerUser || (!hasKpmRole && !isAdmin)) {
-    throw new ForbiddenError('Officer direct connection is limited to monitoring_kpm and admin');
-  }
-
-  if (isAdmin) return;
-
-  const scopeValue = getAccessScopeValue(actor.scope);
-  const effectiveRegions = resolveEffectiveRegionValues(actor.scope, actor.regionalAccess);
-  if (
-    !(
-      scopeValue === 'ALL' ||
-      (scopeValue === 'IN_REGION' &&
-        effectiveRegions.length > 0 &&
-        effectiveRegions.every((value) => value === 'ภาคกลาง'))
-    )
-  ) {
-    throw new ForbiddenError('Officer direct connection is limited to central monitoring_kpm');
-  }
-
-  const regionalValues = normalizedRegionalValues(actor.regionalAccess);
-  if (regionalValues.length > 0 && regionalValues.some((value) => value !== 'ภาคกลาง')) {
-    throw new ForbiddenError('Officer direct connection is limited to central monitoring_kpm');
+  if (actor.scope === undefined || actor.scope === null) {
+    throw new ForbiddenError('Direct connection requires direct-connect permission');
   }
 }
 

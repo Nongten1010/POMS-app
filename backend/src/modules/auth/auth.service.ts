@@ -6,7 +6,8 @@ import { verifyPassword, bufferToHashString } from '../../shared/utils/password'
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
 import { flattenPermissionScopes, groupPermissions } from './permissions';
-import type { PermissionDataScope, PermissionScopeDetails } from './permissions';
+import type { PermissionDataScope, PermissionMode, PermissionScopeDetails } from './permissions';
+import type { AuthenticatedUser } from '../../shared/types/express';
 import { inferRegionalAccessFromText, parseRegionalAccessJson } from './regional-access';
 import type { UserRow } from './auth.repository';
 import type { RegionalAccessDTO } from './regional-access';
@@ -113,13 +114,18 @@ export const authService = {
 
     const officerProfile = await authRepository.getOfficerProfile(user.id);
     const profileDto = officerProfile ? toOfficerDTO(officerProfile) : null;
-    const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
+    const {
+      roles,
+      scopes,
+      permissionMode = 'role_default',
+    } = await authRepository.getRolesAndPermissions(user.id);
 
     return buildLoginResponse({
       user: toUserSummary(user),
       profile: profileDto,
       roles,
-      scopes: enrichRoleScopeDetails(scopes, profileDto, roles),
+      scopes,
+      permissionMode,
     });
   },
 
@@ -139,13 +145,18 @@ export const authService = {
     }
 
     const operatorProfile = await buildOperatorProfile(user.id);
-    const { roles, scopes } = await authRepository.getRolePermissions(user.id, 'factory_operator');
+    const {
+      roles,
+      scopes,
+      permissionMode = 'role_default',
+    } = await authRepository.getRolePermissions(user.id, 'factory_operator');
 
     return buildLoginResponse({
       user: toUserSummary(user),
       profile: operatorProfile,
       roles,
-      scopes: enrichRoleScopeDetails(scopes, operatorProfile, roles),
+      scopes,
+      permissionMode,
     });
   },
 
@@ -156,12 +167,17 @@ export const authService = {
     const user = await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
     ensureLoginUserAvailable(user, 'citizen');
     await authRepository.updateLastLogin(user.id);
-    const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
+    const {
+      roles,
+      scopes,
+      permissionMode = 'role_default',
+    } = await authRepository.getRolesAndPermissions(user.id);
     return buildLoginResponse({
       user: toUserSummary(user),
       profile: null,
       roles,
-      scopes: enrichRoleScopeDetails(scopes, null, roles),
+      scopes,
+      permissionMode,
     });
   },
 
@@ -176,13 +192,18 @@ export const authService = {
       : await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
     ensureLoginUserAvailable(user, 'citizen');
     await authRepository.updateLastLogin(user.id);
-    const { roles, scopes } = await authRepository.getRolePermissions(user.id, 'public_user');
+    const {
+      roles,
+      scopes,
+      permissionMode = 'role_default',
+    } = await authRepository.getRolePermissions(user.id, 'public_user');
 
     return buildLoginResponse({
       user: { ...toUserSummary(user), userType: 'citizen' },
       profile: null,
       roles,
-      scopes: enrichRoleScopeDetails(scopes, null, roles),
+      scopes,
+      permissionMode,
     });
   },
 
@@ -197,22 +218,35 @@ export const authService = {
   ): Promise<MeResponse> {
     const user = await authRepository.findUserById(userId);
     ensureLoginUserAvailable(user, 'citizen');
+    return buildMeResponse(await resolveCurrentAuthorization(user, session));
+  },
 
-    const effectiveUserType = session?.userType ?? user.user_type;
-    const profile = await buildProfileForUser(user, effectiveUserType);
-    const { roles, scopes } = session
-      ? {
-          roles: [...session.roles],
-          scopes: restoreSessionPermissionScopeDetails(session.scopes, session.scopeDetails),
-        }
-      : await authRepository.getRolesAndPermissions(user.id);
-
-    return buildMeResponse({
-      user: { ...toUserSummary(user), userType: effectiveUserType },
-      profile,
-      roles,
-      scopes: enrichRoleScopeDetails(scopes, profile, roles),
-    });
+  async getAuthorizationContext(
+    userId: number,
+    session?: { userType: UserSummary['userType'] },
+  ): Promise<AuthenticatedUser> {
+    const user = await authRepository.findUserById(userId);
+    ensureLoginUserAvailable(user, 'citizen');
+    const current = await resolveCurrentAuthorization(user, session, false);
+    ensureSingleSystemRole(current.roles);
+    const effectiveScopes = enrichRoleScopeDetails(
+      current.scopes,
+      current.profile,
+      current.roles,
+      current.permissionMode,
+    );
+    return {
+      id: Number(user.id),
+      userType: current.user.userType,
+      roles: current.roles,
+      scopes: flattenPermissionScopes(effectiveScopes),
+      scopeDetails: normalizePermissionScopeDetails(effectiveScopes),
+      regionalAccess: getRegionalAccessFromProfile(
+        current.profile,
+        current.roles,
+        current.permissionMode,
+      ),
+    };
   },
 };
 
@@ -293,14 +327,52 @@ async function completeLocalLogin(payload: LoginRequest, user: UserRow): Promise
   await authRepository.updateLastLogin(user.id);
 
   const profile = await buildProfileForUser(user);
-  const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
+  const {
+    roles,
+    scopes,
+    permissionMode = 'role_default',
+  } = await authRepository.getRolesAndPermissions(user.id);
 
   return buildLoginResponse({
     user: toUserSummary(user),
     profile,
     roles,
-    scopes: enrichRoleScopeDetails(scopes, profile, roles),
+    scopes,
+    permissionMode,
   });
+}
+
+async function resolveCurrentAuthorization(
+  user: UserRow,
+  session?: { userType: UserSummary['userType'] },
+  includeOperatorProfile = true,
+) {
+  // Shared external identities may select the citizen persona. The signed hint only
+  // selects that existing persona; permissions still come from current DB state.
+  const isSharedExternalIdentity =
+    user.identity_provider !== 'local' &&
+    (user.user_type === 'operator' || user.user_type === 'citizen');
+  const isCitizenPersona = isSharedExternalIdentity && session?.userType === 'citizen';
+  const isOperatorPersona =
+    isSharedExternalIdentity && user.user_type === 'operator' && session?.userType === 'operator';
+  const effectiveUserType = isCitizenPersona ? 'citizen' : user.user_type;
+  const permissionSet = isCitizenPersona
+    ? await authRepository.getRolePermissions(user.id, 'public_user')
+    : isOperatorPersona
+      ? await authRepository.getRolePermissions(user.id, 'factory_operator')
+      : await authRepository.getRolesAndPermissions(user.id);
+  const profile =
+    effectiveUserType === 'operator' && !includeOperatorProfile
+      ? null
+      : await buildProfileForUser(user, effectiveUserType);
+
+  return {
+    user: { ...toUserSummary(user), userType: effectiveUserType },
+    profile,
+    roles: permissionSet.roles,
+    scopes: permissionSet.scopes,
+    permissionMode: permissionSet.permissionMode ?? 'role_default',
+  };
 }
 
 function toUserSummary(row: {
@@ -422,10 +494,17 @@ function buildLoginResponse(args: {
   profile: OfficerProfileDTO | OperatorProfileDTO | null;
   roles: string[];
   scopes: Record<string, string | null | PermissionScopeDetails>;
+  permissionMode?: PermissionMode;
 }): LoginResponse {
   ensureSingleSystemRole(args.roles);
-  const regionalAccess = getRegionalAccessFromProfile(args.profile, args.roles);
-  const effectiveScopes = enrichRoleScopeDetails(args.scopes, args.profile, args.roles);
+  const permissionMode = args.permissionMode ?? 'role_default';
+  const regionalAccess = getRegionalAccessFromProfile(args.profile, args.roles, permissionMode);
+  const effectiveScopes = enrichRoleScopeDetails(
+    args.scopes,
+    args.profile,
+    args.roles,
+    permissionMode,
+  );
   const accessToken = signAccessToken({
     sub: String(args.user.id),
     userType: args.user.userType,
@@ -436,7 +515,7 @@ function buildLoginResponse(args: {
   });
   return {
     accessToken,
-    user: toAuthUserDTO(args.user, args.profile, args.roles),
+    user: toAuthUserDTO(args.user, args.profile, args.roles, permissionMode),
     permissions: groupPermissions(effectiveScopes),
   };
 }
@@ -446,11 +525,18 @@ function buildMeResponse(args: {
   profile: OfficerProfileDTO | OperatorProfileDTO | null;
   roles: string[];
   scopes: Record<string, string | null | PermissionScopeDetails>;
+  permissionMode?: PermissionMode;
 }): MeResponse {
   ensureSingleSystemRole(args.roles);
-  const effectiveScopes = enrichRoleScopeDetails(args.scopes, args.profile, args.roles);
+  const permissionMode = args.permissionMode ?? 'role_default';
+  const effectiveScopes = enrichRoleScopeDetails(
+    args.scopes,
+    args.profile,
+    args.roles,
+    permissionMode,
+  );
   return {
-    user: toAuthUserDTO(args.user, args.profile, args.roles),
+    user: toAuthUserDTO(args.user, args.profile, args.roles, permissionMode),
     permissions: groupPermissions(effectiveScopes),
   };
 }
@@ -465,10 +551,15 @@ function toAuthUserDTO(
   user: UserSummary,
   profile: OfficerProfileDTO | OperatorProfileDTO | null,
   roles: string[],
+  permissionMode: PermissionMode,
 ): AuthUserDTO {
   const officerProfile = isOfficerProfile(profile) ? profile : null;
   const operatorProfile = isOperatorProfile(profile) ? profile : null;
-  const effectiveRegionalAccess = getRegionalAccessFromProfile(officerProfile, roles);
+  const effectiveRegionalAccess = getRegionalAccessFromProfile(
+    officerProfile,
+    roles,
+    permissionMode,
+  );
   const fullName = [joinNamePrefix(user.prenameTh, user.firstName), user.lastName]
     .filter(Boolean)
     .join(' ');
@@ -483,6 +574,7 @@ function toAuthUserDTO(
   return {
     accountType: user.identityProvider === 'local' ? 'poms' : 'api',
     userType: user.userType,
+    permissionMode,
     username: user.externalId,
     fullName,
     name: {
@@ -534,7 +626,9 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
 function getRegionalAccessFromProfile(
   profile: OfficerProfileDTO | OperatorProfileDTO | null,
   roles: readonly string[],
+  permissionMode: PermissionMode = 'role_default',
 ): RegionalAccessDTO | null {
+  if (permissionMode === 'custom') return null;
   if (!isOfficerProfile(profile)) return null;
   if (roles.includes('monitoring_kpm') || roles.includes('kpm_director')) {
     return { regions: ['ภาคกลาง'] };
@@ -559,7 +653,9 @@ function enrichRoleScopeDetails(
   scopes: Record<string, string | null | PermissionScopeDetails>,
   profile: OfficerProfileDTO | OperatorProfileDTO | null,
   roles: readonly string[],
+  permissionMode: PermissionMode = 'role_default',
 ): Record<string, string | null | PermissionScopeDetails> {
+  if (permissionMode === 'custom') return scopes;
   if (!isOfficerProfile(profile)) return scopes;
 
   const effectiveRegionalAccess = getRegionalAccessFromProfile(profile, roles);
@@ -602,15 +698,6 @@ function enrichRoleScopeDetails(
       }
       return [code, details];
     }),
-  );
-}
-
-function restoreSessionPermissionScopeDetails(
-  scopes: Record<string, string | null>,
-  scopeDetails: Record<string, PermissionScopeDetails> | undefined,
-): Record<string, string | null | PermissionScopeDetails> {
-  return Object.fromEntries(
-    Object.entries(scopes).map(([code, scope]) => [code, scopeDetails?.[code] ?? scope]),
   );
 }
 

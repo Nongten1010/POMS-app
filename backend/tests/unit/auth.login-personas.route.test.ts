@@ -232,26 +232,29 @@ describe('POST /api/v1/auth/login session personas', () => {
     });
     repositoryBoundary.upsertExternalCitizenUser.mockResolvedValue(iIndustryUser());
     mockedAuthRepository.upsertExternalOperatorUser.mockResolvedValue(iIndustryUser());
-    repositoryBoundary.getRolePermissions
-      .mockResolvedValueOnce({
-        roles: ['public_user'],
-        scopes: {
-          'dashboard:view': 'ALL',
-          'dashboard.alerts:view': null,
-          'feedback:submit': null,
-          'laws:view': null,
-          'faq:view': null,
-          'chat:ask': null,
-        },
-      })
-      .mockResolvedValueOnce({
-        roles: ['factory_operator'],
-        scopes: {
-          'dashboard:view': 'OWN_FACTORY',
-          'factories:view': 'OWN_FACTORY',
-          'cems_wpms_requests:view': 'OWN_FACTORY',
-        },
-      });
+    repositoryBoundary.getRolePermissions.mockImplementation(
+      async (_userId, roleCode): ReturnType<typeof authRepository.getRolePermissions> =>
+        roleCode === 'public_user'
+          ? {
+              roles: ['public_user'],
+              scopes: {
+                'dashboard:view': 'ALL',
+                'dashboard.alerts:view': null,
+                'feedback:submit': null,
+                'laws:view': null,
+                'faq:view': null,
+                'chat:ask': null,
+              },
+            }
+          : {
+              roles: ['factory_operator'],
+              scopes: {
+                'dashboard:view': 'OWN_FACTORY',
+                'factories:view': 'OWN_FACTORY',
+                'cems_wpms_requests:view': 'OWN_FACTORY',
+              },
+            },
+    );
     mockedAuthRepository.getOperatorProfile.mockResolvedValue({
       user_id: 91,
       user_code: profile.user_code,

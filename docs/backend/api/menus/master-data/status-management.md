@@ -1,4 +1,4 @@
-# จัดการสถานะโรงงาน จุดตรวจวัด และพารามิเตอร์ (Admin)
+# จัดการสถานะโรงงาน จุดตรวจวัด และพารามิเตอร์
 
 > Owner: Backend
 
@@ -16,12 +16,12 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
   --data '{"expectedRevision":0,"factory":{"visibility":"HIDDEN"}}'
 ```
 
-บัญชีต้องมี JWT `roles` ที่มี `admin` ไม่ได้ตรวจจากชื่อผู้ใช้หรือ `userType` เพียงอย่างเดียว ดังนั้น Admin ที่ล็อกอินเป็น `userType=officer` ใช้ได้
+ใช้ effective permissions ล่าสุดของบัญชีเป็นสิทธิ์เข้าถึงและขอบเขตข้อมูล บัญชีที่ตั้งสิทธิ์รายคนใช้ชุดนั้นโดยไม่จำกัดด้วย role หรือ `userType`; role `admin` อย่างเดียวไม่ให้สิทธิ์เมื่อถูกถอน permission แล้ว
 
 | Endpoint | Permission / scope |
 | --- | --- |
-| `GET /api/v1/poms-factories/:factoryId/status-management` | `admin` + `factories:view` และโรงงานต้องอยู่ใน scope |
-| `PATCH /api/v1/poms-factories/:factoryId/status-management` | `admin` + `factories:view` + `factories:edit` และโรงงานต้องอยู่ใน scope ทั้งสอง permission |
+| `GET /api/v1/poms-factories/:factoryId/status-management` | `factories:view` และโรงงานต้องอยู่ใน scope |
+| `PATCH /api/v1/poms-factories/:factoryId/status-management` | `factories:view` + `factories:edit` และโรงงานต้องอยู่ใน scope ทั้งสอง permission |
 
 ## ความหมายของสถานะ
 
@@ -146,7 +146,7 @@ curl -X PATCH '<BASE_URL>/api/v1/poms-factories/<FACTORY_ID>/status-management' 
 | --- | --- | --- |
 | `400 VALIDATION_ERROR` | ค่าว่าง, enum ผิด, field เกิน, ID/parameter ซ้ำ | แสดงข้อผิดพลาดราย field |
 | `401 UNAUTHORIZED` | JWT ไม่ถูกต้อง/หมดอายุ | เข้าสู่ระบบใหม่ |
-| `403 FORBIDDEN` | ไม่มี role admin หรือ permission | ไม่แสดง action สำหรับผู้ใช้นี้ |
+| `403 FORBIDDEN` | ไม่มี effective permission ที่ endpoint ต้องการ | ไม่แสดง action สำหรับผู้ใช้นี้ |
 | `404 NOT_FOUND` | ไม่พบ current factory, นอก scope, จุดข้ามโรงงาน, parameter ไม่อยู่ในจุด | โหลดรายการใหม่ |
 | `409 CONFLICT` | revision เก่า หรือข้อมูลพารามิเตอร์ต้นทางผิดรูปแบบ | โหลด GET ใหม่แล้วให้ผู้ใช้ตรวจการเปลี่ยนแปลงก่อนบันทึก |
 | `500 INTERNAL_ERROR` | การบันทึกล้มเหลว | ไม่ถือว่าบันทึกสำเร็จ; backend rollback ทั้งชุด |

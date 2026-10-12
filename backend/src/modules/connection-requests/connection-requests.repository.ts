@@ -2481,8 +2481,7 @@ function buildDirectConnectionFactoryQuery(
     });
   }
 
-  applyDirectConnectionFactoryAccessFilter(builder, access.scope, access.regionalAccess);
-  applyFactoryRegionalAccessFilter(builder, access.scope, access.regionalAccess);
+  applyDirectConnectionFactoryAccessFilter(builder, access);
   return builder as unknown as Knex.QueryBuilder<
     DirectConnectionFactoryRow,
     DirectConnectionFactoryRow[]
@@ -2491,11 +2490,26 @@ function buildDirectConnectionFactoryQuery(
 
 function applyDirectConnectionFactoryAccessFilter(
   builder: Knex.QueryBuilder,
-  scope: AccessScope,
-  regionalAccess?: RegionalAccessDTO | null,
+  access: FactoryAccess,
 ): void {
+  const { scope, regionalAccess } = access;
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return;
+  if (scopeValue === 'OWN_FACTORY') {
+    builder.whereExists(function assignedEligibleFactoryAccess() {
+      this.select(db.raw('1'))
+        .from('factories as f')
+        .whereNull('f.deleted_at')
+        .where(function eligibleFactoryIdentity() {
+          this.whereRaw('f.fid = ef.source_factory_id')
+            .orWhereRaw('f.code = ef.source_factory_id')
+            .orWhereRaw('f.fid = ef.factory_registration_no_new')
+            .orWhereRaw('f.code = ef.factory_registration_no_new');
+        });
+      applyAssignedFactoryAccessFilter(this, access.actorUserId);
+    });
+    return;
+  }
   if (scopeValue === 'FACTORY_TYPE_88') {
     applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
     return;

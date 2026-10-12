@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
 import { getScopeDetails } from '../../shared/middlewares/authorize';
-import { BadRequestError, ForbiddenError } from '../../shared/errors/AppError';
+import { BadRequestError } from '../../shared/errors/AppError';
 import { createKwpAttachmentStorage } from './kwp-form-attachments.service';
 import { kwpFormSubmissionsService } from './kwp-form-submissions.service';
 import {
@@ -21,12 +21,9 @@ export const kwpFormSubmissionsController = {
     try {
       const actorUserId = requireActorUserId(req);
       const id = requireSubmissionId(req);
-      const approveScope = getScopeDetails(req, 'kwp_forms:approve');
       const result = await kwpFormSubmissionsService.getWorkflow(id, {
         actorUserId,
-        canEdit: getScopeDetails(req, 'kwp_forms:edit') !== undefined,
-        canApprove: approveScope !== undefined,
-        ...(approveScope === undefined ? {} : { approveScope }),
+        ...getKwpWorkflowPermissions(req),
         scope: getScopeDetails(req, 'kwp_forms:view'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
@@ -43,11 +40,9 @@ export const kwpFormSubmissionsController = {
       const id = requireSubmissionId(req);
       const payload = changeKwpWorkflowStatusSchema.parse(req.body);
       const isCancel = payload.action === 'CANCEL';
-      if (isCancel && req.user?.userType !== 'operator') {
-        throw new ForbiddenError('Only operators can cancel KWP submissions');
-      }
       const result = await kwpFormSubmissionsService.changeWorkflowStatus(id, payload, {
         actorUserId,
+        ...getKwpWorkflowPermissions(req),
         scope: isCancel ? { scope: 'OWN_FACTORY' } : getScopeDetails(req, 'kwp_forms:approve'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
@@ -332,6 +327,7 @@ async function resubmitById(
     const payload = resubmitKwpFormSubmissionSchema.parse(req.body ?? {});
     const access = {
       actorUserId,
+      ...getKwpWorkflowPermissions(req),
       scope: getKwpWriteScope(req),
       roles: req.user?.roles ?? [],
       regionalAccess: req.user?.regionalAccess ?? undefined,
@@ -369,6 +365,17 @@ function requireActorUserId(req: Request): number {
 
 function getKwpWriteScope(req: Request) {
   return getScopeDetails(req, 'kwp_forms:edit');
+}
+
+function getKwpWorkflowPermissions(req: Request) {
+  const editScope = getScopeDetails(req, 'kwp_forms:edit');
+  const approveScope = getScopeDetails(req, 'kwp_forms:approve');
+  return {
+    canEdit: editScope !== undefined,
+    canApprove: approveScope !== undefined,
+    ...(editScope === undefined ? {} : { editScope }),
+    ...(approveScope === undefined ? {} : { approveScope }),
+  };
 }
 
 function getPublicBaseUrl(req: Request): string {

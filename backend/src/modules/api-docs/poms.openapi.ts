@@ -430,7 +430,6 @@ const createLocalAccountExample = {
     userType: 'officer',
     isActive: true,
   },
-  permissions: {},
 };
 
 const createManagedUserExample = {
@@ -472,7 +471,7 @@ const updateManagedUserExample = {
 };
 
 const menuLocationAssignmentDescription =
-  'บทบาทเป็นค่าเริ่มต้นและเพดาน permission/action กับชนิด scope; พื้นที่รายเมนูที่ระบุมีผลก่อนพื้นที่โปรไฟล์และไม่ต้องตรงกัน ไม่แก้โปรไฟล์ตามเมนูอัตโนมัติ. ถ้าไม่ระบุพื้นที่ให้ใช้ค่าเริ่มต้นจากโปรไฟล์; ถ้าไม่มีทั้งสองแหล่งให้ไม่คืนข้อมูล. PATCH ที่ส่ง permissions (รวมชุดว่างเพื่อล้าง) และการสร้างบัญชีพร้อม overrides ที่ไม่ว่าง ต้องมี permissions:manage เพิ่มจาก users:edit มิฉะนั้นตอบ 403 FORBIDDEN. token เดิมคงสิทธิ์เดิมจน login ใหม่; ข้อจำกัดบทบาทและสถานะของ workflow ยังมีผล';
+  'permissionMode=role_default ใช้สิทธิ์เริ่มต้นของบทบาท; เมื่อบันทึก permissions หรือ permissionOverrides จะเปลี่ยนเป็น custom และใช้สิทธิ์ที่บันทึกทั้งชุด ไม่จำกัด action หรือ scope ด้วย role และไม่รับสิทธิ์ที่ไม่ได้บันทึกเพิ่มจาก role. พื้นที่รายเมนูที่ระบุมีผลก่อนพื้นที่โปรไฟล์และไม่ต้องตรงกัน ไม่แก้โปรไฟล์ตามเมนูอัตโนมัติ. ถ้าไม่ระบุพื้นที่ให้ใช้ค่าเริ่มต้นจากโปรไฟล์; ถ้าไม่มีทั้งสองแหล่งให้ไม่คืนข้อมูล. PATCH ที่ส่ง permissions, permissionOverrides (รวมชุดว่าง) หรือ permissionMode และการสร้างบัญชีพร้อมสิทธิ์ custom ต้องมี permissions:manage เพิ่มจาก users:edit มิฉะนั้นตอบ 403 FORBIDDEN. token เดิมใช้สิทธิ์ล่าสุดจากฐานข้อมูลตั้งแต่คำขอถัดไป; เงื่อนไขข้อมูล สถานะและขั้นตอน workflow ยังมีผล';
 
 const replacePermissionsExample = {
   permissions: [
@@ -514,6 +513,19 @@ function editablePermissionGroupSchema(module: string, complete: boolean): OpenA
             nullable: true,
             description:
               'พื้นที่เมนูเมื่อ data=IN_PROVINCE; รับชื่อหรือรหัสจังหวัดและมีผลก่อนจังหวัดเริ่มต้นจากโปรไฟล์',
+          },
+          estateCode: {
+            type: 'string',
+            maxLength: 32,
+            nullable: true,
+            description:
+              'นิคมรายเมนูหนึ่งแห่งเมื่อ data=IN_ESTATE; ใช้ก่อนนิคมเริ่มต้นจากโปรไฟล์และคืนใน grouped response ของ scope นี้',
+          },
+          estate: {
+            type: 'string',
+            maxLength: 32,
+            nullable: true,
+            description: 'compatibility alias ของ estateCode; client ใหม่ใช้ estateCode',
           },
         }
       : {}),
@@ -1435,19 +1447,66 @@ const componentSchemas: Record<string, OpenApiObject> = {
     required: ['user', 'permissions'],
     properties: {
       accessToken: { type: 'string', nullable: true },
-      user: { type: 'object', additionalProperties: true },
+      user: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['permissionMode'],
+        properties: { permissionMode: schemaRef('PermissionMode') },
+      },
       permissions: { type: 'object', additionalProperties: true },
+    },
+  },
+  PermissionMode: {
+    type: 'string',
+    enum: ['role_default', 'custom'],
+    description:
+      'role_default ใช้สิทธิ์เริ่มต้นจาก role; custom ใช้สิทธิ์รายคนที่บันทึกทั้งชุดโดยไม่รวม role fallback',
+  },
+  ManagedUserSummary: {
+    type: 'object',
+    additionalProperties: true,
+    required: ['id', 'permissionMode'],
+    properties: {
+      id: { type: 'integer', minimum: 1 },
+      permissionMode: schemaRef('PermissionMode'),
+      roles: { type: 'string' },
+      roleCodes: { type: 'array', items: { type: 'string' } },
+      isActive: { type: 'boolean' },
+    },
+  },
+  ManagedUserResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('ManagedUserSummary'),
+    },
+  },
+  ManagedUserListResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: { type: 'array', items: schemaRef('ManagedUserSummary') },
+      meta: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['total'],
+        properties: { total: { type: 'integer', minimum: 0 } },
+      },
     },
   },
   EditablePermissionGroups: {
     ...editablePermissionGroupsSchema(false),
     description:
-      'Grouped permissions ที่หน้า Permission Management ส่งได้เท่านั้น; internal RBAC actions ไม่อยู่ใน schema นี้',
+      'Grouped permissions ที่หน้า Permission Management ส่งได้เท่านั้น; บันทึก editable matrix ทั้งชุด action ที่ละไว้เป็นปิด; internal RBAC actions ไม่อยู่ใน schema นี้. data แสดงขอบเขตรวมของเมนู ถ้าไม่เปลี่ยนขอบเขตเมนู ให้คง scope และ qualifier ราย action เดิมที่แคบกว่า ไม่ขยายสิทธิ์เงียบ ๆ; แก้ scope ราย action ผ่าน raw GET/PUT permissions',
   },
   EditablePermissionGroupsResponse: {
     ...editablePermissionGroupsSchema(true),
     description:
-      'Grouped permissions แบบเต็มสำหรับหน้า Permission Management; ทุก action เป็น boolean และ binary modules ไม่มี data/region/province',
+      'Grouped permissions แบบเต็มสำหรับหน้า Permission Management; ทุก action เป็น boolean, scoped modules คืน estateCode เมื่อ data=IN_ESTATE และ binary modules ไม่มี location fields. data เป็นขอบเขตรวมที่แสดงเมนู ไม่ใช่การอนุญาตทุก action ด้วยขอบเขตเดียวกัน',
   },
   ManagedUserEditUser: {
     type: 'object',
@@ -1466,6 +1525,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'regionalAccess',
       'roles',
       'roleCodes',
+      'permissionMode',
       'isActive',
       'source',
     ],
@@ -1491,6 +1551,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       roles: { type: 'string' },
       roleCodes: { type: 'array', minItems: 1, maxItems: 1, items: { type: 'string' } },
+      permissionMode: schemaRef('PermissionMode'),
       isActive: { type: 'boolean' },
       source: { type: 'string', enum: ['api', 'created'] },
     },
@@ -1551,7 +1612,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         maxItems: 200,
         items: schemaRef('PermissionOverride'),
-        description: 'ห้ามมี code ซ้ำกัน',
+        description:
+          'ส่งอย่างชัดเจนรวม [] จะสร้าง custom snapshot ต้องมี permissions:manage; ละ field ใช้ role_default; ห้ามมี code ซ้ำกัน',
       },
     },
   },
@@ -1610,7 +1672,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
           isActive: { type: 'boolean', default: true },
         },
       },
-      permissions: schemaRef('EditablePermissionGroups'),
+      permissions: {
+        ...schemaRef('EditablePermissionGroups'),
+        description:
+          'ส่งอย่างชัดเจนรวม {} จะสร้าง custom snapshot ต้องมี permissions:manage; {} คือบัญชีใหม่ไม่มีสิทธิ์รวม internal actions; ละ field ใช้ role_default',
+      },
     },
   },
   CreateLocalAccountRequest: {
@@ -1745,10 +1811,17 @@ const componentSchemas: Record<string, OpenApiObject> = {
           },
           isActive: { type: 'boolean' },
           source: { type: 'string', enum: ['api', 'created'] },
+          permissionMode: {
+            type: 'string',
+            enum: ['role_default', 'custom'],
+            description:
+              'metadata จาก GET user ที่ส่งกลับได้; ไม่มีผลเปลี่ยนโหมด ใช้ permissionMode ที่ root เพื่อสั่ง reset',
+          },
         },
         description: 'รองรับ contract หน้า edit user ปัจจุบัน',
       },
       permissions: schemaRef('EditablePermissionGroups'),
+      permissionMode: schemaRef('PermissionMode'),
     },
   },
   LegacyUpdateManagedUserRequest: {
@@ -1778,17 +1851,50 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       profile: schemaRef('OfficerProfile'),
       password: { type: 'string', minLength: 8, maxLength: 128 },
+      permissionMode: schemaRef('PermissionMode'),
+      permissionOverrides: {
+        type: 'array',
+        maxItems: 200,
+        items: schemaRef('PermissionOverride'),
+        description:
+          'raw PATCH แทนที่ editable permissions ทั้งชุดและคง internal grants เดิมที่ไม่ได้ส่ง; ห้าม code ซ้ำ; [] ปิด editable actions. scope ที่ส่งชัดเจนมีผลตาม request รวมการขยายขอบเขต ไม่ใช้กฎคง scope ที่แคบกว่าของ grouped PATCH. scope ที่ละไว้ใช้ role default ตอนบันทึกและ resolve พื้นที่หลังเติม defaults. PUT /users/{id}/permissions ใช้แทนที่ทุก code ทั้งชุดแทน',
+      },
     },
   },
   UpdateManagedUserRequest: {
     oneOf: [schemaRef('LegacyUpdateManagedUserRequest'), schemaRef('EditResponseUpdateRequest')],
+    allOf: [
+      {
+        not: {
+          required: ['permissionMode'],
+          properties: { permissionMode: { enum: ['role_default'] } },
+          anyOf: [{ required: ['permissions'] }, { required: ['permissionOverrides'] }],
+        },
+      },
+      {
+        anyOf: [
+          {
+            not: {
+              required: ['permissionMode'],
+              properties: { permissionMode: { enum: ['custom'] } },
+            },
+          },
+          { required: ['permissions'] },
+          { required: ['permissionOverrides'] },
+        ],
+      },
+    ],
     description:
       'รับได้ทั้ง legacy partial payload และ payload รูปแบบหน้า edit ที่มี user/permissions. ' +
+      'permissionMode ที่ root เป็น role_default เพื่อล้าง snapshot และกลับไปใช้ role ปัจจุบัน ห้ามส่งพร้อม permissions หรือ permissionOverrides; custom ต้องส่ง permissions ใน nested shape หรือ permissionOverrides ใน legacy shape ด้วย. การส่งสิทธิ์อย่างชัดเจนโดยไม่ระบุโหมดถือเป็น custom แม้ user.permissionMode ที่ echo มาจาก GET ยังเป็น role_default. Raw PATCH กำหนด scope ราย code ตาม request และคง internal grants ที่ไม่ได้ส่ง; grouped PATCH ที่ไม่เปลี่ยนขอบเขตเมนูคง scope ราย action เดิมที่แคบกว่า. เปลี่ยน role อย่างเดียวไม่เปลี่ยน custom snapshot. ' +
       menuLocationAssignmentDescription,
   },
   PermissionOverride: {
     type: 'object',
-    description: menuLocationAssignmentDescription,
+    description:
+      menuLocationAssignmentDescription +
+      '. ' +
+      'custom legacy edit/approve ที่บันทึก scope null ใช้ scope และ qualifiers ของ saved view ของ resource เดียวกันเท่านั้น ไม่ fallback role หรือ profile; ถ้า view ถูก deny ไม่มี scope ที่ใช้ได้ หรือขาด region/province/estate qualifier ให้ไม่มี action นั้น; data-scoped view/search/export/direct_connect ที่ scope null หรือไม่ถูกต้องไม่ให้สิทธิ์',
     additionalProperties: false,
     required: ['code', 'effect'],
     properties: {
@@ -1798,6 +1904,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'string',
         enum: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY', 'FACTORY_TYPE_88'],
         nullable: true,
+        description:
+          'allow ของ data-scoped code ห้ามส่ง scope: null แม้ code อยู่ใน role (400 BAD_REQUEST); ถ้าละ scope ใช้ role default ตอนบันทึกครั้งเดียว; edit/approve ที่ role default เป็น null ใช้ role view scope ของ resource เดียวกันตอนบันทึก ถ้าไม่มี scope ที่ใช้ได้ตอบ 400 BAD_REQUEST; data-scoped code นอก role ต้องส่ง scope ชัดเจน; IN_REGION/IN_PROVINCE/IN_ESTATE ต้องมี qualifier ที่ใช้ได้หลังเติม defaults และ resolve master มิฉะนั้นตอบ 400 BAD_REQUEST; binary code ใช้ null ได้; deny normalize เป็น null',
       },
       region: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
       province: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
@@ -1834,7 +1942,64 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         maxItems: 200,
         items: schemaRef('PermissionOverride'),
-        description: 'ห้ามมี code ซ้ำกัน',
+        description:
+          'แทนที่สิทธิ์ custom ทั้งชุด ห้ามมี code ซ้ำกัน; [] คือ custom ที่ไม่มีสิทธิ์ ไม่ใช่คืนค่า role default',
+      },
+    },
+  },
+  UserPermissionGrant: {
+    type: 'object',
+    additionalProperties: true,
+    required: ['code', 'scope'],
+    properties: {
+      code: { type: 'string' },
+      resource: { type: 'string' },
+      action: { type: 'string' },
+      description: { type: 'string', nullable: true },
+      scope: { ...permissionDataScopeSchema, nullable: true },
+      region: { type: 'string', nullable: true },
+      provinceId: { type: 'string', nullable: true },
+      provinceName: { type: 'string', nullable: true },
+      estateCode: { type: 'string', nullable: true },
+      effect: { type: 'string', enum: ['allow', 'deny'] },
+    },
+  },
+  UserPermissionsResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'userId',
+          'permissionMode',
+          'rolePermissions',
+          'overrides',
+          'effectiveScopes',
+          'permissions',
+        ],
+        properties: {
+          userId: { type: 'integer', minimum: 1 },
+          permissionMode: schemaRef('PermissionMode'),
+          rolePermissions: {
+            type: 'array',
+            items: schemaRef('UserPermissionGrant'),
+            description: 'role defaults สำหรับอ้างอิง; ไม่รวมเข้า effective เมื่ออยู่ใน custom',
+          },
+          overrides: {
+            type: 'array',
+            items: schemaRef('UserPermissionGrant'),
+            description: 'สิทธิ์รายคนที่บันทึกใน user_permissions; custom ใช้เป็น snapshot ทั้งชุด',
+          },
+          effectiveScopes: {
+            type: 'object',
+            additionalProperties: { ...permissionDataScopeSchema, nullable: true },
+          },
+          permissions: { type: 'object', additionalProperties: schemaRef('PermissionGroup') },
+        },
       },
     },
   },
@@ -3381,7 +3546,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         items: { type: 'string', enum: ['CANCEL', 'APPROVE', 'REQUEST_REVISION', 'REJECT'] },
         description:
-          'ตรวจ role, permission และ data scope; REJECT คืนให้บทบาทเจ้าหน้าที่ที่อนุมัติได้ทุกสถานะโดยไม่ต้องมี current step. action อื่นยังตรวจสถานะและ current step; REJECTED ยังคืน CANCEL ให้เจ้าของโรงงานได้',
+          'รวมผลจาก action scope แยกกัน: edit ใช้กับ CANCEL, approve ใช้กับ APPROVE/REQUEST_REVISION/REJECT; view อย่างเดียวคืน []. REJECT คืนให้ผู้มี bod_cod_errors:approve ในขอบเขตที่เข้าถึงได้ทุกสถานะโดยไม่ต้องมี current step. APPROVE/REQUEST_REVISION ยังตรวจสถานะและ current step โดยไม่จำกัด role; approveScope รวม OWN_FACTORY ได้. CANCEL ใช้ edit scope OWN_FACTORY พร้อมสิทธิ์โรงงานจริง',
       },
       reporterName: nullableStringSchema(255),
       submittedAt: { type: 'string', format: 'date-time', nullable: true },
@@ -5323,6 +5488,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Authentication',
       summary: 'Current user profile',
       operationId: 'getCurrentUser',
+      description:
+        'คืน profile, permissionMode และสิทธิ์ล่าสุดจากฐานข้อมูล; token เดิมมีผลสิทธิ์ใหม่ตั้งแต่คำขอถัดไป โดยคง persona ที่เลือกไว้สำหรับ citizen/operator. custom legacy edit/approve ที่บันทึก scope null ใช้ scope และ qualifiers ของ saved view ของ resource เดียวกันเท่านั้น ไม่ fallback role หรือ profile; ถ้า view ถูก deny ไม่มี scope ที่ใช้ได้ หรือขาด region/province/estate qualifier ให้ไม่มี action นั้น; data-scoped view/search/export/direct_connect ที่ scope null หรือไม่ถูกต้องไม่ให้สิทธิ์',
       successSchema: schemaRef('AuthSessionResponse'),
     }),
   },
@@ -5486,6 +5653,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'List managed users',
       operationId: 'listUsers',
+      successSchema: schemaRef('ManagedUserListResponse'),
       parameters: [
         queryInteger('page', 'เลขหน้าสำหรับ pagination'),
         queryInteger('perPage', 'จำนวนรายการต่อหน้า', false, 1, 100),
@@ -5502,7 +5670,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       requestBody: jsonRequestBody(schemaRef('CreateManagedUserRequest'), createManagedUserExample),
       successStatus: '201',
       successDescription: 'สร้างบัญชี local ด้วย user ID ใหม่จากข้อมูลในคำขอ',
-      successSchema: schemaRef('SuccessEnvelope'),
+      successSchema: schemaRef('ManagedUserResponse'),
       extraResponses: { '409': userIdentityConflictResponse },
     }),
   },
@@ -5520,7 +5688,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       ),
       successStatus: '201',
       successDescription: localAccountCreatedDescription,
-      successSchema: schemaRef('SuccessEnvelope'),
+      successSchema: schemaRef('ManagedUserResponse'),
       extraResponses: { '409': userIdentityConflictResponse },
     }),
   },
@@ -5542,6 +5710,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         menuLocationAssignmentDescription,
       parameters: [userIdParameter],
       requestBody: jsonRequestBody(schemaRef('UpdateManagedUserRequest'), updateManagedUserExample),
+      successSchema: schemaRef('ManagedUserResponse'),
       extraResponses: { '409': userIdentityConflictResponse },
     }),
     delete: securedOperation({
@@ -5561,7 +5730,11 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Permissions',
       summary: 'Get user permission overrides',
       operationId: 'getUserPermissions',
+      description:
+        'คืน permissionMode, role defaults สำหรับอ้างอิง, สิทธิ์รายคนที่บันทึก และ effective permissions ล่าสุด. ' +
+        menuLocationAssignmentDescription,
       parameters: [userIdParameter],
+      successSchema: schemaRef('UserPermissionsResponse'),
     }),
     put: securedOperation({
       tag: 'Permissions',
@@ -5573,6 +5746,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         schemaRef('ReplaceUserPermissionsRequest'),
         replacePermissionsExample,
       ),
+      successSchema: schemaRef('UserPermissionsResponse'),
     }),
   },
   '/eligible-factories/candidates': {
@@ -5717,7 +5891,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Operator-owned factories with POMS membership',
       operationId: 'listOperatorFactoryOverview',
       description:
-        'สำหรับ userType=operator เท่านั้น คืนโรงงานของผู้ประกอบการจาก ownership ที่ sync ตอน login ทั้งหมด โดยบังคับ effective data scope เป็น OWN_FACTORY แล้วแยกสถานะจาก active POMS point; eligibility และสถานะคำขอเป็นข้อมูลคนละส่วน',
+        'ต้องมี effective dashboard:view โดยไม่จำกัด role หรือ userType คืนโรงงานจาก ownership ที่ sync ตอน login ของบัญชีผู้เรียกเท่านั้น โดยบังคับ data scope ของ endpoint เป็น OWN_FACTORY ไม่ขยายด้วย scope ALL แล้วแยกสถานะจาก active POMS point; eligibility และสถานะคำขอเป็นข้อมูลคนละส่วน',
       parameters: [
         queryEnum(
           'systemType',
@@ -6151,7 +6325,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Review a POMS factory edit request',
       operationId: 'reviewPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องมี JWT role admin; userType อาจเป็น officer หรือ admin และ userType=admin อย่างเดียวไม่เพียงพอ; ผู้มี role admin พิจารณาคำขอของตนเองได้ ทั้งกรณีเป็น original creator (createdBy) หรือ latest submitter (submittedBy) โดยใช้ได้กับ APPROVE, REQUEST_REVISION และ REJECT. REJECT ได้ทุกสถานะเป็น REJECTED และไม่บังคับเหตุผล; officerNote ส่ง null ค่าว่าง หรือละ field ได้. REJECT บันทึกการพิจารณาโดยไม่ย้อนข้อมูล current/live ที่เคยอนุมัติและคง approvedAt เดิม. APPROVE และ REQUEST_REVISION ยังคงตรวจสถานะเดิม. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาใช้ effective factories:approve ไม่จำกัดด้วย role หรือ userType; ผู้มีสิทธิ์พิจารณาคำขอของตนเองได้ ทั้งกรณีเป็น original creator (createdBy) หรือ latest submitter (submittedBy) โดยใช้ได้กับ APPROVE, REQUEST_REVISION และ REJECT. REJECT ได้ทุกสถานะเป็น REJECTED และไม่บังคับเหตุผล; officerNote ส่ง null ค่าว่าง หรือละ field ได้. REJECT บันทึกการพิจารณาโดยไม่ย้อนข้อมูล current/live ที่เคยอนุมัติและคง approvedAt เดิม. APPROVE และ REQUEST_REVISION ยังคงตรวจสถานะเดิม. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditReviewRequest'),
@@ -6313,7 +6487,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create BOD/COD deviation report',
       operationId: 'createBodCodReport',
       description:
-        'ต้องมี bod_cod_errors:view + edit และผ่านทั้งสอง data scope (binary action scope null ใช้ view scope); เฉพาะ factory_operator scope OWN_FACTORY หรือ role admin. ระบุ connectedMeasurementPointId หรือ pointCode ที่ชี้จุดของโรงงานได้เพียงจุดเดียวและมี selectedParameterCode; ถ้าส่งทั้งสองต้องตรงกัน. หาโรงงานและจังหวัดสำหรับออกเลขรายงานด้วย eligible ID และ internal factory ID ของจุดที่ตรวจสิทธิ์แล้ว; master อีกแถวที่ code ตรงกับทะเบียนใหม่ไม่เปลี่ยนโรงงานที่ยื่น. พารามิเตอร์จุดรองรับ code BOD/COD หรือชื่อรวมหน่วย mg/l โดย request ยังคงส่ง code. ปี พ.ศ./ครึ่งปีต้องเป็นปัจจุบันตาม Asia/Bangkok ตรวจหลัง lock ก่อนบันทึก. จุด+พารามิเตอร์+ปีมีคำขอค้างได้หนึ่งรายการ (APPROVED/REJECTED/CANCELLED เป็นสถานะสิ้นสุด); serialize การสร้างพร้อมกัน. 409 CONFLICT details.reason REPORT_PERIOD_CLOSED หรือ PENDING_REPORT_EXISTS; จุด/พารามิเตอร์ไม่ถูกต้อง 400 BAD_REQUEST, role ไม่ตรง 403 FORBIDDEN. ไม่รับ reportSequenceNo ใน request และไม่แก้ reportNo เก่า',
+        'ต้องมี bod_cod_errors:view + edit และผ่านทั้งสอง data scope (binary action scope null ใช้ view scope); ผู้มี effective bod_cod_errors:edit สร้างได้ตาม action scope โดยไม่จำกัด role หรือ userType. ระบุ connectedMeasurementPointId หรือ pointCode ที่ชี้จุดของโรงงานได้เพียงจุดเดียวและมี selectedParameterCode; ถ้าส่งทั้งสองต้องตรงกัน. หาโรงงานและจังหวัดสำหรับออกเลขรายงานด้วย eligible ID และ internal factory ID ของจุดที่ตรวจสิทธิ์แล้ว; master อีกแถวที่ code ตรงกับทะเบียนใหม่ไม่เปลี่ยนโรงงานที่ยื่น. พารามิเตอร์จุดรองรับ code BOD/COD หรือชื่อรวมหน่วย mg/l โดย request ยังคงส่ง code. ปี พ.ศ./ครึ่งปีต้องเป็นปัจจุบันตาม Asia/Bangkok ตรวจหลัง lock ก่อนบันทึก. จุด+พารามิเตอร์+ปีมีคำขอค้างได้หนึ่งรายการ (APPROVED/REJECTED/CANCELLED เป็นสถานะสิ้นสุด); serialize การสร้างพร้อมกัน. 409 CONFLICT details.reason REPORT_PERIOD_CLOSED หรือ PENDING_REPORT_EXISTS; จุด/พารามิเตอร์ไม่ถูกต้อง 400 BAD_REQUEST, ไม่มีสิทธิ์ action 403 FORBIDDEN. ไม่รับ reportSequenceNo ใน request และไม่แก้ reportNo เก่า',
       requestBody: jsonRequestBody(schemaRef('BodCodReportRequest'), bodCodReportExample),
       successStatus: '201',
       successSchema: schemaRef('BodCodReportResponse'),
@@ -6378,7 +6552,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       operationId: 'cancelBodCodReport',
       parameters: [idParameter],
       description:
-        'ไม่รับ request body; ต้องมี bod_cod_errors:view + edit และผ่านทั้งสอง data scope. เฉพาะ factory_operator scope OWN_FACTORY ของโรงงานนั้น. ยกเลิกได้ทุกสถานะรวม REJECTED ยกเว้น APPROVED/CANCELLED (409 CONFLICT). role ไม่ตรง 403 FORBIDDEN; นอก scope/ไม่พบ 404 NOT_FOUND. ตรวจซ้ำภายใต้ transaction lock ร่วมกับ workflow/resubmit/result-notice บันทึก event CANCEL และเลิก current step ไม่ลบข้อมูล. ยกเลิกซ้ำไม่เพิ่ม event. คืน reportSequenceNo เดิม (legacy null), statusCode CANCELLED, currentStep null, steps จริง และ allowedActions []',
+        'ไม่รับ request body; ต้องมี bod_cod_errors:view + edit และผ่านทั้งสอง data scope. editScope ต้องเป็น OWN_FACTORY พร้อมสิทธิ์โรงงานจริงผ่าน assigned juristic/factory access โดยไม่จำกัด role. ยกเลิกได้ทุกสถานะรวม REJECTED ยกเว้น APPROVED/CANCELLED (409 CONFLICT). editScope ไม่ใช่ OWN_FACTORY 403 FORBIDDEN; นอก scope/ไม่พบ 404 NOT_FOUND. ตรวจซ้ำภายใต้ transaction lock ร่วมกับ workflow/resubmit/result-notice บันทึก event CANCEL และเลิก current step ไม่ลบข้อมูล. ยกเลิกซ้ำไม่เพิ่ม event. คืน reportSequenceNo เดิม (legacy null), statusCode CANCELLED, currentStep null, steps จริง และ allowedActions []',
       successSchema: schemaRef('BodCodReportResponse'),
       extraResponses: {
         '200': {
@@ -6419,7 +6593,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Change BOD/COD workflow status',
       operationId: 'changeBodCodWorkflowStatus',
       description:
-        'ต้องมี bod_cod_errors:view + bod_cod_errors:approve และผ่านทั้งสอง data scope. REJECT ได้ทุกสถานะเป็น REJECTED และไม่ต้องมี current step; ไม่บังคับเหตุผล officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. ผู้ reject ต้องเป็น monitoring_kpm/monitoring_5_centers/admin/kpm_director/center_director/kwp_director และไม่ใช่ OWN_FACTORY. APPROVE/REQUEST_REVISION ยังคงต้องมี current step PENDING ตามบทบาท: INSPECTOR monitoring_kpm/monitoring_5_centers/admin; RESULT_NOTICE monitoring_kpm/admin; REVIEWER kpm_director; APPROVER center_director/kwp_director. admin เพียงอย่างเดียวข้ามขั้นทบทวน/อนุมัติไม่ได้. ตรวจสถานะภายใต้ lock ร่วมกับ cancel/resubmit',
+        'ต้องมี bod_cod_errors:view + bod_cod_errors:approve และผ่านทั้งสอง data scope. REJECT ได้ทุกสถานะเป็น REJECTED และไม่ต้องมี current step; ไม่บังคับเหตุผล officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. REJECT, APPROVE และ REQUEST_REVISION ใช้ effective approveScope รวม OWN_FACTORY ได้ โดยไม่จำกัดชื่อ role. APPROVE/REQUEST_REVISION ยังคงต้องมี current step PENDING และสถานะตรงขั้น INSPECTOR, RESULT_NOTICE, REVIEWER หรือ APPROVER ตาม workflow; สิทธิ์ approve ไม่ข้ามขั้น. ตรวจสถานะภายใต้ lock ร่วมกับ cancel/resubmit',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodWorkflowActionRequest'), {
         action: 'REJECT',
@@ -6446,7 +6620,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create BOD/COD result notice',
       operationId: 'createBodCodResultNotice',
       description:
-        'ต้องมี view + approve และผ่านทั้งสอง data scope; เฉพาะ monitoring_kpm/monitoring_5_centers/admin ที่ไม่ใช่ OWN_FACTORY และ WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
+        'ต้องมี view + approve และผ่านทั้งสอง data scope; ใช้ effective bod_cod_errors:approve และ action scope รวม OWN_FACTORY โดยไม่จำกัด role; ต้องเป็น WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodResultNoticeRequest'), {
         reportCorrectness: 'ถูกต้องครบถ้วน',
@@ -6471,7 +6645,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Update BOD/COD result notice',
       operationId: 'updateBodCodResultNotice',
       description:
-        'ต้องมี view + approve และผ่านทั้งสอง data scope; เฉพาะ monitoring_kpm/monitoring_5_centers/admin ที่ไม่ใช่ OWN_FACTORY และ WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
+        'ต้องมี view + approve และผ่านทั้งสอง data scope; ใช้ effective bod_cod_errors:approve และ action scope รวม OWN_FACTORY โดยไม่จำกัด role; ต้องเป็น WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodResultNoticeRequest'), {
         reportCorrectness: 'ไม่ถูกต้องครบถ้วน',
@@ -6763,7 +6937,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get KWP workflow',
       operationId: 'getKwpWorkflow',
       description:
-        'allowedActions คืน REJECT ให้เจ้าหน้าที่ที่มี kwp_forms:approve ผ่านบทบาทและ data scope ที่อนุมัติได้ในทุกสถานะ; action อื่นยังใช้เงื่อนไขเดิม',
+        'allowedActions ประเมิน view, edit และ approve action scopes แยกกัน; view อย่างเดียวไม่ให้ workflow actions. คืน REJECT ให้ผู้มี effective kwp_forms:approve ผ่าน action data scope ในทุกสถานะโดยไม่จำกัด role หรือ userType; CANCEL ต้องผ่าน edit scope และ assigned ownership พร้อมสถานะที่ยกเลิกได้; action อื่นยังตรวจสถานะและขั้นตอนเดิม',
       successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
     }),
@@ -6774,7 +6948,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Change KWP workflow status',
       operationId: 'changeKwpWorkflowStatus',
       description:
-        'REJECT ได้ทุกสถานะเป็น REJECTED โดยไม่บังคับเหตุผล; ส่ง action อย่างเดียวได้ และ revisionReason/officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. ต้องมี kwp_forms:approve ผ่าน data scope และบทบาทเจ้าหน้าที่ที่อนุมัติได้ รวมถึงต้องไม่ใช่ OWN_FACTORY. CANCEL: เฉพาะผู้ประกอบการที่มี kwp_forms:edit และสิทธิ์โรงงาน; อนุญาตทุกสถานะยกเว้น APPROVED/CANCELLED; ตรวจสถานะซ้ำขณะ UPDATE และตอบ 409 เมื่อสถานะเปลี่ยน REQUEST_REVISION/APPROVE ยังคงใช้ข้อจำกัดสถานะเดิมและต้องมี kwp_forms:approve พร้อมบทบาทเจ้าหน้าที่ที่อนุมัติได้',
+        'REJECT ได้ทุกสถานะเป็น REJECTED โดยไม่บังคับเหตุผล; ส่ง action อย่างเดียวได้ และ revisionReason/officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. ต้องมี effective kwp_forms:approve ผ่าน action data scope รวม OWN_FACTORY โดยไม่จำกัด role หรือ userType. CANCEL: ผู้มี kwp_forms:edit ผ่าน action scope ตัดกับ assigned ownership ของโรงงานโดยไม่จำกัด userType; นอก edit scope หรือไม่ใช่โรงงานที่ได้รับมอบหมายตอบ 404 NOT_FOUND. อนุญาตทุกสถานะยกเว้น APPROVED/CANCELLED; ตรวจสถานะซ้ำขณะ UPDATE และตอบ 409 เมื่อสถานะเปลี่ยน REQUEST_REVISION/APPROVE ยังคงใช้ข้อจำกัดสถานะเดิมและต้องมี effective kwp_forms:approve พร้อม action scope โดยไม่จำกัด role',
       successSchema: schemaRef('KwpWorkflowResponse'),
       successDescription: 'เปลี่ยน workflow สำเร็จ; action REJECT คืน status REJECTED',
       parameters: [idParameter],

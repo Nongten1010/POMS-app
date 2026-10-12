@@ -1,4 +1,4 @@
-import type { PermissionGroups } from './permissions';
+import type { PermissionGroups, PermissionMode } from './permissions';
 import type { RegionalAccessDTO } from './regional-access';
 
 export type UserType = 'citizen' | 'operator' | 'officer' | 'admin';
@@ -35,6 +35,7 @@ export interface UserSummary {
 export interface AuthUserDTO {
   accountType: AccountType;
   userType: UserType;
+  permissionMode: PermissionMode;
   username: string;
   fullName: string;
   name: {

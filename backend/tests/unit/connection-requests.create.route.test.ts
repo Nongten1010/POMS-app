@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ZodError } from 'zod';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
@@ -190,7 +190,12 @@ describe('create measurement-point request route', () => {
           }),
         ],
       }),
-      { actorUserId: 42, userType: 'operator', roles: ['factory_operator'] },
+      {
+        actorUserId: 42,
+        userType: 'operator',
+        roles: ['factory_operator'],
+        editScope: { scope: 'OWN_FACTORY' },
+      },
     );
   });
 

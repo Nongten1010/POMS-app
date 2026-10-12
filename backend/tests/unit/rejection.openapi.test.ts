@@ -31,7 +31,8 @@ describe('rejection public OpenAPI contract', () => {
     const review = operation('/poms-factories/edit-requests/{id}/review');
     expect(review.description).toContain('REJECT ได้ทุกสถานะ');
     expect(review.description).toContain('ไม่บังคับเหตุผล');
-    expect(review.description).toContain('JWT role admin');
+    expect(review.description).toContain('effective factories:approve');
+    expect(review.description).toContain('ไม่จำกัดด้วย role หรือ userType');
   });
 
   it('publishes KWP rejection with optional reasons and exposes it to authorized approvers in every status', () => {

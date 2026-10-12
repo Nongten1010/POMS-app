@@ -11,7 +11,12 @@ import type {
   CreateBodCodDeviationReportDTO,
 } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.types';
 
-const owner = { actorUserId: 42, scope: 'OWN_FACTORY', roles: ['factory_operator'] };
+const owner = {
+  actorUserId: 42,
+  scope: 'OWN_FACTORY',
+  editScope: 'OWN_FACTORY',
+  roles: ['factory_operator'],
+};
 
 describe('BOD/COD cancellation and mutation serialization', () => {
   beforeEach(() => {
@@ -108,18 +113,42 @@ describe('BOD/COD cancellation and mutation serialization', () => {
     async (sequence) => {
       const h = harness('SUBMITTED');
       h.row.report_sequence_no = sequence;
-      const result = await repository.getReportById(9, owner);
+      const result = await repository.getReportById(9, { ...owner, editScope: undefined });
       expect(result.reportSequenceNo).toBe(sequence);
       expect(result.allowedActions).toEqual([]);
     },
   );
+
+  it('requires saved edit authority for cancellation even when the owner role remains', async () => {
+    const h = harness('SUBMITTED');
+    await expect(
+      repository.cancelReport(9, { ...owner, editScope: undefined }),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(h.writes).toEqual([]);
+  });
+
+  it('allows own-factory cancellation with saved edit authority independently of role', async () => {
+    harness('SUBMITTED');
+    await expect(
+      repository.cancelReport(9, { ...owner, roles: ['provincial_industry'] }),
+    ).resolves.toMatchObject({
+      statusCode: 'CANCELLED',
+    });
+  });
 
   it('prevents resubmit, workflow and result notice writes after cancellation', async () => {
     const h = harness('CANCELLED');
     await expect(repository.resubmitReport(9, payload(), owner)).rejects.toMatchObject({
       statusCode: 409,
     });
-    const officer = { actorUserId: 77, scope: 'ALL', roles: ['monitoring_kpm'] };
+    const officer = {
+      actorUserId: 77,
+      scope: 'ALL',
+      approveScope: 'ALL',
+      roles: ['monitoring_kpm'],
+    };
     await expect(
       repository.changeWorkflowStatus(9, { action: 'APPROVE' }, officer),
     ).rejects.toMatchObject({ statusCode: 409 });
@@ -140,7 +169,7 @@ describe('BOD/COD cancellation and mutation serialization', () => {
     expect(h.writes).toEqual([]);
   });
 
-  it('does not give an admin director approval authority', async () => {
+  it('does not give an admin approval authority without a saved approval grant', async () => {
     const h = harness('WAITING_APPROVAL');
     h.row.current_step_role_code = 'APPROVER';
     await expect(
@@ -149,7 +178,7 @@ describe('BOD/COD cancellation and mutation serialization', () => {
         { action: 'APPROVE' },
         { actorUserId: 1, scope: 'ALL', roles: ['admin'] },
       ),
-    ).rejects.toMatchObject({ statusCode: 409 });
+    ).rejects.toMatchObject({ statusCode: 403 });
     expect(h.writes).toEqual([]);
   });
 
@@ -158,6 +187,7 @@ describe('BOD/COD cancellation and mutation serialization', () => {
     ['monitoring_5_centers', 'IN_REGION'],
     ['monitoring_kpm', 'ALL'],
     ['admin', 'ALL'],
+    ['provincial_industry', 'ALL'],
   ])('saves result notices for %s with %s approve scope', async (role, scope) => {
     const h = harness('WAITING_RESULT_NOTICE');
     h.row.current_step_role_code = 'RESULT_NOTICE';
@@ -175,6 +205,7 @@ describe('BOD/COD cancellation and mutation serialization', () => {
         {
           actorUserId: 77,
           scope,
+          approveScope: scope,
           viewScope: scope,
           roles: [role],
           regionalAccess: { regions: ['ภาคเหนือ'] },
@@ -195,8 +226,6 @@ describe('BOD/COD cancellation and mutation serialization', () => {
   });
 
   it.each([
-    ['provincial_industry', 'ALL', 'WAITING_RESULT_NOTICE', true, 403],
-    ['monitoring_5_centers', 'OWN_FACTORY', 'WAITING_RESULT_NOTICE', true, 403],
     ['monitoring_5_centers', 'IN_REGION', 'WAITING_RESULT_NOTICE', false, 404],
     ['monitoring_5_centers', 'ALL', 'CANCELLED', true, 409],
     ['monitoring_5_centers', 'ALL', 'WAITING_REVIEW', true, 409],
@@ -218,6 +247,7 @@ describe('BOD/COD cancellation and mutation serialization', () => {
           {
             actorUserId: 77,
             scope,
+            approveScope: scope,
             viewScope: scope,
             roles: [role],
             regionalAccess: { regions: ['ภาคเหนือ'] },

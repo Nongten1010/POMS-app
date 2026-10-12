@@ -13,6 +13,18 @@ const optionalNullableTrimmedString = nullableTrimmedString.optional();
 const permissionScopeSchema = z
   .enum(['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY', 'FACTORY_TYPE_88'])
   .nullable();
+const permissionModeSchema = z.enum(['role_default', 'custom']);
+const permissionOverrideSchema = z
+  .object({
+    code: z.string().trim().min(1).max(64),
+    effect: z.enum(['allow', 'deny']),
+    scope: permissionScopeSchema.optional(),
+    region: z.string().trim().min(1).max(128).nullable().optional(),
+    province: z.string().trim().min(1).max(128).nullable().optional(),
+    estateCode: z.string().trim().min(1).max(32).nullable().optional(),
+    estate: z.string().trim().min(1).max(32).nullable().optional(),
+  })
+  .strict();
 const optionalTrimmedNonEmptyString = (max: number) =>
   z.preprocess(
     (value) =>
@@ -133,6 +145,8 @@ const editablePermissionGroupShape = Object.fromEntries(
             data: permissionScopeSchema,
             region: optionalFormScopeValue(128),
             province: optionalFormScopeValue(128),
+            estateCode: optionalFormScopeValue(32),
+            estate: optionalFormScopeValue(32),
             ...actionShape,
           })
           .strict()
@@ -256,7 +270,7 @@ const nestedCreateLocalAccountSchema = z
         isActive: z.boolean().default(true),
       })
       .strict(),
-    permissions: editablePermissionGroupsSchema.default({}),
+    permissions: editablePermissionGroupsSchema.optional(),
   })
   .strict()
   .transform(({ user, permissions }) => {
@@ -264,9 +278,10 @@ const nestedCreateLocalAccountSchema = z
     return {
       ...localAccount,
       roles: roleCodes[0],
-      permissionOverrides: permissionGroupsToUserPermissionOverrides(
-        permissions as PermissionGroups,
-      ),
+      permissionOverrides:
+        permissions === undefined
+          ? undefined
+          : permissionGroupsToUserPermissionOverrides(permissions as PermissionGroups),
     };
   });
 
@@ -303,6 +318,8 @@ const legacyUpdateManagedUserSchema = z
     ...managedUserPayloadShape,
     roleCodes: z.array(z.string().trim().min(1).max(32)).length(1).optional(),
     password: optionalPasswordString,
+    permissionMode: permissionModeSchema.optional(),
+    permissionOverrides: z.array(permissionOverrideSchema).max(200).optional(),
   })
   .partial()
   .strict()
@@ -316,6 +333,8 @@ const editResponseUpdateSchema = z
       .object({
         accountType: z.enum(['poms', 'api']).optional(),
         identityProvider: z.string().trim().min(1).max(32).optional(),
+        // Returned metadata may be echoed by an edit form; only the top-level mode is a command.
+        permissionMode: permissionModeSchema.optional(),
         fullName: z.string().trim().min(1).max(255),
         username: z.string().trim().min(3).max(64),
         password: optionalPasswordString,
@@ -338,9 +357,10 @@ const editResponseUpdateSchema = z
       })
       .strict(),
     permissions: editablePermissionGroupsSchema.optional(),
+    permissionMode: permissionModeSchema.optional(),
   })
   .strict()
-  .transform(({ user, permissions }) => {
+  .transform(({ user, permissions, permissionMode }) => {
     const isApiAccount = user.source === 'api' || user.accountType === 'api';
     const permissionOverrides = permissions
       ? permissionGroupsToUserPermissionOverrides(permissions as PermissionGroups)
@@ -390,6 +410,8 @@ const editResponseUpdateSchema = z
       roleCodes: user.roleCodes ?? (user.roles ? [user.roles] : undefined),
       profile: profilePatch,
       permissionOverrides,
+      ...(permissions !== undefined ? { permissionEditSource: 'grouped' as const } : {}),
+      ...(permissionMode !== undefined ? { permissionMode } : {}),
     };
   });
 
@@ -398,7 +420,35 @@ export const updateManagedUserSchema = z.any().transform((value, ctx) => {
     value && typeof value === 'object' && 'user' in value
       ? editResponseUpdateSchema.safeParse(value)
       : legacyUpdateManagedUserSchema.safeParse(value);
-  if (result.success) return result.data;
+  if (result.success) {
+    const data = result.data;
+    const codes = data.permissionOverrides?.map((permission) => permission.code) ?? [];
+    if (new Set(codes).size !== codes.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'permissionOverrides must not contain duplicate codes',
+        path: ['permissionOverrides'],
+      });
+      return z.NEVER;
+    }
+    if (data.permissionMode === 'role_default' && data.permissionOverrides !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Cannot reset role permissions and replace a custom snapshot together',
+        path: ['permissionMode'],
+      });
+      return z.NEVER;
+    }
+    if (data.permissionMode === 'custom' && data.permissionOverrides === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Custom permission mode requires a permission snapshot',
+        path: ['permissionMode'],
+      });
+      return z.NEVER;
+    }
+    return data;
+  }
 
   for (const issue of result.error.issues) {
     ctx.addIssue(issue as never);

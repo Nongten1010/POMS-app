@@ -1,7 +1,8 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
-import { ConflictError } from '../../shared/errors/AppError';
+import { ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { parseRegionalAccessJson, serializeRegionalAccess } from '../auth/regional-access';
+import type { PermissionMode } from '../auth/permissions';
 import type {
   CreateLocalAccountInput,
   CreateManagedUserInput,
@@ -36,6 +37,7 @@ interface ManagedUserJoinedRow {
   first_name: string;
   last_name: string;
   is_active: boolean;
+  permission_mode: PermissionMode;
   pos_no: string | null;
   pertype_id: string | null;
   pertype: string | null;
@@ -344,12 +346,13 @@ export const usersRepository = {
       await upsertOfficerProfile(trx, userId, input.profile ?? {});
       await replaceUserRoles(trx, userId, roleRows, actorUserId);
 
-      if (input.permissionOverrides && input.permissionOverrides.length > 0) {
+      if (input.permissionOverrides !== undefined || input.permissionMode === 'role_default') {
         await replaceUserPermissionOverridesInTransaction(
           trx,
           userId,
-          input.permissionOverrides,
+          input.permissionOverrides ?? [],
           actorUserId,
+          input.permissionMode ?? 'custom',
         );
       }
 
@@ -395,12 +398,13 @@ export const usersRepository = {
         await replaceUserRoles(trx, userId, roleRows, actorUserId);
       }
 
-      if (input.permissionOverrides !== undefined) {
+      if (input.permissionOverrides !== undefined || input.permissionMode === 'role_default') {
         await replaceUserPermissionOverridesInTransaction(
           trx,
           userId,
-          input.permissionOverrides,
+          input.permissionOverrides ?? [],
           actorUserId,
+          input.permissionMode ?? 'custom',
         );
       }
 
@@ -427,9 +431,16 @@ export const usersRepository = {
     userId: number,
     permissions: PermissionOverrideInput[],
     actorUserId: number,
+    permissionMode: PermissionMode = 'custom',
   ): Promise<void> {
     await db.transaction(async (trx) => {
-      await replaceUserPermissionOverridesInTransaction(trx, userId, permissions, actorUserId);
+      await replaceUserPermissionOverridesInTransaction(
+        trx,
+        userId,
+        permissions,
+        actorUserId,
+        permissionMode,
+      );
     });
   },
 };
@@ -529,6 +540,7 @@ function managedUsersWithJoins(trx?: Knex.Transaction): Knex.QueryBuilder<Manage
       'users.first_name',
       'users.last_name',
       'users.is_active',
+      'users.permission_mode',
       'officer_profiles.pos_no',
       'officer_profiles.pertype_id',
       'officer_profiles.pertype',
@@ -589,6 +601,7 @@ function toTableDTO(rows: ManagedUserJoinedRow[]): ManagedUserTableDTO {
     levelNameTh: first.level_name_th,
     roles: roles[0]?.code ?? first.user_type,
     roleCodes: roles.map((role) => role.code),
+    permissionMode: first.permission_mode ?? 'role_default',
     isActive,
   };
 }
@@ -709,40 +722,104 @@ async function replaceUserPermissionOverridesInTransaction(
   userId: number,
   permissions: PermissionOverrideInput[],
   actorUserId: number,
+  permissionMode: PermissionMode = 'custom',
 ): Promise<void> {
+  const savedPermissions = permissionMode === 'role_default' ? [] : permissions;
   const permissionRows = await usersRepository.findPermissionsByCodes(
-    permissions.map((permission) => permission.code),
+    savedPermissions.map((permission) => permission.code),
     trx,
   );
   const permissionByCode = new Map(
     permissionRows.map((permission) => [permission.code, permission]),
   );
+  const newRows = savedPermissions.map((permission) => {
+    const permissionRow = permissionByCode.get(permission.code);
+    if (!permissionRow) throw new Error(`Permission not loaded: ${permission.code}`);
+    return {
+      user_id: userId,
+      permission_id: permissionRow.id,
+      effect: permission.effect,
+      scope: permission.effect === 'allow' ? (permission.scope ?? null) : null,
+      region_name:
+        permission.effect === 'allow' ? normalizePermissionLocation(permission.region) : null,
+      province_id:
+        permission.effect === 'allow' ? normalizePermissionLocation(permission.province) : null,
+      estate_code:
+        permission.effect === 'allow'
+          ? normalizePermissionLocation(permission.estateCode ?? permission.estate)
+          : null,
+      granted_by: actorUserId,
+    };
+  });
+  // SQL Server's UPDLOCK serializes saves for the same account, so the recorded
+  // "before" state belongs to this change even when another administrator saves.
+  const beforeUser = await trx('users')
+    .where({ id: userId })
+    .whereNull('deleted_at')
+    .forUpdate()
+    .first('permission_mode');
+  if (!beforeUser) throw new NotFoundError('User not found');
+  const beforePermissions: PermissionAuditRow[] = await trx('user_permissions')
+    .join('permissions', 'permissions.id', 'user_permissions.permission_id')
+    .where('user_permissions.user_id', userId)
+    .select(
+      'permissions.code',
+      'user_permissions.effect',
+      'user_permissions.scope',
+      'user_permissions.region_name',
+      'user_permissions.province_id',
+      'user_permissions.estate_code',
+    );
 
+  await trx('users')
+    .where({ id: userId })
+    .whereNull('deleted_at')
+    .update({
+      permission_mode: permissionMode,
+      updated_at: trx.raw('SYSDATETIME()'),
+      updated_by: actorUserId,
+    });
   await trx('user_permissions').where({ user_id: userId }).del();
 
-  if (permissions.length === 0) return;
-
-  await trx('user_permissions').insert(
-    permissions.map((permission) => {
-      const permissionRow = permissionByCode.get(permission.code);
-      if (!permissionRow) throw new Error(`Permission not loaded: ${permission.code}`);
-      return {
-        user_id: userId,
-        permission_id: permissionRow.id,
-        effect: permission.effect,
-        scope: permission.effect === 'allow' ? (permission.scope ?? null) : null,
-        region_name:
-          permission.effect === 'allow' ? normalizePermissionLocation(permission.region) : null,
-        province_id:
-          permission.effect === 'allow' ? normalizePermissionLocation(permission.province) : null,
-        estate_code:
-          permission.effect === 'allow'
-            ? normalizePermissionLocation(permission.estateCode ?? permission.estate)
-            : null,
-        granted_by: actorUserId,
-      };
+  if (newRows.length > 0) await trx('user_permissions').insert(newRows);
+  await trx('audit_logs').insert({
+    actor_user_id: actorUserId,
+    action:
+      permissionMode === 'role_default' ? 'user.permissions.reset' : 'user.permissions.replace',
+    target_type: 'users',
+    target_id: userId,
+    metadata: JSON.stringify({
+      before: {
+        permissionMode: beforeUser.permission_mode ?? 'role_default',
+        permissions: beforePermissions.map(toPermissionAuditDetails),
+      },
+      after: {
+        permissionMode,
+        permissions: newRows.map((row, index) =>
+          toPermissionAuditDetails({
+            ...row,
+            code: savedPermissions[index].code,
+          }),
+        ),
+      },
     }),
-  );
+  });
+}
+
+type PermissionAuditRow = Pick<
+  UserPermissionOverrideRow,
+  'code' | 'effect' | 'scope' | 'region_name' | 'province_id' | 'estate_code'
+>;
+
+function toPermissionAuditDetails(row: PermissionAuditRow) {
+  return {
+    code: row.code,
+    effect: row.effect,
+    scope: row.scope,
+    region: normalizePermissionLocation(row.region_name),
+    provinceId: normalizePermissionLocation(row.province_id),
+    estateCode: normalizePermissionLocation(row.estate_code),
+  };
 }
 
 function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, string | null> {

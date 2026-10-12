@@ -19,7 +19,7 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
   }'
 ```
 
-เมื่อสำเร็จ backend คืน `200 OK` พร้อม `accessToken`, `user` และ `permissions`. สำหรับบัญชี i-Industry ค่า `userType`, `roleCodes` และ `permissions` เป็น persona ของ session ที่ผู้ใช้เลือก ไม่ใช่การรวมทุก role ที่ผูกกับ user row
+เมื่อสำเร็จ backend คืน `200 OK` พร้อม `accessToken`, `user` และ `permissions` บัญชีที่ใช้ `role_default` รับสิทธิ์เริ่มต้นของ role; บัญชี `custom` รับชุดสิทธิ์รายคนที่บันทึกไว้ สำหรับบัญชี i-Industry citizen/operator ยังคงแยก persona ของ session ที่ผู้ใช้เลือก ไม่รวมสิทธิ์ operator เข้า citizen session
 
 ## POST `/api/v1/auth/login`
 
@@ -44,6 +44,7 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 | `user.userType`        | `string`      | Effective persona ของ session; operator request อาจคืน `citizen` ตาม fallback rule |
 | `user.prenameTh`, `user.name.prenameTh` | `string \| null` | คำนำหน้าภาษาไทย; รองรับได้ถึง 64 ตัวอักษร รวมคำนำหน้าเจ้าหน้าที่แบบยาวจาก external identity provider |
 | `user.roleCodes`       | `string[]`    | `public_user` สำหรับ citizen หรือ `factory_operator` สำหรับ operator persona       |
+| `user.permissionMode` | `role_default` \| `custom` | โหมดที่ใช้คำนวณสิทธิ์ปัจจุบัน; ดู [โมเดลสิทธิ์รายคน](../../menus/permissions/README.md#approved-permission-model) |
 | `user.ownedFactoryIds` | `string[]`    | มีเฉพาะ operator persona และคำนวณจากสิทธิ์โรงงานปัจจุบัน                           |
 | `permissions`          | `object`      | Permission groups ของ persona เดียว พร้อม data scope                               |
 
@@ -57,8 +58,18 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 2. เลือก `userType: "operator"` และ DIW ส่ง `juristics` อย่างน้อย 1 รายการ จะได้ `user.userType: "operator"` กับ `roleCodes: ["factory_operator"]`; นิติบุคคลที่มี `FactoryList: []` ยังนับว่าเป็นผู้ประกอบการ จึงอาจได้ `ownedFactoryIds: []`
 3. เลือก `userType: "operator"` แต่ DIW ส่ง `juristics: []` จะ fallback เป็น citizen persona และคืน `200 OK` พร้อม `public_user`; กรณีนี้ไม่คืน `401`
 4. Backend ใช้ provider identity แถวเดียวต่อ `identity_provider = i_industry` และเลขประชาชนเดียวกัน. Login แบบ citizen ไม่ downgrade หรือลบ operator profile/access เดิม; เมื่อภายหลังพบนิติบุคคล operator login สามารถ promote stored `user_type` เดิมได้โดยไม่สร้าง user ซ้ำ
-5. Token เก็บ effective persona, role และ scope ของ session นั้น. `GET /auth/me` ใช้ persona ที่เซ็นไว้ใน token จึงรองรับ citizen session และ operator session ของ account เดียวกันพร้อมกัน
-6. Permission ถูกจำกัดให้อยู่ใน base role ของ persona ที่เลือกเท่านั้น. Per-user `deny` และ allow ที่จำกัด scope ให้แคบลงยังมีผล แต่ allow จาก permission นอก role หรือ scope ที่กว้างกว่า role จะไม่ถูกนำเข้า session
+5. Token เก็บ persona ที่เลือกของ session นั้น `GET /auth/me` และ authenticated requests โหลดสิทธิ์ปัจจุบันจากฐานข้อมูลพร้อมคง persona ที่เซ็นไว้ จึงรองรับ citizen session และ operator session ของ account เดียวกันพร้อมกัน
+6. Citizen session ของบัญชีที่เก็บเป็น operator ยังถูกจำกัดตาม citizen persona ไม่รับ operator actions เพิ่ม การจัดการสิทธิ์รายคนผ่าน `/users*` ในงานนี้รองรับเฉพาะ managed officer/admin; ไม่เพิ่ม endpoint สำหรับมอบสิทธิ์ข้าม persona
+
+### สิทธิ์ล่าสุดระหว่าง session
+
+JWT ใช้ยืนยัน identity, persona และอายุ session Backend ตรวจว่าบัญชียัง active และไม่ถูกลบ แล้วโหลด role, `permissionMode`, grants และ qualifiers ปัจจุบันทุก authenticated request; ไม่ใช้ `scopes` ที่ค้างอยู่ใน JWT เป็นสิทธิ์อนุญาต API
+
+เมื่อผู้มี `permissions:manage` เพิ่มหรือถอนสิทธิ์ของ managed account token ที่ยังไม่หมดอายุใช้สิทธิ์ใหม่ตั้งแต่คำขอถัดไป บัญชี `custom` ไม่รับสิทธิ์เพิ่มจาก role และการเปลี่ยน role อย่างเดียวไม่เปลี่ยน snapshot การคืนค่าเริ่มต้นใช้ PATCH `permissionMode: "role_default"` ตาม [API จัดการสิทธิ์](../../menus/permissions/user-management-api.md#คืนค่าเริ่มต้นตาม-role)
+
+สำหรับ custom snapshot รายการ data-scoped เดิมที่มี scope null ให้ edit/approve รับ scope และ qualifiers จาก saved view ของ resource เดียวกันเท่านั้น หาก view ไม่มี ถูก deny หรือ qualifier ไม่ครบให้ปิด action; view/search/export/direct_connect ที่ scope null ไม่ให้สิทธิ์ Binary codes คงกติกาเดิม ดู [รายละเอียด runtime และ validation ตอนบันทึก](../../menus/permissions/user-management-api.md#scope-ที่เป็น-null-ในข้อมูลเดิม)
+
+Client เรียก `/auth/me` หลังแก้สิทธิ์หรือเมื่อ refresh เมนู เพื่อให้ปุ่มและเมนูตรงกับ API; เมื่อสิทธิ์ที่เคยมีถูกถอน API ตอบ `403 FORBIDDEN` แม้ token เดิมเคยมีสิทธิ์นั้น การเปลี่ยนสถานะบัญชีเป็น inactive หรือ soft-deleted ตอบ `401 UNAUTHORIZED`
 
 ### การยืนยันตัวตนและ provisioning
 
@@ -102,6 +113,7 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
     "provinceId": null,
     "roles": "factory_operator",
     "roleCodes": ["factory_operator"],
+    "permissionMode": "role_default",
     "isActive": true,
     "officerProfile": null,
     "ownedFactoryIds": ["10100000000001"]
@@ -155,6 +167,7 @@ Backend ตั้งใจเก็บ `401` เป็นข้อความ�
     "userType": "operator",
     "username": "1111111111111",
     "roleCodes": ["factory_operator"],
+    "permissionMode": "role_default",
     "ownedFactoryIds": ["10100000000001"]
   },
   "permissions": {
@@ -168,12 +181,13 @@ Backend ตั้งใจเก็บ `401` เป็นข้อความ�
 
 ถ้า token ไม่ถูกต้องหรือหมดอายุ endpoint คืน `401 UNAUTHORIZED` ด้วย shared error envelope เดียวกัน
 
-สำหรับ i-Industry account endpoint นี้ตรวจว่า user row ยัง active และไม่ถูกลบ แล้วคืน persona, role และ permission จาก JWT ที่ผ่านการตรวจลายเซ็น ไม่เปลี่ยนกลับไปใช้ stored `users.user_type`. ดังนั้น token ของ citizen และ operator สำหรับ `sub` เดียวกันยังคงให้ผลแยกกันตลอดอายุ token
+Endpoint นี้ตรวจว่า user row ยัง active และไม่ถูกลบ แล้วคืน role, `permissionMode` และ permission ล่าสุดจากฐานข้อมูล สำหรับ i-Industry account ยังคง persona citizen/operator ที่เซ็นไว้ใน session เพื่อไม่ให้ citizen token รับ operator actions จาก stored `users.user_type` Token ของ citizen และ operator สำหรับ `sub` เดียวกันจึงยังแยก persona กัน แต่การถอนสิทธิ์และข้อมูลขอบเขตโรงงานมีผลกับคำขอถัดไป
 
 ## Maintainer links
 
 - [Routes](../../../../../backend/src/modules/auth/auth.routes.ts) และ [controller](../../../../../backend/src/modules/auth/auth.controller.ts)
 - [Service](../../../../../backend/src/modules/auth/auth.service.ts)
+- [Authentication middleware](../../../../../backend/src/shared/middlewares/authenticate.ts) และ [ตัวคำนวณสิทธิ์](../../../../../backend/src/modules/auth/permissions.ts)
 - [Repository provisioning](../../../../../backend/src/modules/auth/auth.repository.ts)
 - [DIW identity mapping](../../../../../backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts)
 - คำนำหน้า 64 ตัวอักษร: [migration 0135](../../../../../backend/src/db/migrations/0135_expand_user_prename.ts) และ [migration regression](../../../../../backend/tests/unit/user-prename-migration.test.ts)

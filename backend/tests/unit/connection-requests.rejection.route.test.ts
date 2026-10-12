@@ -10,7 +10,7 @@ import { db } from '../../src/config/database';
 import { connectionRequestsRoutes } from '../../src/modules/connection-requests/connection-requests.routes';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 import type { PermissionScopeDetails } from '../../src/modules/auth/permissions';
 
 describe('connection request rejection through HTTP and persistence', () => {

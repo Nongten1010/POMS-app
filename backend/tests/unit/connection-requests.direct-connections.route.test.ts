@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ConflictError } from '../../src/shared/errors/AppError';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
@@ -363,18 +363,14 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
     expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
   });
 
-  it('does not allow an operator even if a token is manually given the permission', async () => {
+  it('allows an operator with a custom direct-connect permission', async () => {
     const response = await request(createApp())
       .post('/api/v1/cems-wpms-requests/direct-connections')
       .set('Authorization', `Bearer ${operatorTokenWithDirectPermission()}`)
       .send(validPayload());
 
-    expect(response.status).toBe(403);
-    expect(response.body).toMatchObject({
-      success: false,
-      error: { code: 'FORBIDDEN' },
-    });
-    expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mockedService.createDirectConnection).toHaveBeenCalled();
   });
 
   it('preserves a duplicate active point-code conflict', async () => {

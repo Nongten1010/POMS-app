@@ -116,13 +116,16 @@ export const usersController = {
 
 function ensureCanManageRegionalAccess(
   req: Request,
-  payload: { profile?: unknown; permissionOverrides?: unknown },
-  replaceOverrides = false,
+  payload: { profile?: unknown; permissionOverrides?: unknown; permissionMode?: unknown },
+  _replaceOverrides = false,
 ): void {
-  const changesOverrides =
-    Array.isArray(payload.permissionOverrides) &&
-    (replaceOverrides || payload.permissionOverrides.length > 0);
-  if (!hasAccessAssignmentPatch(payload.profile) && !changesOverrides) return;
+  const changesOverrides = Array.isArray(payload.permissionOverrides);
+  if (
+    !hasAccessAssignmentPatch(payload.profile) &&
+    !changesOverrides &&
+    payload.permissionMode === undefined
+  )
+    return;
   if (req.user?.scopes['permissions:manage'] !== undefined) return;
   throw new ForbiddenError('Missing required permission: permissions:manage');
 }

@@ -1717,14 +1717,14 @@ describe('pomsFactoriesService edit-request workflow', () => {
     expect(result.proposedMeasurementPoints).toEqual([committedPoint]);
   });
 
-  it('rejects an admin user type without the admin role before accessing request data', async () => {
+  it('denies an admin without approve permission before accessing request data', async () => {
     await expect(
       pomsFactoriesService.reviewEditRequest(
         19,
         { decision: 'APPROVE' },
         77,
-        { userType: 'admin', roles: ['monitoring_kpm'] },
-        { scope: 'ALL' },
+        { userType: 'admin', roles: ['admin'] },
+        undefined,
         null,
       ),
     ).rejects.toBeInstanceOf(ForbiddenError);
@@ -1875,18 +1875,18 @@ describe('pomsFactoriesService edit-request workflow', () => {
     },
   );
 
-  it('rejects review when the approver is not admin even if they have approve permission', async () => {
+  it('allows review with a custom approve grant regardless of role', async () => {
     await expect(
       pomsFactoriesService.reviewEditRequest(
         11,
         { decision: 'APPROVE', officerNote: 'ข้อมูลครบถ้วน' },
         77,
-        { userType: 'officer', roles: ['monitoring_kpm'] },
+        { userType: 'officer', roles: ['industry_officer'] },
         { scope: 'ALL' },
         null,
       ),
-    ).rejects.toBeInstanceOf(ForbiddenError);
-    expect(mockedRepository.reviewEditRequest).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({ status: 'APPROVED' });
+    expect(mockedRepository.reviewEditRequest).toHaveBeenCalled();
   });
 });
 

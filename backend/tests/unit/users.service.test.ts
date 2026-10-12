@@ -86,6 +86,9 @@ describe('usersService permissions', () => {
     ] as never);
     mockedUsersRepository.getUserPermissionOverrides.mockResolvedValue([]);
     mockedUsersRepository.findIndustrialEstateByCodeOrName.mockResolvedValue(undefined);
+    mockedUsersRepository.findProvinceByIdOrName.mockImplementation(
+      async (value) => ({ id: value, name_th: value }) as never,
+    );
   });
 
   it('returns managed-user pagination metadata', async () => {
@@ -136,7 +139,7 @@ describe('usersService permissions', () => {
     expect(mockedUsersRepository.softDelete).toHaveBeenCalledWith(44, 7);
   });
 
-  it('allows region and province to be null for menu location scopes', async () => {
+  it('freezes profile defaults when menu location selections are null', async () => {
     await usersService.replacePermissions(
       44,
       {
@@ -167,7 +170,7 @@ describe('usersService permissions', () => {
           code: 'dashboard:view',
           effect: 'allow',
           scope: 'IN_REGION',
-          region: null,
+          region: 'ภาคตะวันออก',
           province: null,
           estateCode: null,
           estate: null,
@@ -177,7 +180,7 @@ describe('usersService permissions', () => {
           effect: 'allow',
           scope: 'IN_PROVINCE',
           region: null,
-          province: null,
+          province: '21',
           estateCode: null,
           estate: null,
         },
@@ -247,7 +250,7 @@ describe('usersService permissions', () => {
     expect(mockedUsersRepository.replaceUserPermissionOverrides).not.toHaveBeenCalled();
   });
 
-  it('rejects permission overrides that widen or invent role permissions', async () => {
+  it('allows valid permission snapshots beyond the role defaults', async () => {
     mockedUsersRepository.getRolePermissions.mockResolvedValue([
       {
         code: 'factories:view',
@@ -264,7 +267,7 @@ describe('usersService permissions', () => {
         { permissions: [{ code: 'factories:view', effect: 'allow', scope: 'ALL' }] },
         7,
       ),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ).resolves.toBeDefined();
 
     await expect(
       usersService.replacePermissions(
@@ -272,9 +275,9 @@ describe('usersService permissions', () => {
         { permissions: [{ code: 'chat:answer', effect: 'allow', scope: null }] },
         7,
       ),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ).resolves.toBeDefined();
 
-    expect(mockedUsersRepository.replaceUserPermissionOverrides).not.toHaveBeenCalled();
+    expect(mockedUsersRepository.replaceUserPermissionOverrides).toHaveBeenCalledTimes(2);
   });
 
   it('returns profile assignments without leaking estate qualifiers into permission groups', async () => {
@@ -334,6 +337,7 @@ describe('usersService permissions', () => {
 
     expect(result.user).toEqual({
       accountType: 'poms',
+      permissionMode: 'role_default',
       identityProvider: 'local',
       userType: 'officer',
       username: 'local_officer',
@@ -409,7 +413,7 @@ describe('usersService permissions', () => {
       region: null,
       province: null,
     });
-    expect(result.permissions.eligible_factories).not.toHaveProperty('estateCode');
+    expect(result.permissions.eligible_factories).toHaveProperty('estateCode', 'IE01');
     expect(result.permissions.eligible_factories).not.toHaveProperty('estate');
   });
 
@@ -672,6 +676,10 @@ describe('usersService permissions', () => {
       },
     ] as never);
     mockedUsersRepository.update.mockResolvedValue(existing);
+
+    mockedUsersRepository.getRolePermissions.mockImplementation(() =>
+      mockedUsersRepository.getRolePermissionsByRoleCodes(['admin']),
+    );
 
     await usersService.update(
       45,

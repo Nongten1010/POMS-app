@@ -9,7 +9,7 @@ import { createLawsRoutes } from '../../src/modules/laws/laws.routes';
 import type { LawServiceContract } from '../../src/modules/laws/laws.service';
 import { LAW_TYPE_LABELS, type LawDTO } from '../../src/modules/laws/laws.types';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 const LAW_ID = '28b69ad9-2acf-4b50-961f-84d7a5bea945';
 const temporaryDirectories: string[] = [];

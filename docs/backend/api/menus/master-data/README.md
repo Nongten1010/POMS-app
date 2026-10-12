@@ -39,7 +39,7 @@ curl --request POST \
   --data '{"formType":"BASIC_INFO","projectName":"โครงการปรับปรุงระบบตรวจวัด"}'
 ```
 
-## จัดการสถานะ (เฉพาะ Admin)
+## จัดการสถานะตามสิทธิ์
 
 [สัญญา API จัดการสถานะ](./status-management.md): `GET` และ `PATCH /api/v1/poms-factories/:factoryId/status-management` รองรับซ่อน/แสดงโรงงาน จุดตรวจวัด พารามิเตอร์ และสถานะยกเลิกการเชื่อมต่อโรงงาน/จุดตรวจวัด พร้อม revision และ audit
 

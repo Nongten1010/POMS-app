@@ -5,7 +5,7 @@ import path from 'node:path';
 import { NotFoundError } from '../../src/shared/errors/AppError';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
 
 jest.mock('../../src/modules/faqs/faqs.service', () => ({

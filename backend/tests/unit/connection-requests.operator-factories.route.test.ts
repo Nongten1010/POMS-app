@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
@@ -370,7 +370,7 @@ describe('operator factory dashboard routes', () => {
     expect(mockedConnectionRequestsService.listOperatorFactoryOverview).not.toHaveBeenCalled();
   });
 
-  it('rejects non-operator users from the owned factory overview', async () => {
+  it('allows a custom dashboard grant to read owned overview regardless of user type', async () => {
     const app = createApp();
     const citizenToken = accessToken({
       userType: 'citizen',
@@ -382,8 +382,8 @@ describe('operator factory dashboard routes', () => {
       .get('/api/v1/operator-factories')
       .set('Authorization', `Bearer ${citizenToken}`);
 
-    expect(response.status).toBe(403);
-    expect(mockedConnectionRequestsService.listOperatorFactoryOverview).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listOperatorFactoryOverview).toHaveBeenCalledWith(42, expect.anything());
   });
 
   it('validates the POMS membership filter for the owned factory overview', async () => {

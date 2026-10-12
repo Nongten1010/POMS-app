@@ -4,7 +4,7 @@
 
 ## Frontend Quick Start
 
-เมนูนี้ครอบคลุมการจัดการผู้ใช้, บทบาท, สิทธิ์รายเมนู, และ per-user permission override ที่ backend ใช้คำนวณ token ของ `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` ด้วย ผู้เรียกทุก endpoint ในหน้านี้ต้องส่ง Bearer token และอย่างน้อยต้องมี `users:view`, `users:edit`, หรือ `permissions:manage` ตาม route ที่เรียก
+เมนูนี้ครอบคลุมการจัดการผู้ใช้, บทบาท และสิทธิ์รายคนที่ backend ใช้ตรวจ API จริง บทบาทให้สิทธิ์เริ่มต้น; หลังบันทึกสิทธิ์รายคน ระบบใช้ชุดที่บันทึกโดยไม่จำกัดด้วยบทบาท `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` คืนสิทธิ์ชุดเดียวกัน ผู้เรียกทุก endpoint ในหน้านี้ต้องส่ง Bearer token และมี `users:view`, `users:edit`, หรือ `permissions:manage` ตาม route ที่เรียก
 
 หน้านี้เป็น contract ที่ใช้งานจริงของ permission matrix ตั้งแต่ migration `0089_expand_auth_rbac_permission_scopes` และส่วนขยาย role กกพ. ใน migration `0103_add_erc_office_permissions` เป็นต้นไป
 
@@ -14,7 +14,8 @@
 2. อ่านรายละเอียดหน้าแก้ไขด้วย `GET /api/v1/users/:id`
 3. อ่าน role grants และ override ปัจจุบันด้วย `GET /api/v1/users/:id/permissions`
 4. แก้ role หรือข้อมูลผู้ใช้ด้วย `PATCH /api/v1/users/:id`
-5. แทนที่ per-user overrides ทั้งชุดด้วย `PUT /api/v1/users/:id/permissions`; token ใหม่ที่ออกหลังบันทึกจะสะท้อนสิทธิ์ที่คำนวณล่าสุดเมื่อ implementation ตาม target ครบ
+5. บันทึก grouped matrix ด้วย `PATCH /api/v1/users/:id` หรือสิทธิ์ raw ทั้งชุดด้วย `PUT /api/v1/users/:id/permissions`; บัญชีเปลี่ยนเป็น `custom` และ token เดิมใช้สิทธิ์ล่าสุดตั้งแต่คำขอถัดไป
+6. ถ้าต้องการคืนค่าเริ่มต้น ส่ง `PATCH /api/v1/users/:id` ด้วย `{ "permissionMode": "role_default" }` โดยไม่ส่ง `permissions`
 
 ```bash
 curl --request GET \
@@ -35,6 +36,14 @@ curl --request PUT \
   }'
 ```
 
+```bash
+curl --request PATCH \
+  --url '<BASE_URL>/api/v1/users/12' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Content-Type: application/json' \
+  --data '{ "permissionMode": "role_default" }'
+```
+
 ## Endpoint Summary
 
 | งาน | Method | Path | Auth | Permission | Contract |
@@ -52,24 +61,36 @@ curl --request PUT \
 
 ### Approved permission model
 
-Target model ของเมนูนี้คือ:
+โมเดลสิทธิ์ของเมนูนี้คือ:
 
 1. managed officer/admin หนึ่งบัญชีต้องมี system role เดียวใน `user_roles`; login จะ fail closed หากบัญชี legacy มีหลาย role
-2. แต่ละ role ให้ permission codes พร้อม data scope ตาม approved matrix ด้านล่าง
-3. พื้นที่โปรไฟล์เป็นค่าเริ่มต้นของ role; พื้นที่ที่มอบหมายรายเมนูมีผลก่อนและไม่ต้องตรงกับโปรไฟล์ โดยยังคงเพดาน permission/action และชนิด scope ของ role
-4. `user_permissions` ใช้เป็น per-user override เพิ่มเติม
-5. `deny` ตัด permission code นั้นออกจาก effective result
-6. `allow` ใช้ได้เฉพาะ permission ที่ role มีอยู่แล้ว และจำกัด scope ได้เท่าเดิมหรือแคบลงเท่านั้น; backend ปฏิเสธการเพิ่ม permission หรือขยาย scope
-7. `/auth/login`, `/auth/me`, และ `GET /api/v1/users/:id` ต้อง map permission code ไปเป็น grouped response ที่สอดคล้องกับ target นี้
+2. `permissionMode: "role_default"` ใช้ permission codes และ data scope เริ่มต้นของ role ตาม matrix ด้านล่าง
+3. `permissionMode: "custom"` ใช้ `user_permissions` เป็น snapshot สิทธิ์ทั้งชุด ไม่รวมสิทธิ์ที่ไม่ได้บันทึกจาก role; `allow` ให้สิทธิ์และ `deny` ปิดสิทธิ์นั้น
+4. ผู้มี `permissions:manage` เพิ่ม action ที่ role ไม่มีหรือเลือก scope ที่กว้างกว่า role ได้ เช่น `ALL` โดยต้องเป็น code, scope และพื้นที่ที่ backend รองรับ
+5. PATCH รับ grouped `permissions` หรือ legacy raw `permissionOverrides` เพื่อกำหนด editable permissions ทั้งชุด; action ที่ละไว้เป็นปิด และระบบคงสิทธิ์ internal/hidden เดิมที่ไม่ได้ส่งใน snapshot Raw PATCH ใช้ scope ที่ส่งอย่างชัดเจน; grouped PATCH คง action scope เดิมที่แคบกว่าเมื่อขอบเขตเมนูไม่เปลี่ยน Raw PUT แทนที่ทั้งชุดรวม internal actions; `[]` ของ PUT คือ `custom` ที่ไม่มีสิทธิ์
+6. เปลี่ยน role อย่างเดียวไม่เปลี่ยน snapshot ของบัญชี `custom`; การคืนค่า role defaults ต้องส่ง top-level `permissionMode: "role_default"` โดยไม่ส่ง `permissions`
+7. พื้นที่รายเมนูมีผลก่อนพื้นที่โปรไฟล์และไม่ต้องตรงกัน ไม่แก้โปรไฟล์อัตโนมัติ; การบันทึกใหม่ที่ scope ต้องใช้พื้นที่แต่ไม่มี qualifier ที่ใช้ได้หลังเติม defaults และ resolve master ตอบ `400 BAD_REQUEST`; ข้อมูลเดิมที่ qualifier ใช้ไม่ได้ให้ไม่มีสิทธิ์หรือข้อมูล
+8. `/auth/login`, `/auth/me`, รายละเอียดผู้ใช้ และ API guards ใช้ตัวคำนวณสิทธิ์เดียวกัน Backend โหลดสิทธิ์ล่าสุดจากฐานข้อมูลทุกคำขอ จึงเพิ่มหรือถอนสิทธิ์ได้โดยไม่ต้อง login ใหม่; persona citizen/operator ยังแยกตาม session ที่เลือก
 
-Account and assignment invariants:
+| การเปลี่ยนแปลง | สิทธิ์ที่มีผล |
+| --- | --- |
+| บัญชีใช้ `role_default` | ติดตาม role ปัจจุบัน |
+| บันทึกสิทธิ์รายคน | เปลี่ยนเป็น `custom` และใช้ชุดที่บันทึก |
+| เปลี่ยน role ของบัญชี `custom` | คงสิทธิ์ชุดเดิม |
+| คืนค่า `role_default` | ล้าง snapshot และใช้ role ปัจจุบัน |
+
+Data-scoped `allow` ที่บันทึกใหม่ต้องมี scope ที่ใช้ได้ ห้ามส่ง `scope: null`; ถ้าละ field จะคัดลอก role scope ครั้งเดียวตอนบันทึก Binary codes ยังใช้ null ได้ ส่วน custom legacy edit/approve ที่มี null ใช้เฉพาะ saved view scope และ qualifiers ที่ถูกต้อง ไม่ใช้ role/profile fallback ดู [กติกา scope null และ validation](./user-management-api.md#scope-ที่เป็น-null-ในข้อมูลเดิม)
+
+`permissions:view` ใช้แสดงเมนูสิทธิ์เท่านั้น ไม่ให้ `permissions:manage` อัตโนมัติ สิทธิ์จัดการผู้ใช้และสิทธิ์จัดการสิทธิ์เป็นคนละ capability การบันทึกสิทธิ์หรือคืนค่าเริ่มต้นต้องตรวจ `permissions:manage` เสมอ
+
+Account and assignment invariants (location assignment เป็นข้อกำหนดของ `role_default`; `custom` ใช้ scope และพื้นที่ที่บันทึกใน snapshot):
 
 - `roleCodes` ต้องมีสมาชิกหนึ่งค่าเท่านั้นทั้ง create/update
 - `monitoring_5_centers` และ `center_director` ต้องมี assigned region หนึ่งภาค
 - `monitoring_kpm` และ `kpm_director` ใช้ `ภาคกลาง` เป็น assignment ที่ระบบกำหนด
 - `provincial_office` ต้องมี assigned province หนึ่งจังหวัด
 - `industrial_estate` ต้องมี `estateCode` หนึ่งนิคม; เจ้าหน้าที่เห็นโรงงานทุกแห่งที่ผูกกับนิคมนั้น ไม่ได้จำกัดเพียงโรงงานเดียว
-- per-menu override ระบุพื้นที่ต่างจาก profile assignment ได้ เช่น `diw_central` ให้ dashboard เป็นภาคตะวันออกและ factories เป็นจังหวัดระยอง โดยไม่เปลี่ยนโปรไฟล์; ไม่เพิ่ม action หรือขยายชนิด scope เกิน role
+- สิทธิ์รายเมนูระบุพื้นที่ต่างจาก profile assignment ได้ เช่น `diw_central` ให้ dashboard เป็นภาคตะวันออกและ factories เป็นจังหวัดระยอง โดยไม่เปลี่ยนโปรไฟล์; ใน `custom` ให้ action หรือ scope เกินค่าเริ่มต้นของ role ได้
 
 Data scope keywords ที่ target รองรับ:
 
@@ -133,7 +154,7 @@ Frontend ต้องใช้ module `connection` สำหรับเมน�
 
 `permissions.connection.direct_connect` ยังอยู่ใน response ของ `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` เพราะหน้าขอเชื่อมต่อใช้ตัดสินใจแสดง action เชื่อมต่อทันที แต่ field นี้ไม่อยู่ใน response และ request ของหน้า Permission Management
 
-Raw code `cems_wpms_requests:*` ใช้เฉพาะ backend route guard, JWT `scopes`, ตาราง permission/role และ field `permissions[].code` หรือ `permissionOverrides[].code` ที่ API รับเท่านั้น
+Raw code `cems_wpms_requests:*` ใช้กับ backend route guard, ตาราง permission/role และ field `permissions[].code` หรือ `permissionOverrides[].code` ที่ API รับ JWT `scopes` เป็น snapshot ตอนออก token; backend ตรวจสิทธิ์ล่าสุดจากฐานข้อมูลแทนการเชื่อถือ snapshot นี้
 
 ### Permission Management editable contract
 
@@ -157,13 +178,15 @@ Raw code `cems_wpms_requests:*` ใช้เฉพาะ backend route guard, JW
 | `permissions` | `view` | ไม่มี `data`, `region`, `province`; ไม่มี `manage` ในหน้าแก้สิทธิ์ |
 | `eligible_factories` | `view`, `edit`, `approve` | scoped module |
 
-Scoped permission groups ส่งและคืน location fields เพียง `data`, `region`, `province` ตาม frontend handoff โดยไม่ส่ง `estateCode` หรือ `estate`. เมื่อ `data=IN_ESTATE` backend ใช้ estate assignment ระดับ user profile ภายใน ไม่รับ qualifier ซ้ำในแต่ละ permission group.
+Scoped permission groups ใช้ `data`, `region`, `province` และ optional `estateCode` สำหรับนิคมรายเมนูหนึ่งแห่งเมื่อ `data=IN_ESTATE`; `estate` เป็น compatibility alias และ client ใหม่ควรใช้ `estateCode` Response คืน `estateCode` ของ scope นี้ เพื่อให้ส่งกลับผ่าน grouped PATCH โดยไม่สูญเสียพื้นที่รายเมนู ถ้าไม่ระบุนิคมใช้ profile fallback และยังคงจำกัดหนึ่งนิคม
 
-`api_documentation` และ internal actions เช่น `statistics:export`, `chat:ask`, `permissions:manage`, `eligible_factories:manage` ไม่อยู่ใน editable matrix แต่ raw grants, route guards และ runtime auth permissions ยังทำงานตาม role matrix เดิม เมื่อ grouped PATCH แทนที่ matrix ระบบรักษา per-user overrides ของ internal actions เดิมไว้เพื่อไม่ให้ deny ถูกล้างหรือสิทธิ์ถูกเปิดกลับโดยไม่ตั้งใจ
+`data` ใน grouped response แสดงขอบเขตรวมของเมนู แต่ scope ของแต่ละ action อาจต่างกัน เช่น `view=ALL` และ `edit=IN_PROVINCE` การส่ง grouped matrix กลับโดยไม่เปลี่ยนขอบเขตเมนูต้องคง scope/qualifier ราย action ที่แคบกว่า ไม่ใช้ค่า display ที่กว้างที่สุดขยาย edit หรือ approve อัตโนมัติ ถ้าต้องการแก้ scope แยกแต่ละ action ให้ใช้ raw GET/PUT ตาม [API สิทธิ์รายบัญชี](./user-management-api.md#permission-override-api)
+
+`api_documentation` และ internal actions เช่น `statistics:export`, `chat:ask`, `permissions:manage`, `eligible_factories:manage` ไม่อยู่ใน editable matrix เมื่อ grouped PATCH เปลี่ยนบัญชีเป็น `custom` ระบบเก็บสิทธิ์ internal ที่มีผลอยู่ก่อนบันทึกไว้ใน snapshot เพื่อไม่ให้สิทธิ์หายหรือเปิดกลับจาก role โดยไม่ตั้งใจ Raw PUT เป็นช่องทางแทนที่สิทธิ์ทุก code รวม internal actions ผู้ที่มีเพียง `permissions:view` จะไม่ได้สิทธิ์แก้ผู้ใช้หรือแก้สิทธิ์เพิ่ม
 
 ### Backend raw role / action / scope matrix
 
-ตารางนี้เป็น backend reference ของ role defaults และ location scope ที่ seed/runtime ใช้จริง ค่าในตารางเป็น **raw permission code** ไม่ใช่ JSON key ที่ Frontend ต้องสร้าง สำหรับเมนูขอเชื่อมต่อ Frontend ต้องอ่านผ่าน `permissions.connection.*` ตาม mapping ด้านบน
+ตารางนี้เป็น backend reference ของ role defaults และ location scope ที่ seed/runtime ใช้จริง ใช้เป็นค่าเริ่มต้นสำหรับ `role_default` และไม่ใช่เพดานของ `custom` ค่าในตารางเป็น **raw permission code** ไม่ใช่ JSON key ที่ Frontend ต้องสร้าง สำหรับเมนูขอเชื่อมต่อ Frontend ต้องอ่านผ่าน `permissions.connection.*` ตาม mapping ด้านบน
 
 | Role | Dashboard / Search / Stats | Factories | Eligible factories | Connection requests (raw backend code) | KWP forms | BOD/COD | Notifications | Helpdesk / Feedback / Chat | Permission admin |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -191,7 +214,7 @@ Admin target intentionally **does not include** `chat:ask`
 | --- | --- |
 | `dashboard:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view`, `dashboard.stats:export`, `statistics:view`, `statistics:export`, `conditional_search:view`, `factories:view`, `eligible_factories:view`, `eligible_factories:edit`, `cems_wpms_requests:view`, `kwp_forms:view`, `bod_cod_errors:view`, `bod_cod_errors:approve`, `notifications:view`, `notifications:view_status` | ใช้ data scope ตาม role matrix เมื่อแถวนั้นระบุ scope ไว้ |
 | `dashboard.alerts:view` | เป็น binary action ไม่มี data scope |
-| `factories:*`, `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve`, `cems_wpms_requests:*`, `kwp_forms:*`, `bod_cod_errors:*`, `notifications:*` | ทุก action ที่ role ได้รับใช้ data scope เดียวกับ role ใน matrix; backend บังคับ scope ตอนอ่าน/แก้ไข/อนุมัติ |
+| `factories:*`, `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve`, `cems_wpms_requests:*`, `kwp_forms:*`, `bod_cod_errors:*`, `notifications:*` | `role_default` ใช้ scope ของ role ใน matrix; `custom` ใช้ scope ที่บันทึกสำหรับ action นั้น Backend บังคับ scope ตอนอ่าน/แก้ไข/อนุมัติและไม่ข้ามสถานะหรือขั้นตอนธุรกิจ |
 | `eligible_factories:manage` | deprecated compatibility permission; เป็น binary action และมีใน admin default เท่านั้น |
 | `chat:answer`, `laws:edit`, `faq:edit`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `permissions:*`, `audit:view`, `api_documentation:view` | เป็น binary action; contract ไม่เพิ่ม location field |
 | `chat:view`, `chat:ask`, `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | เป็น binary action ใน approved target รอบนี้ |
@@ -240,20 +263,22 @@ Frontend ต้องใช้ grouped response เป็น canonical UI contra
 
 | Case | Request / storage rule | Response rule |
 | --- | --- | --- |
-| `IN_REGION` | รับ `region` เป็น string; ใช้ภาคที่ระบุรายเมนูก่อน ถ้าไม่ส่งให้ใช้ภาคเริ่มต้นจากโปรไฟล์ ถ้าไม่มีทั้งสองแหล่งต้อง fail closed | grouped permissions คืนภาคเมนูเดิมแม้ต่างจากโปรไฟล์; ค่าเริ่มต้นของ `monitoring_kpm`/`kpm_director` ยังเป็นภาคกลาง |
-| `IN_PROVINCE` | รับ `province` เป็นชื่อหรือรหัสจังหวัดและ resolve เป็น province id; ใช้จังหวัดเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ | grouped permissions คืนชื่อจังหวัดไทย; ถ้าไม่มีทั้ง qualifier และค่าเริ่มต้นให้ไม่มีข้อมูล |
-| `IN_ESTATE` | raw override API รับ `estateCode` หรือ compatibility field `estate` และ resolve กับ master; ใช้นิคมรายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์; grouped Permission Management payload ไม่รับสอง field นี้ | Permission Management group คืนเพียง `data: "IN_ESTATE"`; runtime/raw contract คืน qualifier ที่มอบหมายไว้ |
+| `IN_REGION` | รับ `region` เป็น string; ใช้ภาคที่ระบุรายเมนูก่อน ถ้าไม่ส่งให้ใช้ภาคเริ่มต้นจากโปรไฟล์ ถ้าไม่มีทั้งสองแหล่งตอนบันทึก custom ตอบ `400 BAD_REQUEST`; ข้อมูลเดิม fail closed | grouped permissions คืนภาคเมนูเดิมแม้ต่างจากโปรไฟล์; ค่าเริ่มต้นของ `monitoring_kpm`/`kpm_director` ยังเป็นภาคกลาง |
+| `IN_PROVINCE` | รับ `province` เป็นชื่อหรือรหัสจังหวัดและ resolve เป็น province id; ใช้จังหวัดเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ | grouped permissions คืนชื่อจังหวัดไทย; การบันทึก custom ที่ไม่มี qualifier หรือค่าเริ่มต้นใช้ได้ตอบ `400 BAD_REQUEST`; ข้อมูลเดิมให้ไม่มีข้อมูล |
+| `IN_ESTATE` | grouped และ raw API รับ `estateCode` หรือ compatibility field `estate` สำหรับหนึ่งนิคมและ resolve กับ master; ใช้นิคมรายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ | Permission Management group คืน `estateCode` เมื่อ `data: "IN_ESTATE"` เพื่อรักษา scope เมื่อส่งกลับ; runtime/raw contract คืน qualifier ที่มอบหมายไว้ |
 | `OWN_FACTORY` | ไม่มี field location เพิ่มเติม | client เห็นเพียง `data: "OWN_FACTORY"` |
 | `FACTORY_TYPE_88` | ไม่มี field location เพิ่มเติม; filter จาก factory type ที่เก็บใน eligible/snapshot/form | client เห็น `data: "FACTORY_TYPE_88"`; scope นี้แคบกว่า `ALL` แต่เทียบลำดับกับ region/province/estate ไม่ได้ |
 | profile-level regional access | `profile.regionalAccess` เป็นคนละชั้นกับ per-menu permission scope | ใช้กับการกำหนดพื้นที่เจ้าหน้าที่ ไม่ใช่รายการ `permissions.<module>.region` |
+
+การบันทึก custom `IN_REGION`, `IN_PROVINCE` หรือ `IN_ESTATE` ต้องได้ qualifier ที่ใช้ได้หลังเติม defaults และ resolve master มิฉะนั้นตอบ `400 BAD_REQUEST` การปิดสิทธิ์เมื่อ qualifier ไม่ครบเป็นกติกาสำหรับข้อมูลเดิมที่ runtime อ่านพบ
 
 `profile.regionalAccess` กับ `permissions.<module>.region` จึงไม่ใช่ field แทนกัน:
 
 - `profile.regionalAccess`, `profile.provinceId` และ `profile.estateCode` เป็นค่าเริ่มต้นสำหรับ permission ที่ไม่ได้ระบุพื้นที่รายเมนู
 - `permissions.<module>.region` ใช้บันทึก override เฉพาะเมนู
 - effective location ใช้ per-menu qualifier ก่อน profile default; ไม่มีทั้งสองแหล่งต้องไม่คืนข้อมูล และ location scopes ไม่ถูกกรองซ้ำด้วยภาคโปรไฟล์
-- การแก้ region/province/estate assignment หรือส่ง `permissions` ผ่าน PATCH (รวมชุดว่างเพื่อล้าง) ต้องมี `permissions:manage` แม้ route จะ authorize ด้วย `users:edit` ได้อยู่แล้ว; การสร้างบัญชีพร้อม overrides ที่ไม่ว่างใช้กติกาเดียวกัน
-- ข้อจำกัดบทบาท/สถานะของ workflow เช่น direct connection โดย `monitoring_kpm` เฉพาะภาคกลางยังมีผล พื้นที่เมนูไม่ให้สิทธิ์ข้ามขั้นตอนเหล่านี้
+- การแก้ region/province/estate assignment หรือส่ง `permissions`/`permissionOverrides`/top-level `permissionMode` ผ่าน PATCH ต้องมี `permissions:manage` แม้ route จะ authorize ด้วย `users:edit` ได้อยู่แล้ว; การสร้างบัญชีพร้อมสิทธิ์ custom ใช้กติกาเดียวกัน
+- Direct Connection ใช้ `cems_wpms_requests:direct_connect` พร้อม action scope ที่บันทึก ไม่จำกัดด้วยชื่อ role หรือภาคกลาง; workflow อื่นยังตรวจ scope และสถานะ/ขั้นตอนที่ทำรายการได้
 
 ### Detailed API contract
 
@@ -267,21 +292,23 @@ Frontend ต้องใช้ grouped response เป็น canonical UI contra
 | Runtime role count | target ใช้ 13 roles รวม `erc_office`; `public_anonymous` ยังเป็น system role แต่ frontend ไม่ต้องแสดงใน dropdown สร้างผู้ใช้ |
 | Regional roles | `monitoring_kpm` และ `kpm_director` target เป็น `IN_REGION` ภาคกลาง; `monitoring_5_centers` และ `center_director` target เป็น assigned region |
 | One-role policy | managed account รับ role เดียว; IdP sync คง specialized role ที่ Admin มอบหมายและไม่เติม base role ซ้ำ |
-| Menu assignment | พื้นที่รายเมนูมีผลก่อน profile default; ถ้าไม่ระบุทั้งสองแหล่งเป็น no data และต้องรับ token ใหม่หลังเปลี่ยนสิทธิ์ |
+| Menu assignment | พื้นที่รายเมนูมีผลก่อน profile default; ถ้าไม่ระบุทั้งสองแหล่งเป็น no data และ token เดิมใช้สิทธิ์ล่าสุดตั้งแต่คำขอถัดไป |
+| Custom permission snapshot | ใช้สิทธิ์ทั้งชุดที่บันทึก ไม่รับ role fallback; Raw PUT `[]` ไม่คืน role defaults และ grouped PATCH ปิด editable actions ที่ละไว้ |
 | New codes | เพิ่ม `statistics:view`, `conditional_search:view`, `chat:view`, `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve` ใน target contract |
 | Grouped permission aliases | `dashboard.search`, `dashboard.advanced_search`, `dashboard.statistics`, `dashboard.export`, `statistics.*`, `conditional_search.view`, `permissions.*`, `chat.edit` |
-| Estate location detail | ใช้ `estateCode`/`estate` เฉพาะ profile และ raw override API; ไม่อยู่ใน Permission Management group |
+| Estate location detail | grouped Permission Management รองรับ `estateCode` รายเมนูเมื่อ IN_ESTATE และ `estate` compatibility alias; scope ยังคงหนึ่งนิคม |
 
 Migration guidance:
 
 - หาก client เดิมสร้าง UI จากเอกสาร legacy ให้ย้ายมาอ่าน canonical page นี้
 - ถ้า admin UI แก้สิทธิ์รายเมนู ให้ส่ง grouped permission shape ผ่าน `PATCH /api/v1/users/:id` หรือส่ง permission code ดิบผ่าน `PUT /api/v1/users/:id/permissions`
-- token ที่ออกก่อนเปลี่ยน role/override จะไม่เปลี่ยนย้อนหลัง ให้ login ใหม่เพื่อรับ token ตามสิทธิ์ล่าสุด
-- token ที่ออกก่อน migration หรือก่อนเปลี่ยน role/override ต้อง login หรือ refresh ใหม่เพื่อรับ scope ล่าสุด
+- รัน migration `0136_add_user_permission_mode` ก่อนเริ่ม backend รุ่นนี้ บัญชี managed officer/admin ที่ไม่มีสิทธิ์รายคนใช้ `role_default`; บัญชี managed ที่มีสิทธิ์รายคนย้ายเป็น `custom` โดยใช้ `allow`/`deny` และพื้นที่ที่บันทึกไว้ก่อน แม้ action หรือ scope นั้นเคยถูก role กรองทิ้ง `deny` มีผลปิดสิทธิ์ ส่วน code ที่ไม่เคยบันทึกใช้ค่าเริ่มต้นของ role ตอนย้ายเพื่อสร้าง snapshot ทั้งชุด ผู้ที่มีค่าบันทึกแล้วไม่ต้องเลือกสิทธิ์ใหม่ Citizen/operator คง `role_default` และกติกา persona เดิม
+- token ที่ยังไม่หมดอายุใช้สิทธิ์ล่าสุดจากฐานข้อมูล โดยยังตรวจลายเซ็น อายุ token และสถานะบัญชีตามปกติ Client เรียก `/auth/me` หลังแก้สิทธิ์เพื่อปรับเมนูและปุ่ม
+- ใช้ PATCH `{ "permissionMode": "role_default" }` เมื่อต้องการคืนค่าเริ่มต้น; ดู [breaking change และขั้นตอนย้าย](../../CHANGELOG.md#custom-user-permission-snapshots)
 
 ### Implementation status notes
 
-สถานะ code/test สำหรับ approved target ณ วันอังคารที่ 11 สิงหาคม 2026:
+แหล่ง implementation และการตรวจโมเดลสิทธิ์:
 
 | Area | Status |
 | --- | --- |
@@ -289,7 +316,8 @@ Migration guidance:
 | New permission codes | implemented: `statistics:*`, `conditional_search:view`, `permissions:view`, `chat:view`, `eligible_factories:view/edit` |
 | Regional role assignment | `monitoring_kpm`/`kpm_director` are fixed to ภาคกลาง; 5 ศูนย์/ผอ.ศูนย์ use assigned profile region |
 | Province/estate assignment | สอจ. ใช้หนึ่งจังหวัด; กนอ. ใช้ canonical `estateCode` หนึ่งนิคมและเห็นทุกโรงงานในนิคมนั้น |
-| Fail-closed enforcement | request, dashboard, eligible factory, KWP/BOD, alert, monitoring point, device config และ parameter reads ใช้ profile intersection |
+| Fail-closed enforcement | request, dashboard, eligible factory, KWP/BOD, alert, monitoring point, device config และ parameter reads ใช้ effective action scope ล่าสุด; qualifier รายเมนูมีผลก่อน profile fallback |
+| Custom snapshot | การบันทึกสิทธิ์ไม่ติดเพดาน role, การเปลี่ยน role คง snapshot, reset ใช้ top-level `permissionMode` |
 | Grouped response aliases | implemented and covered by auth/user tests |
 | ERC factory-type scope | migration `0103`, RBAC seeds และ repository filters ใช้ `FACTORY_TYPE_88`/`00088` แบบ fail closed |
 | Tests proving matrix | see evidence page |
@@ -311,6 +339,7 @@ Migration guidance:
 | Service | [backend/src/modules/users/users.service.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.service.ts:1) |
 | Repository | [backend/src/modules/users/users.repository.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.repository.ts:1), [backend/src/modules/auth/auth.repository.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/auth/auth.repository.ts:349) |
 | Current permission aliases in code | [backend/src/modules/auth/permissions.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/auth/permissions.ts:1) |
+| Runtime custom contract tests | [users.custom-permissions.openapi.test.ts](../../../../../backend/tests/unit/users.custom-permissions.openapi.test.ts) |
 | Current seed files to reconcile | [backend/src/db/seeds/04_roles.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/db/seeds/04_roles.ts:1), [backend/src/db/seeds/05_permissions.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/db/seeds/05_permissions.ts:1), [backend/src/db/seeds/06_role_permissions.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/db/seeds/06_role_permissions.ts:1) |
 | Endpoint registry | [docs/backend/api/ENDPOINTS.md](../../ENDPOINTS.md) |
-| Evidence | [Permission matrix rollout evidence](../../../evidence/permissions/permission-matrix-rollout.tdd.md), [Permission Management contract alignment](../../../evidence/permissions/permission-management-contract-alignment.tdd.md) |
+| Evidence | [ผลทดสอบ custom permission snapshots](../../../evidence/permissions/custom-permission-snapshots.tdd.md), [Permission matrix rollout evidence](../../../evidence/permissions/permission-matrix-rollout.tdd.md), [Permission Management contract alignment](../../../evidence/permissions/permission-management-contract-alignment.tdd.md) |

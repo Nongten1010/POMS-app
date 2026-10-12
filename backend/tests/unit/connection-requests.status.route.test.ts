@@ -5,7 +5,7 @@ import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests
 import { connectionRequestsRoutes } from '../../src/modules/connection-requests/connection-requests.routes';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
 import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {

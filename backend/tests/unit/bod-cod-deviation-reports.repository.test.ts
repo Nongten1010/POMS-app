@@ -49,10 +49,13 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       actorUserId: 88,
       scope: { scope: 'FACTORY_TYPE_88' },
     }).toSQL();
-    const reports = buildBodCodDeviationReportQueryForTests({}, {
-      actorUserId: 88,
-      scope: { scope: 'FACTORY_TYPE_88' },
-    }).toSQL();
+    const reports = buildBodCodDeviationReportQueryForTests(
+      {},
+      {
+        actorUserId: 88,
+        scope: { scope: 'FACTORY_TYPE_88' },
+      },
+    ).toSQL();
 
     expect(factories.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
     expect(factories.bindings).toContain('00088');
@@ -463,7 +466,7 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
     expect(
       buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL', ['center_director']),
-    ).toEqual(['REJECT']);
+    ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
     expect(
       buildBodCodAllowedActionsForTests('APPROVED', currentStep, 'ALL', ['monitoring_kpm']),
     ).toEqual(['REJECT']);
@@ -472,7 +475,7 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     ).toEqual(['REJECT']);
   });
 
-  it('allows BOD/COD director approvals only on their assigned workflow steps', () => {
+  it('allows granted approval actions at pending workflow steps independently of role', () => {
     const reviewerStep = {
       stepNo: 3,
       roleCode: 'REVIEWER' as const,
@@ -493,7 +496,7 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
     expect(
       buildBodCodAllowedActionsForTests('WAITING_REVIEW', reviewerStep, 'ALL', ['center_director']),
-    ).toEqual(['REJECT']);
+    ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
     expect(
       buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', ['kwp_director']),
     ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
@@ -506,7 +509,7 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', [
         'monitoring_kpm',
       ]),
-    ).toEqual(['REJECT']);
+    ).toEqual(['APPROVE', 'REQUEST_REVISION', 'REJECT']);
   });
 
   it('maps BOD/COD workflow actions to the next report and step state', () => {

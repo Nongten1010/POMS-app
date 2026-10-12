@@ -177,10 +177,11 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 การบังคับ data scope แตกต่างกันตาม endpoint และห้ามเหมารวมว่าใช้ location intersection ทุก route:
 
 - route อ่านรายการ/รายละเอียดและ route ของเจ้าหน้าที่ใช้ permission scope ตาม implementation; location scope ใช้พื้นที่เมนูก่อนค่าเริ่มต้นจากโปรไฟล์ตาม [กติกาพื้นที่รายเมนู](../permissions/README.md#region-and-location-rules) และรายการนอกพื้นที่คืนรายการว่างหรือ `404`
-- `POST /measurement-points` และ `POST /parameters` ตรวจว่า identifier resolve เป็น active row ใน `eligible_factories`; เมื่อเจ้าหน้าที่ส่ง `submissionAction` ใน `POST /measurement-points` backend จะตัด edit scope/region ของเจ้าหน้าที่ด้วย
-- เฉพาะเจ้าหน้าที่ใน `POST /measurement-points` สามารถส่ง `submissionAction=REQUEST_FACTORY_REVISION|CONNECT`; ค่า `CONNECT` ต้องมี direct-connect permission และผ่าน eligible-factory scope ของ permission นั้น
+- `POST /measurement-points` ตรวจว่า identifier resolve เป็น active row ใน `eligible_factories`; เมื่อส่ง `submissionAction` backend ตรวจ scope ของ action ที่เกี่ยวข้องด้วย
+- `POST /parameters` ตรวจ active eligible factory ภายใน effective edit scope/assignment ก่อนสร้างคำขอ; legacy edit grant ที่ endpoint ได้เป็น scope null ใช้ granted view data scope และต้องส่งรายละเอียดฟอร์มครบตาม [กติกา parameter request](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsparameters)
+- ผู้มี `cems_wpms_requests:edit` ใน `POST /measurement-points` สามารถส่ง `submissionAction=REQUEST_FACTORY_REVISION|CONNECT`; ค่า `CONNECT` ต้องมี direct-connect permission และผ่าน eligible-factory scope ของ permission นั้น
 - `PUT /:id/form` ใช้ edit scope/assignment และสถานะ `WAITING_FACTORY_REVISION`; cancel, ตั้งค่าอุปกรณ์ และ confirm ใช้ edit scope/assignment กับข้อจำกัดสถานะของแต่ละ action
-- Direct Connection รับ `submissionAction=REQUEST_FACTORY_REVISION|CONNECT` ไปพร้อมแบบ ตรวจทั้งข้อจำกัด actor, scope ของ permission และ active eligible factory ตามรายละเอียดใน [Payload และ validation ของคำขอ](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsdirect-connections)
+- Direct Connection รับ `submissionAction=REQUEST_FACTORY_REVISION|CONNECT` ไปพร้อมแบบ ตรวจ effective permission และ scope ล่าสุดของ permission และ active eligible factory ตามรายละเอียดใน [Payload และ validation ของคำขอ](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsdirect-connections)
 
 สำหรับ route ที่ใช้ scope ของ กนอ. ค่า `IN_ESTATE` หมายถึงโรงงานในนิคม `estateCode` ที่มอบหมาย
 

@@ -5,7 +5,7 @@ import request from 'supertest';
 import { describe, expect, it } from '@jest/globals';
 import { createApp } from '../../src/app';
 import { env } from '../../src/config/env';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 describe('connection request document image upload route', () => {
   async function withTempUploadDir<T>(callback: (uploadDir: string) => Promise<T>): Promise<T> {

@@ -31,6 +31,7 @@ describe('BOD/COD deviation report create numbering', () => {
     const result = await bodCodDeviationReportsRepository.createReport(createPayload(), {
       actorUserId: 42,
       scope: 'ALL',
+      editScope: 'ALL',
       roles: ['admin'],
     });
 
@@ -56,7 +57,10 @@ describe('BOD/COD deviation report create numbering', () => {
     const h = createReportHarness(undefined, { parameters: '["BOD (mg/l)","COD (mg/l)"]' });
     mockedDb.transaction.mockImplementationOnce(h.runTransaction);
     const result = await bodCodDeviationReportsRepository.createReport(createPayload(), {
-      actorUserId: 42, scope: 'ALL', roles: ['admin'],
+      actorUserId: 42,
+      scope: 'ALL',
+      editScope: 'ALL',
+      roles: ['admin'],
     });
     expect(result.statusCode).toBe('SUBMITTED');
   });
@@ -70,6 +74,7 @@ describe('BOD/COD deviation report create numbering', () => {
       bodCodDeviationReportsRepository.createReport(createPayload(), {
         actorUserId: 42,
         scope: 'ALL',
+        editScope: 'ALL',
         roles: ['admin'],
       }),
     ).rejects.toMatchObject({ statusCode: 409 });
@@ -88,6 +93,7 @@ describe('BOD/COD deviation report create numbering', () => {
     const result = await bodCodDeviationReportsRepository.createReport(createPayload(), {
       actorUserId: 42,
       scope: 'ALL',
+      editScope: 'ALL',
       roles: ['admin'],
     });
     expect(result.reportSequenceNo).toBe(2);
@@ -107,6 +113,7 @@ describe('BOD/COD deviation report create numbering', () => {
       bodCodDeviationReportsRepository.createReport(createPayload(), {
         actorUserId: 42,
         scope: 'ALL',
+        editScope: 'ALL',
         roles: ['admin'],
       }),
     ).rejects.toMatchObject({ statusCode: 400 });
@@ -120,6 +127,7 @@ describe('BOD/COD deviation report create numbering', () => {
       bodCodDeviationReportsRepository.createReport(createPayload(), {
         actorUserId: 42,
         scope: 'ALL',
+        editScope: 'ALL',
         roles: ['admin'],
       }),
     ).rejects.toMatchObject({ statusCode: 400 });
@@ -129,7 +137,7 @@ describe('BOD/COD deviation report create numbering', () => {
     await expect(
       bodCodDeviationReportsRepository.createReport(
         { ...createPayload(), factoryId: 'OTHER' },
-        { actorUserId: 42, scope: 'ALL', roles: ['admin'] },
+        { actorUserId: 42, scope: 'ALL', editScope: 'ALL', roles: ['admin'] },
       ),
     ).rejects.toMatchObject({ statusCode: 400 });
     expect(h2.reportInsert).not.toHaveBeenCalled();
@@ -147,6 +155,7 @@ describe('BOD/COD deviation report create numbering', () => {
       bodCodDeviationReportsRepository.createReport(createPayload(), {
         actorUserId: 42,
         scope: 'ALL',
+        editScope: 'ALL',
         roles: ['admin'],
       }),
     ).rejects.toMatchObject({ statusCode: 409 });
@@ -169,6 +178,7 @@ describe('BOD/COD deviation report create numbering', () => {
       {
         actorUserId: 42,
         scope: 'ALL',
+        editScope: 'ALL',
         roles: ['admin'],
       },
     );

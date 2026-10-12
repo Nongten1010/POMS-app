@@ -3,7 +3,7 @@ import express from 'express';
 import request from 'supertest';
 import { pomsFactoriesRoutes } from '../../src/modules/poms-factories/poms-factories.routes';
 import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/poms-factories/poms-status-management.service', () => ({
   pomsStatusManagementService: {
@@ -69,7 +69,7 @@ describe('Status management authorization and validation', () => {
     ).toBe(401);
   });
   it.each(['officer', 'admin'] as const)(
-    'rejects userType=%s without a JWT admin role despite ALL scopes',
+    'allows userType=%s with custom view/edit grants regardless of role',
     async (userType) => {
       const auth = authToken(
         ['monitoring_kpm'],
@@ -82,7 +82,7 @@ describe('Status management authorization and validation', () => {
             .get('/api/v1/poms-factories/F1/status-management')
             .set('Authorization', `Bearer ${auth}`)
         ).status,
-      ).toBe(403);
+      ).toBe(200);
       expect(
         (
           await request(app())
@@ -90,7 +90,7 @@ describe('Status management authorization and validation', () => {
             .set('Authorization', `Bearer ${auth}`)
             .send(patch)
         ).status,
-      ).toBe(403);
+      ).toBe(200);
     },
   );
   it.each<Record<string, string>>([{ 'factories:view': 'ALL' }, { 'factories:edit': 'ALL' }])(

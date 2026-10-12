@@ -1,10 +1,11 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.repository', () => ({
   connectionRequestsRepository: {
     findActiveEligibleFactoryReference: jest.fn(),
+    findDirectConnectionFactory: jest.fn(),
     create: jest.fn(),
   },
 }));
@@ -22,12 +23,13 @@ function token(
   userType: 'officer' | 'admin' | 'operator' = 'officer',
   roles = ['monitoring_kpm'],
   canEdit = true,
+  scope = userType === 'operator' ? 'OWN_FACTORY' : 'ALL',
 ) {
   return signAccessToken({
     sub: '52',
     userType,
     roles,
-    scopes: canEdit ? { 'cems_wpms_requests:edit': 'ALL' } : {},
+    scopes: canEdit ? { 'cems_wpms_requests:edit': scope } : {},
   });
 }
 
@@ -73,6 +75,10 @@ describe('officer add-parameter optional sections through route and service', ()
   beforeEach(() => {
     jest.clearAllMocks();
     repository.findActiveEligibleFactoryReference.mockResolvedValue({ id: 9 } as never);
+    repository.findDirectConnectionFactory.mockResolvedValue({
+      eligibleFactoryId: 9, factoryId: 'factory-001', factoryName: 'โรงงานทดสอบ',
+      newRegistrationNo: 'REG-001', oldRegistrationNo: 'REG-001',
+    });
     repository.create.mockResolvedValue({
       id: 17,
       requestType: 'ADD_PARAMETER',
@@ -205,17 +211,17 @@ describe('officer add-parameter optional sections through route and service', ()
     ['operator', ['monitoring_kpm']],
     ['operator', ['admin']],
     ['officer', ['factory_operator']],
-  ])('does not relax validation for userType %s and roles %j', async (userType, roles) => {
+  ])('allows reduced form using custom edit grant for userType %s and roles %j', async (userType, roles) => {
     const response = await request(app)
       .post(endpoint)
       .set('Connection', 'close')
       .set(
         'Authorization',
-        `Bearer ${token(userType as 'officer' | 'operator', roles as string[])}`,
+        `Bearer ${token(userType as 'officer' | 'operator', roles as string[], true, 'ALL')}`,
       )
       .send(withoutSections('CEMS', 'both', undefined));
-    expect(response.status).toBe(400);
-    expect(repository.create).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(repository.create).toHaveBeenCalled();
   });
 
   it('still requires edit permission', async () => {
@@ -228,12 +234,12 @@ describe('officer add-parameter optional sections through route and service', ()
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('keeps the service strict when an internal caller supplies only a user ID', async () => {
+  it('denies the service when an internal caller supplies no edit grant', async () => {
     const input = officerAddParameterRequestSchema.parse(
       withoutSections('CEMS', 'both', undefined),
     );
     await expect(connectionRequestsService.createParameterRequest(input, 52)).rejects.toMatchObject(
-      { statusCode: 400, code: 'BAD_REQUEST' },
+      { statusCode: 403, code: 'FORBIDDEN' },
     );
     expect(repository.create).not.toHaveBeenCalled();
   });

@@ -393,11 +393,11 @@ export const pomsFactoriesService = {
     id: number,
     input: ReviewPomsFactoryEditRequestInput,
     actorUserId: number,
-    actor: PomsFactoryReviewActorContext,
+    _actor: PomsFactoryReviewActorContext,
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PomsFactoryEditRequestDetailDTO> {
-    ensureAdminReviewActor(actor);
+    ensureReviewPermission(viewScope);
     const request = await this.getEditRequest(id, actorUserId, viewScope, regionalAccess);
     if (
       input.decision !== 'REJECT' &&
@@ -851,9 +851,10 @@ function editableMeasurementPoint(point: PomsMeasurementPointDTO) {
   };
 }
 
-function ensureAdminReviewActor(actor: PomsFactoryReviewActorContext): void {
-  if (actor.roles.includes('admin')) return;
-  throw new ForbiddenError('POMS factory edit request review is limited to admin users');
+function ensureReviewPermission(approveScope: AccessScope): void {
+  if (approveScope === undefined || approveScope === null) {
+    throw new ForbiddenError('POMS factory edit request review requires factories:approve');
+  }
 }
 
 // Historical snapshots lack this field; explicit [] must not fall back to source recipients.

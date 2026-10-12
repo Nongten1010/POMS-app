@@ -36,15 +36,29 @@ describe('Status management service', () => {
     expect(repo.read).toHaveBeenCalledWith('F1', actor);
     expect(repo.update).toHaveBeenCalledWith('F1', actor, input);
   });
-  it('rejects non-admin direct service calls before any database access', async () => {
-    const outsider = { ...actor, roles: ['factory_operator'] };
-    await expect(pomsStatusManagementService.get('F1', outsider)).rejects.toThrow('Only Admin');
+  it('allows a custom grant for non-admin actors', async () => {
+    const custom = { ...actor, roles: ['factory_operator'] };
+    await expect(pomsStatusManagementService.get('F1', custom)).resolves.toMatchObject({
+      factoryId: 'F1',
+    });
     await expect(
-      pomsStatusManagementService.update('F1', outsider, {
+      pomsStatusManagementService.update('F1', custom, {
         expectedRevision: 0,
         factory: { visibility: 'HIDDEN' },
       }),
-    ).rejects.toThrow('Only Admin');
+    ).resolves.toMatchObject({ factoryId: 'F1' });
+  });
+  it('denies admin service calls without the action scope before database access', async () => {
+    const denied = { ...actor, scope: undefined };
+    await expect(pomsStatusManagementService.get('F1', denied)).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    await expect(
+      pomsStatusManagementService.update('F1', denied, {
+        expectedRevision: 0,
+        factory: { visibility: 'HIDDEN' },
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
     expect(repo.read).not.toHaveBeenCalled();
     expect(repo.update).not.toHaveBeenCalled();
   });

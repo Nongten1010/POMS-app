@@ -12,13 +12,85 @@ import type { BodCodDeviationReportStatus } from '../../src/modules/bod-cod-devi
 import { changeBodCodWorkflowStatusSchema } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.validator';
 import { bodCodDeviationReportsRoutes } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.routes';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
-const officer = { actorUserId: 77, scope: 'ALL', roles: ['monitoring_kpm'] };
+const officer = {
+  actorUserId: 77,
+  scope: 'ALL',
+  approveScope: 'ALL',
+  roles: ['monitoring_kpm'],
+};
 
 describe('BOD/COD rejection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it.each([
+    ['SUBMITTED', 'INSPECTOR'],
+    ['WAITING_RESULT_NOTICE', 'RESULT_NOTICE'],
+    ['WAITING_REVIEW', 'REVIEWER'],
+    ['WAITING_APPROVAL', 'APPROVER'],
+  ] as const)(
+    'uses saved approval authority at %s independently of user role',
+    async (status, roleCode) => {
+      const h = harness(status);
+      const actor = { ...officer, roles: ['provincial_industry'] };
+      Object.assign(h.row, {
+        current_step_id: 1,
+        current_step_no: 1,
+        current_step_role_code: roleCode,
+        current_step_status: 'PENDING',
+      });
+      h.steps.push({
+        id: 1,
+        step_no: 1,
+        role_code: roleCode,
+        role_label: 'ขั้นตอนพิจารณา',
+        status: 'PENDING',
+        is_current: true,
+      });
+      expect((await repository.getReportById(9, actor)).allowedActions).toEqual([
+        'APPROVE',
+        'REQUEST_REVISION',
+        'REJECT',
+      ]);
+      await expect(
+        repository.changeWorkflowStatus(9, { action: 'APPROVE' }, actor),
+      ).resolves.toMatchObject({
+        statusCode: 'APPROVED',
+      });
+    },
+  );
+
+  it('does not let a role restore withdrawn approval permission', async () => {
+    const h = harness('APPROVED');
+    const actor = { ...officer, approveScope: undefined };
+    expect((await repository.getReportById(9, actor)).allowedActions).toEqual([]);
+    await expect(
+      repository.changeWorkflowStatus(9, { action: 'REJECT' }, actor),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(h.writes).toEqual([]);
+  });
+
+  it('uses a saved own-factory approval grant without treating its scope as a role ceiling', async () => {
+    harness('REJECTED');
+    const actor = {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      editScope: 'OWN_FACTORY',
+      approveScope: 'OWN_FACTORY',
+      roles: ['factory_operator'],
+    };
+    expect((await repository.getReportById(9, actor)).allowedActions).toEqual(['CANCEL', 'REJECT']);
+    await expect(
+      repository.changeWorkflowStatus(9, { action: 'REJECT' }, actor),
+    ).resolves.toMatchObject({
+      statusCode: 'REJECTED',
+      allowedActions: ['REJECT'],
+    });
   });
 
   it('rejects an approved report without a current step or reason and preserves its numbers', async () => {
@@ -165,7 +237,9 @@ describe('BOD/COD rejection', () => {
 
   it('does not advertise rejection to view-only users or operators', async () => {
     harness('REJECTED');
-    expect((await repository.getReportById(9, officer)).allowedActions).toEqual([]);
+    expect(
+      (await repository.getReportById(9, { ...officer, approveScope: undefined })).allowedActions,
+    ).toEqual([]);
     const operator = {
       actorUserId: 42,
       scope: 'OWN_FACTORY',
@@ -175,7 +249,7 @@ describe('BOD/COD rejection', () => {
     expect((await repository.getReportById(9, operator)).allowedActions).toEqual(['CANCEL']);
     await expect(
       repository.changeWorkflowStatus(9, { action: 'REJECT' }, operator),
-    ).rejects.toMatchObject({ statusCode: 409 });
+    ).rejects.toMatchObject({ statusCode: 403 });
   });
 
   it('rejects out-of-scope reports and users without workflow authority without writing', async () => {
@@ -189,9 +263,9 @@ describe('BOD/COD rejection', () => {
       repository.changeWorkflowStatus(
         9,
         { action: 'REJECT' },
-        { ...officer, roles: ['provincial_industry'] },
+        { ...officer, approveScope: undefined, roles: ['provincial_industry'] },
       ),
-    ).rejects.toMatchObject({ statusCode: 409 });
+    ).rejects.toMatchObject({ statusCode: 403 });
     expect(visible.writes).toEqual([]);
   });
 

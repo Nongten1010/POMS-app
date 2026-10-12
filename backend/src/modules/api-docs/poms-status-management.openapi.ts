@@ -166,7 +166,7 @@ const common = {
     ),
     '401': response('UNAUTHORIZED: JWT ขาดหายหรือไม่ถูกต้อง', ref('ErrorEnvelope')),
     '403': response(
-      'FORBIDDEN: ต้องมี JWT role admin และ permission ที่กำหนด',
+      'FORBIDDEN: ต้องมี effective permission ที่ endpoint กำหนด',
       ref('ErrorEnvelope'),
     ),
     '404': response(
@@ -184,16 +184,16 @@ export const statusManagementPaths: Record<string, Schema> = {
     get: {
       ...common,
       operationId: 'getPomsStatusManagement',
-      summary: 'อ่านสถานะโรงงาน จุดตรวจวัด และพารามิเตอร์ (Admin)',
+      summary: 'อ่านสถานะโรงงาน จุดตรวจวัด และพารามิเตอร์',
       description:
-        'ต้องมี JWT roles ที่มี admin และ factories:view พร้อม data scope. userType=officer ที่มี role admin ใช้ได้. อ่านรายการที่ซ่อน/ยกเลิกด้วยเพื่อจัดการได้. visibility สรุปจากพารามิเตอร์ไปจุดและจากจุด CONNECTED ไปโรงงาน: ทั้งหมดซ่อนเป็น HIDDEN มีหนึ่งตัวแสดงเป็น VISIBLE; ถ้าไม่มีลูกใช้ค่าระดับนั้นเดิม. อ่านข้อมูลเก่าได้โดยไม่ต้องบันทึกซ้ำ นับเฉพาะลูก current/live. จุด/พารามิเตอร์ไม่มีค่าบันทึกใช้ visibility แม่เป็นค่าเริ่มต้น. effectiveConnectionStatus ยังรับผลการยกเลิกจากโรงงาน. สถานะเป็นการบริหารใน POMS ไม่ใช่คำสั่งเปิด/ปิดอุปกรณ์หรือหลักฐาน telemetry.',
+        'ต้องมี effective permission factories:view พร้อม data scope ล่าสุด ไม่จำกัด role หรือ userType. อ่านรายการที่ซ่อน/ยกเลิกด้วยเพื่อจัดการได้. visibility สรุปจากพารามิเตอร์ไปจุดและจากจุด CONNECTED ไปโรงงาน: ทั้งหมดซ่อนเป็น HIDDEN มีหนึ่งตัวแสดงเป็น VISIBLE; ถ้าไม่มีลูกใช้ค่าระดับนั้นเดิม. อ่านข้อมูลเก่าได้โดยไม่ต้องบันทึกซ้ำ นับเฉพาะลูก current/live. จุด/พารามิเตอร์ไม่มีค่าบันทึกใช้ visibility แม่เป็นค่าเริ่มต้น. effectiveConnectionStatus ยังรับผลการยกเลิกจากโรงงาน. สถานะเป็นการบริหารใน POMS ไม่ใช่คำสั่งเปิด/ปิดอุปกรณ์หรือหลักฐาน telemetry.',
     },
     patch: {
       ...common,
       operationId: 'updatePomsStatusManagement',
-      summary: 'บันทึกสถานะทั้งหน้าต่างแบบ atomic (Admin)',
+      summary: 'บันทึกสถานะทั้งหน้าต่างแบบ atomic',
       description:
-        'ต้องมี JWT role admin และ factories:view + factories:edit โดยโรงงานต้องผ่านทั้งสอง scope. expectedRevision ใช้ค่าจาก GET; revision เก่าตอบ 409 และไม่บันทึกส่วนใด. ไม่รับฟิลด์ reason; บันทึก before/after กับผู้ทำรายการใน transaction เดียวกัน. factory/point เปลี่ยน visibility และ connectionStatus ได้; parameter เปลี่ยนได้เฉพาะ visibility. visibility ที่โรงงาน/จุดตั้งลูกปัจจุบันทั้งหมด แล้วใช้ patch ลูกที่ระบุชัดเจนตามลำดับ โรงงาน → จุด → พารามิเตอร์ ก่อนสรุปสถานะแม่. เปิดหนึ่งพารามิเตอร์ทำให้ visibility จุดและโรงงานกลับเป็น VISIBLE แต่ไม่เชื่อมต่อแม่ที่ DISCONNECTED กลับเอง. connectionStatus ที่ไม่ส่งคงค่าเดิม; visibility ของแม่อาจเปลี่ยนตามลูก. การบันทึกไม่ลบข้อมูล ไม่แก้ snapshot คำขอ ไม่สั่งอุปกรณ์ และไม่เปลี่ยนการรับข้อมูลหรือรายงานเดิม. Frontend ต้องเชื่อมปุ่มบันทึกกับ API นี้.',
+        'ต้องมี effective permissions factories:view + factories:edit ล่าสุด ไม่จำกัด role หรือ userType โดยโรงงานต้องผ่านทั้งสอง scope. expectedRevision ใช้ค่าจาก GET; revision เก่าตอบ 409 และไม่บันทึกส่วนใด. ไม่รับฟิลด์ reason; บันทึก before/after กับผู้ทำรายการใน transaction เดียวกัน. factory/point เปลี่ยน visibility และ connectionStatus ได้; parameter เปลี่ยนได้เฉพาะ visibility. visibility ที่โรงงาน/จุดตั้งลูกปัจจุบันทั้งหมด แล้วใช้ patch ลูกที่ระบุชัดเจนตามลำดับ โรงงาน → จุด → พารามิเตอร์ ก่อนสรุปสถานะแม่. เปิดหนึ่งพารามิเตอร์ทำให้ visibility จุดและโรงงานกลับเป็น VISIBLE แต่ไม่เชื่อมต่อแม่ที่ DISCONNECTED กลับเอง. connectionStatus ที่ไม่ส่งคงค่าเดิม; visibility ของแม่อาจเปลี่ยนตามลูก. การบันทึกไม่ลบข้อมูล ไม่แก้ snapshot คำขอ ไม่สั่งอุปกรณ์ และไม่เปลี่ยนการรับข้อมูลหรือรายงานเดิม. Frontend ต้องเชื่อมปุ่มบันทึกกับ API นี้.',
       requestBody: {
         required: true,
         content: {

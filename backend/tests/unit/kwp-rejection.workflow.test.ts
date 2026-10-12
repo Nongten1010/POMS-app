@@ -10,7 +10,7 @@ jest.mock('../../src/config/database', () => ({
 import { db } from '../../src/config/database';
 import { kwpFormSubmissionsRoutes } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.routes';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 type Row = Record<string, unknown>;
 type TransactionCallback = (trx: Knex.Transaction) => Promise<unknown>;
@@ -32,6 +32,7 @@ beforeEach(() => {
           reviewed_by: 21,
           reviewed_at: new Date('2026-09-01T00:00:00Z'),
           submission_region_name: 'ภาคกลาง',
+          assigned_user_ids: [42],
         },
       ],
     ],
@@ -159,14 +160,110 @@ describe('KWP rejection through HTTP and the real workflow', () => {
     },
   );
 
-  it('does not let an unrelated officer role reject even with an approve permission', async () => {
+  it('uses a custom approve permission regardless of the officer role', async () => {
     const response = await request(workflowApp())
       .post('/api/v1/kwp-form-submissions/12/workflow-actions')
       .set('Authorization', `Bearer ${approverToken('center_director')}`)
       .send({ action: 'REJECT' });
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    expect(tables.get('kwp_form_status_history')).toHaveLength(1);
+  });
+
+  it.each(['APPROVE', 'REQUEST_REVISION', 'REJECT'])(
+    'uses custom OWN_FACTORY approval for %s without a monitoring role',
+    async (action) => {
+      const row = tables.get('kwp_form_submissions')?.[0];
+      if (!row) throw new Error('Expected seeded submission');
+      row.status = 'SUBMITTED';
+      const token = signAccessToken({
+        sub: '42',
+        userType: 'operator',
+        roles: ['factory_operator'],
+        scopes: { 'kwp_forms:view': 'OWN_FACTORY', 'kwp_forms:approve': 'OWN_FACTORY' },
+      });
+      const app = workflowApp();
+      const workflow = await request(app)
+        .get('/api/v1/kwp-form-submissions/12/workflow')
+        .set('Authorization', `Bearer ${token}`);
+      expect(workflow.status).toBe(200);
+      expect(workflow.body.data.allowedActions).toContain(action);
+      expect(workflow.body.data.allowedActions).not.toContain('CANCEL');
+      const response = await request(app)
+        .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ action, revisionReason: action === 'REQUEST_REVISION' ? 'ปรับข้อมูล' : undefined });
+      expect(response.status).toBe(200);
+      expect(tables.get('kwp_form_status_history')).toHaveLength(1);
+    },
+  );
+
+  it('keeps OWN_FACTORY approval limited to assigned factories', async () => {
+    const token = signAccessToken({
+      sub: '99',
+      userType: 'operator',
+      roles: ['factory_operator'],
+      scopes: { 'kwp_forms:approve': 'OWN_FACTORY' },
+    });
+    const response = await request(workflowApp())
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'REJECT' });
+    expect(response.status).toBe(404);
     expect(tables.get('kwp_form_status_history')).toHaveLength(0);
   });
+
+  it('uses custom edit permission for cancellation regardless of user type', async () => {
+    const row = tables.get('kwp_form_submissions')?.[0];
+    if (!row) throw new Error('Expected seeded submission');
+    row.status = 'SUBMITTED';
+    const token = signAccessToken({
+      sub: '42',
+      userType: 'officer',
+      roles: ['center_director'],
+      scopes: { 'kwp_forms:view': 'ALL', 'kwp_forms:edit': 'ALL' },
+    });
+    const app = workflowApp();
+    const workflow = await request(app)
+      .get('/api/v1/kwp-form-submissions/12/workflow')
+      .set('Authorization', `Bearer ${token}`);
+    expect(workflow.body.data.allowedActions).toEqual(['CANCEL']);
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'CANCEL' });
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ status: 'CANCELLED', allowedActions: [] });
+  });
+
+  it.each(['unassigned', 'outside edit region'])(
+    'does not advertise or perform cancellation for a factory %s',
+    async (restriction) => {
+      const row = tables.get('kwp_form_submissions')?.[0];
+      if (!row) throw new Error('Expected seeded submission');
+      row.status = 'SUBMITTED';
+      const token = signAccessToken({
+        sub: restriction === 'unassigned' ? '99' : '42',
+        userType: 'officer',
+        roles: ['center_director'],
+        scopes: {
+          'kwp_forms:view': 'ALL',
+          'kwp_forms:edit': restriction === 'unassigned' ? 'ALL' : 'IN_REGION',
+        },
+        regionalAccess: { regions: ['ภาคใต้'] },
+      });
+      const app = workflowApp();
+      const workflow = await request(app)
+        .get('/api/v1/kwp-form-submissions/12/workflow')
+        .set('Authorization', `Bearer ${token}`);
+      expect(workflow.body.data.allowedActions).toEqual([]);
+      const response = await request(app)
+        .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ action: 'CANCEL' });
+      expect(response.status).toBe(404);
+      expect(tables.get('kwp_form_status_history')).toHaveLength(0);
+    },
+  );
 
   it.each(['officer', 'operator'] as const)(
     'does not advertise or allow rejection for a view-only %s',
@@ -317,7 +414,27 @@ function query(name: string): Knex.QueryBuilder {
     (tables.get(table) ?? []).filter((row) => filters.every((filter) => filter(row)));
   const chain: Record<string, unknown> = {};
   for (const method of ['leftJoin', 'modify', 'orderBy', 'select']) chain[method] = () => chain;
-  chain.where = (column: string, value: unknown) => {
+  chain.where = (column: string | ((this: unknown) => void), value: unknown) => {
+    if (typeof column === 'function') {
+      let actorUserId: unknown;
+      const assignment: Record<string, unknown> = {};
+      for (const method of ['select', 'from', 'whereRaw', 'whereNull'])
+        assignment[method] = () => assignment;
+      assignment.where = (_column: string, userId: unknown) => {
+        actorUserId = userId;
+        return assignment;
+      };
+      const exists = function (callback: (this: unknown) => void) {
+        callback.call(assignment);
+        return { orWhereExists: exists };
+      };
+      column.call({ whereExists: exists });
+      filters.push(
+        (row) =>
+          (row.assigned_user_ids as number[] | undefined)?.includes(Number(actorUserId)) === true,
+      );
+      return chain;
+    }
     filters.push((row) => row[key(column)] === value);
     return chain;
   };

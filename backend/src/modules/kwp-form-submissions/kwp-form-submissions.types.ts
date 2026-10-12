@@ -47,8 +47,15 @@ export interface KwpFormSubmissionUpdateAccess extends KwpFormSubmissionAccess {
 export type KwpFormWorkflowAccess = KwpFormSubmissionAccess & {
   canEdit?: boolean;
   canApprove?: boolean;
+  editScope?: KwpFormSubmissionAccess['scope'];
   approveScope?: KwpFormSubmissionAccess['scope'];
 };
+
+export interface KwpWorkflowActionPermissions {
+  canEdit: boolean;
+  canApprove: boolean;
+  canCancel: boolean;
+}
 
 export interface ChangeKwpFormWorkflowStatusDTO {
   action: KwpFormWorkflowAction;

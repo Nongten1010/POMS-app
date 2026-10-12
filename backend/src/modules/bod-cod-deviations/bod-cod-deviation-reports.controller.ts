@@ -97,6 +97,7 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.createReport(payload, {
         actorUserId,
         scope: getBodCodWriteDataScope(req),
+        editScope: getBodCodWriteDataScope(req),
         viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
@@ -126,6 +127,7 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.cancelReport(id, {
         actorUserId,
         scope: getBodCodWriteDataScope(req),
+        editScope: getBodCodWriteDataScope(req),
         viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
@@ -144,6 +146,7 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.resubmitReport(id, payload, {
         actorUserId,
         scope: getBodCodWriteDataScope(req),
+        editScope: getBodCodWriteDataScope(req),
         viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
@@ -162,6 +165,7 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.changeWorkflowStatus(id, payload, {
         actorUserId,
         scope: getBodCodActionDataScope(req, 'approve'),
+        approveScope: getBodCodActionDataScope(req, 'approve'),
         viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
         roles: req.user?.roles ?? [],
@@ -180,6 +184,7 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.upsertResultNotice(id, payload, {
         actorUserId,
         scope: getBodCodActionDataScope(req, 'approve'),
+        approveScope: getBodCodActionDataScope(req, 'approve'),
         viewScope: getScopeDetails(req, 'bod_cod_errors:view'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
         roles: req.user?.roles ?? [],

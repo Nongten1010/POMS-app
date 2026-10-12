@@ -277,6 +277,7 @@ export const bodCodDeviationReportsRepository = {
     input: CreateBodCodDeviationReportDTO,
     access: CreateBodCodDeviationReportAccess,
   ): Promise<CreatedBodCodDeviationReportDTO> {
+    access = { ...access, scope: access.editScope };
     return db.transaction(async (trx) => {
       assertBodCodCreator(access);
       const point = await resolveSubmissionPoint(input, access, trx);
@@ -405,12 +406,7 @@ export const bodCodDeviationReportsRepository = {
         approvalTrack,
         currentStep,
         steps: savedSteps,
-        allowedActions: allowedActionsFor(
-          'SUBMITTED',
-          currentStep,
-          access.scope,
-          access.roles ?? [],
-        ),
+        allowedActions: allowedActionsFor('SUBMITTED', currentStep, access.scope, 'edit'),
       };
     });
   },
@@ -420,6 +416,7 @@ export const bodCodDeviationReportsRepository = {
     input: ResubmitBodCodDeviationReportDTO,
     access: CreateBodCodDeviationReportAccess,
   ): Promise<CreatedBodCodDeviationReportDTO> {
+    access = { ...access, scope: access.editScope };
     return db.transaction(async (trx) => {
       const now = new Date();
       const report = await assertCanResubmitReport(id, input, access, trx);
@@ -476,7 +473,7 @@ export const bodCodDeviationReportsRepository = {
           'REVISED_PENDING_REVIEW',
           currentStep,
           access.scope,
-          access.roles ?? [],
+          'edit',
         ),
       };
     });
@@ -486,8 +483,9 @@ export const bodCodDeviationReportsRepository = {
     id: number,
     access: BodCodDeviationAccess,
   ): Promise<CreatedBodCodDeviationReportDTO> {
+    access = { ...access, scope: access.editScope };
     if (!isBodCodOperator(access)) {
-      throw new ForbiddenError('Only own-factory operators can cancel BOD/COD reports');
+      throw new ForbiddenError('BOD/COD cancellation requires own-factory edit permission');
     }
     return db.transaction(async (trx) => {
       await lockBodCodReport(id, trx);
@@ -587,12 +585,7 @@ export const bodCodDeviationReportsRepository = {
         approvalTrack: report.approval_track,
         currentStep,
         steps: savedSteps,
-        allowedActions: allowedActionsFor(
-          nextState.reportStatus,
-          currentStep,
-          access.scope,
-          access.roles ?? [],
-        ),
+        allowedActions: allowedActionsFor(nextState.reportStatus, currentStep, access.approveScope),
       };
     });
   },
@@ -617,12 +610,7 @@ export const bodCodDeviationReportsRepository = {
         approvalTrack: report.approval_track,
         currentStep,
         steps: savedSteps,
-        allowedActions: allowedActionsFor(
-          report.status,
-          currentStep,
-          access.scope,
-          access.roles ?? [],
-        ),
+        allowedActions: allowedActionsFor(report.status, currentStep, access.approveScope),
         resultNotice,
       };
     });
@@ -650,23 +638,18 @@ export const bodCodDeviationReportsRepository = {
       historyByReportId.get(Number(report.id)) ?? [],
       resultNotice,
       access.scope,
-      access.roles ?? [],
     );
     // Viewing a report alone must never advertise authority to mutate it.
-    const actionScope = isBodCodOperator({ ...access, scope: access.editScope })
-      ? access.editScope
-      : access.approveScope;
-    if (actionScope === undefined) {
-      detail.allowedActions = [];
-    } else {
+    for (const action of ['edit', 'approve'] as const) {
+      const actionScope = action === 'edit' ? access.editScope : access.approveScope;
+      const actions = allowedActionsFor(report.status, detail.currentStep, actionScope, action);
+      if (actions.length === 0) continue;
       const writable = await buildEditableReportQuery(id, {
         ...access,
         scope: actionScope,
         viewScope: access.scope,
       }).first();
-      detail.allowedActions = writable
-        ? allowedActionsFor(report.status, detail.currentStep, actionScope, access.roles ?? [])
-        : [];
+      if (writable) detail.allowedActions.push(...actions);
     }
     return detail;
   },
@@ -707,7 +690,10 @@ async function resolveSubmissionPoint(
     [id],
   );
   const point = (await readPoint()).find((row) => Number(row.connected_point_id) === id);
-  if (!point || !supportsBodCodParameter(parseParameters(point.parameters_json), input.selectedParameterCode)) {
+  if (
+    !point ||
+    !supportsBodCodParameter(parseParameters(point.parameters_json), input.selectedParameterCode)
+  ) {
     throw new BadRequestError('Selected parameter is unavailable at this connected point');
   }
   if (
@@ -821,9 +807,10 @@ export function buildBodCodAllowedActionsForTests(
   status: BodCodDeviationReportStatus,
   currentStep: BodCodWorkflowStepDTO | null,
   scope?: BodCodDeviationAccess['scope'],
-  roles: string[] = [],
+  _roles: string[] = [],
+  action: 'edit' | 'approve' = 'approve',
 ) {
-  return allowedActionsFor(status, currentStep, scope, roles);
+  return allowedActionsFor(status, currentStep, scope, action);
 }
 
 export function buildBodCodNextWorkflowStateForTests(
@@ -1037,7 +1024,7 @@ async function assertCanResubmitReport(
   trx: Knex.Transaction,
 ): Promise<EditableReportRow> {
   if (!isBodCodOperator(access)) {
-    throw new ForbiddenError('Only own-factory operators can resubmit BOD/COD reports');
+    throw new ForbiddenError('BOD/COD resubmission requires own-factory edit permission');
   }
 
   await lockBodCodReport(id, trx);
@@ -1065,17 +1052,19 @@ async function assertCanChangeWorkflowStatus(
   access: BodCodDeviationAccess,
   trx: Knex.Transaction,
 ): Promise<EditableReportRow> {
+  if (scopeValue(access.approveScope) == null) {
+    throw new ForbiddenError('BOD/COD approval permission is required');
+  }
   await lockBodCodReport(id, trx);
-  const row = await buildEditableReportQuery(id, access, trx).first();
+  const row = await buildEditableReportQuery(
+    id,
+    { ...access, scope: access.approveScope },
+    trx,
+  ).first();
   if (!row) throw new NotFoundError('BOD/COD deviation report not found');
 
   const currentStep = editableCurrentStep(row);
-  const allowedActions = allowedActionsFor(
-    row.status,
-    currentStep,
-    access.scope,
-    access.roles ?? [],
-  );
+  const allowedActions = allowedActionsFor(row.status, currentStep, access.approveScope);
   if (!allowedActions.includes(input.action)) {
     throw new ConflictError('BOD/COD workflow action is not allowed for current status', {
       currentStatus: row.status,
@@ -1099,19 +1088,16 @@ async function assertCanUpsertResultNotice(
   access: BodCodDeviationAccess,
   trx: Knex.Transaction,
 ): Promise<EditableReportRow> {
-  if (
-    scopeValue(access.scope) === 'OWN_FACTORY' ||
-    !(access.roles ?? []).some((role) =>
-      ['monitoring_kpm', 'monitoring_5_centers', 'admin'].includes(role),
-    )
-  ) {
-    throw new ForbiddenError(
-      'Only monitoring_kpm, monitoring_5_centers or admin officers can save BOD/COD result notices',
-    );
+  if (scopeValue(access.approveScope) == null) {
+    throw new ForbiddenError('BOD/COD approval permission is required to save result notices');
   }
 
   await lockBodCodReport(id, trx);
-  const row = await buildEditableReportQuery(id, access, trx).first();
+  const row = await buildEditableReportQuery(
+    id,
+    { ...access, scope: access.approveScope },
+    trx,
+  ).first();
   if (!row) throw new NotFoundError('BOD/COD deviation report not found');
 
   if (
@@ -1987,7 +1973,6 @@ function toReportDetailDTO(
   statusHistory: BodCodStatusHistoryDTO[],
   resultNotice: BodCodResultNoticeDTO | null,
   scope: BodCodDeviationAccess['scope'],
-  roles: string[] = [],
 ): BodCodDeviationReportDetailDTO {
   const base = toReportDTO(row, scope, statusHistory);
   const currentStep = currentWorkflowStep(steps);
@@ -2010,7 +1995,7 @@ function toReportDetailDTO(
     approvalTrack: row.approval_track,
     currentStep,
     steps,
-    allowedActions: allowedActionsFor(row.status, currentStep, scope, roles),
+    allowedActions: [],
     measurements,
     attachments,
     resultNotice,
@@ -2098,24 +2083,15 @@ function allowedActionsFor(
   status: BodCodDeviationReportStatus,
   currentStep: BodCodWorkflowStepDTO | null,
   scope: BodCodDeviationAccess['scope'],
-  roles: string[] = [],
+  action: 'edit' | 'approve' = 'approve',
 ): BodCodAllowedAction[] {
-  if (isBodCodOperator({ actorUserId: 0, scope, roles })) {
-    return status === 'APPROVED' || status === 'CANCELLED' ? [] : ['CANCEL'];
+  if (scopeValue(scope) == null) return [];
+  if (action === 'edit') {
+    return scopeValue(scope) === 'OWN_FACTORY' && status !== 'APPROVED' && status !== 'CANCELLED'
+      ? ['CANCEL']
+      : [];
   }
-  if (scopeValue(scope) === 'OWN_FACTORY') return [];
-  const rejectionActions: BodCodAllowedAction[] = roles.some((role) =>
-    [
-      'monitoring_kpm',
-      'monitoring_5_centers',
-      'admin',
-      'kpm_director',
-      'center_director',
-      'kwp_director',
-    ].includes(role),
-  )
-    ? ['REJECT']
-    : [];
+  const rejectionActions: BodCodAllowedAction[] = ['REJECT'];
   if (currentStep?.status !== 'PENDING') return rejectionActions;
   const expectedRoles: Partial<Record<BodCodDeviationReportStatus, BodCodApprovalRoleCode>> = {
     SUBMITTED: 'INSPECTOR',
@@ -2125,25 +2101,7 @@ function allowedActionsFor(
     WAITING_APPROVAL: 'APPROVER',
   };
   if (currentStep.roleCode !== expectedRoles[status]) return rejectionActions;
-  return canActOnCurrentStep(currentStep, roles)
-    ? ['APPROVE', 'REQUEST_REVISION', ...rejectionActions]
-    : rejectionActions;
-}
-
-function canActOnCurrentStep(currentStep: BodCodWorkflowStepDTO, roles: string[]): boolean {
-  if (currentStep.roleCode === 'INSPECTOR') {
-    return roles.some((role) => ['monitoring_kpm', 'monitoring_5_centers', 'admin'].includes(role));
-  }
-  if (currentStep.roleCode === 'RESULT_NOTICE') {
-    return roles.some((role) => ['monitoring_kpm', 'admin'].includes(role));
-  }
-  if (currentStep.roleCode === 'REVIEWER') {
-    return roles.includes('kpm_director');
-  }
-  if (currentStep.roleCode === 'APPROVER') {
-    return roles.some((role) => ['center_director', 'kwp_director'].includes(role));
-  }
-  return false;
+  return ['APPROVE', 'REQUEST_REVISION', ...rejectionActions];
 }
 
 function connectedFactoryId(row: FactoryTableRow): string {

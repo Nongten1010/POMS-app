@@ -5,7 +5,7 @@ import { describe, expect, it } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import { env } from '../../src/config/env';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 describe('POMS factory document image upload route', () => {
   async function withTempUploadDir<T>(callback: (uploadDir: string) => Promise<T>): Promise<T> {

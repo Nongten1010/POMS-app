@@ -20,7 +20,7 @@ import { alertEventsService } from '../../src/modules/alert-events/alert-events.
 import { renderAlertEmail } from '../../src/modules/alert-emails/alert-email-template';
 import { alertEmailOutboxRepository } from '../../src/modules/alert-emails/alert-email-outbox.repository';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 import { NotFoundError } from '../../src/shared/errors/AppError';
 
 const events = jest.mocked(alertEventsService.getById);

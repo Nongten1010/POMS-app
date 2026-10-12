@@ -9,11 +9,13 @@ import { hashPassword } from '../../shared/utils/password';
 import { usersRepository } from './users.repository';
 import {
   groupPermissions,
+  hasValidPermissionDataScope,
+  isBinaryPermissionCode,
   isEditablePermissionCode,
-  isSameOrNarrowerPermissionScope,
   mergePermissionScopesWithOverrides,
   projectEditablePermissionGroups,
 } from '../auth/permissions';
+import type { PermissionMode } from '../auth/permissions';
 import type {
   CreateManagedUserInput,
   CreateLocalAccountInput,
@@ -60,7 +62,12 @@ export const usersService = {
       usersRepository.getRolePermissions(userId),
       usersRepository.getUserPermissionOverrides(userId),
     ]);
-    const effectivePermissionDetails = buildEffectivePermissionDetails(rolePermissions, overrides);
+    const permissionMode = user.permissionMode ?? 'role_default';
+    const effectivePermissionDetails = buildEffectivePermissionDetails(
+      rolePermissions,
+      overrides,
+      permissionMode,
+    );
     const roleCodes = [...(user.roleCodes ?? [user.roles])];
 
     return {
@@ -80,15 +87,18 @@ export const usersService = {
         regionalAccess: user.profile?.regionalAccess ?? null,
         roles: user.roles,
         roleCodes,
+        permissionMode,
         isActive: user.isActive,
         source: toManagedUserSource(user.identityProvider),
       },
       permissions: projectEditablePermissionGroups(
-        projectManagedPermissionAssignments(
-          groupPermissions(effectivePermissionDetails),
-          roleCodes,
-          user.profile,
-        ),
+        permissionMode === 'custom'
+          ? groupPermissions(effectivePermissionDetails)
+          : projectManagedPermissionAssignments(
+              groupPermissions(effectivePermissionDetails),
+              roleCodes,
+              user.profile,
+            ),
       ),
     };
   },
@@ -111,16 +121,20 @@ export const usersService = {
     await ensureUniqueIdentity(input.username);
     await ensureRolesExist(input.roleCodes);
     const resolvedInput = await withResolvedUserInput(input);
-    ensureRequiredRoleAssignment(resolvedInput.roleCodes[0], resolvedInput.profile);
+    if (resolvedInput.permissionOverrides === undefined) {
+      ensureRequiredRoleAssignment(resolvedInput.roleCodes[0], resolvedInput.profile);
+    }
     if (resolvedInput.permissionOverrides) {
       await ensurePermissionsExist(
         resolvedInput.permissionOverrides.map((permission) => permission.code),
       );
     }
     const permissionOverrides = resolvedInput.permissionOverrides
-      ? await validatePermissionOverridesForRoleCodes(
+      ? await preparePermissionSnapshot(
           resolvedInput.permissionOverrides,
           resolvedInput.roleCodes,
+          undefined,
+          resolvedInput.profile,
         )
       : undefined;
 
@@ -158,11 +172,24 @@ export const usersService = {
       await ensureRolesExist(identitySafeInput.roleCodes);
     }
     const resolvedInput = await withResolvedUserInput(identitySafeInput);
-    ensureRequiredRoleAssignment(
-      resolvedInput.roleCodes?.[0] ?? existing.roleCodes[0],
-      resolvedInput.profile,
-      existing.profile,
-    );
+    if (input.permissionMode === 'role_default' && input.permissionOverrides !== undefined) {
+      throw new BadRequestError(
+        'Cannot reset role permissions and replace a custom snapshot together',
+      );
+    }
+    if (input.permissionMode === 'custom' && input.permissionOverrides === undefined) {
+      throw new BadRequestError('Custom permission mode requires a permission snapshot');
+    }
+    if (
+      input.permissionOverrides === undefined &&
+      (input.permissionMode ?? existing.permissionMode ?? 'role_default') === 'role_default'
+    ) {
+      ensureRequiredRoleAssignment(
+        resolvedInput.roleCodes?.[0] ?? existing.roleCodes[0],
+        resolvedInput.profile,
+        existing.profile,
+      );
+    }
     if (resolvedInput.permissionOverrides !== undefined) {
       await ensurePermissionsExist(
         resolvedInput.permissionOverrides.map((permission) => permission.code),
@@ -172,10 +199,12 @@ export const usersService = {
     const permissionOverrides =
       resolvedInput.permissionOverrides === undefined
         ? undefined
-        : await validatePermissionOverridesForRoleCodes(
+        : await preparePermissionSnapshot(
             resolvedInput.permissionOverrides,
             resolvedInput.roleCodes ?? existing.roleCodes,
-            userId,
+            existing,
+            { ...existing.profile, ...resolvedInput.profile },
+            resolvedInput.permissionEditSource === 'grouped',
           );
 
     const { password, ...repositoryInput } = resolvedInput;
@@ -183,7 +212,9 @@ export const usersService = {
       userId,
       await withResolvedOfficerProfile({
         ...repositoryInput,
-        ...(permissionOverrides !== undefined ? { permissionOverrides } : {}),
+        ...(permissionOverrides !== undefined
+          ? { permissionOverrides, permissionMode: 'custom' as const }
+          : {}),
         ...(password ? { passwordHash: await hashPassword(password) } : {}),
       }),
       actorUserId,
@@ -207,11 +238,17 @@ export const usersService = {
       usersRepository.getRolePermissions(userId),
       usersRepository.getUserPermissionOverrides(userId),
     ]);
-    const effectiveScopes = buildEffectiveScopes(rolePermissions, overrides);
-    const effectivePermissionDetails = buildEffectivePermissionDetails(rolePermissions, overrides);
+    const permissionMode = existing.permissionMode ?? 'role_default';
+    const effectiveScopes = buildEffectiveScopes(rolePermissions, overrides, permissionMode);
+    const effectivePermissionDetails = buildEffectivePermissionDetails(
+      rolePermissions,
+      overrides,
+      permissionMode,
+    );
 
     return {
       userId,
+      permissionMode,
       rolePermissions,
       overrides,
       effectiveScopes,
@@ -226,12 +263,16 @@ export const usersService = {
   ): Promise<UserPermissionsDTO> {
     const existing = await usersRepository.findById(userId);
     if (!existing) throw new NotFoundError('User not found');
-    const resolvedPermissions = await resolvePermissionOverrides(input.permissions);
-    await ensurePermissionsExist(resolvedPermissions.map((permission) => permission.code));
+    await ensurePermissionsExist(input.permissions.map((permission) => permission.code));
     const rolePermissions = await usersRepository.getRolePermissions(userId);
-    const permissions = validatePermissionOverridesAgainstRole(
-      resolvedPermissions,
-      rolePermissions,
+    validateNewPermissionScopes(input.permissions, rolePermissions);
+    const permissions = await resolvePermissionOverrides(
+      fillPermissionSnapshotDefaults(
+        input.permissions,
+        rolePermissions,
+        existing.roleCodes,
+        existing.profile,
+      ),
     );
     await usersRepository.replaceUserPermissionOverrides(userId, permissions, actorUserId);
     return this.getPermissions(userId);
@@ -241,9 +282,10 @@ export const usersService = {
 function buildEffectiveScopes(
   rolePermissions: PermissionGrantDTO[],
   overrides: Awaited<ReturnType<typeof usersRepository.getUserPermissionOverrides>>,
+  permissionMode: PermissionMode = 'role_default',
 ): Record<string, PermissionScope> {
   return Object.fromEntries(
-    Object.entries(buildEffectivePermissionDetails(rolePermissions, overrides)).map(
+    Object.entries(buildEffectivePermissionDetails(rolePermissions, overrides, permissionMode)).map(
       ([code, details]) => [code, details.scope],
     ),
   );
@@ -252,6 +294,7 @@ function buildEffectiveScopes(
 function buildEffectivePermissionDetails(
   rolePermissions: PermissionGrantDTO[],
   overrides: Awaited<ReturnType<typeof usersRepository.getUserPermissionOverrides>>,
+  permissionMode: PermissionMode = 'role_default',
 ): Record<
   string,
   {
@@ -276,6 +319,7 @@ function buildEffectivePermissionDetails(
       estateCode: override.estateCode ?? override.estate,
       estate: override.estate,
     })),
+    permissionMode,
   );
 
   return Object.fromEntries(
@@ -451,98 +495,195 @@ async function ensureRolesExist(roleCodes: string[]): Promise<void> {
   }
 }
 
-async function validatePermissionOverridesForRoleCodes(
+/** Grouped edits replace editable grants and freeze the currently effective hidden grants. */
+async function preparePermissionSnapshot(
   permissions: PermissionOverrideInput[],
   roleCodes: string[],
-  preserveHiddenOverridesForUserId?: number,
+  existing?: ManagedUserDetailDTO,
+  profile?: OfficerProfileInput,
+  preserveActionScopes = false,
 ): Promise<PermissionOverrideInput[]> {
   const rolePermissions = await usersRepository.getRolePermissionsByRoleCodes(roleCodes);
-  const effectivePermissions =
-    preserveHiddenOverridesForUserId === undefined
-      ? permissions
-      : await mergePreservedHiddenPermissionOverrides(
-          preserveHiddenOverridesForUserId,
-          permissions,
-          rolePermissions,
-        );
-  return validatePermissionOverridesAgainstRole(effectivePermissions, rolePermissions);
-}
-
-async function mergePreservedHiddenPermissionOverrides(
-  userId: number,
-  editableOverrides: PermissionOverrideInput[],
-  rolePermissions: PermissionGrantDTO[],
-): Promise<PermissionOverrideInput[]> {
-  const existingOverrides = await usersRepository.getUserPermissionOverrides(userId);
-  const incomingCodes = new Set(editableOverrides.map((permission) => permission.code));
-  const roleScopes = new Map(
-    rolePermissions.map((permission) => [permission.code, permission.scope] as const),
+  validateNewPermissionScopes(permissions, rolePermissions);
+  permissions = await resolvePermissionOverrides(
+    fillPermissionSnapshotDefaults(permissions, rolePermissions, roleCodes, profile),
   );
-  const hiddenOverrides = existingOverrides
-    .filter(
-      (permission) =>
+  const hidden: PermissionOverrideInput[] = [];
+  if (existing) {
+    const [currentRolePermissions, existingOverrides] = await Promise.all([
+      usersRepository.getRolePermissions(existing.id),
+      usersRepository.getUserPermissionOverrides(existing.id),
+    ]);
+    const incomingCodes = new Set(permissions.map((permission) => permission.code));
+    const current = buildEffectivePermissionDetails(
+      currentRolePermissions,
+      existingOverrides,
+      existing.permissionMode ?? 'role_default',
+    );
+    const overrideByCode = new Map(
+      existingOverrides.map((permission) => [permission.code, permission]),
+    );
+    const currentSnapshot = fillPermissionSnapshotDefaults(
+      Object.entries(current).map(([code, details]) => ({
+        code,
+        effect: 'allow',
+        ...details,
+        province: overrideByCode.get(code)?.provinceId ?? details.province,
+      })),
+      currentRolePermissions,
+      existing.roleCodes,
+      existing.profile,
+    );
+    if (preserveActionScopes) {
+      permissions = preserveUnchangedActionScopes(permissions, currentSnapshot);
+    }
+    for (const [code, details] of Object.entries(current)) {
+      if (!isEditablePermissionCode(code) && !incomingCodes.has(code)) {
+        hidden.push(
+          ...fillPermissionSnapshotDefaults(
+            [{ code, effect: 'allow', ...details, province: details.province ?? null }],
+            currentRolePermissions,
+            existing.roleCodes,
+            existing.profile,
+          ),
+        );
+      }
+    }
+    for (const permission of existingOverrides) {
+      if (
+        permission.effect === 'deny' &&
         !isEditablePermissionCode(permission.code) &&
-        !incomingCodes.has(permission.code) &&
-        roleScopes.has(permission.code),
-    )
-    .filter((permission) => {
-      if (permission.effect === 'deny') return true;
-      return isSameOrNarrowerPermissionScope(permission.scope, roleScopes.get(permission.code));
-    })
-    .map((permission) => ({
-      code: permission.code,
-      effect: permission.effect,
-      scope: permission.scope,
-      region: permission.region,
-      province: permission.provinceId ?? permission.provinceName,
-      estateCode: permission.estateCode ?? permission.estate,
-      estate: permission.estate ?? permission.estateCode,
-    }));
-
-  return [...editableOverrides, ...hiddenOverrides];
+        !incomingCodes.has(permission.code)
+      ) {
+        hidden.push({ code: permission.code, effect: 'deny' });
+      }
+    }
+  }
+  return [...permissions, ...(await resolvePermissionOverrides(hidden))];
 }
 
-function validatePermissionOverridesAgainstRole(
+/** A menu's widest display scope must not silently expand a narrower existing action. */
+function preserveUnchangedActionScopes(
+  incoming: PermissionOverrideInput[],
+  current: PermissionOverrideInput[],
+): PermissionOverrideInput[] {
+  const details = Object.fromEntries(
+    current.map((permission) => [
+      permission.code,
+      {
+        scope: permission.scope ?? null,
+        region: permission.region,
+        province: permission.province,
+        estateCode: permission.estateCode,
+      },
+    ]),
+  );
+  const groups = groupPermissions(details);
+  const byCode = new Map(current.map((permission) => [permission.code, permission]));
+  return incoming.map((permission) => {
+    const previous = byCode.get(permission.code);
+    if (permission.effect !== 'allow' || !previous || permission.scope === undefined)
+      return permission;
+    const candidateGroups = groupPermissions({
+      [permission.code]: {
+        scope: permission.scope,
+        region: permission.region,
+        province: permission.province,
+        estateCode: permission.estateCode ?? permission.estate,
+      },
+    });
+    const module = Object.keys(candidateGroups)[0];
+    const candidate = candidateGroups[module];
+    const group = groups[module];
+    if (!candidate || !group || candidate.data !== group.data) return permission;
+    if (
+      ['region', 'province', 'estateCode'].some(
+        (key) =>
+          normalizeLocationValue(candidate[key] as string | null | undefined) !==
+          normalizeLocationValue(group[key] as string | null | undefined),
+      )
+    )
+      return permission;
+    return previous;
+  });
+}
+
+function validateNewPermissionScopes(
   permissions: PermissionOverrideInput[],
   rolePermissions: PermissionGrantDTO[],
-): PermissionOverrideInput[] {
-  const roleScopes = new Map<string, PermissionScope>();
-  for (const permission of rolePermissions) {
-    roleScopes.set(permission.code, permission.scope);
-  }
-
-  const validated: PermissionOverrideInput[] = [];
+): void {
+  const roleCodes = new Set(rolePermissions.map((permission) => permission.code));
   for (const permission of permissions) {
-    if (!roleScopes.has(permission.code)) {
-      if (permission.effect === 'deny') continue;
-      throw new BadRequestError(
-        'Permission override cannot grant an action outside the assigned role',
-        {
-          permission: permission.code,
-          status: StatusCodes.BAD_REQUEST,
-        },
-      );
-    }
-
-    const roleScope = roleScopes.get(permission.code) as PermissionScope;
-    if (permission.effect === 'deny') {
-      validated.push(permission);
-      continue;
-    }
-
-    const scope = permission.scope === undefined ? roleScope : permission.scope;
-    if (!isSameOrNarrowerPermissionScope(scope, roleScope)) {
-      throw new BadRequestError('Permission override cannot widen the assigned role scope', {
+    if (
+      permission.effect === 'allow' &&
+      !isBinaryPermissionCode(permission.code) &&
+      (permission.scope === null ||
+        (permission.scope === undefined && !roleCodes.has(permission.code)))
+    ) {
+      throw new BadRequestError('Data-scoped permissions require a valid scope', {
         permission: permission.code,
-        roleScope,
-        requestedScope: scope,
-        status: StatusCodes.BAD_REQUEST,
       });
     }
-    validated.push({ ...permission, scope });
   }
+}
 
-  return validated;
+/** Defaults are copied once at save time; a custom snapshot never inherits later role changes. */
+function fillPermissionSnapshotDefaults(
+  permissions: PermissionOverrideInput[],
+  rolePermissions: PermissionGrantDTO[],
+  roleCodes: readonly string[],
+  profile?: OfficerProfileInput,
+): PermissionOverrideInput[] {
+  const roleScopes = new Map(
+    rolePermissions.map((permission) => [permission.code, permission.scope]),
+  );
+  const region =
+    roleCodes.includes('monitoring_kpm') || roleCodes.includes('kpm_director')
+      ? 'ภาคกลาง'
+      : profile?.regionalAccess?.regions.length === 1
+        ? profile.regionalAccess.regions[0]
+        : null;
+  return permissions.map((permission) => {
+    if (permission.effect === 'deny') return { ...permission, scope: undefined };
+    let scope =
+      permission.scope === undefined ? (roleScopes.get(permission.code) ?? null) : permission.scope;
+    if (!isBinaryPermissionCode(permission.code) && scope === null) {
+      const [resource, action] = permission.code.split(':');
+      // Legacy action defaults borrow the role view area once, then become explicit snapshot data.
+      if (permission.scope === undefined && (action === 'edit' || action === 'approve')) {
+        scope = roleScopes.get(`${resource}:view`) ?? null;
+      }
+      if (scope === null) {
+        throw new BadRequestError('Data-scoped permissions require a valid scope', {
+          permission: permission.code,
+        });
+      }
+    }
+    return {
+      ...permission,
+      scope,
+      region: scope === 'IN_REGION' ? (normalizeLocationValue(permission.region) ?? region) : null,
+      province:
+        scope === 'IN_PROVINCE'
+          ? (normalizeLocationValue(permission.province) ??
+            profile?.provinceId ??
+            profile?.provinceName ??
+            null)
+          : null,
+      estateCode:
+        scope === 'IN_ESTATE'
+          ? (normalizeLocationValue(permission.estateCode ?? permission.estate) ??
+            profile?.estateCode ??
+            null)
+          : null,
+      estate:
+        scope === 'IN_ESTATE'
+          ? (normalizeLocationValue(permission.estateCode ?? permission.estate) ??
+            profile?.estateCode ??
+            null)
+          : null,
+    };
+  });
 }
 
 async function ensurePermissionsExist(permissionCodes: string[]): Promise<void> {
@@ -571,12 +712,8 @@ async function withResolvedOfficerProfile<T extends { profile?: OfficerProfileIn
 async function withResolvedUserInput<
   T extends { profile?: OfficerProfileInput; permissionOverrides?: PermissionOverrideInput[] },
 >(input: T): Promise<T> {
-  return {
-    ...(await withResolvedOfficerProfile(input)),
-    ...(input.permissionOverrides !== undefined
-      ? { permissionOverrides: await resolvePermissionOverrides(input.permissionOverrides) }
-      : {}),
-  };
+  // Permission locations are resolved after their scope defaults have been copied.
+  return withResolvedOfficerProfile(input);
 }
 
 async function resolveOfficerProfile(profile: OfficerProfileInput): Promise<OfficerProfileInput> {
@@ -618,7 +755,19 @@ async function resolveOfficerProfile(profile: OfficerProfileInput): Promise<Offi
 async function resolvePermissionOverrides(
   permissions: PermissionOverrideInput[],
 ): Promise<PermissionOverrideInput[]> {
-  return Promise.all(permissions.map(resolvePermissionOverride));
+  const resolved = await Promise.all(permissions.map(resolvePermissionOverride));
+  for (const permission of resolved) {
+    if (
+      permission.effect === 'allow' &&
+      !isBinaryPermissionCode(permission.code) &&
+      !hasValidPermissionDataScope({ ...permission, scope: permission.scope ?? null })
+    ) {
+      throw new BadRequestError('Data-scoped permissions require a scope and matching location', {
+        permission: permission.code,
+      });
+    }
+  }
+  return resolved;
 }
 
 async function resolvePermissionOverride(

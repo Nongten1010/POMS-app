@@ -24,7 +24,9 @@ interface DirectActor {
   actorUserId: number;
   userType: 'citizen' | 'operator' | 'officer' | 'admin';
   roles: string[];
-  scope: { scope: 'ALL' | 'IN_REGION'; region?: string | null; province?: string | null };
+  scope:
+    | { scope: 'ALL' | 'IN_REGION'; region?: string | null; province?: string | null }
+    | undefined;
   regionalAccess?: { regions?: string[] };
 }
 
@@ -84,18 +86,42 @@ describe('connectionRequestsService.createDirectConnection', () => {
     expect(result).toBe(created);
   });
 
-  it('rejects a non-officer actor even if the permission middleware were bypassed', async () => {
+  it('allows a custom direct-connect grant regardless of role and user type', async () => {
     await expect(
       directService.createDirectConnection(validInput(), {
         ...actor,
         userType: 'operator',
         roles: ['factory_operator'],
       }),
-    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+    ).resolves.toBe(created);
+  });
 
-    expect(mockedRepository.findFactoryGeneral).not.toHaveBeenCalled();
+  it('denies an admin without a direct-connect grant before database access', async () => {
+    await expect(
+      directService.createDirectConnection(validInput(), {
+        ...actor,
+        userType: 'admin',
+        roles: ['admin'],
+        scope: undefined,
+      }),
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
     expect(mockedRepository.findDirectConnectionFactory).not.toHaveBeenCalled();
     expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('uses a custom non-central region without a role region ceiling', async () => {
+    await expect(
+      directService.createDirectConnection(validInput(), {
+        ...actor,
+        roles: ['industry_officer'],
+        scope: { scope: 'IN_REGION', region: 'ภาคตะวันออก' },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      }),
+    ).resolves.toBe(created);
+    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ scope: { scope: 'IN_REGION', region: 'ภาคตะวันออก' } }),
+    );
   });
 
   it('passes WAITING_FACTORY_REVISION through to the repository when reason is provided', async () => {

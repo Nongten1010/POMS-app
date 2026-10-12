@@ -616,7 +616,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(description).toContain('informationProviderName');
     expect(description).toContain('BASIC_INFO');
     expect(operation('/poms-factories/edit-requests/{id}/review', 'post').description).toEqual(
-      expect.stringContaining('JWT role admin'),
+      expect.stringContaining('ไม่จำกัดด้วย role หรือ userType'),
     );
   });
 
@@ -909,7 +909,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
     );
     expect(reviewDescription).toContain('createdBy');
     expect(reviewDescription).toContain('submittedBy');
-    expect(reviewDescription).toContain('ผู้มี role admin พิจารณาคำขอของตนเองได้');
+    expect(reviewDescription).toContain('ผู้มีสิทธิ์พิจารณาคำขอของตนเองได้');
     expect(reviewDescription).toContain('APPROVE, REQUEST_REVISION และ REJECT');
   });
 });

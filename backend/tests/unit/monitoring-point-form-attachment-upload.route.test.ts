@@ -19,7 +19,7 @@ import {
   type MonitoringPointAttachmentRow,
 } from '../../src/modules/monitoring-point-forms/monitoring-point-form-attachments.service';
 import { createMonitoringPointAttachmentUploadConcurrencyLimiter } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.routes';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 const mockedDb = db as unknown as jest.Mock<(...args: unknown[]) => unknown> & {
   transaction: jest.Mock<(...args: unknown[]) => Promise<unknown>>;

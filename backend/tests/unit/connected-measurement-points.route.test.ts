@@ -3,7 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { connectedMeasurementPointsRoutes } from '../../src/modules/connection-requests/connected-measurement-points.routes';
 import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {

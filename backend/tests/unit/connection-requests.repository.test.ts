@@ -248,10 +248,10 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings).toContain('ภาคกลาง');
   });
 
-  it('denies a direct connection scope that cannot be evaluated against eligible factories', () => {
+  it('denies an unsupported direct connection scope', () => {
     const sql = buildDirectConnectionFactoryQueryForTests(
       { factoryId: '10120000325542', factoryRegistrationNo: '10120000325542' },
-      { actorUserId: 42, scope: 'OWN_FACTORY' },
+      { actorUserId: 42, scope: 'INVALID' },
     )
       .toSQL()
       .sql.toLowerCase();

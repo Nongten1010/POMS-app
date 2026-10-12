@@ -47,6 +47,7 @@ import type {
   KwpFormSubmissionReadAccess,
   KwpFormSubmissionUpdateAccess,
   KwpFormWorkflowAccess,
+  KwpWorkflowActionPermissions,
   KwpFormAllowedAction,
   KwpFormWorkflowAction,
   KwpFormWorkflowDTO,
@@ -304,15 +305,8 @@ export const kwpFormSubmissionsRepository = {
     }
 
     const historyRows = await listWorkflowHistory(Number(submission.id));
-    const workflow = toWorkflowDTO(submission, historyRows, access.scope, access.roles);
-    const canApprove =
-      access.canApprove !== false &&
-      (access.approveScope === undefined ||
-        Boolean(await buildWorkflowQuery(id, { ...access, scope: access.approveScope }).first()));
-    workflow.allowedActions = workflow.allowedActions.filter((action) =>
-      action === 'CANCEL' || action === 'RESUBMIT' ? access.canEdit !== false : canApprove,
-    );
-    return workflow;
+    const permissions = await resolveWorkflowActionPermissions(id, access);
+    return toWorkflowDTO(submission, historyRows, permissions);
   },
 
   async changeWorkflowStatus(
@@ -320,20 +314,32 @@ export const kwpFormSubmissionsRepository = {
     input: ChangeKwpFormWorkflowStatusDTO,
     access: KwpFormWorkflowAccess,
   ): Promise<KwpFormWorkflowDTO> {
+    const permitted =
+      input.action === 'CANCEL' ? access.canEdit === true : access.canApprove === true;
+    if (!permitted) throw new ForbiddenError('KWP workflow action is not permitted');
     return db.transaction(async (trx) => {
-      const submission = await buildWorkflowQuery(id, access, trx).first();
+      const permissionScope = input.action === 'CANCEL' ? access.editScope : access.approveScope;
+      const submission = await buildWorkflowQuery(
+        id,
+        {
+          ...access,
+          scope: permissionScope === undefined ? access.scope : permissionScope,
+        },
+        trx,
+      ).first();
       if (!submission) {
         throw new NotFoundError('KWP form submission not found');
       }
 
-      if (input.action === 'CANCEL' && scopeValue(access.scope) !== 'OWN_FACTORY') {
-        throw new ForbiddenError('Only operators can cancel KWP submissions');
+      if (
+        input.action === 'CANCEL' &&
+        !(await buildWorkflowQuery(id, { ...access, scope: { scope: 'OWN_FACTORY' } }, trx).first())
+      ) {
+        throw new NotFoundError('KWP form submission not found');
       }
       if (
         input.action !== 'CANCEL' &&
-        !allowedWorkflowActions(submission.status, access.scope, access.roles).includes(
-          input.action,
-        )
+        !allowedWorkflowStatusActions(submission.status).includes(input.action)
       ) {
         throw new ForbiddenError('KWP workflow action is not permitted');
       }
@@ -371,7 +377,8 @@ export const kwpFormSubmissionsRepository = {
         throw new NotFoundError('KWP form submission not found');
       }
       const historyRows = await listWorkflowHistory(Number(updated.id), trx);
-      return toWorkflowDTO(updated, historyRows, access.scope, access.roles);
+      const permissions = await resolveWorkflowActionPermissions(id, access, trx);
+      return toWorkflowDTO(updated, historyRows, permissions);
     });
   },
 
@@ -565,6 +572,7 @@ export const kwpFormSubmissionsRepository = {
     input: ResubmitKwpFormSubmissionDTO,
     access: KwpFormWorkflowAccess & { formType: KwpFormSubmissionDetailType },
   ): Promise<KwpFormWorkflowDTO> {
+    if (access.canEdit !== true) throw new ForbiddenError('KWP edit permission is required');
     return db.transaction(async (trx) => {
       await assertCanEditReturnedSubmission(id, access, trx);
       const now = new Date();
@@ -588,7 +596,8 @@ export const kwpFormSubmissionsRepository = {
         throw new NotFoundError('KWP form submission not found');
       }
       const historyRows = await listWorkflowHistory(Number(updated.id), trx);
-      return toWorkflowDTO(updated, historyRows, access.scope, access.roles);
+      const permissions = await resolveWorkflowActionPermissions(id, access, trx);
+      return toWorkflowDTO(updated, historyRows, permissions);
     });
   },
 
@@ -1124,10 +1133,13 @@ export function parseKwp05CalibrationItemParametersForTests(
 export function toKwpWorkflowDTOForTests(
   row: SubmissionWorkflowRow,
   historyRows: WorkflowHistoryRow[] = [],
-  scope?: KwpFormSubmissionAccess['scope'],
-  roles: string[] = [],
+  permissions: KwpWorkflowActionPermissions = {
+    canEdit: false,
+    canApprove: false,
+    canCancel: false,
+  },
 ): KwpFormWorkflowDTO {
-  return toWorkflowDTO(row, historyRows, scope, roles);
+  return toWorkflowDTO(row, historyRows, permissions);
 }
 
 export function nextKwpWorkflowStatusForTests(
@@ -1433,6 +1445,24 @@ function buildWorkflowQuery(
   applySubmissionLocationFilters(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<SubmissionWorkflowRow, SubmissionWorkflowRow[]>;
+}
+
+async function resolveWorkflowActionPermissions(
+  id: number,
+  access: KwpFormWorkflowAccess,
+  knexOrTrx: Knex | Knex.Transaction = db,
+): Promise<KwpWorkflowActionPermissions> {
+  const hasScopeAccess = async (scope: KwpFormSubmissionAccess['scope']) =>
+    Boolean(await buildWorkflowQuery(id, { ...access, scope }, knexOrTrx).first());
+  const canEdit =
+    access.canEdit === true &&
+    (await hasScopeAccess(access.editScope === undefined ? access.scope : access.editScope));
+  const canApprove =
+    access.canApprove === true &&
+    (await hasScopeAccess(access.approveScope === undefined ? access.scope : access.approveScope));
+  // Cancellation remains limited to current factory assignments for every account.
+  const canCancel = canEdit && (await hasScopeAccess({ scope: 'OWN_FACTORY' }));
+  return { canEdit, canApprove, canCancel };
 }
 
 function applySubmissionReadAccessFilter(
@@ -2002,8 +2032,7 @@ function toSubmissionDetailDTO(row: SubmissionDetailRow): KwpFormSubmissionDetai
 function toWorkflowDTO(
   row: SubmissionWorkflowRow,
   historyRows: WorkflowHistoryRow[],
-  scope: KwpFormSubmissionAccess['scope'],
-  roles: string[] = [],
+  permissions: KwpWorkflowActionPermissions,
 ): KwpFormWorkflowDTO {
   const hasRevisionRequest = historyRows.some((history) => history.status === 'REVISION_REQUESTED');
   const revisionReason = latestRevisionReason(historyRows);
@@ -2026,7 +2055,7 @@ function toWorkflowDTO(
     reviewedAt: toIsoString(row.reviewed_at),
     currentStep,
     steps,
-    allowedActions: allowedWorkflowActions(row.status, scope, roles),
+    allowedActions: allowedWorkflowActions(row.status, permissions),
   };
 }
 
@@ -2052,17 +2081,15 @@ function workflowSteps(
 
 function allowedWorkflowActions(
   status: KwpFormSubmissionStatus,
-  scope: KwpFormSubmissionAccess['scope'],
-  roles: string[] = [],
+  permissions: KwpWorkflowActionPermissions,
 ): KwpFormAllowedAction[] {
-  if (scopeValue(scope) === 'OWN_FACTORY') {
-    if (status === 'APPROVED' || status === 'CANCELLED') return [];
-    return status === 'REVISION_REQUESTED' ? ['RESUBMIT', 'CANCEL'] : ['CANCEL'];
-  }
-  if (!roles.some((role) => ['monitoring_kpm', 'monitoring_5_centers', 'admin'].includes(role))) {
-    return [];
-  }
-  return allowedWorkflowStatusActions(status);
+  const actions: KwpFormAllowedAction[] = permissions.canApprove
+    ? allowedWorkflowStatusActions(status)
+    : [];
+  if (permissions.canEdit && status === 'REVISION_REQUESTED') actions.push('RESUBMIT');
+  if (permissions.canCancel && status !== 'APPROVED' && status !== 'CANCELLED')
+    actions.push('CANCEL');
+  return actions;
 }
 
 function allowedWorkflowStatusActions(status: KwpFormSubmissionStatus): KwpFormWorkflowAction[] {

@@ -1,4 +1,4 @@
-import type { PermissionGroups } from '../auth/permissions';
+import type { PermissionGroups, PermissionMode } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 
 export type ManagedUserType = 'officer' | 'admin';
@@ -49,6 +49,7 @@ export interface UserPermissionOverrideDTO extends PermissionGrantDTO {
 
 export interface UserPermissionsDTO {
   userId: number;
+  permissionMode: PermissionMode;
   rolePermissions: PermissionGrantDTO[];
   overrides: UserPermissionOverrideDTO[];
   effectiveScopes: Record<string, PermissionScope>;
@@ -94,6 +95,7 @@ export interface ManagedUserTableDTO {
   levelNameTh: string | null;
   roles: string;
   roleCodes: string[];
+  permissionMode: PermissionMode;
   isActive: boolean;
 }
 
@@ -126,6 +128,7 @@ export interface ManagedUserEditUserDTO {
   regionalAccess: RegionalAccessDTO | null;
   roles: string;
   roleCodes: string[];
+  permissionMode: PermissionMode;
   isActive: boolean;
   source: ManagedUserSource;
 }
@@ -166,9 +169,12 @@ export interface CreateLocalAccountInput {
   roleCodes: string[];
   profile?: OfficerProfileInput;
   permissionOverrides?: PermissionOverrideInput[];
+  permissionMode?: PermissionMode;
 }
 
 export interface UpdateManagedUserInput {
+  /** Set by the grouped form parser; never accepted as a client-controlled field. */
+  permissionEditSource?: 'grouped';
   username?: string;
   externalId?: string;
   userType?: ManagedUserType;
@@ -183,10 +189,12 @@ export interface UpdateManagedUserInput {
   roleCodes?: string[];
   profile?: OfficerProfileInput;
   permissionOverrides?: PermissionOverrideInput[];
+  permissionMode?: PermissionMode;
 }
 
 export interface ReplaceUserPermissionsInput {
   permissions: PermissionOverrideInput[];
+  permissionMode?: PermissionMode;
 }
 
 export interface PaginatedManagedUsersDTO {

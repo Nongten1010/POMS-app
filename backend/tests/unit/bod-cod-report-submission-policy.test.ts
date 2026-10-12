@@ -39,7 +39,7 @@ describe('BOD/COD submission policy', () => {
     ).toThrow('report period is closed');
   });
 
-  it('allows admin creation but denies ordinary officers and missing roles', () => {
+  it('allows creation by granted action scope independently of role', () => {
     expect(() =>
       assertBodCodCreator({ actorUserId: 1, scope: 'ALL', roles: ['admin'] }),
     ).not.toThrow();
@@ -48,9 +48,12 @@ describe('BOD/COD submission policy', () => {
     ).not.toThrow();
     expect(() =>
       assertBodCodCreator({ actorUserId: 1, scope: 'ALL', roles: ['monitoring_kpm'] }),
-    ).toThrow();
+    ).not.toThrow();
     expect(() =>
       assertBodCodCreator({ actorUserId: 1, scope: 'OWN_FACTORY', roles: [] }),
+    ).not.toThrow();
+    expect(() =>
+      assertBodCodCreator({ actorUserId: 1, scope: undefined, roles: ['admin'] }),
     ).toThrow();
   });
 
@@ -95,17 +98,17 @@ describe('BOD/COD submission policy', () => {
   });
 
   it.each([
-    ['WAITING_REVIEW', 'REVIEWER', 'admin', false],
-    ['WAITING_APPROVAL', 'APPROVER', 'admin', false],
+    ['WAITING_REVIEW', 'REVIEWER', 'admin', true],
+    ['WAITING_APPROVAL', 'APPROVER', 'admin', true],
     ['WAITING_REVIEW', 'REVIEWER', 'kpm_director', true],
     ['WAITING_APPROVAL', 'APPROVER', 'center_director', true],
     ['WAITING_APPROVAL', 'APPROVER', 'kwp_director', true],
-    ['WAITING_RESULT_NOTICE', 'RESULT_NOTICE', 'monitoring_5_centers', false],
+    ['WAITING_RESULT_NOTICE', 'RESULT_NOTICE', 'monitoring_5_centers', true],
     ['WAITING_RESULT_NOTICE', 'RESULT_NOTICE', 'monitoring_kpm', true],
     ['WAITING_RESULT_NOTICE', 'RESULT_NOTICE', 'admin', true],
     ['WAITING_APPROVAL', 'INSPECTOR', 'admin', false],
   ] as [BodCodDeviationReportStatus, BodCodApprovalRoleCode, string, boolean][])(
-    'checks status %s, step %s and role %s',
+    'checks status %s and step %s with approval scope for any role %s',
     (status, roleCode, role, allowed) => {
       const actions = buildBodCodAllowedActionsForTests(
         status,
@@ -119,11 +122,23 @@ describe('BOD/COD submission policy', () => {
 
   it('allows owner cancellation after rejection but never after approval or cancellation', () => {
     expect(
-      buildBodCodAllowedActionsForTests('REJECTED', null, 'OWN_FACTORY', ['factory_operator']),
+      buildBodCodAllowedActionsForTests(
+        'REJECTED',
+        null,
+        'OWN_FACTORY',
+        ['factory_operator'],
+        'edit',
+      ),
     ).toEqual(['CANCEL']);
     for (const status of ['APPROVED', 'CANCELLED'] as const) {
       expect(
-        buildBodCodAllowedActionsForTests(status, null, 'OWN_FACTORY', ['factory_operator']),
+        buildBodCodAllowedActionsForTests(
+          status,
+          null,
+          'OWN_FACTORY',
+          ['factory_operator'],
+          'edit',
+        ),
       ).toEqual([]);
     }
   });

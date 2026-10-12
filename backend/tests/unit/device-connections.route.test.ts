@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 import { NotFoundError } from '../../src/shared/errors/AppError';
 
 jest.mock('../../src/modules/device-connections/device-connections.service', () => ({

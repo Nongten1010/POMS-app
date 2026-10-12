@@ -3,7 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { connectionRequestsRoutes } from '../../src/modules/connection-requests/connection-requests.routes';
 import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
 
 const findPreviousRequest = jest.fn<(...args: unknown[]) => Promise<unknown>>();

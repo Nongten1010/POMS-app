@@ -214,7 +214,7 @@ describe('managed users validators', () => {
     );
   });
 
-  it('rejects removed permission-management fields and actions', () => {
+  it('rejects internal actions and accepts per-menu estate qualifiers', () => {
     const baseUser = {
       fullName: 'เจ้าหน้าที่ ทดสอบ',
       username: 'local_permission_editor',
@@ -250,7 +250,7 @@ describe('managed users validators', () => {
           dashboard: { data: 'IN_ESTATE', estateCode: 'MTP', view: true },
         },
       }).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       createLocalAccountSchema.safeParse({
         user: baseUser,
@@ -258,7 +258,7 @@ describe('managed users validators', () => {
           dashboard: { data: 'IN_ESTATE', estate: 'MTP', view: true },
         },
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('accepts local account location fields from the permission form', () => {

@@ -52,7 +52,7 @@ curl --request GET \
 
 ### `GET /api/v1/operator-factories`
 
-Endpoint สำหรับหน้าแรกผู้ประกอบการโดยเฉพาะ ต้อง login เป็น `userType: "operator"` และมี `dashboard:view`. ผู้ใช้ชนิดอื่นตอบ `403` แม้มี permission code เดียวกัน และ backend บังคับอ่านเฉพาะโรงงานของ actor ด้วย `OWN_FACTORY`.
+Endpoint สำหรับรายการโรงงานของบัญชีผู้เรียก ต้องมี effective `dashboard:view` โดยไม่จำกัดชื่อ role หรือ `userType` Backend บังคับอ่านเฉพาะโรงงานที่ actor มี assigned ownership ด้วย `OWN_FACTORY` แม้ permission ของเมนูจะเป็น `ALL` จึงไม่เปิดข้อมูลโรงงานของผู้อื่นจากการเพิ่มสิทธิ์ดูเมนูเพียงอย่างเดียว
 
 Query fields:
 

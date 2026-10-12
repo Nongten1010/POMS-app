@@ -4646,7 +4646,7 @@ describe('connectionRequestsService', () => {
     );
   });
 
-  it('lets an officer create an add-point request directly in waiting factory revision', async () => {
+  it('uses a custom edit grant to create an add-point revision regardless of role', async () => {
     mockedRepository.findDirectConnectionFactory.mockResolvedValueOnce({
       factoryId: 'canonical-factory-id',
       factoryName: 'โรงงานจากฐานข้อมูล',
@@ -4675,8 +4675,8 @@ describe('connectionRequestsService', () => {
       },
       {
         actorUserId,
-        userType: 'officer',
-        roles: ['monitoring_kpm'],
+        userType: 'operator',
+        roles: ['factory_operator'],
         editScope: { scope: 'ALL' },
       },
     );
@@ -4713,7 +4713,7 @@ describe('connectionRequestsService', () => {
     );
   });
 
-  it('rejects an operator submission action before looking up an eligible factory', async () => {
+  it('rejects a revision submission without edit permission regardless of role', async () => {
     await expect(
       connectionRequestsService.createMeasurementPointRequest(
         {
@@ -4725,8 +4725,8 @@ describe('connectionRequestsService', () => {
         {
           actorUserId,
           userType: 'operator',
-          roles: ['factory_operator'],
-          editScope: { scope: 'OWN_FACTORY' },
+          roles: ['admin'],
+          editScope: undefined,
         },
       ),
     ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
@@ -4769,6 +4769,27 @@ describe('connectionRequestsService', () => {
     );
     expect(mockedRepository.findActiveEligibleFactoryReference).not.toHaveBeenCalled();
     expect(mockedRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('requires edit permission even when an admin has a direct-connect grant', async () => {
+    await expect(
+      connectionRequestsService.createMeasurementPointRequest(
+        {
+          ...payload,
+          requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+          submissionAction: 'CONNECT',
+          measurementPoints: [{ ...payload.measurementPoints[0], pointCode: 'S2201' }],
+        },
+        {
+          actorUserId,
+          userType: 'admin',
+          roles: ['admin'],
+          directConnectScope: { scope: 'ALL' },
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+    expect(mockedRepository.findDirectConnectionFactory).not.toHaveBeenCalled();
+    expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
   });
 
   it('checks direct-connect permission before looking up a factory for CONNECT', async () => {
@@ -4823,8 +4844,8 @@ describe('connectionRequestsService', () => {
       },
       {
         actorUserId,
-        userType: 'officer',
-        roles: ['monitoring_kpm'],
+        userType: 'operator',
+        roles: ['factory_operator'],
         editScope: { scope: 'ALL' },
         directConnectScope: { scope: 'ALL' },
       },
@@ -4898,7 +4919,7 @@ describe('connectionRequestsService', () => {
       }),
     );
 
-    await connectionRequestsService.createParameterRequest(addParameterPayload, actorUserId);
+    await connectionRequestsService.createParameterRequest(addParameterPayload, { actorUserId, userType: 'operator', roles: ['factory_operator'], editScope: { scope: 'OWN_FACTORY' } });
 
     expect(mockedRepository.create).toHaveBeenCalledWith(
       { ...addParameterPayload, eligibleFactoryId: 9 },
@@ -4908,7 +4929,7 @@ describe('connectionRequestsService', () => {
   });
 
   it('rejects an add parameter request when the factory is not actively eligible', async () => {
-    mockedRepository.findActiveEligibleFactoryReference.mockResolvedValueOnce(null);
+    mockedRepository.findDirectConnectionFactory.mockResolvedValueOnce(null);
     const addParameterPayload = {
       ...payload,
       requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
@@ -4932,7 +4953,7 @@ describe('connectionRequestsService', () => {
     };
 
     await expect(
-      connectionRequestsService.createParameterRequest(addParameterPayload, actorUserId),
+      connectionRequestsService.createParameterRequest(addParameterPayload, { actorUserId, userType: 'operator', roles: ['factory_operator'], editScope: { scope: 'OWN_FACTORY' } }),
     ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
 
     expect(mockedRepository.create).not.toHaveBeenCalled();

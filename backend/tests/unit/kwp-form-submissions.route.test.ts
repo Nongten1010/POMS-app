@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 
 jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service', () => ({
   kwpFormSubmissionsService: {
@@ -116,7 +116,7 @@ describe('KWP form submission routes', () => {
     },
   );
 
-  it('does not let an officer cancel even with edit permission', async () => {
+  it('lets an officer with edit permission cancel within assigned factories', async () => {
     const token = signAccessToken({
       sub: '77',
       userType: 'officer',
@@ -127,7 +127,12 @@ describe('KWP form submission routes', () => {
       .post('/api/v1/kwp-form-submissions/12/workflow-actions')
       .set('Authorization', `Bearer ${token}`)
       .send({ action: 'CANCEL' });
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    expect(mockedService.changeWorkflowStatus).toHaveBeenCalledWith(
+      12,
+      expect.objectContaining({ action: 'CANCEL' }),
+      expect.objectContaining({ actorUserId: 77, canEdit: true, scope: { scope: 'OWN_FACTORY' } }),
+    );
   });
 
   it('does not grant approval to operators who can cancel', async () => {
@@ -789,6 +794,9 @@ describe('KWP form submission routes', () => {
       },
       {
         actorUserId: 77,
+        canEdit: false,
+        canApprove: true,
+        approveScope: { scope: 'ALL' },
         scope: { scope: 'ALL' },
         roles: ['monitoring_kpm'],
         regionalAccess: { regions: ['ภาคกลาง'] },
@@ -826,6 +834,9 @@ describe('KWP form submission routes', () => {
       },
       {
         actorUserId: 77,
+        canEdit: false,
+        canApprove: true,
+        approveScope: { scope: 'IN_REGION', region: 'ภาคใต้' },
         scope: { scope: 'IN_REGION', region: 'ภาคใต้' },
         roles: ['monitoring_kpm'],
         regionalAccess: { regions: ['ภาคกลาง'] },
@@ -902,6 +913,9 @@ describe('KWP form submission routes', () => {
       { note: 'ปรับข้อมูลและแนบเอกสารครบแล้ว' },
       {
         actorUserId: 42,
+        canEdit: true,
+        canApprove: false,
+        editScope: { scope: 'OWN_FACTORY' },
         scope: { scope: 'OWN_FACTORY' },
         roles: ['factory_operator'],
         regionalAccess: undefined,

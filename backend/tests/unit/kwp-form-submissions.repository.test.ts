@@ -315,7 +315,7 @@ describe('kwpFormSubmissionsRepository', () => {
           changed_at: '2026-07-04T09:00:00.000Z',
         },
       ],
-      'OWN_FACTORY',
+      { canEdit: true, canApprove: false, canCancel: true },
     );
     expect(submitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
     expect(submitted.steps.map((step) => step.key)).toEqual(['SUBMITTED', 'REVISION_REQUESTED']);
@@ -331,7 +331,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(operatorRevision.allowedActions).toEqual(['RESUBMIT', 'CANCEL']);
   });
 
-  it('allows KWP officer workflow actions only for monitoring approvers and admin', () => {
+  it('maps KWP workflow actions from explicit approval permission', () => {
     const monitoring = toKwpWorkflowDTOForTests(
       {
         id: 12,
@@ -345,8 +345,7 @@ describe('kwpFormSubmissionsRepository', () => {
         province_region: 'ภาคกลาง',
       },
       [],
-      'ALL',
-      ['monitoring_kpm'],
+      { canEdit: false, canApprove: true, canCancel: false },
     );
     const director = toKwpWorkflowDTOForTests(
       {
@@ -361,8 +360,7 @@ describe('kwpFormSubmissionsRepository', () => {
         province_region: 'ภาคกลาง',
       },
       [],
-      'ALL',
-      ['center_director'],
+      { canEdit: false, canApprove: false, canCancel: false },
     );
 
     expect(monitoring.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE', 'REJECT']);
@@ -399,7 +397,7 @@ describe('kwpFormSubmissionsRepository', () => {
           changed_at: '2026-07-04T10:30:00.000Z',
         },
       ],
-      'OWN_FACTORY',
+      { canEdit: true, canApprove: false, canCancel: true },
     );
 
     expect(resubmitted.status).toBe('SUBMITTED');

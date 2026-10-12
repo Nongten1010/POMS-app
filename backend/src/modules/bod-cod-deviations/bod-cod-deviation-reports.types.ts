@@ -38,6 +38,7 @@ export interface BodCodDeviationAccess {
   publicPath?: string;
   roles?: string[];
   viewScope?: string | PermissionScopeDetails | null;
+  // Controllers resolve binary grants to view scope; absent fields mean no action authority.
   editScope?: string | PermissionScopeDetails | null;
   approveScope?: string | PermissionScopeDetails | null;
 }

@@ -145,6 +145,7 @@ describe('factory registration identity at request and eligibility seams', () =>
         actorUserId: 42,
         userType: 'officer',
         roles: ['monitoring_kpm'],
+        editScope: 'ALL',
         directConnectScope: 'ALL',
       },
     );

@@ -18,7 +18,7 @@ jest.mock('../../src/shared/utils/password', () => ({
 import { usersRepository } from '../../src/modules/users/users.repository';
 import { usersRoutes } from '../../src/modules/users/users.routes';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
-import { signAccessToken } from '../../src/shared/utils/jwt';
+import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
 import { logger } from '../../src/config/logger';
 
 interface IdentityRow {
@@ -97,7 +97,7 @@ function app() {
   return instance;
 }
 
-function token(scopes: Record<string, string | null> = { 'users:edit': null }) {
+function token(scopes: Record<string, string | null> = { 'users:edit': null, 'permissions:manage': null }) {
   return signAccessToken({ sub: '1', userType: 'officer', roles: ['admin'], scopes });
 }
 
@@ -304,9 +304,10 @@ describe('managed user identity conflicts', () => {
     expect(response.body.data).not.toHaveProperty('password');
   });
 
-  it.each([undefined, token({ 'users:view': null })])(
+  it.each([false, true])(
     'checks authentication and authorization before looking up identity',
-    async (bearer) => {
+    async (hasBearer) => {
+      const bearer = hasBearer ? token({ 'users:view': null }) : undefined;
       const pending = request(app()).post('/api/v1/users/local-accounts');
       if (bearer) pending.set('Authorization', `Bearer ${bearer}`);
       const response = await pending.send(payload());

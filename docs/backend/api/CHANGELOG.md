@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="custom-user-permission-snapshots"></a>
+
+## 2026-10-12 — ใช้สิทธิ์รายคนที่บันทึกโดยไม่ติดเพดาน role
+
+- **Affected canonical docs:** [สิทธิ์การใช้งาน](./menus/permissions/README.md#approved-permission-model), [API ผู้ใช้และสิทธิ์รายคน](./menus/permissions/user-management-api.md), [Authentication](./shared/authentication/README.md#สิทธิ์ล่าสุดระหว่าง-session), [คำขอเชื่อมต่อ](./menus/connection-requests/README.md), [การตรวจ payload เชื่อมต่อ](./menus/connection-requests/request-payloads-and-validation.md), [คำขอแก้โรงงาน](./menus/master-data/factory-edit-requests.md), [จัดการสถานะโรงงาน](./menus/master-data/status-management.md), [BOD/COD](./menus/bod-cod-deviation-reports/README.md), [กวภ.](./menus/kwp-forms/README.md), [โรงงานของบัญชีผู้เรียก](./menus/home/README.md#get-apiv1operator-factories)
+- **Impact:** เพิ่ม `permissionMode` ในข้อมูลผู้ใช้และ `GET/PUT /users/:id/permissions`; บัญชี `custom` ใช้ snapshot สิทธิ์ที่บันทึกทั้งชุดโดยไม่เติม role defaults และให้ action/scope เกิน role ได้ตาม code ที่รองรับ Raw PUT `[]` หมายถึง custom ไม่มีสิทธิ์ Grouped PATCH ปิด editable actions ที่ละไว้และคง hidden grants ที่มีผลก่อนบันทึก การเปลี่ยน role อย่างเดียวคง custom snapshot Token ที่ยังไม่หมดอายุอ่านสิทธิ์ล่าสุดตั้งแต่คำขอถัดไป
+- **Migration:** รัน `0136_add_user_permission_mode` ก่อนเริ่ม backend รุ่นนี้ บัญชี managed officer/admin ที่ไม่มีรายการสิทธิ์รายคนใช้ `role_default`; บัญชี managed ที่มีรายการย้ายเป็น `custom` โดยใช้ `allow`/`deny`, พื้นที่และ audit ที่บันทึกไว้เหนือ role รวม action/scope ที่ role เดิมเคยกรองทิ้ง `deny` ปิดสิทธิ์เสมอ และ code ที่ไม่มีรายการบันทึกใช้ role defaults ตอนย้ายเพื่อสร้าง snapshot ทั้งชุด ผู้ที่มีค่าบันทึกไว้แล้วไม่ต้องกำหนดใหม่ Citizen/operator คง `role_default` และกติกา persona เดิม หาก preflight พบพื้นที่เริ่มต้นหลายภาคหรือ ownership/region intersection ที่ไม่มีรายการบันทึกมาแทนและ snapshot แบบ scalar เก็บให้ตรงเดิมไม่ได้ ต้องกำหนดพื้นที่รายเมนูให้ชัดเจนก่อน retry; รายการ saved `ALL` ใช้ `ALL` ได้โดยไม่ติด role เดิม Client ส่งสิทธิ์ที่ต้องการทั้งชุดและอ่าน `/auth/me` หลังแก้สิทธิ์ การคืนค่า default ใช้ PATCH `{ "permissionMode": "role_default" }` โดยไม่ส่ง permissions หลัง deploy ตรวจ runtime OpenAPI ว่าตรง contract
+- **Old contract:** role เป็นเพดานของ permission/scope; raw `[]` ล้าง overrides แล้วกลับไป role defaults และ token เดิมคงสิทธิ์จน login ใหม่
+- **New contract:** role เป็นค่าเริ่มต้น เมื่อบันทึก custom ให้ใช้ชุดที่เลือกจริงแม้ role ไม่มี action นั้น การคืนค่าเริ่มต้นเป็นคำสั่ง explicit และสิทธิ์ใหม่มีผลกับ session เดิม Grouped IN_ESTATE คืนและรับ `estateCode` รายเมนูหนึ่งแห่งเพื่อรักษา qualifier; grouped scope ที่แสดงรวมไม่ขยาย action ที่เคยมี scope แคบกว่าเมื่อบันทึกขอบเขตเดิม Legacy PATCH เพิ่ม optional raw `permissionOverrides` เพื่อกำหนด scope ราย code อย่างชัดเจนและคง internal grants ที่ไม่ได้ส่ง; raw PUT ยังแทนที่ทุก code ทั้งชุด
+- **Breaking change:** yes — เปลี่ยนความหมายการแทนที่สิทธิ์และ empty payload รวมผลของ role changes และ token เดิม; URL และ response envelopes เดิมคงอยู่
+
 <a id="low-data-completed-days"></a>
 
 ## 2026-10-08 — สรุปวันข้อมูลต่ำกว่า 80% เฉพาะวันที่จบแล้ว

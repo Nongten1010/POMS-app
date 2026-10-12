@@ -49,9 +49,9 @@ curl --request POST \
 | Endpoint                   | Authentication | Permission                                                                            | Data scope                                                                                                                       |
 | -------------------------- | -------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /measurement-points` | required       | `cems_wpms_requests:edit`; `CONNECT` ต้องมี `cems_wpms_requests:direct_connect` เพิ่ม | ต้อง resolve เป็น active eligible factory; เมื่อเจ้าหน้าที่ส่ง `submissionAction` จะตรวจ scope ของ permission ที่เกี่ยวข้องเพิ่ม |
-| `POST /parameters`         | required       | `cems_wpms_requests:edit`                                                             | ต้อง resolve เป็น active eligible factory; service ปัจจุบันไม่ได้ตัด location scope เพิ่ม                                        |
+| `POST /parameters`         | required       | `cems_wpms_requests:edit`                                                             | active eligible factory ต้องอยู่ใน effective edit scope; `OWN_FACTORY` ตรวจ assignment ปัจจุบัน                                        |
 | `PUT /:id/form`            | required       | `cems_wpms_requests:edit`                                                             | ขอบเขตของ `cems_wpms_requests:edit`; `OWN_FACTORY` ต้องได้รับมอบหมายโรงงาน                                                       |
-| `POST /direct-connections` | required       | `cems_wpms_requests:direct_connect`                                                   | actor restriction + permission scope + active eligible factory ตามหัวข้อ endpoint                                                |
+| `POST /direct-connections` | required       | `cems_wpms_requests:direct_connect`                                                   | effective permission scope + active eligible factory ตามหัวข้อ endpoint                                                |
 
 ## Shared Top-level Request Fields
 
@@ -282,7 +282,7 @@ criteria normalization สำคัญ
 | Field                                        | Location | Required    | Nullable | Type   | Additional rule                                                                                         |
 | -------------------------------------------- | -------- | ----------- | -------- | ------ | ------------------------------------------------------------------------------------------------------- |
 | `requestType`                                | body     | No          | No       | -      | backend ไม่รับ user intent ผ่าน field นี้ใน dedicated endpoint และจะ stamp เป็น `ADD_MEASUREMENT_POINT` |
-| `submissionAction`                           | body     | No          | No       | enum   | officer/admin ใช้ `REQUEST_FACTORY_REVISION` หรือ `CONNECT`; ถ้าไม่ส่งจะใช้ flow เดิม                   |
+| `submissionAction`                           | body     | No          | No       | enum   | ผู้มี permission ที่เกี่ยวข้องใช้ `REQUEST_FACTORY_REVISION` หรือ `CONNECT`; ถ้าไม่ส่งจะใช้ flow เดิม                   |
 | `revisionReason`                             | body     | Conditional | Yes      | string | required เมื่อ `submissionAction = "REQUEST_FACTORY_REVISION"`; trim 1-1000                             |
 | `officerNote`                                | body     | No          | Yes      | string | optional note จากเจ้าหน้าที่; trim <=1000                                                               |
 | `measurementPoints[].details`                | body     | Yes         | No       | object | ต้องมีและต้องไม่เป็น object ว่าง                                                                        |
@@ -393,8 +393,8 @@ criteria normalization สำคัญ
 
 - ต้อง resolve โรงงานไปยัง active `eligible_factories` ได้ มิฉะนั้นตอบ `404 NOT_FOUND`
 - ถ้าไม่ส่ง `submissionAction` backend clear `pointCode` ของจุดใหม่และสร้างสถานะ `PENDING_DESIGN_REVIEW` ตาม flow เดิม
-- `submissionAction = "REQUEST_FACTORY_REVISION"` ใช้ได้เฉพาะ officer/admin ที่มี role `monitoring_kpm` หรือ `admin`; ต้องส่ง `revisionReason`, backend ตรวจ eligible-factory scope ของ `cems_wpms_requests:edit` และสร้างสถานะ `WAITING_FACTORY_REVISION`
-- `submissionAction = "CONNECT"` ใช้ได้เฉพาะ officer/admin ที่มี role `monitoring_kpm` หรือ `admin`, ต้องมี permission `cems_wpms_requests:direct_connect`, exactly 1 measurement point และ `measurementPoints[0].pointCode`; backend ตรวจ eligible-factory scope แล้วสร้างสถานะ `CONNECTED`
+- `submissionAction = "REQUEST_FACTORY_REVISION"` ใช้ได้เมื่อมี `cems_wpms_requests:edit` ล่าสุดโดยไม่จำกัด role หรือ `userType`; ต้องส่ง `revisionReason`, backend ตรวจ eligible-factory scope ของ `cems_wpms_requests:edit` และสร้างสถานะ `WAITING_FACTORY_REVISION`
+- `submissionAction = "CONNECT"` ต้องมี effective permission `cems_wpms_requests:direct_connect` ล่าสุดโดยไม่จำกัด role หรือ `userType`, exactly 1 measurement point และ `measurementPoints[0].pointCode`; backend ตรวจ eligible-factory scope แล้วสร้างสถานะ `CONNECTED`
 - duplicate `pointName` และ duplicate `pointCode` ภายใน request เดียวถูก reject
 - `CEMS` ต้องมีเอกสารแนบอย่างน้อย 1 รายการต่อ point; `WPMS` ไม่บังคับ
 - ไม่มี conditional validation เพิ่มสำหรับสถานะ `ได้รับการยกเว้นทั้งหมด`; ช่องกฎหมาย/ประกาศใช้กติกาเดิม และ client ส่ง `requestedParameters: []` กับ `measurementInstruments.parameters: []` ได้
@@ -411,7 +411,7 @@ criteria normalization สำคัญ
 | ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `400`       | `VALIDATION_ERROR` | body ไม่ผ่าน zod validation หรือ detail business rules                                                        | แก้ field ตาม `issues[].pathString` |
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                              | login ใหม่                          |
-| `403`       | `FORBIDDEN`        | ไม่มี permission, ผู้ส่ง action ไม่ใช่ officer/admin ที่รองรับ หรือ `CONNECT` ไม่มี direct-connect permission | ซ่อน action ที่ผู้ใช้ไม่มีสิทธิ์    |
+| `403`       | `FORBIDDEN`        | ไม่มี effective permission ที่เกี่ยวข้อง หรือ `CONNECT` ไม่มี direct-connect permission | ซ่อน action ที่ผู้ใช้ไม่มีสิทธิ์    |
 | `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory                                                                                 | refresh ข้อมูลโรงงานก่อนส่งใหม่     |
 
 ## Approval point-code assignments
@@ -501,7 +501,9 @@ criteria normalization สำคัญ
 
 - Authentication: required
 - Permission: `cems_wpms_requests:edit`
-- Data scope: ต้อง resolve identifier เป็น active row ใน `eligible_factories`; service ปัจจุบันไม่ได้ตัด location scope เพิ่ม
+- Data scope: ต้อง resolve identifier เป็น active row ใน `eligible_factories` ภายใน effective `cems_wpms_requests:edit` scope; `OWN_FACTORY` ตรวจ assignment ปัจจุบันจากโรงงานและนิติบุคคล หากไม่พบหรืออยู่นอก scope ตอบ `404 NOT_FOUND` ก่อนบันทึก
+- Legacy edit grant ที่ endpoint ได้เป็น `scope = null` ใช้ data scope ของ `cems_wpms_requests:view` ที่ได้รับอนุญาต หากไม่มี data scope ที่ใช้ได้ตอบ `403 FORBIDDEN`; ไม่ตีความ `null` เป็น `ALL`
+- ขอบเขตพื้นที่ที่บันทึกไว้ใน edit permission ใช้ก่อนข้อมูลโปรไฟล์; `regionalAccess` ใช้เติมพื้นที่เมื่อ `IN_REGION` ยังไม่ระบุ region
 
 ### Request Delta From Shared Contract
 
@@ -510,11 +512,11 @@ criteria normalization สำคัญ
 | `requestType`                                | body     | No       | No       | -      | backend จะ stamp เป็น `ADD_PARAMETER`             |
 | `measurementPoints`                          | body     | Yes      | No       | array  | ต้องมี exactly 1 point                            |
 | `measurementPoints[].pointCode`              | body     | Yes      | No       | string | trim 1-64; ต้องอ้าง active point เพียงจุดเดียวของ `eligible_factory_id` และ `systemType` เดียวกับคำขอ |
-| `measurementPoints[].details` | body | ตามผู้ยื่น | เฉพาะเจ้าหน้าที่ | object | เจ้าหน้าที่ละ field หรือส่ง `null` ได้; ผู้ประกอบการต้องส่ง object ที่ไม่ว่าง; object ที่ส่งมาต้องผ่านกฎเดิม |
-| `measurementPoints[].measurementInstruments` | body | ตามผู้ยื่น | เฉพาะเจ้าหน้าที่ | object | เจ้าหน้าที่ละ field หรือส่ง `null` ได้; ผู้ประกอบการต้องส่ง object; ข้อมูลที่ส่งมายังตรวจรูปแบบเดิม |
+| `measurementPoints[].details` | body | ตาม edit scope | scope ระบุชัดเจน ไม่ใช่ `OWN_FACTORY` หรือ `null` | object | edit scope ที่ระบุชัดเจนและไม่ใช่ `OWN_FACTORY` หรือ `null` ละ field หรือส่ง `null` ได้; `OWN_FACTORY` หรือ legacy edit grant ที่ endpoint ได้เป็น scope null ต้องส่ง object ที่ไม่ว่าง; object ที่ส่งมาต้องผ่านกฎเดิม |
+| `measurementPoints[].measurementInstruments` | body | ตาม edit scope | scope ระบุชัดเจน ไม่ใช่ `OWN_FACTORY` หรือ `null` | object | edit scope ที่ระบุชัดเจนและไม่ใช่ `OWN_FACTORY` หรือ `null` ละ field หรือส่ง `null` ได้; `OWN_FACTORY` หรือ legacy edit grant ที่ endpoint ได้เป็น scope null ต้องส่ง object; ข้อมูลที่ส่งมายังตรวจรูปแบบเดิม |
 | `measurementPoints[].documentsAndImages`     | body     | No       | No       | array  | ไม่บังคับ แม้เป็น `CEMS`                          |
 
-ข้อยกเว้นนี้ใช้เฉพาะ `userType` เป็น `officer` หรือ `admin` และมี role `monitoring_kpm` หรือ `admin` ตาม access token เช่นเดียวกับฟอร์มเพิ่มจุดของเจ้าหน้าที่ พร้อม permission `cems_wpms_requests:edit` เดิม ไม่รับ role หรือ flag จาก request body เพื่อเลือก validation
+ข้อยกเว้นนี้ใช้ effective `cems_wpms_requests:edit` scope ล่าสุดที่ระบุชัดเจนและไม่ใช่ `OWN_FACTORY` หรือ `null` โดยไม่จำกัด role หรือ `userType`; `OWN_FACTORY` และ legacy edit grant ที่ endpoint ได้เป็น scope null ต้องส่งทั้งสองส่วน แม้ grant ที่ endpoint ได้เป็น scope null จะใช้ view scope ที่กว้างกว่า ไม่รับ scope, role หรือ flag จาก request body เพื่อเลือก validation
 
 ### ตัวอย่างคำขอเจ้าหน้าที่ที่ละสองส่วน
 
@@ -609,14 +611,14 @@ criteria normalization สำคัญ
 - ต้องมี exactly 1 measurement point
 - `pointCode` ต้องมี เพราะ flow นี้อ้างถึงจุดเดิม
 - เลือกจุดจากรายการปัจจุบันของโรงงานและระบบที่จะยื่นคำขอ ใช้ [parameter-form](./README.md#add-parameter-prefill) โหลดข้อมูลจุดเดิม; การมีรหัสอยู่ในทะเบียนหรือคำขอเก่าเพียงอย่างเดียวไม่ยืนยันเจ้าของจุดปัจจุบัน
-- เฉพาะเจ้าหน้าที่ตามเงื่อนไขข้างต้น ละ `details` และ/หรือ `measurementInstruments` หรือส่ง `null` ได้; ผู้ประกอบการยังต้องส่งทั้งสองส่วน
-- `details` ที่ส่งเป็น object ต้องไม่ว่าง; เจ้าหน้าที่สามารถส่ง `stackShape: null`, `stackShape: ""` หรือละ `stackShape` ได้ เพื่อรองรับ prefill ของจุดเดิมที่ยังไม่มีรูปทรงปล่อง แม้มี `requestedParameters` หรือข้อมูลส่วนอื่นอยู่ใน object
-- เมื่อเจ้าหน้าที่ระบุรูปทรงปล่อง ต้องส่งขนาดหรือคำอธิบายของรูปทรงนั้นตามกฎเดิม; ผู้ประกอบการยังต้องระบุรูปทรงปล่อง CEMS เสมอ และเครื่องมือที่ส่งมาต้องผ่าน schema เดิม
-- ถ้า `details.requestedParameters` มีค่าและส่ง `measurementInstruments` ต้องมีชุดค่าเดียวกัน; เมื่อเจ้าหน้าที่ละเครื่องมือหรือส่ง `null` จะไม่ตรวจการจับคู่กับเครื่องมือ แต่ยังตรวจค่าพารามิเตอร์ที่ขอ
-- service ตรวจซ้ำโดยใช้ตัวตนผู้ยื่น: จุดเดียวและ `pointCode` บังคับทุกคน; สองส่วนนี้ยกเว้นเฉพาะเจ้าหน้าที่
+- ผู้มี edit scope แบบระบุชัดเจนที่ไม่ใช่ `OWN_FACTORY` หรือ `null` ละ `details` และ/หรือ `measurementInstruments` หรือส่ง `null` ได้; `OWN_FACTORY` และ grant ที่ endpoint ได้เป็น scope null ต้องส่งทั้งสองส่วน
+- `details` ที่ส่งเป็น object ต้องไม่ว่าง; ผู้ใช้แบบฟอร์มย่อตาม edit scope สามารถส่ง `stackShape: null`, `stackShape: ""` หรือละ `stackShape` ได้ เพื่อรองรับ prefill ของจุดเดิมที่ยังไม่มีรูปทรงปล่อง แม้มี `requestedParameters` หรือข้อมูลส่วนอื่นอยู่ใน object
+- เมื่อแบบฟอร์มย่อระบุรูปทรงปล่อง ต้องส่งขนาดหรือคำอธิบายของรูปทรงนั้นตามกฎเดิม; `OWN_FACTORY` หรือ legacy edit grant ที่ endpoint ได้เป็น scope null ยังต้องระบุรูปทรงปล่อง CEMS เสมอ และเครื่องมือที่ส่งมาต้องผ่าน schema เดิม
+- ถ้า `details.requestedParameters` มีค่าและส่ง `measurementInstruments` ต้องมีชุดค่าเดียวกัน; เมื่อละเครื่องมือหรือส่ง `null` ตาม edit scope จะไม่ตรวจการจับคู่กับเครื่องมือ แต่ยังตรวจค่าพารามิเตอร์ที่ขอ
+- service ตรวจ edit grant, data scope/assignment และ validation ซ้ำ: จุดเดียวและ `pointCode` บังคับทุกคน; สองส่วนนี้ยกเว้นตาม raw edit scope ข้างต้น
 - ผู้ติดต่อ ชื่อโรงงาน และ field อื่นยังใช้กฎเดิม; สถานะหลังสร้างยังเป็น `PENDING_DESIGN_REVIEW` และไม่รับ `submissionAction`
 - ข้อยกเว้นนี้ใช้เฉพาะการสร้างผ่าน `POST /parameters`; `PUT /:id/form` และฟอร์มประเภทอื่นใช้ validation เดิม
-- ต้อง resolve active eligible factory ได้เหมือน add-point
+- ต้อง resolve active eligible factory ภายใน effective edit scope โดยคงเลขทะเบียนเดิมและการตรวจเจ้าของจุดตามกติกาเจ้าของจุดในหัวข้อนี้
 
 ### Errors
 
@@ -626,8 +628,8 @@ criteria normalization สำคัญ
 | ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | `400`       | `VALIDATION_ERROR` | ไม่มี `pointCode`, มีหลาย point, instrument parameters ไม่ตรง requested set หรือ field อื่นไม่ผ่าน validation | แก้ payload ให้ตรงกับ point เดิม |
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                              | login ใหม่                       |
-| `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:edit`                                                                               | ซ่อนปุ่มส่งคำขอ                  |
-| `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory                                                                                 | refresh ข้อมูลโรงงานก่อนส่งใหม่  |
+| `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:edit` หรือ grant ที่ endpoint ได้เป็น scope null ไม่มี data scope ที่ใช้ได้                                                                               | ซ่อนปุ่มส่งคำขอ                  |
+| `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory หรือโรงงานอยู่นอก edit scope/assignment                                                                                 | refresh ข้อมูลโรงงานก่อนส่งใหม่  |
 | `409`       | `CONFLICT`         | จุดต้นทางไม่เป็น active point เพียงจุดเดียวของโรงงานและระบบที่ระบุ หรือไม่มี stable owner (`error.details.reason=ADD_PARAMETER_POINT_OWNERSHIP_INVALID`) | โหลดรายการจุดใหม่ เลือกโรงงาน ระบบ และจุดให้ตรงกันก่อนส่งใหม่ |
 
 ตัวอย่างข้อผิดพลาดเดียวกันสำหรับการสร้าง ส่งแบบแก้ไข อนุมัติ ยืนยัน และเชื่อมต่อคำขอ `ADD_PARAMETER` ที่อ้างจุดไม่ถูกต้อง:
@@ -790,9 +792,8 @@ criteria normalization สำคัญ
 
 - Authentication: required
 - Permission: `cems_wpms_requests:direct_connect`
-- Data scope: active eligible factory ต้องอยู่ภายใน permission scope ของเจ้าหน้าที่
-- Actor restriction: `userType` ต้องเป็น `officer` หรือ `admin` และมี role `monitoring_kpm` หรือ `admin`
-- role `admin` ผ่านข้อจำกัดภูมิภาค; role `monitoring_kpm` ที่ไม่ใช่ admin รับเฉพาะ scope `ALL` หรือ `IN_REGION` ที่ resolve region ได้อย่างน้อยหนึ่งค่าและทุกค่าเป็น `ภาคกลาง`; `regionalAccess` ต้องไม่มีค่าพื้นที่นอก `ภาคกลาง`
+- Data scope: active eligible factory ต้องอยู่ใน effective scope ล่าสุดของ `cems_wpms_requests:direct_connect`; รองรับพื้นที่ที่บันทึกไว้โดยไม่จำกัดภาคตาม role
+- ไม่จำกัด role หรือ `userType`; role `admin` ไม่ข้ามการตรวจ permission หรือ data scope
 
 ### Top-level Fields ของ Direct Connection
 
@@ -906,7 +907,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 ### Validation And Business Rules
 
 - actor ต้องผ่าน permission `cems_wpms_requests:direct_connect`
-- actor ต้องผ่านข้อจำกัด role/scope ข้างต้น มิฉะนั้นตอบ `403`
+- actor ต้องมี effective permission ข้างต้น มิฉะนั้นตอบ `403`
 - ต้อง resolve active eligible factory ภายใน officer scope ได้ มิฉะนั้นตอบ `404`
 - `measurementPoints` ต้องมี exactly 1 row
 - `pointCode` ต้องไม่ว่าง, ยาวไม่เกิน 64, และต้องไม่ชนกับรหัสที่ยังจองอยู่ในทะเบียนรหัสกลาง
