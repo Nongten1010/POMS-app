@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="general-file-uploads"></a>
+
+## 2026-10-12 — เปิดรับไฟล์ทั่วไปและกรองไฟล์เสี่ยงร่วมกัน
+
+- **Affected canonical docs:** [นโยบายอัปโหลดไฟล์ทั่วไป](./shared/file-uploads/README.md) และเมนูที่ลิงก์จากหน้านั้น
+- **Impact:** upload endpoints เดิมรับชนิดไฟล์เพิ่ม แต่บล็อกโปรแกรม สคริปต์ macro, Office รุ่นเก่า DOC/XLS/PPT/RTF และ archive ที่ตรวจไม่ได้; MIME response เป็น string กว้างขึ้น ขนาดไฟล์ จำนวนไฟล์ auth และ permissions เดิมคงอยู่
+- **Migration:** รัน `0137_allow_general_attachment_file_types` ก่อนเปิด backend; client ยกเลิก MIME enum เดิมและใช้ metadata จาก response; ผู้ใช้ FAQ แปลง DOC/XLS เป็น DOCX/XLSX ที่ไม่มี macro หรือ PDF. รูป JPEG/PNG และ PDF เดิม preview ได้ ส่วนชนิดใหม่ดาวน์โหลดเป็น attachment; rollback ปฏิเสธเมื่อยังมีชนิดใหม่ในฐานข้อมูล. ตรวจ runtime OpenAPI หลัง deploy
+- **Old contract:** หลายเมนูรับเฉพาะ JPEG/PNG/PDF; กฎหมายรับ PDF; FAQ รับ DOC/XLS โดยยังไม่มีการตรวจ macro
+- **New contract:** ใช้ตัวกรองร่วม ตรวจเนื้อหา ZIP/Office และลายเซ็นเสี่ยง; ยังไม่มี antivirus และการผ่านตัวกรองไม่ใช่ผลรับรองว่าปลอดมัลแวร์
+- **Breaking change:** yes — FAQ ไม่รับ DOC/XLS อีกต่อไป และไฟล์เสี่ยงที่เคยผ่าน signature อย่างเดียวอาจถูกปฏิเสธ; MIME enums ของผู้เรียกต้องรองรับชนิดใหม่
+
 <a id="custom-user-permission-snapshots"></a>
 
 ## 2026-10-12 — ใช้สิทธิ์รายคนที่บันทึกโดยไม่ติดเพดาน role

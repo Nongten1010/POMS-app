@@ -1,12 +1,11 @@
+import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
 import { RequestHandler, Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { StatusCodes } from 'http-status-codes';
 import multer from 'multer';
-import { BadRequestError } from '../../shared/errors/AppError';
 import { authenticate } from '../../shared/middlewares/authenticate';
 import { authorize } from '../../shared/middlewares/authorize';
 import { MAX_MONITORING_POINT_ATTACHMENT_FILE_SIZE_BYTES } from './monitoring-point-attachments';
-import { allowedMonitoringPointFormAttachmentFileTypes } from './monitoring-point-form-attachments.service';
 import { monitoringPointFormsController } from './monitoring-point-forms.controller';
 
 export const monitoringPointFormsRoutes = Router();
@@ -23,12 +22,12 @@ const monitoringPointFormAttachmentUpload = multer({
     fields: 0,
   },
   fileFilter: (_req, file, callback) => {
-    if (allowedMonitoringPointFormAttachmentFileTypes.has(file.mimetype)) {
+    try {
+      validateUploadFileMetadata(file.originalname, file.mimetype);
       callback(null, true);
-      return;
+    } catch (error) {
+      callback(error instanceof Error ? error : new Error('Invalid uploaded file'));
     }
-
-    callback(new BadRequestError('Unsupported file type'));
   },
 });
 const monitoringPointFormAttachmentUploadRateLimiter = rateLimit({

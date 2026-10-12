@@ -1,5 +1,7 @@
 # แจ้งแบบ กวภ. 01 - กวภ. 05
 
+นโยบายชนิดไฟล์ การบล็อกโปรแกรม/สคริปต์/macro และการตรวจ ZIP ใช้ [นโยบายอัปโหลดไฟล์ทั่วไป](../../shared/file-uploads/README.md) โดยคงขนาดและสิทธิ์เดิมของเมนู
+
 > Owner: Backend
 
 ## Frontend Quick Start
@@ -74,7 +76,7 @@ curl --request POST \
 
 | Field | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `file` | multipart form-data | PDF / PNG / JPEG | Yes | ไฟล์แนบที่อัปโหลดจริง |
+| `file` | multipart form-data | binary | Yes | ไฟล์แนบที่อัปโหลดจริง |
 | `attachmentType` | multipart form-data | string | No | ใช้กำหนดเพดานขนาดไฟล์เฉพาะบางประเภท; trim แล้ว 1-64 ตัวอักษร |
 
 ### Request Example
@@ -853,7 +855,7 @@ Query fields:
 
 | แบบ | Field ระดับ root | Type | Required | กติกา |
 | --- | --- | --- | --- | --- |
-| กวภ.01/03 | `attachments` | attachment[] | No | ชุดทั่วไปสูงสุด 5 ไฟล์ JPG/JPEG, PNG, PDF ไฟล์ละไม่เกิน 10 MiB; ใช้ `GENERAL` สำหรับไฟล์ใหม่ |
+| กวภ.01/03 | `attachments` | attachment[] | No | ชุดทั่วไปสูงสุด 5 ไฟล์ทั่วไปตามนโยบายร่วม ไฟล์ละไม่เกิน 10 MiB; ใช้ `GENERAL` สำหรับไฟล์ใหม่ |
 | กวภ.01/03 | `attachmentLink` | string/null | No | URL `http://` หรือ `https://` ไม่เกิน 1000 ตัวอักษร ไม่รับ credentials หรืออักขระควบคุม |
 | กวภ.02/04 | `reportRound` | integer/null | No | จำนวนเต็ม 1–2147483647; optional เพื่อรองรับ client/คำขอเก่า |
 | กวภ.02/04 | `reportYear` | integer/null | No | ปี พ.ศ. 2400–9999 ไม่บวก 543 อีกครั้ง |

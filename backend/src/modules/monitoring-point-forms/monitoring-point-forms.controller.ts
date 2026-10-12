@@ -1,3 +1,4 @@
+import { uploadContentDisposition } from '../../shared/utils/upload-file-policy';
 import { createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { NextFunction, Request, Response } from 'express';
@@ -30,7 +31,10 @@ export const monitoringPointFormsController = {
 
       res.setHeader('Content-Type', content.fileType);
       res.setHeader('Content-Length', String(content.fileSize));
-      res.setHeader('Content-Disposition', buildInlineContentDisposition(content.fileName));
+      res.setHeader(
+        'Content-Disposition',
+        uploadContentDisposition(content.fileName, content.fileType),
+      );
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cache-Control', 'private, no-store, max-age=0');
       res.setHeader('Pragma', 'no-cache');
@@ -166,13 +170,4 @@ function requireAccess(req: Request, permission: string): MonitoringPointFormAcc
     scope: getScopeDetails(req, permission),
     regionalAccess: req.user?.regionalAccess ?? null,
   };
-}
-
-function buildInlineContentDisposition(fileName: string): string {
-  const asciiFileName = fileName.replace(/[^\x20-\x7e]|["\\]/g, '_');
-  const encodedFileName = encodeURIComponent(fileName).replace(
-    /['()*]/g,
-    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-  return `inline; filename="${asciiFileName}"; filename*=UTF-8''${encodedFileName}`;
 }

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import archiveFixtures from '../fixtures/upload-archives.json';
 
 jest.mock('../../src/modules/faqs/faqs.repository', () => ({
   faqsRepository: {
@@ -148,6 +149,25 @@ describe('faqsService', () => {
       ]),
     ).rejects.toMatchObject({ statusCode: 400 });
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it('awaits ZIP macro inspection for every file before storing the batch', async () => {
+    const save = jest.spyOn(faqFileStorage, 'save');
+    const buffer = Buffer.from(archiveFixtures.macro, 'base64');
+    await expect(
+      faqsService.create(input, 42, [
+        uploadedFile(),
+        {
+          ...uploadedFile(),
+          originalname: 'report.docx',
+          mimetype: 'application/octet-stream',
+          buffer,
+          size: buffer.length,
+        },
+      ]),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(save).not.toHaveBeenCalled();
+    expect(mockedRepository.create).not.toHaveBeenCalled();
   });
 
   it('denies downloads when the attachment is not part of an active FAQ', async () => {

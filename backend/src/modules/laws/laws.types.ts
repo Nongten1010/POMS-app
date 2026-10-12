@@ -44,7 +44,7 @@ export interface UploadedLawFile {
 export interface StoredLawFile {
   fileName: string;
   fileSize: number;
-  mimeType: 'application/pdf';
+  mimeType: string;
   storagePath: string;
 }
 
@@ -66,7 +66,7 @@ export interface LawDTO {
   file: {
     fileName: string;
     fileSize: number;
-    mimeType: 'application/pdf';
+    mimeType: string;
     downloadUrl: string;
   };
   createdAt: string;
@@ -77,7 +77,7 @@ export interface LawFileContent {
   filePath: string;
   fileName: string;
   fileSize: number;
-  mimeType: 'application/pdf';
+  mimeType: string;
 }
 
 export interface CreateLawRecordInput extends LawInput {

@@ -180,7 +180,7 @@ describe('law routes', () => {
     },
   );
 
-  it('rejects a non-PDF MIME type before buffering it into the service', async () => {
+  it('rejects a script before buffering it into the service', async () => {
     const response = await request(testApp(service))
       .post('/laws')
       .set('Authorization', `Bearer ${accessToken()}`)
@@ -189,8 +189,8 @@ describe('law routes', () => {
       .field('type', 'DEPARTMENT_ANNOUNCEMENT')
       .field('publishedDate', '2026-09-04')
       .attach('file', Buffer.from('plain text'), {
-        filename: 'law.txt',
-        contentType: 'text/plain',
+        filename: 'law.js',
+        contentType: 'text/javascript',
       });
 
     expect(response.status).toBe(400);

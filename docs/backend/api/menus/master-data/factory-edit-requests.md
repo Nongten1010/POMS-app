@@ -1,5 +1,7 @@
 # โรงงานและคำขอแก้ไขข้อมูลในระบบ POMS
 
+นโยบายชนิดไฟล์ การบล็อกโปรแกรม/สคริปต์/macro และการตรวจ ZIP ใช้ [นโยบายอัปโหลดไฟล์ทั่วไป](../../shared/file-uploads/README.md) โดยคงขนาดและสิทธิ์เดิมของเมนู
+
 > Owner: Backend
 
 ## Frontend Quick Start
@@ -452,7 +454,7 @@ Minimal response (`200 OK`):
 
 | Field         | Type   | Required | Rules                                                                                                                           |
 | ------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `file`        | binary | yes      | หนึ่งไฟล์ต่อ request; 1–5,242,880 bytes; JPEG (`.jpg`, `.jpeg`), PNG (`.png`) หรือ PDF (`.pdf`); MIME, นามสกุล และ signature ต้องตรงกัน |
+| `file`        | binary | yes      | หนึ่งไฟล์ต่อ request; 1–5,242,880 bytes; ไฟล์ทั่วไปตามนโยบายร่วม; กรองโปรแกรม สคริปต์ macro และตรวจ ZIP/Office |
 | `title`       | string | no       | trim ค่าว่างเป็น omitted; ไม่เกิน 255 ตัวอักษร; เมื่อไม่ส่งใช้ค่าเริ่มต้น `เอกสารและรูปภาพ`                                    |
 | `description` | string | no       | trim ค่าว่างเป็น `null`; ไม่เกิน 1000 ตัวอักษร                                                                                 |
 | `link`        | string | no       | reference URL แบบ absolute `http`/`https`; trim ค่าว่างเป็น `null`; ไม่เกิน 2048 ตัวอักษร                                      |

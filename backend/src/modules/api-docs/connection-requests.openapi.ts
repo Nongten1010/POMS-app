@@ -1,3 +1,4 @@
+import { generalUploadPolicyDescription } from './upload-policy.openapi';
 import { pomsManagedStatusProperties } from './poms-status-management.openapi';
 import { env } from '../../config/env';
 import {
@@ -1254,6 +1255,14 @@ const componentSchemas: Record<string, OpenApiObject> = {
       phone: { type: 'string', minLength: 1, maxLength: 64 },
       email: { type: 'string', format: 'email', maxLength: 255, nullable: true },
       position: { type: 'string', maxLength: 255, nullable: true },
+    },
+  },
+  ConnectionRequestDocumentImageUploadResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('RequestDocumentImage'),
     },
   },
   RequestDocumentImage: {
@@ -2603,8 +2612,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ข้อมูลประกอบฟอร์ม',
       summary: 'อัปโหลดรูปหรือเอกสารสำหรับฟอร์ม',
       operationId: 'uploadConnectionRequestDocumentImage',
-      description:
-        'Permission: cems_wpms_requests:edit. ต้องมี file หรือ link อย่างน้อยหนึ่งค่า; file สูงสุด 5 MiB และตรวจ MIME, นามสกุล และ file signature',
+      successSchema: schemaRef('ConnectionRequestDocumentImageUploadResponse'),
+      description: `Permission: cems_wpms_requests:edit. ต้องมี file หรือ link อย่างน้อยหนึ่งค่า; file สูงสุด 5 MiB. ${generalUploadPolicyDescription}`,
       requestBody: {
         required: true,
         content: {
@@ -2617,8 +2626,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
                 file: {
                   type: 'string',
                   format: 'binary',
-                  description:
-                    'Optional เมื่อมี link; 1 byte ถึง 5 MiB; รองรับ .jpg/.jpeg (image/jpeg), .png (image/png), .pdf (application/pdf)',
+                  description: `Optional เมื่อมี link; 1 byte ถึง 5 MiB. ${generalUploadPolicyDescription}`,
                 },
                 title: {
                   type: 'string',

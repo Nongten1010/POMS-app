@@ -105,7 +105,7 @@ describe('KWP form attachment storage', () => {
         mimeType: 'application/pdf',
         size: disguisedExecutable.length,
       }),
-    ).rejects.toThrow('Uploaded file content does not match its declared type');
+    ).rejects.toThrow('Executable, legacy Office or uninspectable archive content is not allowed');
   });
 
   it.each([

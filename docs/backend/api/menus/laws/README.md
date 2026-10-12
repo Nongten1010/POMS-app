@@ -1,16 +1,18 @@
 # กฎหมายที่เกี่ยวข้อง
 
+นโยบายชนิดไฟล์ การบล็อกโปรแกรม/สคริปต์/macro และการตรวจ ZIP ใช้ [นโยบายอัปโหลดไฟล์ทั่วไป](../../shared/file-uploads/README.md) โดยคงขนาดและสิทธิ์เดิมของเมนู
+
 > Owner: Backend
 
 ## Frontend Quick Start
 
-เมนูนี้โหลดรายการกฎหมายทั้งหมดแบบ public และใช้ `file.downloadUrl` ดาวน์โหลด PDF ได้โดยตรง ส่วนการเพิ่ม แก้ไข และลบต้องส่ง Bearer token ที่มี permission `laws:edit` โดย API ไม่รองรับ pagination, filter หรือ sort query
+เมนูนี้โหลดรายการกฎหมายทั้งหมดแบบ public และใช้ `file.downloadUrl` ดาวน์โหลดไฟล์แนบ ได้โดยตรง ส่วนการเพิ่ม แก้ไข และลบต้องส่ง Bearer token ที่มี permission `laws:edit` โดย API ไม่รองรับ pagination, filter หรือ sort query
 
 ### Main Flow
 
 1. เรียก `GET /api/v1/laws` หนึ่งครั้งเพื่อรับรายการทั้งหมด
 2. กรองด้วย `category` และเรียงด้วย `title` ใน frontend
-3. เปิด `file.downloadUrl` เพื่อดาวน์โหลด PDF
+3. เปิด `file.downloadUrl` เพื่อดาวน์โหลดไฟล์แนบ
 4. ผู้ใช้ที่มี `laws:edit` จัดการรายการผ่าน `POST`, `PUT` และ `DELETE`
 
 ```bash
@@ -36,10 +38,10 @@ curl --request POST \
 | งาน | Method | Path | Auth | Permission |
 | --- | --- | --- | --- | --- |
 | โหลดรายการทั้งหมด | `GET` | `/api/v1/laws` | Public | - |
-| เพิ่มรายการพร้อม PDF | `POST` | `/api/v1/laws` | Bearer | `laws:edit` |
-| แก้ไขข้อมูลหรือเปลี่ยน PDF | `PUT` | `/api/v1/laws/:id` | Bearer | `laws:edit` |
+| เพิ่มรายการพร้อมไฟล์แนบ | `POST` | `/api/v1/laws` | Bearer | `laws:edit` |
+| แก้ไขข้อมูลหรือเปลี่ยนไฟล์แนบ | `PUT` | `/api/v1/laws/:id` | Bearer | `laws:edit` |
 | ลบรายการ | `DELETE` | `/api/v1/laws/:id` | Bearer | `laws:edit` |
-| ดาวน์โหลด PDF | `GET` | `/api/v1/laws/:id/file` | Public | - |
+| ดาวน์โหลดไฟล์แนบ | `GET` | `/api/v1/laws/:id/file` | Public | - |
 
 ## Enums
 
@@ -82,7 +84,7 @@ curl --request POST \
 | `publishedDate` | string (`YYYY-MM-DD`) | No | วันประกาศ ค.ศ. ช่วง `1900-01-01` ถึง `9999-12-31` |
 | `file.fileName` | string | No | ชื่อไฟล์เดิม สูงสุด 255 ตัวอักษร |
 | `file.fileSize` | integer | No | ขนาดไฟล์หน่วย byte ช่วง 1-10,485,760 |
-| `file.mimeType` | string | No | `application/pdf` |
+| `file.mimeType` | string | No | MIME string ที่ backend กำหนด |
 | `file.downloadUrl` | URI reference | No | URL public รูป `/api/v1/laws/:id/file` ที่ใช้ดาวน์โหลดโดยตรง |
 | `createdAt` | ISO 8601 datetime | No | เวลาสร้าง |
 | `updatedAt` | ISO 8601 datetime | No | เวลาแก้ไขล่าสุด |
@@ -136,7 +138,7 @@ Frontend เป็นผู้กรอง `category` และเรียง `
 | `category` | form | enum | Yes | `CEMS`, `WPMS`, `OTHER` |
 | `type` | form | enum | Yes | ค่าตามตาราง `type` |
 | `publishedDate` | form | string | Yes | วันจริงรูป `YYYY-MM-DD` ช่วงปี 1900-9999; future date ใช้ได้ |
-| `file` | form | binary | Yes | PDF 1 ไฟล์, 1 byte-10 MB, MIME `application/pdf`, นามสกุล `.pdf` และ signature `%PDF-` ต้องตรงกัน |
+| `file` | form | binary | Yes | ไฟล์ทั่วไป 1 ไฟล์, 1 byte–10 MiB ตามนโยบายร่วม |
 
 ตัวอย่างเชิงโครงสร้างของ form fields นี้ไม่ใช่ JSON wire format:
 
@@ -187,7 +189,7 @@ Frontend เป็นผู้กรอง `category` และเรียง `
 | `category` | form | enum | Yes | full replacement |
 | `type` | form | enum | Yes | full replacement; หนึ่งใน 5 ค่าตามตาราง `type` เท่านั้น |
 | `publishedDate` | form | string | Yes | วันจริงรูป `YYYY-MM-DD` |
-| `file` | form | binary | No | เมื่อไม่ส่งจะเก็บไฟล์เดิม; เมื่อส่งใช้กติกา PDF เดียวกับ create |
+| `file` | form | binary | No | เมื่อไม่ส่งจะเก็บไฟล์เดิม; เมื่อส่งใช้กติกาไฟล์เดียวกับ create |
 
 ```json
 {
@@ -260,13 +262,13 @@ Response `200 OK`:
 | --- | --- | --- | --- | --- |
 | `id` | path | UUID string | Yes | public identifier จาก `file.downloadUrl` |
 
-Response `200 OK` เป็น binary PDF ไม่ใช่ JSON:
+Response `200 OK` เป็น binary ตามชนิดไฟล์ ไม่ใช่ JSON:
 
 | Header/body | Value |
 | --- | --- |
-| `Content-Type` | `application/pdf` |
+| `Content-Type` | MIME string ที่ backend กำหนด |
 | `Content-Disposition` | `attachment` พร้อมชื่อไฟล์เดิม |
-| body | byte stream ที่ขึ้นต้นด้วย PDF signature |
+| body | byte stream ของไฟล์ที่บันทึก |
 
 ```text
 %PDF-<binary data>
@@ -284,7 +286,7 @@ Response `200 OK` เป็น binary PDF ไม่ใช่ JSON:
     "message": "ข้อมูลรายการกฎหมายไม่ถูกต้อง",
     "details": {
       "category": "กรุณาเลือกหมวดหมู่",
-      "file": "กรุณาแนบไฟล์ PDF"
+      "file": "กรุณาแนบไฟล์"
     }
   }
 }
@@ -292,7 +294,7 @@ Response `200 OK` เป็น binary PDF ไม่ใช่ JSON:
 
 | HTTP | Code | Condition | Client action |
 | --- | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | path/query/form field ไม่ตรง schema, ไม่มีไฟล์ตอน create หรือ PDF ว่าง/MIME/นามสกุล/signature ไม่ตรง | แสดงรายละเอียดราย field และให้ผู้ใช้แก้ข้อมูลหรือเลือก PDF ใหม่ |
+| `400` | `VALIDATION_ERROR` | path/query/form field ไม่ตรง schema, ไม่มีไฟล์ตอน create หรือ ไฟล์ว่าง/เกินขนาด/เข้าข่ายไฟล์เสี่ยง/เนื้อหาไม่ตรงชนิด | แสดงรายละเอียดราย field และให้ผู้ใช้แก้ข้อมูลหรือเลือกไฟล์ใหม่ |
 | `400` | `UPLOAD_ERROR` | ไฟล์เกิน 10 MB, จำนวนไฟล์/field หรือ multipart limit | ลดไฟล์หรือแก้ multipart แล้วส่งใหม่ |
 | `401` | `UNAUTHORIZED` | write request ไม่มี token หรือ token ใช้ไม่ได้ | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี `laws:edit` | ซ่อน action หรือแจ้งผู้ดูแลสิทธิ์ |

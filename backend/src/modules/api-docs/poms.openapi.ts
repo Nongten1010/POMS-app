@@ -1,3 +1,4 @@
+import { generalUploadPolicyDescription } from './upload-policy.openapi';
 import {
   pomsManagedStatusProperties,
   statusManagementPaths,
@@ -1001,7 +1002,7 @@ const lawValidationErrorExample = {
     message: 'ข้อมูลรายการกฎหมายไม่ถูกต้อง',
     details: {
       category: 'กรุณาเลือกหมวดหมู่',
-      file: 'กรุณาแนบไฟล์ PDF',
+      file: 'กรุณาแนบไฟล์',
     },
   },
 };
@@ -1033,7 +1034,7 @@ const lawRequestProperties: Record<string, OpenApiObject> = {
 const lawBinaryFileSchema: OpenApiObject = {
   type: 'string',
   format: 'binary',
-  description: 'ไฟล์ PDF 1 ไบต์ถึง 10 MB; MIME type ต้องเป็น application/pdf',
+  description: `ไฟล์ทั่วไป 1 byte ถึง 10 MiB. ${generalUploadPolicyDescription}`,
   'x-allowed-mime-types': ['application/pdf'],
   'x-max-size-bytes': 10 * 1024 * 1024,
 };
@@ -1227,7 +1228,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
         maximum: 10 * 1024 * 1024,
         description: 'ขนาดไฟล์หน่วย byte',
       },
-      mimeType: { type: 'string', enum: ['application/pdf'] },
+      mimeType: {
+        type: 'string',
+        maxLength: 100,
+        description: 'MIME ที่ backend กำหนดจากไฟล์ที่ผ่านการตรวจ',
+      },
       downloadUrl: {
         type: 'string',
         format: 'uri-reference',
@@ -1347,8 +1352,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         maxItems: 10,
         items: { type: 'string', format: 'binary', 'x-max-size-bytes': 10485760 },
-        description:
-          'ใช้ field files ซ้ำ; PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, JPEG, TXT (UTF-8) ไฟล์ละ 1 byte ถึง 10 MB รวมกับไฟล์เดิมไม่เกิน 10 ไฟล์; ตรวจนามสกุลและลายเซ็นไฟล์',
+        description: `ใช้ field files ซ้ำ; ไฟล์ละ 1 byte ถึง 10 MiB รวมกับไฟล์เดิมไม่เกิน 10 ไฟล์. ${generalUploadPolicyDescription}`,
       },
     },
   },
@@ -2749,12 +2753,10 @@ const componentSchemas: Record<string, OpenApiObject> = {
       file: {
         type: 'string',
         format: 'binary',
-        description:
-          'ไฟล์ JPEG (.jpg/.jpeg), PNG (.png) หรือ PDF (.pdf) ขนาดตั้งแต่ 1 byte ถึง 5 MiB; MIME type, นามสกุล และ file signature ต้องตรงกัน',
+        description: `ไฟล์ทั่วไป 1 byte ถึง 5 MiB. ${generalUploadPolicyDescription}`,
         'x-min-size-bytes': 1,
         'x-max-size-bytes': 5242880,
-        'x-allowed-media-types': ['image/jpeg', 'image/png', 'application/pdf'],
-        'x-allowed-file-extensions': ['.jpg', '.jpeg', '.png', '.pdf'],
+        'x-antivirus-enabled': false,
       },
       title: {
         type: 'string',
@@ -2801,7 +2803,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       fileType: {
         type: 'string',
-        enum: ['image/jpeg', 'image/png', 'application/pdf'],
+        maxLength: 128,
+        description: 'MIME ที่ backend กำหนด; ชนิดไม่รู้จักใช้ application/octet-stream',
       },
       fileSize: { type: 'integer', minimum: 1, maximum: 5242880 },
     },
@@ -3438,7 +3441,25 @@ const componentSchemas: Record<string, OpenApiObject> = {
       file: {
         type: 'string',
         format: 'binary',
-        description: 'ไฟล์ JPEG, PNG หรือ PDF ขนาดไม่เกิน 10 MiB',
+        description: `ไฟล์ทั่วไป 1 byte ถึง 10 MiB. ${generalUploadPolicyDescription}`,
+      },
+    },
+  },
+  MonitoringPointAttachmentUploadResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'object',
+        required: ['uploadToken', 'fileName', 'fileType', 'fileSize', 'expiresAt'],
+        properties: {
+          uploadToken: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$' },
+          fileName: { type: 'string', maxLength: 255 },
+          fileType: { type: 'string', maxLength: 128 },
+          fileSize: { type: 'integer', minimum: 1, maximum: 10485760 },
+          expiresAt: { type: 'string', format: 'date-time' },
+        },
       },
     },
   },
@@ -3450,7 +3471,33 @@ const componentSchemas: Record<string, OpenApiObject> = {
       file: {
         type: 'string',
         format: 'binary',
-        description: 'ไฟล์ JPEG, PNG หรือ PDF ขนาดตั้งแต่ 1 byte ถึง 5 MiB',
+        description: `ไฟล์ทั่วไป 1 byte ถึง 5 MiB. ${generalUploadPolicyDescription}`,
+      },
+    },
+  },
+  BodCodAttachmentUploadResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'object',
+        required: [
+          'originalFileName',
+          'storedFileName',
+          'mimeType',
+          'fileSize',
+          'storagePath',
+          'fileUrl',
+        ],
+        properties: {
+          originalFileName: { type: 'string', maxLength: 255 },
+          storedFileName: { type: 'string' },
+          mimeType: { type: 'string', maxLength: 128 },
+          fileSize: { type: 'integer', minimum: 1, maximum: 5242880 },
+          storagePath: { type: 'string' },
+          fileUrl: { type: 'string', format: 'uri' },
+        },
       },
     },
   },
@@ -4274,8 +4321,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       file: {
         type: 'string',
         format: 'binary',
-        description:
-          'JPEG, PNG หรือ PDF; ไม่รับไฟล์ว่าง ตรวจ MIME/extension/signature; GENERAL/RATA_REPORT/CALIBRATION_PHOTO ไม่เกิน 10 MiB ประเภทอื่นไม่เกิน 5 MiB',
+        description: `GENERAL/RATA_REPORT/CALIBRATION_PHOTO ไม่เกิน 10 MiB ประเภทอื่นไม่เกิน 5 MiB; ไม่รับไฟล์ว่าง. ${generalUploadPolicyDescription}`,
       },
     },
   },
@@ -5507,12 +5553,12 @@ const extraPaths: Record<string, OpenApiObject> = {
     }),
     post: securedOperation({
       tag: 'Laws',
-      summary: 'เพิ่มรายการกฎหมายพร้อมไฟล์ PDF',
+      summary: 'เพิ่มรายการกฎหมายพร้อมไฟล์แนบ',
       operationId: 'createLaw',
-      description: 'อัปโหลด multipart/form-data โดยรับไฟล์ PDF 1 ไฟล์ ขนาดไม่เกิน 10 MB',
+      description: `อัปโหลด multipart/form-data รับไฟล์ทั่วไป 1 ไฟล์ ขนาดไม่เกิน 10 MiB. ${generalUploadPolicyDescription}`,
       requestBody: multipartRequestBody(
         schemaRef('CreateLawRequest'),
-        { file: { contentType: 'application/pdf' } },
+        { file: { contentType: '*/*' } },
         createLawExample,
       ),
       successStatus: '201',
@@ -5520,7 +5566,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('LawResponse'),
       extraResponses: {
         '400': errorResponse(
-          'ข้อมูล multipart หรือไฟล์ PDF ไม่ผ่าน validation',
+          'ข้อมูล multipart หรือไฟล์ไม่ผ่าน validation',
           lawValidationErrorExample,
         ),
       },
@@ -5536,14 +5582,14 @@ const extraPaths: Record<string, OpenApiObject> = {
       parameters: [contentIdParameter],
       requestBody: multipartRequestBody(
         schemaRef('UpdateLawRequest'),
-        { file: { contentType: 'application/pdf' } },
+        { file: { contentType: '*/*' } },
         updateLawExample,
       ),
       successDescription: 'แก้ไขรายการกฎหมายสำเร็จ',
       successSchema: schemaRef('LawResponse'),
       extraResponses: {
         '400': errorResponse(
-          'UUID, ข้อมูล multipart หรือไฟล์ PDF ไม่ผ่าน validation',
+          'UUID, ข้อมูล multipart หรือไฟล์ไม่ผ่าน validation',
           lawValidationErrorExample,
         ),
       },
@@ -5563,11 +5609,11 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'ดาวน์โหลดไฟล์กฎหมาย',
       operationId: 'downloadLawFile',
       description:
-        'Public endpoint ที่ file.downloadUrl ชี้มาโดยตรง; ตอบ PDF พร้อม Content-Disposition แบบ attachment',
+        'Public endpoint ที่ file.downloadUrl ชี้มาโดยตรง; ตอบไฟล์ตาม MIME ที่บันทึก พร้อม Content-Disposition แบบ attachment',
       parameters: [contentIdParameter],
-      successDescription: 'ไฟล์ PDF ของรายการกฎหมาย',
+      successDescription: 'ไฟล์แนบของรายการกฎหมาย',
       successSchema: { type: 'string', format: 'binary' },
-      successContentType: 'application/pdf',
+      successContentType: '*/*',
     }),
   },
   '/faqs': {
@@ -6151,11 +6197,10 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Master Data',
       summary: 'Upload a POMS factory document or image',
       operationId: 'uploadPomsFactoryDocumentImage',
-      description:
-        'อัปโหลดไฟล์หนึ่งไฟล์เพื่อรับ RequestDocumentImage metadata สำหรับนำไปใส่ใน factoryFrontPhotos หรือ factoryLogo. รับ JPEG (.jpg/.jpeg), PNG (.png) และ PDF (.pdf) ขนาด 1 byte–5 MiB; MIME type, นามสกุล และ file signature ต้องตรงกัน. Multer limit failure ตอบ FILE_UPLOAD_FAILED ส่วน file/metadata validation ตอบ BAD_REQUEST',
+      description: `อัปโหลดไฟล์หนึ่งไฟล์เพื่อรับ RequestDocumentImage metadata สำหรับนำไปใส่ใน factoryFrontPhotos หรือ factoryLogo ขนาด 1 byte–5 MiB. ${generalUploadPolicyDescription}. Multer limit failure ตอบ FILE_UPLOAD_FAILED ส่วน file/metadata validation ตอบ BAD_REQUEST`,
       requestBody: multipartRequestBody(
         schemaRef('PomsFactoryDocumentImageUploadRequest'),
-        { file: { contentType: 'image/jpeg, image/png, application/pdf' } },
+        { file: { contentType: '*/*' } },
         {
           file: '<binary>',
           title: 'ภาพถ่ายหน้าโรงงาน',
@@ -6431,6 +6476,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Eligible Factories',
       summary: 'Upload monitoring point attachment',
       operationId: 'uploadMonitoringPointAttachment',
+      successSchema: schemaRef('MonitoringPointAttachmentUploadResponse'),
       requestBody: multipartRequestBody(schemaRef('MonitoringPointAttachmentUploadRequest')),
       successStatus: '201',
       extraResponses: {
@@ -6443,6 +6489,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Eligible Factories',
       summary: 'Download monitoring point attachment content',
       operationId: 'downloadMonitoringPointAttachment',
+      description:
+        'MIME ตามไฟล์ที่บันทึก; JPEG/PNG/PDF เป็น inline และชนิดอื่นเป็น attachment พร้อม nosniff; ใช้ signed URL และกติกา claim เดิม',
       parameters: [publicAttachmentIdParameter, expiresParameter, signatureParameter],
       successSchema: schemaRef('AttachmentContentResponse'),
       successDescription: 'ไฟล์แนบ',
@@ -6464,6 +6512,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'BOD/COD Deviation Reports',
       summary: 'Upload BOD/COD attachment',
       operationId: 'uploadBodCodAttachment',
+      successSchema: schemaRef('BodCodAttachmentUploadResponse'),
       requestBody: multipartRequestBody(schemaRef('BodCodAttachmentUploadRequest')),
       successStatus: '201',
     }),
@@ -7229,7 +7278,7 @@ const tags: OpenApiObject[] = [
   },
   {
     name: MENU_TAGS.LAWS,
-    description: 'รายการกฎหมาย ไฟล์ PDF และการดูแลข้อมูลกฎหมาย',
+    description: 'รายการกฎหมาย ไฟล์แนบ และการดูแลข้อมูลกฎหมาย',
   },
   {
     name: MENU_TAGS.FAQS,
@@ -7705,6 +7754,26 @@ const paths = decorateWriteRequestValidationDocs(
   ),
   components,
 );
+
+for (const [uploadPath, method] of [
+  ['/cems-wpms-requests/document-images', 'post'],
+  ['/poms-factories/document-images', 'post'],
+  ['/monitoring-point-forms/attachments', 'post'],
+  ['/bod-cod-deviation-reports/attachments', 'post'],
+  ['/kwp-form-submissions/attachments', 'post'],
+  ['/laws', 'post'],
+  ['/laws/{id}', 'put'],
+  ['/faqs', 'post'],
+  ['/faqs/{id}', 'put'],
+]) {
+  const operation = paths[uploadPath]?.[method] as OpenApiObject | undefined;
+  if (!operation) continue;
+  const description = String(operation.description ?? '');
+  if (!description.includes(generalUploadPolicyDescription)) {
+    operation.description = `${description}\n\n${generalUploadPolicyDescription}`;
+  }
+  operation['x-antivirus-enabled'] = false;
+}
 
 export const pomsOpenApiDocument: OpenApiObject = {
   openapi: '3.0.3',

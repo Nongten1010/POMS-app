@@ -1,3 +1,4 @@
+import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -5,11 +6,6 @@ import { BadRequestError } from '../../shared/errors/AppError';
 
 export const MAX_DOCUMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const STORAGE_PREFIX = 'cems-wpms/document-images';
-export const allowedDocumentFileTypes = new Map([
-  ['image/jpeg', new Set(['.jpg', '.jpeg'])],
-  ['image/png', new Set(['.png'])],
-  ['application/pdf', new Set(['.pdf'])],
-]);
 
 export interface UploadedDocumentFile {
   buffer: Buffer;
@@ -50,7 +46,7 @@ export class LocalDocumentFileStorage implements DocumentFileStorage {
   constructor(private readonly options: LocalDocumentFileStorageOptions) {}
 
   async save(file: UploadedDocumentFile): Promise<{ fileUrl: string; storageKey: string }> {
-    validateDocumentFile(file);
+    file = { ...file, mimeType: await validateDocumentFile(file) };
 
     const now = new Date();
     const yyyy = String(now.getFullYear());
@@ -82,7 +78,7 @@ export class ConnectionRequestDocumentImageService {
     const title = normalizeText(input.title) ?? 'เอกสารและรูปภาพ';
     const description = normalizeText(input.description);
     const link = normalizeUrl(input.link, 'link');
-    const file = input.file ?? null;
+    let file = input.file ?? null;
 
     if (!file && !link) {
       throw new BadRequestError('Either file or link is required');
@@ -101,7 +97,7 @@ export class ConnectionRequestDocumentImageService {
       };
     }
 
-    validateDocumentFile(file);
+    file = { ...file, mimeType: await validateDocumentFile(file) };
     const storedFile = await this.storage.save(file);
 
     return {
@@ -117,7 +113,7 @@ export class ConnectionRequestDocumentImageService {
   }
 }
 
-function validateDocumentFile(file: UploadedDocumentFile): void {
+async function validateDocumentFile(file: UploadedDocumentFile): Promise<string> {
   if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
     throw new BadRequestError('Uploaded file is empty');
   }
@@ -130,34 +126,7 @@ function validateDocumentFile(file: UploadedDocumentFile): void {
     throw new BadRequestError('Uploaded file size does not match file content');
   }
 
-  const allowedExtensions = allowedDocumentFileTypes.get(file.mimeType);
-  if (!allowedExtensions) {
-    throw new BadRequestError('Unsupported file type');
-  }
-
-  const extension = path.extname(file.originalName).toLowerCase();
-  if (!extension || !allowedExtensions.has(extension)) {
-    throw new BadRequestError('Unsupported file extension');
-  }
-
-  if (!hasExpectedFileSignature(file)) {
-    throw new BadRequestError('Uploaded file content does not match file type');
-  }
-}
-
-function hasExpectedFileSignature(file: UploadedDocumentFile): boolean {
-  if (file.mimeType === 'image/png') {
-    return file.buffer
-      .subarray(0, 8)
-      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  }
-  if (file.mimeType === 'image/jpeg') {
-    return file.buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
-  }
-  if (file.mimeType === 'application/pdf') {
-    return file.buffer.subarray(0, 1024).includes(Buffer.from('%PDF-'));
-  }
-  return false;
+  return validateGeneralUpload(file, MAX_DOCUMENT_FILE_SIZE_BYTES);
 }
 
 function normalizeText(value: string | null | undefined): string | null {
@@ -183,7 +152,10 @@ function normalizeUrl(value: string | null | undefined, field: string): string |
 
 function sanitizeOriginalFileName(value: string): string {
   const baseName = path.basename(value).replace(/[^\w.\- ก-๙()]/g, '_');
-  return baseName || 'uploaded-file';
+  if (!baseName) return 'uploaded-file';
+  if (baseName.length <= 255) return baseName;
+  const extension = path.extname(baseName);
+  return `${baseName.slice(0, 255 - extension.length)}${extension}`;
 }
 
 function buildPublicFileUrl(publicBaseUrl: string, publicPath: string, storageKey: string): string {

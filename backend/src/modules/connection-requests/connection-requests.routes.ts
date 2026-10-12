@@ -1,12 +1,9 @@
+import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
 import { Router } from 'express';
 import multer from 'multer';
-import { BadRequestError } from '../../shared/errors/AppError';
 import { authenticate } from '../../shared/middlewares/authenticate';
 import { authorize } from '../../shared/middlewares/authorize';
-import {
-  allowedDocumentFileTypes,
-  MAX_DOCUMENT_FILE_SIZE_BYTES,
-} from './connection-request-document-image.service';
+import { MAX_DOCUMENT_FILE_SIZE_BYTES } from './connection-request-document-image.service';
 import { connectionRequestsController } from './connection-requests.controller';
 
 export const connectionRequestsRoutes = Router();
@@ -24,12 +21,12 @@ const documentImageUpload = multer({
     fieldSize: 4096,
   },
   fileFilter: (_req, file, callback) => {
-    if (allowedDocumentFileTypes.has(file.mimetype)) {
+    try {
+      validateUploadFileMetadata(file.originalname, file.mimetype);
       callback(null, true);
-      return;
+    } catch (error) {
+      callback(error instanceof Error ? error : new Error('Invalid uploaded file'));
     }
-
-    callback(new BadRequestError('Unsupported file type'));
   },
 });
 

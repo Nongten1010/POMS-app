@@ -6,7 +6,7 @@ import {
   LAW_MAX_FILE_SIZE_BYTES,
   LocalLawFileStorage,
   resolveLawStoragePath,
-  validateLawPdf,
+  validateLawFile,
 } from '../../src/modules/laws/laws-file-storage';
 
 const temporaryDirectories: string[] = [];
@@ -60,7 +60,7 @@ describe('law file storage', () => {
 
   it.each([
     { name: 'wrong extension', file: uploadedPdf('law.exe') },
-    { name: 'wrong MIME', file: uploadedPdf('law.pdf', 'text/plain') },
+    { name: 'wrong MIME', file: uploadedPdf('law.pdf', 'text/javascript') },
     {
       name: 'spoofed signature',
       file: uploadedPdf('law.pdf', 'application/pdf', Buffer.from('not a PDF')),
@@ -77,8 +77,8 @@ describe('law file storage', () => {
         size: LAW_MAX_FILE_SIZE_BYTES + pdfBuffer().length,
       },
     },
-  ])('rejects $name uploads', ({ file }) => {
-    expect(() => validateLawPdf(file)).toThrow(
+  ])('rejects $name uploads', async ({ file }) => {
+    await expect(validateLawFile(file)).rejects.toThrow(
       expect.objectContaining({ code: 'VALIDATION_ERROR' }),
     );
   });

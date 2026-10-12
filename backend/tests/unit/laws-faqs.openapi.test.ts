@@ -124,7 +124,7 @@ describe('laws and FAQs OpenAPI contract', () => {
     });
   });
 
-  it('defines the law DTO, enums, multipart payloads, and PDF download', () => {
+  it('defines the law DTO, enums, multipart payloads, and general file download', () => {
     expect(asObject(schemas().LawCategory, 'LawCategory').enum).toEqual(['CEMS', 'WPMS', 'OTHER']);
     expect(asObject(schemas().LawType, 'LawType').enum).toEqual([
       'MINISTERIAL_REGULATION',
@@ -189,7 +189,7 @@ describe('laws and FAQs OpenAPI contract', () => {
       expect.objectContaining({ type: 'integer', minimum: 1, maximum: 10 * 1024 * 1024 }),
     );
     expect(schemaProperties('LawFile').mimeType).toEqual(
-      expect.objectContaining({ type: 'string', enum: ['application/pdf'] }),
+      expect.objectContaining({ type: 'string', maxLength: 100 }),
     );
     expect(schemaProperties('LawFile').downloadUrl).toEqual(
       expect.objectContaining({ type: 'string', format: 'uri-reference' }),
@@ -229,7 +229,7 @@ describe('laws and FAQs OpenAPI contract', () => {
 
     const fileResponses = asObject(operation('/laws/{id}/file', 'get').responses, 'responses');
     const fileContent = asObject(asObject(fileResponses['200'], '200 response').content, 'content');
-    expect(asObject(fileContent['application/pdf'], 'application/pdf').schema).toEqual({
+    expect(asObject(fileContent['*/*'], 'dynamic file MIME').schema).toEqual({
       type: 'string',
       format: 'binary',
     });

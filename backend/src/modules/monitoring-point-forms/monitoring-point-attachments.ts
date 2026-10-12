@@ -1,14 +1,7 @@
 import { z } from 'zod';
 
-export const MONITORING_POINT_ATTACHMENT_FILE_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'application/pdf',
-] as const;
-
 export const MAX_MONITORING_POINT_ATTACHMENT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-export type MonitoringPointAttachmentFileType =
-  (typeof MONITORING_POINT_ATTACHMENT_FILE_TYPES)[number];
+export type MonitoringPointAttachmentFileType = string;
 
 const httpUrlSchema = z
   .string()

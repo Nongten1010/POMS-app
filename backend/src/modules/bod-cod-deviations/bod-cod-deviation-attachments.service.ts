@@ -1,3 +1,4 @@
+import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -6,12 +7,6 @@ import { buildPublicFileUrl } from '../kwp-form-submissions/kwp-form-attachments
 
 export const MAX_BOD_COD_ATTACHMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const STORAGE_PREFIX = 'bod-cod/deviation-attachments';
-
-export const allowedBodCodAttachmentFileTypes = new Map([
-  ['image/jpeg', new Set(['.jpg', '.jpeg'])],
-  ['image/png', new Set(['.png'])],
-  ['application/pdf', new Set(['.pdf'])],
-]);
 
 export interface UploadedBodCodAttachmentFile {
   buffer: Buffer;
@@ -39,7 +34,7 @@ export class LocalBodCodAttachmentStorage {
   constructor(private readonly options: BodCodAttachmentStorageOptions) {}
 
   async save(file: UploadedBodCodAttachmentFile): Promise<StoredBodCodAttachment> {
-    validateBodCodAttachmentFile(file);
+    file = { ...file, mimeType: await validateBodCodAttachmentFile(file) };
 
     const now = new Date();
     const yyyy = String(now.getFullYear());
@@ -69,7 +64,7 @@ export function createBodCodAttachmentStorage(
   return new LocalBodCodAttachmentStorage(options);
 }
 
-function validateBodCodAttachmentFile(file: UploadedBodCodAttachmentFile): void {
+async function validateBodCodAttachmentFile(file: UploadedBodCodAttachmentFile): Promise<string> {
   if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
     throw new BadRequestError('Uploaded file is empty');
   }
@@ -86,18 +81,13 @@ function validateBodCodAttachmentFile(file: UploadedBodCodAttachmentFile): void 
     throw new BadRequestError('Uploaded file size does not match file content');
   }
 
-  const allowedExtensions = allowedBodCodAttachmentFileTypes.get(file.mimeType);
-  if (!allowedExtensions) {
-    throw new BadRequestError('Unsupported file type');
-  }
-
-  const extension = path.extname(file.originalName).toLowerCase();
-  if (!extension || !allowedExtensions.has(extension)) {
-    throw new BadRequestError('Unsupported file extension');
-  }
+  return validateGeneralUpload(file, MAX_BOD_COD_ATTACHMENT_FILE_SIZE_BYTES);
 }
 
 function sanitizeOriginalFileName(value: string): string {
   const baseName = path.basename(value).replace(/[^\w.\- ก-๙()]/g, '_');
-  return baseName || 'uploaded-file';
+  if (!baseName) return 'uploaded-file';
+  if (baseName.length <= 255) return baseName;
+  const extension = path.extname(baseName);
+  return `${baseName.slice(0, 255 - extension.length)}${extension}`;
 }

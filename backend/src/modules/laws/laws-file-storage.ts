@@ -1,3 +1,4 @@
+import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { randomUUID } from 'node:crypto';
 import { mkdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -7,9 +8,8 @@ import { lawValidationError } from './laws.validator';
 
 export const LAW_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export const LAW_STORAGE_PREFIX = '.private/laws';
-const PDF_SIGNATURE = Buffer.from('%PDF-');
 const LAW_STORAGE_PATH_PATTERN =
-  /^\.private\/laws\/\d{4}\/\d{2}\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.pdf$/i;
+  /^\.private\/laws\/\d{4}\/\d{2}\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.[a-z0-9]{1,16}$/i;
 
 interface LocalLawFileStorageOptions {
   uploadDir: string;
@@ -27,12 +27,12 @@ export class LocalLawFileStorage implements LawFileStorage {
   }
 
   async save(file: UploadedLawFile): Promise<StoredLawFile> {
-    validateLawPdf(file);
+    const mimeType = await validateLawFile(file);
 
     const now = this.now();
     const year = String(now.getUTCFullYear()).padStart(4, '0');
     const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const storedFileName = `${this.generateId()}.pdf`;
+    const storedFileName = `${this.generateId()}${path.extname(file.originalName).toLowerCase()}`;
     const storagePath = path.posix.join(LAW_STORAGE_PREFIX, year, month, storedFileName);
     const lexicalPath = resolveLawStoragePath(this.options.uploadDir, storagePath);
 
@@ -52,7 +52,7 @@ export class LocalLawFileStorage implements LawFileStorage {
     return {
       fileName: sanitizeOriginalFileName(file.originalName),
       fileSize: file.size,
-      mimeType: 'application/pdf',
+      mimeType,
       storagePath,
     };
   }
@@ -72,7 +72,7 @@ export class LocalLawFileStorage implements LawFileStorage {
 
   async getContent(file: StoredLawFile): Promise<LawFileContent> {
     if (
-      file.mimeType !== 'application/pdf' ||
+      !file.mimeType ||
       !Number.isSafeInteger(file.fileSize) ||
       file.fileSize <= 0 ||
       file.fileSize > LAW_MAX_FILE_SIZE_BYTES
@@ -90,34 +90,18 @@ export class LocalLawFileStorage implements LawFileStorage {
       filePath,
       fileName: file.fileName,
       fileSize: file.fileSize,
-      mimeType: 'application/pdf',
+      mimeType: file.mimeType,
     };
   }
 }
 
-export function validateLawPdf(file: UploadedLawFile): void {
-  if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
-    throw lawValidationError({ file: 'กรุณาแนบไฟล์ PDF ที่มีข้อมูล' });
-  }
-  if (
-    !Number.isSafeInteger(file.size) ||
-    file.size <= 0 ||
-    file.size > LAW_MAX_FILE_SIZE_BYTES ||
-    file.buffer.length !== file.size
-  ) {
-    throw lawValidationError({ file: 'ไฟล์ต้องมีขนาดไม่เกิน 10 MB' });
-  }
-  if (file.mimeType !== 'application/pdf') {
-    throw lawValidationError({ file: 'รองรับเฉพาะไฟล์ PDF' });
-  }
-  if (path.extname(file.originalName).toLowerCase() !== '.pdf') {
-    throw lawValidationError({ file: 'นามสกุลไฟล์ต้องเป็น .pdf' });
-  }
-  if (
-    file.buffer.length < PDF_SIGNATURE.length ||
-    !file.buffer.subarray(0, PDF_SIGNATURE.length).equals(PDF_SIGNATURE)
-  ) {
-    throw lawValidationError({ file: 'ลายเซ็นไฟล์ PDF ไม่ถูกต้อง' });
+export async function validateLawFile(file: UploadedLawFile): Promise<string> {
+  try {
+    return await validateGeneralUpload(file, LAW_MAX_FILE_SIZE_BYTES);
+  } catch (error) {
+    throw lawValidationError({
+      file: error instanceof Error ? error.message : 'Invalid uploaded file',
+    });
   }
 }
 

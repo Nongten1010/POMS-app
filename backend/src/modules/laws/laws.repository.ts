@@ -19,7 +19,7 @@ interface LawRow {
   document_type: LawRecordType;
   published_date: Date | string;
   original_file_name: string;
-  mime_type: 'application/pdf';
+  mime_type: string;
   file_size: number | string;
   storage_path: string;
   created_at: Date | string;

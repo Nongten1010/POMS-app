@@ -6,6 +6,7 @@ import { describe, expect, it } from '@jest/globals';
 import { createApp } from '../../src/app';
 import { env } from '../../src/config/env';
 import { signTestAccessToken as signAccessToken } from '../helpers/live-authorization-fixture';
+import archiveFixtures from '../fixtures/upload-archives.json';
 
 describe('connection request document image upload route', () => {
   async function withTempUploadDir<T>(callback: (uploadDir: string) => Promise<T>): Promise<T> {
@@ -32,6 +33,40 @@ describe('connection request document image upload route', () => {
       },
     });
   }
+
+  it.each([
+    ['notes.txt', Buffer.from('hello'), 'text/plain'],
+    [
+      'document.docx',
+      Buffer.from(archiveFixtures.document, 'base64'),
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
+    ['data.zip', Buffer.from(archiveFixtures.ordinary, 'base64'), 'application/zip'],
+    ['custom.dat', Buffer.from([1, 2, 3]), 'application/octet-stream'],
+  ])(
+    'uploads %s and serves it as a download with safe headers',
+    async (filename, buffer, mimeType) => {
+      await withTempUploadDir(async () => {
+        const app = createApp();
+        const response = await request(app)
+          .post('/api/v1/cems-wpms-requests/document-images')
+          .set('Authorization', `Bearer ${accessToken()}`)
+          .attach('file', buffer, { filename, contentType: 'application/octet-stream' });
+        expect(response.status).toBe(201);
+        expect(response.body.data).toMatchObject({
+          fileName: filename,
+          fileType: mimeType,
+          fileSize: buffer.length,
+        });
+        const download = await request(app).get(new URL(response.body.data.fileUrl).pathname);
+        expect(download.status).toBe(200);
+        expect(download.headers['content-type']).toBe('application/octet-stream');
+        expect(download.headers['content-disposition']).toMatch(/^attachment;/);
+        expect(download.headers['x-content-type-options']).toBe('nosniff');
+        expect(download.body).toEqual(buffer);
+      });
+    },
+  );
 
   it('accepts multipart file uploads and returns document metadata for form submission', async () => {
     await withTempUploadDir(async () => {
@@ -85,7 +120,9 @@ describe('connection request document image upload route', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error.message).toBe('Unsupported file type');
+      expect(response.body.error.message).toBe(
+        'Programs, scripts, macros and uninspectable archives are not allowed',
+      );
     });
   });
 

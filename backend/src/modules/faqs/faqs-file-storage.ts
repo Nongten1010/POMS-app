@@ -1,3 +1,4 @@
+import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { randomUUID } from 'node:crypto';
 import { mkdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -6,56 +7,24 @@ import type { StoredFaqAttachment } from './faqs.types';
 
 export const FAQ_MAX_FILES = 10;
 export const FAQ_MAX_FILE_SIZE = 10 * 1024 * 1024;
-const formats: Record<string, { mime: string; signature?: string }> = {
-  '.pdf': { mime: 'application/pdf', signature: '255044462d' },
-  '.png': { mime: 'image/png', signature: '89504e470d0a1a0a' },
-  '.jpg': { mime: 'image/jpeg', signature: 'ffd8ff' },
-  '.jpeg': { mime: 'image/jpeg', signature: 'ffd8ff' },
-  '.doc': { mime: 'application/msword', signature: 'd0cf11e0a1b11ae1' },
-  '.xls': { mime: 'application/vnd.ms-excel', signature: 'd0cf11e0a1b11ae1' },
-  '.docx': {
-    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    signature: '504b0304',
-  },
-  '.xlsx': {
-    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    signature: '504b0304',
-  },
-  '.txt': { mime: 'text/plain' },
-};
-
 export function faqFileError(message: string): AppError {
   return new AppError(message, 400, 'VALIDATION_ERROR', { files: message });
 }
 
-export function validateFaqFile(file: Express.Multer.File): string {
-  const format = formats[path.extname(file.originalname).toLowerCase()];
-  if (!format) throw faqFileError('รองรับไฟล์ PDF, DOC, DOCX, XLS, XLSX, PNG, JPG และ TXT');
-  if (
-    !Buffer.isBuffer(file.buffer) ||
-    file.buffer.length !== file.size ||
-    file.size < 1 ||
-    file.size > FAQ_MAX_FILE_SIZE
-  ) {
-    throw faqFileError('ไฟล์ต้องมีข้อมูลและขนาดไม่เกิน 10 MB');
+export async function validateFaqFile(file: Express.Multer.File): Promise<string> {
+  try {
+    return await validateGeneralUpload(
+      {
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        buffer: file.buffer,
+        size: file.size,
+      },
+      FAQ_MAX_FILE_SIZE,
+    );
+  } catch (error) {
+    throw faqFileError(error instanceof Error ? error.message : 'Invalid uploaded file');
   }
-  if (
-    format.signature &&
-    !file.buffer
-      .subarray(0, format.signature.length / 2)
-      .equals(Buffer.from(format.signature, 'hex'))
-  ) {
-    throw faqFileError('เนื้อหาไฟล์ไม่ตรงกับชนิดไฟล์');
-  }
-  if (!format.signature) {
-    try {
-      new TextDecoder('utf-8', { fatal: true }).decode(file.buffer);
-    } catch {
-      throw faqFileError('ไฟล์ TXT ต้องเป็นข้อความ UTF-8');
-    }
-    if (file.buffer.includes(0)) throw faqFileError('ไฟล์ TXT ต้องเป็นข้อความ');
-  }
-  return format.mime;
 }
 
 export class FaqFileStorage {
@@ -72,7 +41,7 @@ export class FaqFileStorage {
   }
 
   async save(file: Express.Multer.File): Promise<StoredFaqAttachment> {
-    const mimeType = validateFaqFile(file);
+    const mimeType = await validateFaqFile(file);
     const id = randomUUID();
     const fileName = path
       .basename(file.originalname.replace(/\\/g, '/'))

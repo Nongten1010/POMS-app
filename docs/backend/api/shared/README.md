@@ -14,4 +14,6 @@ API contract ในกลุ่มนี้ใช้ข้ามหลายเ�
 | [`notification-recipients/`](./notification-recipients/README.md)           | การตั้งค่าผู้รับอีเมลเจ้าหน้าที่                                   |
 | [`internal-tools/`](./internal-tools/README.md)                             | Internal-only endpoints เช่น email test                            |
 
+- [นโยบายอัปโหลดไฟล์ทั่วไป](./file-uploads/README.md) — กฎกรองโปรแกรม สคริปต์ macro และ ZIP ที่ใช้ร่วมกันทุกเมนู
+
 Canonical links จะเพิ่มเมื่อแต่ละ contract ตรวจเทียบกับ implementation และ tests แล้ว

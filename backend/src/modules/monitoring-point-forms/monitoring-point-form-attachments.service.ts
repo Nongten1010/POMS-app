@@ -1,3 +1,4 @@
+import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -12,10 +13,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../shared/errors/AppError';
-import {
-  MAX_MONITORING_POINT_ATTACHMENT_FILE_SIZE_BYTES,
-  MONITORING_POINT_ATTACHMENT_FILE_TYPES,
-} from './monitoring-point-attachments';
+import { MAX_MONITORING_POINT_ATTACHMENT_FILE_SIZE_BYTES } from './monitoring-point-attachments';
 
 export const MONITORING_POINT_ATTACHMENTS_TABLE = 'factory_monitoring_point_attachments';
 export const MONITORING_POINT_ATTACHMENT_PENDING_TTL_MS = 60 * 60 * 1000;
@@ -28,24 +26,7 @@ const UPLOAD_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SIGNATURE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
-const FILE_EXTENSIONS_BY_MIME_TYPE = {
-  'image/jpeg': new Set(['.jpg', '.jpeg']),
-  'image/png': new Set(['.png']),
-  'application/pdf': new Set(['.pdf']),
-} satisfies Record<(typeof MONITORING_POINT_ATTACHMENT_FILE_TYPES)[number], ReadonlySet<string>>;
-
-export type MonitoringPointAttachmentMimeType =
-  (typeof MONITORING_POINT_ATTACHMENT_FILE_TYPES)[number];
-
-export const allowedMonitoringPointFormAttachmentFileTypes: ReadonlyMap<
-  string,
-  ReadonlySet<string>
-> = new Map(
-  MONITORING_POINT_ATTACHMENT_FILE_TYPES.map((mimeType) => [
-    mimeType,
-    FILE_EXTENSIONS_BY_MIME_TYPE[mimeType],
-  ]),
-);
+export type MonitoringPointAttachmentMimeType = string;
 
 export interface MonitoringPointAttachmentRow {
   id: number | string;
@@ -139,7 +120,7 @@ export class LocalMonitoringPointFormAttachmentStorage {
     file: UploadedMonitoringPointFormAttachmentFile,
     actorUserId: number,
   ): Promise<StoredMonitoringPointFormAttachment> {
-    const fileType = validateMonitoringPointFormAttachmentFile(file);
+    const fileType = await validateMonitoringPointFormAttachmentFile(file);
     if (!Number.isInteger(actorUserId) || actorUserId <= 0) {
       throw new Error('Authenticated user id is required');
     }
@@ -454,9 +435,9 @@ export function resolveMonitoringPointAttachmentStoragePath(
   return absolutePath;
 }
 
-function validateMonitoringPointFormAttachmentFile(
+async function validateMonitoringPointFormAttachmentFile(
   file: UploadedMonitoringPointFormAttachmentFile,
-): MonitoringPointAttachmentMimeType {
+): Promise<MonitoringPointAttachmentMimeType> {
   if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
     throw new BadRequestError('Uploaded file is empty');
   }
@@ -473,21 +454,7 @@ function validateMonitoringPointFormAttachmentFile(
     throw new BadRequestError('Uploaded file size does not match file content');
   }
 
-  const allowedExtensions = allowedMonitoringPointFormAttachmentFileTypes.get(file.mimeType);
-  if (!allowedExtensions) {
-    throw new BadRequestError('Unsupported file type');
-  }
-
-  const extension = path.extname(file.originalName).toLowerCase();
-  if (!extension || !allowedExtensions.has(extension)) {
-    throw new BadRequestError('Unsupported file extension');
-  }
-
-  if (!hasMatchingFileSignature(file.buffer, file.mimeType)) {
-    throw new BadRequestError('Uploaded file content does not match its declared type');
-  }
-
-  return file.mimeType as MonitoringPointAttachmentMimeType;
+  return validateGeneralUpload(file, MAX_MONITORING_POINT_ATTACHMENT_FILE_SIZE_BYTES);
 }
 
 function verifyMonitoringPointAttachmentFileAccess(
@@ -555,21 +522,6 @@ async function resolveExistingMonitoringPointAttachmentPath(
     throw new NotFoundError('Attachment file not found');
   }
   return filePath;
-}
-
-function hasMatchingFileSignature(buffer: Buffer, mimeType: string): boolean {
-  if (mimeType === 'application/pdf') {
-    return buffer.subarray(0, 5).equals(Buffer.from('%PDF-'));
-  }
-  if (mimeType === 'image/png') {
-    return buffer
-      .subarray(0, 8)
-      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  }
-  if (mimeType === 'image/jpeg') {
-    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  }
-  return false;
 }
 
 function sanitizeOriginalFileName(value: string): string {

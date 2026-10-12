@@ -56,7 +56,7 @@ async function withUploads<T>(
   save: (files: StoredFaqAttachment[]) => Promise<T>,
 ): Promise<T> {
   if (files.length > 10) throw faqFileError('แนบได้สูงสุด 10 ไฟล์ต่อคำถาม');
-  files.forEach(validateFaqFile);
+  for (const file of files) await validateFaqFile(file);
   const stored: StoredFaqAttachment[] = [];
   try {
     for (const file of files) stored.push(await faqFileStorage.save(file));

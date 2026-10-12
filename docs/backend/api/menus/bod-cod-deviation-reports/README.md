@@ -1,5 +1,7 @@
 # รายงานค่าความคลาดเคลื่อน BOD/COD Online
 
+นโยบายชนิดไฟล์ การบล็อกโปรแกรม/สคริปต์/macro และการตรวจ ZIP ใช้ [นโยบายอัปโหลดไฟล์ทั่วไป](../../shared/file-uploads/README.md) โดยคงขนาดและสิทธิ์เดิมของเมนู
+
 > Owner: Backend
 
 ## Frontend Quick Start
@@ -157,7 +159,7 @@ E-{รหัสภาค 2 หลัก}-{ลำดับ 4 หลัก}/{repor
 
 ### Upload เอกสาร
 
-`POST /api/v1/bod-cod-deviation-reports/attachments` รับ `multipart/form-data` โดย field ชื่อ `file` จำนวน 1 ไฟล์ รองรับ `.jpg`, `.jpeg`, `.png`, `.pdf` ที่ MIME type ตรงกับนามสกุลและขนาด 1 byte ถึง 5 MB
+`POST /api/v1/bod-cod-deviation-reports/attachments` รับ `multipart/form-data` โดย field ชื่อ `file` จำนวน 1 ไฟล์ รับไฟล์ทั่วไปตามนโยบายร่วม ขนาด 1 byte ถึง 5 MiB
 
 ```bash
 curl --request POST \

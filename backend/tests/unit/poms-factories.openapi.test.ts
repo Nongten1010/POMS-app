@@ -134,7 +134,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
       $ref: '#/components/schemas/PomsFactoryDocumentImageUploadRequest',
     });
     expect(multipart.encoding).toEqual({
-      file: { contentType: 'image/jpeg, image/png, application/pdf' },
+      file: { contentType: '*/*' },
     });
 
     const upload = asObject(
@@ -156,8 +156,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
         format: 'binary',
         'x-min-size-bytes': 1,
         'x-max-size-bytes': 5 * 1024 * 1024,
-        'x-allowed-media-types': ['image/jpeg', 'image/png', 'application/pdf'],
-        'x-allowed-file-extensions': ['.jpg', '.jpeg', '.png', '.pdf'],
+        'x-antivirus-enabled': false,
       }),
     );
     expect(uploadProperties.title).toEqual(
@@ -203,11 +202,10 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(asObject(uploadedProperties.fileUrl, 'uploaded fileUrl')).toEqual(
       expect.objectContaining({ type: 'string', format: 'uri', pattern: '^https?://' }),
     );
-    expect(asObject(uploadedProperties.fileType, 'uploaded fileType').enum).toEqual([
-      'image/jpeg',
-      'image/png',
-      'application/pdf',
-    ]);
+    expect(asObject(uploadedProperties.fileType, 'uploaded fileType')).toEqual(
+      expect.objectContaining({ type: 'string', maxLength: 128 }),
+    );
+    expect(asObject(uploadedProperties.fileType, 'uploaded fileType').enum).toBeUndefined();
 
     const responses = asObject(documented.responses, 'upload responses');
     const badRequest = asObject(responses['400'], 'upload 400 response');

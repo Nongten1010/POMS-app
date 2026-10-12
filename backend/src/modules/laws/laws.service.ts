@@ -53,7 +53,7 @@ export class LawService implements LawServiceContract {
     file: UploadedLawFile | undefined,
     actorUserId: number,
   ): Promise<LawDTO> {
-    if (!file) throw lawValidationError({ file: 'กรุณาแนบไฟล์ PDF' });
+    if (!file) throw lawValidationError({ file: 'กรุณาแนบไฟล์' });
     const storedFile = await this.fileStorage.save(file);
     try {
       const created = await this.repository.create({ ...input, file: storedFile }, actorUserId);
@@ -132,7 +132,7 @@ export class LawService implements LawServiceContract {
     try {
       await this.fileStorage.remove(storagePath);
     } catch (error) {
-      logger.warn('[laws] Failed to remove private PDF', {
+      logger.warn('[laws] Failed to remove private file', {
         context,
         ...(lawId ? { lawId } : {}),
         storagePath,

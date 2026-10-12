@@ -1,14 +1,11 @@
+import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
 import { pomsStatusManagementRoutes } from './poms-status-management.routes';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import multer from 'multer';
-import { BadRequestError } from '../../shared/errors/AppError';
 import { authenticate } from '../../shared/middlewares/authenticate';
 import { authorize } from '../../shared/middlewares/authorize';
-import {
-  allowedDocumentFileTypes,
-  MAX_DOCUMENT_FILE_SIZE_BYTES,
-} from '../connection-requests/connection-request-document-image.service';
+import { MAX_DOCUMENT_FILE_SIZE_BYTES } from '../connection-requests/connection-request-document-image.service';
 import { pomsFactoriesController } from './poms-factories.controller';
 
 export const pomsFactoriesRoutes = Router();
@@ -23,12 +20,12 @@ const documentImageUpload = multer({
     fieldSize: 4096,
   },
   fileFilter: (_req, file, callback) => {
-    if (allowedDocumentFileTypes.has(file.mimetype)) {
+    try {
+      validateUploadFileMetadata(file.originalname, file.mimetype);
       callback(null, true);
-      return;
+    } catch (error) {
+      callback(error instanceof Error ? error : new Error('Invalid uploaded file'));
     }
-
-    callback(new BadRequestError('Unsupported file type'));
   },
 });
 

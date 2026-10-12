@@ -217,7 +217,7 @@ describe('law service', () => {
 
     await expect(service.delete(LAW_ID, 7)).resolves.toEqual({ id: LAW_ID, deleted: true });
     expect(warn.mock.calls[0]).toEqual([
-      '[laws] Failed to remove private PDF',
+      '[laws] Failed to remove private file',
       {
         context: 'delete',
         lawId: LAW_ID,

@@ -1,3 +1,4 @@
+import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../../shared/middlewares/authenticate';
@@ -17,11 +18,16 @@ const lawUpload = multer({
     fieldSize: 4096,
   },
   fileFilter: (_req, file, callback) => {
-    if (file.mimetype === 'application/pdf') {
+    try {
+      validateUploadFileMetadata(file.originalname, file.mimetype);
       callback(null, true);
-      return;
+    } catch (error) {
+      callback(
+        lawValidationError({
+          file: error instanceof Error ? error.message : 'Invalid uploaded file',
+        }),
+      );
     }
-    callback(lawValidationError({ file: 'รองรับเฉพาะไฟล์ PDF' }));
   },
 });
 

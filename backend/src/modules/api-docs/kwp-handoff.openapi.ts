@@ -31,7 +31,7 @@ export function extendKwpHandoffSchemas(schemas: Record<string, Schema>): void {
     properties: {
       originalFileName: { type: 'string' },
       storedFileName: { type: 'string' },
-      mimeType: { type: 'string', enum: ['application/pdf', 'image/jpeg', 'image/png'] },
+      mimeType: { type: 'string', maxLength: 128 },
       fileSize: { type: 'integer', minimum: 1, maximum: 10485760 },
       storagePath: { type: 'string', description: 'path ผูกผู้ใช้อัปโหลด ห้ามสร้างเอง' },
       fileUrl: { type: 'string', format: 'uri' },

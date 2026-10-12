@@ -1,3 +1,4 @@
+import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -12,12 +13,6 @@ const KWP05_TEN_MEGABYTE_ATTACHMENT_TYPES = new Set([
   'GENERAL',
   'RATA_REPORT',
   'CALIBRATION_PHOTO',
-]);
-
-export const allowedKwpAttachmentFileTypes = new Map([
-  ['image/jpeg', new Set(['.jpg', '.jpeg'])],
-  ['image/png', new Set(['.png'])],
-  ['application/pdf', new Set(['.pdf'])],
 ]);
 
 export interface UploadedKwpAttachmentFile {
@@ -48,7 +43,7 @@ export class LocalKwpAttachmentStorage {
   constructor(private readonly options: KwpAttachmentStorageOptions) {}
 
   async save(file: UploadedKwpAttachmentFile): Promise<StoredKwpAttachment> {
-    validateKwpAttachmentFile(file);
+    file = { ...file, mimeType: await validateKwpAttachmentFile(file) };
 
     const now = new Date();
     const yyyy = String(now.getFullYear());
@@ -123,7 +118,7 @@ export async function validateStoredKwpAttachments(
         attachment.fileSize !== buffer.length
       )
         throw new BadRequestError('Attachment metadata does not match the uploaded file');
-      validateKwpAttachmentFile({
+      await validateKwpAttachmentFile({
         attachmentType: attachment.attachmentType,
         buffer,
         originalName: attachment.originalFileName,
@@ -143,7 +138,7 @@ export function createKwpAttachmentStorage(
   return new LocalKwpAttachmentStorage(options);
 }
 
-function validateKwpAttachmentFile(file: UploadedKwpAttachmentFile): void {
+async function validateKwpAttachmentFile(file: UploadedKwpAttachmentFile): Promise<string> {
   if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
     throw new BadRequestError('Uploaded file is empty');
   }
@@ -160,19 +155,7 @@ function validateKwpAttachmentFile(file: UploadedKwpAttachmentFile): void {
     throw new BadRequestError('Uploaded file size does not match file content');
   }
 
-  const allowedExtensions = allowedKwpAttachmentFileTypes.get(file.mimeType);
-  if (!allowedExtensions) {
-    throw new BadRequestError('Unsupported file type');
-  }
-
-  const extension = path.extname(file.originalName).toLowerCase();
-  if (!extension || !allowedExtensions.has(extension)) {
-    throw new BadRequestError('Unsupported file extension');
-  }
-
-  if (!hasMatchingFileSignature(file.buffer, file.mimeType)) {
-    throw new BadRequestError('Uploaded file content does not match its declared type');
-  }
+  return validateGeneralUpload(file, maximumFileSize);
 }
 
 export function getKwpAttachmentFileSizeLimit(attachmentType?: string): number {
@@ -181,24 +164,12 @@ export function getKwpAttachmentFileSizeLimit(attachmentType?: string): number {
     : DEFAULT_KWP_ATTACHMENT_FILE_SIZE_BYTES;
 }
 
-function hasMatchingFileSignature(buffer: Buffer, mimeType: string): boolean {
-  if (mimeType === 'application/pdf') {
-    return buffer.subarray(0, 5).equals(Buffer.from('%PDF-'));
-  }
-  if (mimeType === 'image/png') {
-    return buffer
-      .subarray(0, 8)
-      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  }
-  if (mimeType === 'image/jpeg') {
-    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  }
-  return false;
-}
-
 function sanitizeOriginalFileName(value: string): string {
   const baseName = path.basename(value).replace(/[^\w.\- ก-๙()]/g, '_');
-  return baseName || 'uploaded-file';
+  if (!baseName) return 'uploaded-file';
+  if (baseName.length <= 255) return baseName;
+  const extension = path.extname(baseName);
+  return `${baseName.slice(0, 255 - extension.length)}${extension}`;
 }
 
 export function buildPublicFileUrl(

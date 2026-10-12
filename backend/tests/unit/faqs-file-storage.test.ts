@@ -41,13 +41,15 @@ describe('FAQ file storage', () => {
     ['script.html', '<script>'],
     ['empty.txt', ''],
     ['binary.txt', '\0abc'],
-  ])('rejects invalid file %s', (name, contents) => {
-    expect(() => validateFaqFile(upload(name, contents))).toThrow();
+  ])('rejects invalid file %s', async (name, contents) => {
+    await expect(validateFaqFile(upload(name, contents))).rejects.toThrow();
   });
 
-  it('rejects oversized files and mismatching buffer lengths', () => {
-    expect(() => validateFaqFile(upload('large.txt', Buffer.alloc(10485761, 65)))).toThrow();
-    expect(() => validateFaqFile({ ...upload('small.txt', 'hello'), size: 999 })).toThrow();
+  it('rejects oversized files and mismatching buffer lengths', async () => {
+    await expect(
+      validateFaqFile(upload('large.txt', Buffer.alloc(10485761, 65))),
+    ).rejects.toThrow();
+    await expect(validateFaqFile({ ...upload('small.txt', 'hello'), size: 999 })).rejects.toThrow();
   });
 
   it('does not read paths outside its private root, including symlinks', async () => {

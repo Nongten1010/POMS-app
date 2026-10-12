@@ -121,7 +121,7 @@ describe('POMS factory document image upload route', () => {
         success: false,
         error: {
           code: 'BAD_REQUEST',
-          message: 'Unsupported file type',
+          message: 'Programs, scripts, macros and uninspectable archives are not allowed',
         },
       });
     });

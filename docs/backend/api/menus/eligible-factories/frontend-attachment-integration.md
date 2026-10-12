@@ -21,14 +21,14 @@ type PersistedAttachment = {
   fileName: string;
   fileUrl: string;
   fileUrlExpiresAt: string;
-  fileType: "image/jpeg" | "image/png" | "application/pdf";
+  fileType: string;
   fileSize: number;
 };
 
 type PendingAttachment = {
   uploadToken: string;
   fileName: string;
-  fileType: "image/jpeg" | "image/png" | "application/pdf";
+  fileType: string;
   fileSize: number;
   expiresAt: string;
 };
@@ -124,7 +124,7 @@ Backend รับ upload สูงสุด 20 requests ต่อผู้ใช
 
 ## Checklist ก่อนส่ง QA
 
-- เพิ่ม JPEG, PNG และ PDF ได้ และ reject ไฟล์เกิน 10 MiB ก่อนเรียก API.
+- เพิ่มไฟล์ทั่วไปตาม [นโยบายร่วม](../../shared/file-uploads/README.md) และ reject ไฟล์เกิน 10 MiB ก่อนเรียก API; ส่ง MIME จาก upload response ตามจริง.
 - เพิ่มหลายไฟล์แล้วบันทึก ได้ persisted attachment `id` กลับมาครบ.
 - เปิดหน้าแก้ไขแล้ว point `id`, attachments และ links ยังอยู่ครบ.
 - ลบไฟล์หนึ่งรายการแล้ว `PUT` ส่ง `{ id }` ของไฟล์ที่เหลือครบ.

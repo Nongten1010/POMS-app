@@ -1,12 +1,9 @@
+import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
 import { Router } from 'express';
 import multer from 'multer';
-import { BadRequestError } from '../../shared/errors/AppError';
 import { authenticate } from '../../shared/middlewares/authenticate';
 import { authorize } from '../../shared/middlewares/authorize';
-import {
-  allowedBodCodAttachmentFileTypes,
-  MAX_BOD_COD_ATTACHMENT_FILE_SIZE_BYTES,
-} from './bod-cod-deviation-attachments.service';
+import { MAX_BOD_COD_ATTACHMENT_FILE_SIZE_BYTES } from './bod-cod-deviation-attachments.service';
 import { bodCodDeviationReportsController } from './bod-cod-deviation-reports.controller';
 
 export const bodCodDeviationReportsRoutes = Router();
@@ -18,12 +15,12 @@ const bodCodAttachmentUpload = multer({
     files: 1,
   },
   fileFilter: (_req, file, callback) => {
-    if (allowedBodCodAttachmentFileTypes.has(file.mimetype)) {
+    try {
+      validateUploadFileMetadata(file.originalname, file.mimetype);
       callback(null, true);
-      return;
+    } catch (error) {
+      callback(error instanceof Error ? error : new Error('Invalid uploaded file'));
     }
-
-    callback(new BadRequestError('Unsupported file type'));
   },
 });
 

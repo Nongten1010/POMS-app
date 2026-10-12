@@ -386,7 +386,9 @@ describe('monitoring point form attachment upload route', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error.message).toBe('Unsupported file type');
+      expect(response.body.error.message).toBe(
+        'Programs, scripts, macros and uninspectable archives are not allowed',
+      );
     });
   });
 
@@ -396,7 +398,7 @@ describe('monitoring point form attachment upload route', () => {
       fileName: 'disguised.pdf',
       mimeType: 'image/png',
       buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-      expectedMessage: 'Unsupported file extension',
+      expectedMessage: 'Uploaded file content does not match its declared type',
     },
     {
       caseName: 'signature',
@@ -479,6 +481,26 @@ describe('monitoring point form attachment upload route', () => {
 
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({ success: false, error: { code: 'UPLOAD_ERROR' } });
+  });
+  it('stores an ordinary text attachment with its derived MIME and the original claim lifecycle', async () => {
+    await withTempUploadDir(async () => {
+      const buffer = Buffer.from('ordinary report');
+      const response = await request(createApp())
+        .post('/api/v1/monitoring-point-forms/attachments')
+        .set('Authorization', `Bearer ${accessToken()}`)
+        .attach('file', buffer, {
+          filename: 'report.txt',
+          contentType: 'application/octet-stream',
+        });
+      expect(response.status).toBe(201);
+      expect(response.body.data).toMatchObject({
+        fileName: 'report.txt',
+        fileType: 'text/plain',
+        fileSize: buffer.length,
+      });
+      expect(response.body.data.uploadToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(insertedRows[0].mime_type).toBe('text/plain');
+    });
   });
 });
 

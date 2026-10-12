@@ -1,3 +1,4 @@
+import { uploadContentDisposition } from './shared/utils/upload-file-policy';
 import express, { Application, Request, Response } from 'express';
 import path from 'node:path';
 import helmet from 'helmet';
@@ -68,6 +69,22 @@ export function createApp(): Application {
       fallthrough: false,
       index: false,
       maxAge: '1d',
+      setHeaders: (res, filePath) => {
+        const extension = path.extname(filePath).toLowerCase();
+        const previewTypes: Record<string, string> = {
+          '.pdf': 'application/pdf',
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+        };
+        const mimeType = previewTypes[extension] ?? 'application/octet-stream';
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader(
+          'Content-Disposition',
+          uploadContentDisposition(path.basename(filePath), mimeType),
+        );
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+      },
     }),
   );
 

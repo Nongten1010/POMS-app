@@ -1,5 +1,7 @@
 # โรงงานที่เข้าข่าย
 
+นโยบายชนิดไฟล์ การบล็อกโปรแกรม/สคริปต์/macro และการตรวจ ZIP ใช้ [นโยบายอัปโหลดไฟล์ทั่วไป](../../shared/file-uploads/README.md) โดยคงขนาดและสิทธิ์เดิมของเมนู
+
 > Owner: Backend
 
 ## Frontend Quick Start
@@ -531,7 +533,7 @@ Request fields:
 
 | Field | Location | Type | Required | Rules |
 | --- | --- | --- | --- | --- |
-| `file` | multipart form-data | binary | yes | ส่งหนึ่งไฟล์ต่อ request โดยไม่ส่ง text field เพิ่ม; รองรับ JPEG, PNG และ PDF ขนาด 1 byte ถึง 10 MiB |
+| `file` | multipart form-data | binary | yes | ส่งหนึ่งไฟล์ต่อ request โดยไม่ส่ง text field เพิ่ม; รับไฟล์ทั่วไปตามนโยบายร่วม ขนาด 1 byte ถึง 10 MiB |
 
 ```bash
 curl --request POST \
@@ -546,7 +548,7 @@ Success response fields (`201 Created`):
 | --- | --- | --- | --- |
 | `data.uploadToken` | string | no | opaque one-time token แบบ base64url 43 ตัวอักษรสำหรับ claim ไฟล์ตอนบันทึกฟอร์ม; ห้าม client แกะหรือสร้างเอง |
 | `data.fileName` | string | no | ชื่อไฟล์สำหรับแสดงผลหลัง backend sanitize ชื่อที่รับมา |
-| `data.fileType` | string | no | `image/jpeg`, `image/png` หรือ `application/pdf` |
+| `data.fileType` | string | no | MIME string ที่ backend กำหนด; ชนิดไม่รู้จักใช้ `application/octet-stream` |
 | `data.fileSize` | integer | no | ขนาดไฟล์เป็น bytes |
 | `data.expiresAt` | string | no | เวลา ISO 8601 ที่ `uploadToken` หมดอายุ |
 
@@ -606,7 +608,7 @@ curl --location '<BASE_URL><FILE_URL_FROM_RESPONSE>' \
   --output document.pdf
 ```
 
-สำเร็จตอบ `200 OK` เป็น binary body พร้อม `Content-Type` ตาม `fileType`, `Content-Disposition: inline`, `Cache-Control: private, no-store, max-age=0`, `Pragma: no-cache`, `Referrer-Policy: no-referrer` และ `X-Content-Type-Options: nosniff`. Backend ให้เปิดเฉพาะไฟล์ที่ claim แล้วและยังผูกกับ active form/point; pending upload เปิดผ่าน content endpoint ไม่ได้.
+สำเร็จตอบ `200 OK` เป็น binary body พร้อม `Content-Type` ตาม `fileType`, `Content-Disposition: inline` สำหรับ JPEG/PNG/PDF และ `attachment` สำหรับชนิดอื่น, `Cache-Control: private, no-store, max-age=0`, `Pragma: no-cache`, `Referrer-Policy: no-referrer` และ `X-Content-Type-Options: nosniff`. Backend ให้เปิดเฉพาะไฟล์ที่ claim แล้วและยังผูกกับ active form/point; pending upload เปิดผ่าน content endpoint ไม่ได้.
 
 Errors ใช้ [shared error envelope](../../shared/README.md):
 
@@ -658,7 +660,7 @@ Relevant request fields:
 | `attachments[].fileName` | string | no | ชื่อไฟล์สำหรับแสดงผล |
 | `attachments[].fileUrl` | string | no | signed relative URL สำหรับเปิดไฟล์ชั่วคราว |
 | `attachments[].fileUrlExpiresAt` | string | no | เวลา ISO 8601 ที่ `fileUrl` หมดอายุ |
-| `attachments[].fileType` | string | no | `image/jpeg`, `image/png` หรือ `application/pdf` |
+| `attachments[].fileType` | string | no | MIME string ที่ backend กำหนด; ชนิดไม่รู้จักใช้ `application/octet-stream` |
 | `attachments[].fileSize` | integer | no | ขนาดไฟล์เป็น bytes |
 
 Minimal create request:
