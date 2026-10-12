@@ -29,7 +29,7 @@ test('officers reuse request actions to edit revisions without gaining creation 
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          return `${code}\nexport { OfficerRequestActions, OperatorRequestActions, getRequestColumns };`
+          return `${code}\nexport { OfficerRequestActions, OperatorRequestActions, getRequestColumns, getFactoryColumns, MonitoringPointActions };`
         }
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
           return `${code}\nexport { getPageRequestColumns, canSubmitMasterDataForm, isFactoryRequestAwaitingRevision };`
@@ -40,12 +40,50 @@ test('officers reuse request actions to edit revisions without gaining creation 
     }],
   })
   try {
-    const { OfficerRequestActions, OperatorRequestActions, getRequestColumns } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+    const { OfficerRequestActions, OperatorRequestActions, getRequestColumns, getFactoryColumns, MonitoringPointActions } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
     globalThis.window = { location: { hostname: 'localhost' } }
     const { default: MasterDataPage, getPageRequestColumns, canSubmitMasterDataForm, isFactoryRequestAwaitingRevision } = await server.ssrLoadModule('/src/pages/MasterDataPage.jsx')
     if (originalWindow === undefined) delete globalThis.window
     else globalThis.window = originalWindow
 
+    await t.test('connection creation buttons require creation permission without disabling view', () => {
+      for (const canCreateRequests of [false, true]) {
+        const column = getFactoryColumns(false, () => {}, () => {}, () => {}, true, canCreateRequests)
+          .find(({ field }) => field === 'actions')
+        const cell = column.renderCell({ row: { isEligible: true } })
+        const factoryButtons = buttons(cell.type(cell.props))
+        assert.equal(factoryButtons.find((button) => button.props.children === 'เพิ่มจุดตรวจวัด').props.disabled, !canCreateRequests)
+        assert.ok(!factoryButtons.find((button) => button.props.children === 'รายการจุดตรวจวัด').props.disabled)
+        for (const statusCode of ['CONNECTED', 'WAITING_FACTORY_REVISION']) {
+          const pointButtons = buttons(MonitoringPointActions({
+            point: { statusCode }, useOperatorActions: true, canCreateRequests, canEditSettings: true,
+            onOpenPointDetails: () => {}, onOpenAddParameter: () => {}, onOpenConnectionSettings: () => {},
+          }))
+          assert.equal(pointButtons.find((button) => button.props.children === 'เพิ่มพารามิเตอร์').props.disabled,
+            !canCreateRequests || statusCode !== 'CONNECTED')
+          assert.ok(!pointButtons.find((button) => button.props.children === 'เปิดดู').props.disabled)
+          assert.equal(pointButtons.find((button) => button.props.children === 'ตั้งค่า').props.disabled, statusCode !== 'CONNECTED')
+        }
+      }
+      const operatorColumn = getFactoryColumns(true, () => {}, () => {}, () => {})
+        .find(({ field }) => field === 'actions')
+      const operatorCell = operatorColumn.renderCell({ row: { isEligible: true } })
+      assert.equal(buttons(operatorCell.type(operatorCell.props))
+        .find((button) => button.props.children === 'เพิ่มจุดตรวจวัด').props.disabled, false)
+    })
+    await t.test('point settings require edit permission and connected status independently of creation permission', () => {
+      for (const canEditSettings of [false, true]) {
+        for (const statusCode of ['CONNECTED', 'WAITING_FACTORY_REVISION', 'REJECTED', 'CANCELLED']) {
+          const actions = buttons(MonitoringPointActions({
+            point: { statusCode }, useOperatorActions: true, canCreateRequests: true, canEditSettings,
+            onOpenConnectionSettings: () => {}, onOpenPointDetails: () => {},
+          }))
+          assert.equal(actions.find((button) => button.props.children === 'ตั้งค่า').props.disabled,
+            !canEditSettings || statusCode !== 'CONNECTED')
+          assert.ok(!actions.find((button) => button.props.children === 'เปิดดู').props.disabled)
+        }
+      }
+    })
     await t.test('all four menus disable process for terminal requests while preserving view', async () => {
       const kwp = await server.ssrLoadModule('/src/pages/KwpFormsPage.jsx')
       const bod = await server.ssrLoadModule('/src/pages/BodCodReportPage.jsx')

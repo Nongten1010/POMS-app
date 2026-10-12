@@ -2517,7 +2517,7 @@ function OfficerFactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints, onOpenIntentDialog }) {
+function OperatorFactoryActions({ row, canCreateRequests = false, onOpenRequestForm, onOpenMonitoringPoints, onOpenIntentDialog }) {
   if (!row.isEligible) {
     const hasPendingAddRequest = [row?.requestStatusCode, row?.requestStatus, row?.requestStatusLabel].includes('PENDING_REVIEW')
       || [row?.requestStatusCode, row?.requestStatus, row?.requestStatusLabel].includes('รอพิจารณา')
@@ -2545,6 +2545,7 @@ function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints
         size="small"
         variant="outlined"
         onClick={() => onOpenRequestForm?.(row, 'เพิ่มจุดตรวจวัด')}
+        disabled={!canCreateRequests}
       >
         เพิ่มจุดตรวจวัด
       </Button>
@@ -2658,13 +2659,13 @@ function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDo
   )
 }
 
-function MonitoringPointActions({ point, useOperatorActions, onOpenPointDetails, onOpenAddParameter, onOpenConnectionSettings }) {
+function MonitoringPointActions({ point, useOperatorActions, canCreateRequests = false, canEditSettings = false, onOpenPointDetails, onOpenAddParameter, onOpenConnectionSettings }) {
   const { status, statusCode } = point
   const canConsider = ['รอพิจารณาแบบ', 'ยืนยันการเชื่อมต่อ', 'แก้ไขแล้ว/รอพิจารณาแบบ'].includes(status)
   const isConnected = [status, statusCode].includes('เชื่อมต่อแล้ว')
     || [status, statusCode].includes('CONNECTED')
-  const canConfigureConnection = isConnected
-  const canAddParameter = isConnected
+  const canConfigureConnection = isConnected && canEditSettings
+  const canAddParameter = isConnected && canCreateRequests
 
   if (!useOperatorActions) {
     return (
@@ -2698,7 +2699,7 @@ function MonitoringPointActions({ point, useOperatorActions, onOpenPointDetails,
   )
 }
 
-function MonitoringPointListDialog({ open, factory, useOperatorActions, accessToken, onOpenAddParameter, onOpenConnectionSettings, onClose }) {
+function MonitoringPointListDialog({ open, factory, useOperatorActions, canCreateRequests = false, canEditSettings = false, accessToken, onOpenAddParameter, onOpenConnectionSettings, onClose }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -2890,6 +2891,8 @@ function MonitoringPointListDialog({ open, factory, useOperatorActions, accessTo
                       <MonitoringPointActions
                         point={row}
                         useOperatorActions={useOperatorActions}
+                        canCreateRequests={canCreateRequests}
+                        canEditSettings={canEditSettings}
                         onOpenPointDetails={handleOpenPointDetails}
                         onOpenAddParameter={(point) => {
                           onOpenAddParameter?.(point)
@@ -5291,7 +5294,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
   )
 }
 
-function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints, onOpenIntentDialog, useOperatorColumns = isOperator) {
+function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints, onOpenIntentDialog, useOperatorColumns = isOperator, canCreateRequests = isOperator) {
   const columns = [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
@@ -5316,6 +5319,7 @@ function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints
         useOperatorColumns ? (
           <OperatorFactoryActions
             row={params.row}
+            canCreateRequests={canCreateRequests}
             onOpenRequestForm={onOpenRequestForm}
             onOpenMonitoringPoints={onOpenMonitoringPoints}
             onOpenIntentDialog={onOpenIntentDialog}
@@ -8121,6 +8125,7 @@ function ConnectionRequestPage({
   const isAdmin = roleCode === 'admin'
   const canApproveConnectionRequests = userType === 'officer' && permissions?.connection?.approve === true
   const canEditConnectionRequests = (isAdmin || userType === 'officer') && permissions?.connection?.edit === true
+  const canCreateRequests = isOperator || canEditConnectionRequests
   const canDirectConnect = isAdmin
     || permissions?.connection?.direct_connect === true
     || permissions?.connection?.directConnect === true
@@ -8296,6 +8301,7 @@ function ConnectionRequestPage({
     setPreviousRequestLoad(null)
   }, [])
   const handleOpenNewRequestForm = useCallback(async (factory, formType) => {
+    if (!canCreateRequests) return
     previousRequestAbortRef.current?.abort()
     previousRequestAbortRef.current = null
     setPreviousRequestLoad(null)
@@ -8330,7 +8336,7 @@ function ConnectionRequestPage({
     } finally {
       if (previousRequestAbortRef.current === controller) previousRequestAbortRef.current = null
     }
-  }, [accessToken, canUseEligibleFactoryRows, isOperator])
+  }, [accessToken, canCreateRequests, canUseEligibleFactoryRows, isOperator])
   const factoryColumns = useMemo(
     () =>
       getFactoryColumns(
@@ -8341,8 +8347,9 @@ function ConnectionRequestPage({
         setMonitoringPointFactory,
         openIntentDialog,
         canViewFactoryTable,
+        canCreateRequests,
       ),
-    [canViewFactoryTable, handleOpenNewRequestForm, isOperator, openIntentDialog],
+    [canCreateRequests, canViewFactoryTable, handleOpenNewRequestForm, isOperator, openIntentDialog],
   )
   const handleOpenRequestDocument = useCallback(async (row, mode = 'view') => {
     if (mode === 'process' && isTerminalProcessRequest(row)) {
@@ -8461,6 +8468,7 @@ function ConnectionRequestPage({
       })
   }, [accessToken, isOperator, canEditConnectionRequests])
   const handleOpenAddParameterForm = useCallback((point) => {
+    if (!canCreateRequests) return
     setRequestFormError('')
 
     const stationId = point?.pointCode ?? point?.code ?? point?.stationId ?? ''
@@ -8526,7 +8534,7 @@ function ConnectionRequestPage({
         )
         setRequestFormError(error instanceof Error ? error.message : 'โหลดข้อมูลสำหรับเพิ่มพารามิเตอร์ไม่สำเร็จ')
       })
-  }, [accessToken])
+  }, [accessToken, canCreateRequests])
   const closeRequestDocumentDialog = useCallback(() => {
     setRequestDocumentOpen(false)
   }, [])
@@ -9243,6 +9251,8 @@ function ConnectionRequestPage({
         open={Boolean(monitoringPointFactory)}
         factory={monitoringPointFactory}
         useOperatorActions={canViewFactoryTable}
+        canCreateRequests={canCreateRequests}
+        canEditSettings={isOperator || canEditConnectionRequests}
         accessToken={accessToken}
         onOpenAddParameter={handleOpenAddParameterForm}
         onOpenConnectionSettings={setConnectionSettingsContext}
