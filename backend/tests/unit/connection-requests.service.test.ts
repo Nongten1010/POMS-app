@@ -4985,6 +4985,7 @@ describe('connectionRequestsService', () => {
         revisionReason: null,
         connectionDueAt: dueAt,
       },
+      { approvalAccess: { scope: 'ALL', regionalAccess: undefined } },
     );
   });
 
@@ -5032,6 +5033,7 @@ describe('connectionRequestsService', () => {
         verifiedAt: now.toISOString(),
       },
       {
+        approvalAccess: { scope: 'ALL', regionalAccess: undefined },
         activateFullyExemptedPoints: true,
       },
     );
@@ -5132,6 +5134,7 @@ describe('connectionRequestsService', () => {
           revisionReason: null,
           connectionDueAt: dueAt,
         },
+        { approvalAccess: { scope, regionalAccess: { regions: ['ภาคตะวันออก'] } } },
       );
     },
   );
@@ -5164,6 +5167,7 @@ describe('connectionRequestsService', () => {
         officerNote: null,
         revisionReason: 'เพิ่มรายละเอียดจุดตรวจวัด',
       },
+      { approvalAccess: { scope: 'ALL', regionalAccess: undefined } },
     );
   });
 
@@ -5193,6 +5197,7 @@ describe('connectionRequestsService', () => {
         revisionReason: null,
         connectionDueAt: dueAt,
       },
+      { approvalAccess: { scope: 'ALL', regionalAccess: undefined } },
     );
   });
 
@@ -5374,6 +5379,7 @@ describe('connectionRequestsService', () => {
         CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
         7,
         { revisionReason: 'เพิ่มเติมแบบคำขอ', officerNote: null },
+        { approvalAccess: { scope: 'ALL', regionalAccess: undefined } },
       );
       expect(mockedRepository.returnToFactoryRevisionAfterProfileChange).not.toHaveBeenCalled();
     });
@@ -5435,6 +5441,7 @@ describe('connectionRequestsService', () => {
         connectionDueAt: dueAt,
       },
       {
+        approvalAccess: { scope: 'ALL', regionalAccess: undefined },
         pointCodeAssignments,
       },
     );
@@ -5479,6 +5486,7 @@ describe('connectionRequestsService', () => {
         confirmedAt: null,
       },
       {
+        approvalAccess: { scope: 'ALL', regionalAccess: undefined },
         issueWaitingConnectionSideEffects: false,
       },
     );
@@ -5523,6 +5531,7 @@ describe('connectionRequestsService', () => {
         confirmedAt: null,
       },
       {
+        approvalAccess: { scope: 'ALL', regionalAccess: undefined },
         issueWaitingConnectionSideEffects: false,
       },
     );
@@ -6485,10 +6494,15 @@ describe('connectionRequestsService', () => {
       7,
     );
 
-    expect(mockedRepository.connect).toHaveBeenCalledWith(1, 7, {
-      verifiedAt: '2026-05-27T11:00:00.000Z',
-      officerNote: null,
-    });
+    expect(mockedRepository.connect).toHaveBeenCalledWith(
+      1,
+      7,
+      {
+        verifiedAt: '2026-05-27T11:00:00.000Z',
+        officerNote: null,
+      },
+      { scope: 'ALL', regionalAccess: undefined },
+    );
     expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
     expect(mockedRepository.syncConnectedMeasurementPoints).not.toHaveBeenCalled();
   });
@@ -6546,10 +6560,15 @@ describe('connectionRequestsService', () => {
         { regions: ['ภาคตะวันออก'] },
       );
 
-      expect(mockedRepository.connect).toHaveBeenCalledWith(1, 7, {
-        verifiedAt: '2026-05-27T11:00:00.000Z',
-        officerNote: null,
-      });
+      expect(mockedRepository.connect).toHaveBeenCalledWith(
+        1,
+        7,
+        {
+          verifiedAt: '2026-05-27T11:00:00.000Z',
+          officerNote: null,
+        },
+        { scope, regionalAccess: { regions: ['ภาคตะวันออก'] } },
+      );
     },
   );
 });

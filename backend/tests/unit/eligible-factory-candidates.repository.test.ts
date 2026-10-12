@@ -251,8 +251,8 @@ describe('eligibleFactoryCandidatesRepository', () => {
       string,
       Array<{ id: string; name_th: string; region: string }>
     >([
-      ['ภาคกลาง', [{ id: '18', name_th: 'ชัยนาท', region: 'ภาคกลาง' }]],
-      ['ภาคตะวันออก', [{ id: '21', name_th: 'ระยอง', region: 'ภาคตะวันออก' }]],
+      ['ภาคกลาง', [{ id: '1018', name_th: 'ชัยนาท', region: 'ภาคกลาง' }]],
+      ['ภาคตะวันออก', [{ id: '1021', name_th: 'ระยอง', region: 'ภาคตะวันออก' }]],
     ]);
     const provinceQuery = {
       whereIn: jest.fn((_column: string, regions: string[]) => {
@@ -545,6 +545,102 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(provinceQuery.whereIn).toHaveBeenCalledWith('region', ['ภาคกลาง']);
     expect(countQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
     expect(facImportQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
+  });
+
+  it.each([
+    ['ภาคกลาง', '1000', 'กรุงเทพมหานคร', '10'],
+    ['ภาคตะวันออก', '1021', 'ระยอง', '21'],
+    ['ภาคตะวันตก', '1071', 'กาญจนบุรี', '71'],
+    ['ภาคตะวันออกเฉียงเหนือ', '1030', 'นครราชสีมา', '30'],
+    ['ภาคเหนือ', '1050', 'เชียงใหม่', '50'],
+    ['ภาคใต้', '1080', 'นครศรีธรรมราช', '80'],
+    ['ภาคใต้', '1090', 'สงขลา', '90'],
+  ])(
+    'maps %s province master ID %s to the Fac60k province code by name',
+    async (region, id, provinceName, expectedCode) => {
+      const { countQuery, facImportQuery, provinceQuery } = mockExternalCandidates();
+      provinceQuery.select.mockResolvedValueOnce([{ id, name_th: provinceName, region }]);
+      mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+      await eligibleFactoryCandidatesRepository.list(
+        { page: 1, perPage: 50 },
+        { actorUserId: 42, scope: { scope: 'IN_REGION', region } },
+      );
+
+      expect(countQuery.whereIn).toHaveBeenCalledWith('PROV', [expectedCode]);
+      expect(facImportQuery.whereIn).toHaveBeenCalledWith('PROV', [expectedCode]);
+    },
+  );
+
+  it('uses all mapped southern provinces instead of the four-digit province master IDs', async () => {
+    const { countQuery, facImportQuery, provinceQuery } = mockExternalCandidates();
+    const southernProvinces = [
+      ['1080', 'นครศรีธรรมราช'],
+      ['1081', 'กระบี่'],
+      ['1082', 'พังงา'],
+      ['1083', 'ภูเก็ต'],
+      ['1084', 'สุราษฎร์ธานี'],
+      ['1085', 'ระนอง'],
+      ['1086', 'ชุมพร'],
+      ['1090', 'สงขลา'],
+      ['1091', 'สตูล'],
+      ['1092', 'ตรัง'],
+      ['1093', 'พัทลุง'],
+      ['1094', 'ปัตตานี'],
+      ['1095', 'ยะลา'],
+      ['1096', 'นราธิวาส'],
+    ];
+    provinceQuery.select.mockResolvedValueOnce(
+      southernProvinces.map(([id, name_th]) => ({ id, name_th, region: 'ภาคใต้' })),
+    );
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    await eligibleFactoryCandidatesRepository.list(
+      {},
+      { actorUserId: 42, scope: { scope: 'IN_REGION', region: 'ภาคใต้' } },
+    );
+
+    const expectedCodes = [
+      '80',
+      '81',
+      '82',
+      '83',
+      '84',
+      '85',
+      '86',
+      '90',
+      '91',
+      '92',
+      '93',
+      '94',
+      '95',
+      '96',
+    ];
+    expect(countQuery.whereIn).toHaveBeenCalledWith('PROV', expectedCodes);
+    expect(facImportQuery.whereIn).toHaveBeenCalledWith('PROV', expectedCodes);
+  });
+
+  it.each([
+    { reason: 'the master has no provinces', provinces: [] },
+    {
+      reason: 'the province name has no DIW code',
+      provinces: [{ id: '80', name_th: 'จังหวัดที่ไม่รู้จัก', region: 'ภาคใต้' }],
+    },
+  ])('fails closed when $reason', async ({ provinces }) => {
+    const { provinceQuery } = mockExternalCandidates();
+    provinceQuery.select.mockResolvedValueOnce(provinces);
+
+    const result = await eligibleFactoryCandidatesRepository.list(
+      { page: 1, perPage: 50 },
+      { actorUserId: 42, scope: { scope: 'IN_REGION', region: 'ภาคใต้' } },
+    );
+
+    expect(result).toEqual({
+      data: [],
+      meta: { total: 0, page: 1, perPage: 50, totalPages: 0, source: 'external' },
+    });
+    expect(mockedFactorySourceDb).not.toHaveBeenCalled();
+    expect(mockedEligibleFactoriesRepository.listActiveRegistrationNumbers).not.toHaveBeenCalled();
   });
 
   it('filters external candidates by authoritative estate code when provided', async () => {

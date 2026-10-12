@@ -136,6 +136,9 @@ const connectionProfileAndParameterConflictResponse: OpenApiObject = {
   ...addParameterOwnershipConflictResponse,
   description: `${connectionProfileConflictResponse.description} ${addParameterOwnershipDescription}`,
 };
+const requestApprovalAccessDescription =
+  'Backend API: effective cems_wpms_requests:approve ใช้เฉพาะเมนูขอเชื่อมต่อและ scope ที่ได้รับ ไม่จำกัด role หรือ userType; ยังตรวจสถานะ workflow เดิมและตรวจ approve scope/assignment ซ้ำภายใต้ transaction lock ของคำขอก่อนเปลี่ยนสถานะ จองรหัสจุด หรือเขียนผลข้างเคียง. OWN_FACTORY ตรวจ assignment ปัจจุบันผ่าน user_factory_access หรือ user_juristics ที่ยังไม่ revoked และ supporting factory ยัง active; direct factory assignment ไม่ขยายไปโรงงานอื่นในนิติบุคคลเดียวกัน และ createdBy อย่างเดียวไม่ให้สิทธิ์อนุมัติ. saved OWN_FACTORY ไม่ถูกจำกัดซ้ำด้วยภาคโปรไฟล์เดิม. ไม่มี approve ตอบ 403; ไม่พบคำขอหรืออยู่นอก scope/assignment ตอบ 404. Mutation นี้ตรวจ approve; การอ่านเมนูยังใช้ view แยกกัน และไม่เติม view อัตโนมัติ';
+
 const requestEditAccessDescription =
   'Permission: cems_wpms_requests:edit ตาม scope และ regionalAccess. OWN_FACTORY ใช้ assignment ผ่าน user_juristics หรือ user_factory_access; ผู้ทำรายการไม่ต้องตรงกับ createdBy และผู้สร้างเดิมก็ต้องผ่าน scope. เก็บ createdBy เดิมและบันทึกผู้ทำรายการจริง. ';
 const resubmitPointReplacementDescription =
@@ -2897,7 +2900,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'reviewConnectionRequest',
       description:
         'Permission: cems_wpms_requests:approve พร้อม data scope. decision REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ล็อกคำขอและตรวจ approve scope ซ้ำก่อนบันทึก; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. คำสั่งอื่นคงข้อจำกัดสถานะเดิม; คำสั่งที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
-        addParameterOwnershipDescription,
+        addParameterOwnershipDescription +
+        ' ' +
+        requestApprovalAccessDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -2974,7 +2979,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         'ล็อกคำขอและตรวจ approve scope ซ้ำก่อน REJECT; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. คำสั่งอื่นที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
         'action REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ตรวจ approve permission และ data scope เดิม บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. ' +
         'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นผู้มีสิทธิ์ edit ตาม scope/assignment ของโรงงาน resubmit เพื่อเก็บ revision ใหม่ ทั้ง OPERATOR_FORM และ OFFICER_DIRECT_API โดยคง createdBy เดิม. กรณีอื่นคงข้อจำกัด transition เดิม. ' +
-        addParameterOwnershipDescription,
+        addParameterOwnershipDescription +
+        ' ' +
+        requestApprovalAccessDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -3167,7 +3174,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'verifyConnectionRequestConnection',
       description:
         'Permission: cems_wpms_requests:approve' +
-        ` ${connectionProfileWriteDescription} ${addParameterOwnershipDescription}`,
+        ` ${connectionProfileWriteDescription} ${addParameterOwnershipDescription}` +
+        ' ' +
+        requestApprovalAccessDescription,
       extraResponses: { '409': connectionProfileAndParameterConflictResponse },
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(

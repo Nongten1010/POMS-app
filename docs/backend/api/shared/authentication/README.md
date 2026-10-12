@@ -69,6 +69,8 @@ JWT ใช้ยืนยัน identity, persona และอายุ session 
 
 สำหรับ custom snapshot รายการ data-scoped เดิมที่มี scope null ให้ edit/approve รับ scope และ qualifiers จาก saved view ของ resource เดียวกันเท่านั้น หาก view ไม่มี ถูก deny หรือ qualifier ไม่ครบให้ปิด action; view/search/export/direct_connect ที่ scope null ไม่ให้สิทธิ์ Binary codes คงกติกาเดิม ดู [รายละเอียด runtime และ validation ตอนบันทึก](../../menus/permissions/user-management-api.md#scope-ที่เป็น-null-ในข้อมูลเดิม)
 
+Backend ตรวจ approve แยกรายเมนูตาม [ตารางสิทธิ์อนุมัติ](../../menus/permissions/README.md#สิทธิ์อนุมัติแยกรายเมนู) โดยไม่จำกัด role หรือ userType; custom snapshot ไม่เติม view/edit หรือสิทธิ์เมนูอื่นให้อัตโนมัติ รอบนี้ไม่ได้แก้ frontend หรือ App refresh การตรวจ role และข้อมูลสิทธิ์ที่หน้าเว็บเก็บไว้ยังเป็นข้อจำกัดของ UI
+
 Client เรียก `/auth/me` หลังแก้สิทธิ์หรือเมื่อ refresh เมนู เพื่อให้ปุ่มและเมนูตรงกับ API; เมื่อสิทธิ์ที่เคยมีถูกถอน API ตอบ `403 FORBIDDEN` แม้ token เดิมเคยมีสิทธิ์นั้น การเปลี่ยนสถานะบัญชีเป็น inactive หรือ soft-deleted ตอบ `401 UNAUTHORIZED`
 
 ### การยืนยันตัวตนและ provisioning

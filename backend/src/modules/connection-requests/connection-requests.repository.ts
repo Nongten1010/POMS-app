@@ -355,6 +355,7 @@ interface StatusUpdate {
 }
 
 interface StatusUpdateOptions {
+  approvalAccess?: Pick<ListAccess, 'scope' | 'regionalAccess'>;
   issueWaitingConnectionSideEffects?: boolean;
   activateFullyExemptedPoints?: boolean;
   pointCodeAssignments?: PointCodeAssignmentInput[];
@@ -1307,6 +1308,10 @@ export const connectionRequestsRepository = {
     return Boolean(await buildRequestEditAccessQuery(id, access).first());
   },
 
+  async canApproveRequest(id: number, access: ListAccess): Promise<boolean> {
+    return Boolean(await buildRequestApprovalAccessQuery(id, access).first());
+  },
+
   async findPreviousRequestForReadAccess(
     factoryId: string,
     access: Pick<ListAccess, 'actorUserId' | 'scope' | 'regionalAccess'>,
@@ -1506,16 +1511,11 @@ export const connectionRequestsRepository = {
         .forUpdate()
         .first();
       if (!current) throw new NotFoundError('Connection request not found');
-      if (
-        !['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(
-          getAccessScopeValue(access.scope) ?? '',
-        )
-      ) {
-        throw new NotFoundError('Connection request not found');
-      }
-      const accessible = await buildBaseQuery({}, { ...access, actorUserId }, trx)
-        .where('id', id)
-        .first('id');
+      const accessible = await buildRequestApprovalAccessQuery(
+        id,
+        { ...access, actorUserId },
+        trx,
+      ).first();
       if (!accessible) throw new NotFoundError('Connection request not found');
       await trx('cems_wpms_connection_requests')
         .where('id', id)
@@ -1554,6 +1554,16 @@ export const connectionRequestsRepository = {
         .forUpdate()
         .first('id', 'status');
       if (!current) throw new NotFoundError('Connection request not found');
+      if (
+        options.approvalAccess &&
+        !(await buildRequestApprovalAccessQuery(
+          id,
+          { ...options.approvalAccess, actorUserId },
+          trx,
+        ).first())
+      ) {
+        throw new NotFoundError('Connection request not found');
+      }
       if (
         current.status === CONNECTION_REQUEST_STATUS.REJECTED &&
         status !== CONNECTION_REQUEST_STATUS.REJECTED
@@ -1623,6 +1633,7 @@ export const connectionRequestsRepository = {
     id: number,
     actorUserId: number,
     update: Pick<StatusUpdate, 'verifiedAt' | 'officerNote'>,
+    approvalAccess?: Pick<ListAccess, 'scope' | 'regionalAccess'>,
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
       const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
@@ -1632,6 +1643,16 @@ export const connectionRequestsRepository = {
         .first();
 
       if (!current) throw new NotFoundError('Connection request not found');
+      if (
+        approvalAccess &&
+        !(await buildRequestApprovalAccessQuery(
+          id,
+          { ...approvalAccess, actorUserId },
+          trx,
+        ).first())
+      ) {
+        throw new NotFoundError('Connection request not found');
+      }
       if (current.status !== CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED) {
         throw new ConflictError('Connection request cannot be connected from its current status', {
           currentStatus: current.status,
@@ -2589,6 +2610,25 @@ export function buildRequestEditAccessQuery(
     builder.whereRaw('1 = 0');
   }
   return builder;
+}
+
+function buildRequestApprovalAccessQuery(
+  id: number,
+  access: ListAccess,
+  connection: Knex | Knex.Transaction = db,
+): Knex.QueryBuilder<ConnectionRequestRow, ConnectionRequestRow[]> {
+  return buildRequestEditAccessQuery(
+    id,
+    {
+      ...access,
+      // Explicit ownership grants use current assignments, independently of profile regions.
+      regionalAccess:
+        getAccessScopeValue(access.scope) === 'OWN_FACTORY' ? undefined : access.regionalAccess,
+    },
+    connection,
+  )
+    .clearSelect()
+    .select('id');
 }
 
 function buildBaseQuery(

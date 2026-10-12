@@ -65,7 +65,11 @@ curl --request POST \
 | แก้ไขข้อมูลจุดตรวจวัด | `PUT` | `/api/v1/monitoring-point-forms/:id` | Bearer | `cems_wpms_requests:edit` |
 | เลือกฟอร์มเป็นโรงงานเข้าข่าย | `POST` | `/api/v1/monitoring-point-forms/:id/select-eligible` | Bearer | `eligible_factories:approve` |
 
-รายการและ candidate ถูกกรองตาม data scope ของผู้เรียก: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY` หรือ `FACTORY_TYPE_88` โดย `FACTORY_TYPE_88` เทียบรหัสประเภทโรงงานหลักที่ normalize เป็น `00088`; `IN_REGION` หา region จาก province master และ intersect กับ `regionalAccess`; ถ้าไม่มี qualifier ที่ต้องใช้หรือ qualifier ขัดกัน ระบบคืนผลลัพธ์ว่าง/`404` แบบ fail closed. การเพิ่มและลบตรวจ scope เดียวกันก่อนเปลี่ยนข้อมูล.
+รายการและ candidate ถูกกรองตาม data scope ของผู้เรียก: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY` หรือ `FACTORY_TYPE_88` โดย `FACTORY_TYPE_88` เทียบรหัสประเภทโรงงานหลักที่ normalize เป็น `00088`; `IN_REGION` ใช้ภาคจาก effective permission ก่อนค่าเริ่มต้น `regionalAccess` แล้วหา province จาก master; ถ้าไม่มี qualifier ที่ใช้ได้ ระบบคืนผลลัพธ์ว่าง/`404` แบบ fail closed ไม่จำกัด scope ที่มอบหมายด้วย role หรือภาคโปรไฟล์ซ้ำ. การเพิ่มและลบตรวจ scope เดียวกันก่อนเปลี่ยนข้อมูล.
+
+<a id="candidate-region-province-mapping"></a>
+
+สำหรับ candidate ที่ใช้ `IN_REGION` backend อ่านจังหวัดในภาคที่ได้รับสิทธิ์จาก POMS province master แล้วแปลง `name_th` ตาม canonical mapping เป็น `PROV` ของต้นทาง ไม่ส่ง POMS province ID ไปใช้แทนและไม่คำนวณรหัสด้วยการตัดหลัก ตัวอย่าง POMS `1080` / นครศรีธรรมราชใช้ต้นทาง `80`, POMS `1090` / สงขลาใช้ `90` กติกาแปลงชื่อนี้ใช้กับ source lookup ที่ใช้ขอบเขตเดียวกันด้วย; lookup ที่ไม่มีจังหวัดแปลงได้ตอบ `404 NOT_FOUND` ตามเดิม หากชื่อจังหวัดไม่รู้จักจะตัดจังหวัดนั้นออก; ถ้าไม่มีจังหวัดที่แปลงได้คืน `200 OK`, `data: []`, `meta.total: 0` และ `totalPages: 0` เมื่อใช้ pagination โดยไม่เรียกฐานต้นทางหรือ fallback เป็น ALL
 
 Candidate จาก Fac60k รับเฉพาะแถวที่ `fac_import.FFLAG` เป็น `0`, `1` หรือ `3`; ไม่รวมสถานะ `2`. Mapping สถานะโรงงานคือ `0` = `ยังไม่แจ้งประกอบ`, `1` = `แจ้งประกอบแล้ว`, `2` = `จำหน่ายทะเบียน` และ `3` = `หยุดชั่วคราว`.
 
@@ -446,6 +450,7 @@ Minimal response (`200 OK`):
 
 - Authentication: required
 - Permission: ต้องมีทั้ง `eligible_factories:view` และ `eligible_factories:approve`
+- Backend ใช้ effective grants และ scope ทั้งสองชุดโดยไม่จำกัด role หรือ userType; ยังตรวจสถานะที่พิจารณาได้และกฎธุรกิจของคำขอ การมี approve ไม่เติม view/edit อัตโนมัติ API review ไม่เพิ่มข้อกำหนด edit หรือการเลือกโรงงานซ้ำ รอบนี้ไม่ได้แก้ frontend ดู [สัญญาและข้อจำกัด UI](../permissions/README.md#สิทธิ์อนุมัติแยกรายเมนู)
 
 Path and body fields:
 

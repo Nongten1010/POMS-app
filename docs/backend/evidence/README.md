@@ -78,6 +78,7 @@
 
 ## Permissions
 
+- [สิทธิ์อนุมัติรายเมนูและจังหวัดของ candidate](./permissions/menu-approval-scopes.tdd.md)
 - [สิทธิ์รายคนไม่ติดเพดาน role และใช้สิทธิ์ล่าสุดกับ token เดิม](./permissions/custom-permission-snapshots.tdd.md)
 - [Permission matrix rollout evidence](./permissions/permission-matrix-rollout.tdd.md)
 - [Permission Management contract alignment](./permissions/permission-management-contract-alignment.tdd.md)

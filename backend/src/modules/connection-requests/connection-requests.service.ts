@@ -1366,7 +1366,7 @@ export const connectionRequestsService = {
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
-    ensureCanApprove(request, approveScope, regionalAccess);
+    await ensureCanApprove(request, actorUserId, approveScope, regionalAccess);
     if (input.decision === 'REJECT') {
       return connectionRequestsRepository.rejectRequest(
         id,
@@ -1376,6 +1376,7 @@ export const connectionRequestsService = {
       );
     }
     ensureStatus(request, DESIGN_REVIEW_STATUSES);
+    const approvalAccess = { scope: approveScope, regionalAccess };
 
     if (input.decision === 'REQUEST_REVISION') {
       return connectionRequestsRepository.updateStatus(
@@ -1386,6 +1387,7 @@ export const connectionRequestsService = {
           officerNote: input.officerNote ?? null,
           revisionReason: input.revisionReason,
         },
+        { approvalAccess },
       );
     }
 
@@ -1400,6 +1402,7 @@ export const connectionRequestsService = {
           verifiedAt: nowProvider().toISOString(),
         },
         {
+          approvalAccess,
           activateFullyExemptedPoints: true,
           ...(input.pointCodeAssignments
             ? { pointCodeAssignments: input.pointCodeAssignments }
@@ -1419,7 +1422,7 @@ export const connectionRequestsService = {
         CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
         actorUserId,
         update,
-        { pointCodeAssignments: input.pointCodeAssignments },
+        { approvalAccess, pointCodeAssignments: input.pointCodeAssignments },
       );
     }
 
@@ -1428,6 +1431,7 @@ export const connectionRequestsService = {
       CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
       actorUserId,
       update,
+      { approvalAccess },
     );
   },
 
@@ -1543,7 +1547,7 @@ export const connectionRequestsService = {
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
-    ensureCanApprove(request, approveScope, regionalAccess);
+    await ensureCanApprove(request, actorUserId, approveScope, regionalAccess);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
     const nextStatus = isPastConnectionDueDate(request.connectionDueAt, nowProvider())
       ? CONNECTION_REQUEST_STATUS.CANCELED
@@ -1562,6 +1566,7 @@ export const connectionRequestsService = {
         confirmedAt: null,
       },
       {
+        approvalAccess: { scope: approveScope, regionalAccess },
         issueWaitingConnectionSideEffects: false,
       },
     );
@@ -1717,13 +1722,18 @@ export const connectionRequestsService = {
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
-    ensureCanApprove(request, approveScope, regionalAccess);
+    await ensureCanApprove(request, actorUserId, approveScope, regionalAccess);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
 
-    return connectionRequestsRepository.connect(id, actorUserId, {
-      verifiedAt: input.verifiedAt ?? nowProvider().toISOString(),
-      officerNote: input.note ?? null,
-    });
+    return connectionRequestsRepository.connect(
+      id,
+      actorUserId,
+      {
+        verifiedAt: input.verifiedAt ?? nowProvider().toISOString(),
+        officerNote: input.note ?? null,
+      },
+      { scope: approveScope, regionalAccess },
+    );
   },
 };
 
@@ -4052,11 +4062,23 @@ async function loadRequest(id: number): Promise<ConnectionRequestDTO> {
   return request;
 }
 
-function ensureCanApprove(
+async function ensureCanApprove(
   request: ConnectionRequestDTO,
+  actorUserId: number,
   approveScope: AccessScope,
   regionalAccess?: RegionalAccessDTO | null,
-): void {
+): Promise<void> {
+  if (getAccessScopeValue(approveScope) === 'OWN_FACTORY') {
+    if (
+      await connectionRequestsRepository.canApproveRequest(request.id, {
+        actorUserId,
+        scope: approveScope,
+        regionalAccess,
+      })
+    )
+      return;
+    throw new NotFoundError('Connection request not found');
+  }
   if (
     requestMatchesPermissionScope(request, approveScope, regionalAccess) &&
     requestMatchesRegionalAccess(request, approveScope, regionalAccess)

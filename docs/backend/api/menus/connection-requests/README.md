@@ -185,6 +185,18 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 
 สำหรับ route ที่ใช้ scope ของ กนอ. ค่า `IN_ESTATE` หมายถึงโรงงานในนิคม `estateCode` ที่มอบหมาย
 
+<a id="approval-access"></a>
+
+### สิทธิ์พิจารณาคำขอ
+
+รอบนี้แก้เฉพาะ backend; ข้อจำกัด role และปุ่มของ frontend ยังไม่ได้ปรับ ดู [ข้อจำกัด UI](../permissions/README.md#สิทธิ์อนุมัติแยกรายเมนู)
+
+`POST /:id/review`, `POST /:id/status` และ `POST /:id/verify-connection` ใช้ effective `cems_wpms_requests:approve` พร้อม scope ปัจจุบัน โดยไม่จำกัด role หรือ userType การเปิดรายการ/รายละเอียดใช้ `cems_wpms_requests:view` แยกกัน; approve ไม่เพิ่ม view ให้เอง และ mutation ทั้งสาม endpoint ไม่เพิ่มข้อกำหนด view ใหม่
+
+เมื่อ approve scope เป็น `OWN_FACTORY` โรงงานของคำขอต้องมี assignment ปัจจุบันผ่าน `user_factory_access` หรือ `user_juristics` ที่ยังไม่ revoked และ factory identity ที่รองรับยัง active การมอบหมายโรงงานโดยตรงไม่ขยายไปโรงงานอื่นในนิติบุคคลเดียวกัน ผู้สร้างคำขอ (`createdBy`) ที่ไม่มี assignment ไม่ได้รับสิทธิ์อนุมัติ และการถอน assignment มีผลกับคำขอถัดไป saved OWN_FACTORY ไม่ถูกกรองด้วยภาคโปรไฟล์เดิมซ้ำ Backend ตรวจ scope/assignment ซ้ำภายใต้ transaction lock ของคำขอก่อนเปลี่ยนสถานะ จองรหัสจุด หรือเขียน history/ข้อมูลเชื่อมต่อ ถ้าสิทธิ์ถูกถอนหลัง service precheck ให้ตอบ `404` โดยไม่เขียนผลบางส่วน
+
+ไม่มี approve ตอบ `403 FORBIDDEN`; ไม่พบหรืออยู่นอก scope/assignment ตอบ `404 NOT_FOUND` ก่อนเปลี่ยนสถานะ คำสั่งอนุมัติและยืนยันยังตรวจสถานะ workflow เดิม ดู [กติกาสิทธิ์อนุมัติร่วม](../permissions/README.md#สิทธิ์อนุมัติแยกรายเมนู)
+
 ## Request-number Contract
 
 คำขอที่สร้างใหม่ใช้เลขชุดเดียวกันตาม `systemType` และปี พ.ศ. ไม่ว่าผู้ส่งจะเป็นผู้ประกอบการหรือเจ้าหน้าที่เชื่อมต่อโดยตรง:

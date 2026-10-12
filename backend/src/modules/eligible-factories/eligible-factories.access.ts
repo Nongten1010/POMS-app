@@ -135,6 +135,7 @@ export async function resolveCandidateAccessFilters(
       const regions = resolveAssignedRegions(scope.region, access.regionalAccess);
       if (regions.length === 0) return denyAllCandidateAccess();
       provinceCodes = await provinceCodesForRegions(regions);
+      if (provinceCodes.length === 0) return denyAllCandidateAccess();
       break;
     }
     case 'IN_PROVINCE': {
@@ -409,7 +410,8 @@ async function provinceCodesForRegions(regions: string[]): Promise<string[]> {
   const rows = await db<ProvinceRow>('provinces')
     .whereIn('region', normalizedRegions)
     .select('id', 'name_th', 'region');
-  return uniqueValues(rows.map((row) => String(row.id)));
+  // POMS master IDs (for example 1080) differ from Fac60k PROV codes (80).
+  return uniqueValues(rows.map((row) => diwProvinceCodeFromName(row.name_th.trim())));
 }
 
 function provinceCodesForProvince(provinceName: string): string[] {

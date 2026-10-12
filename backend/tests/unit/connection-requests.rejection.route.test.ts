@@ -3,7 +3,11 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../src/config/database', () => ({
-  db: Object.assign(jest.fn(), { transaction: jest.fn(), fn: { now: () => new Date() } }),
+  db: Object.assign(jest.fn(), {
+    transaction: jest.fn(),
+    raw: jest.fn(async () => []),
+    fn: { now: () => new Date() },
+  }),
 }));
 
 import { db } from '../../src/config/database';
@@ -53,6 +57,104 @@ describe('connection request rejection through HTTP and persistence', () => {
     });
     expect(await connectionRequestsRepository.findById(1)).toMatchObject({ status: 'REJECTED' });
   });
+
+  it.each(['status', 'review'])(
+    'allows %s rejection with a current assigned-factory approval grant',
+    async (endpoint) => {
+      database('CONNECTED');
+      const response = await request(createApp())
+        .post(`/api/v1/cems-wpms-requests/1/${endpoint}`)
+        .set('Authorization', `Bearer ${token({ 'cems_wpms_requests:approve': 'OWN_FACTORY' })}`)
+        .send(endpoint === 'status' ? { action: 'REJECT' } : { decision: 'REJECT' });
+      expect(response.status).toBe(200);
+      expect(response.body.data.status).toBe('REJECTED');
+    },
+  );
+
+  it('rechecks assigned-factory approval access under the rejection transaction lock', async () => {
+    const state = database('CONNECTED');
+    state.loseAccessOnTransaction = true;
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/1/status')
+      .set('Authorization', `Bearer ${token({ 'cems_wpms_requests:approve': 'OWN_FACTORY' })}`)
+      .send({ action: 'REJECT' });
+    expect(response.status).toBe(404);
+    expect(state.row.status).toBe('CONNECTED');
+    expect(state.history).toEqual([]);
+  });
+
+  it.each([
+    { action: 'APPROVE_FORM', status: 'PENDING_DESIGN_REVIEW', endpoint: 'status' },
+    { action: 'REQUEST_REVISION', status: 'PENDING_DESIGN_REVIEW', endpoint: 'status' },
+    { action: 'RETURN_TO_WAITING_CONNECTION', status: 'CONNECTION_CONFIRMED', endpoint: 'status' },
+    { action: 'VERIFY_CONNECTION', status: 'CONNECTION_CONFIRMED', endpoint: 'verify-connection' },
+  ])(
+    'does not mutate $action after ownership is revoked between the service check and the transaction',
+    async ({ action, status, endpoint }) => {
+      const state = database(status);
+      state.loseAccessOnTransaction = true;
+      const response = await request(createApp())
+        .post(`/api/v1/cems-wpms-requests/1/${endpoint}`)
+        .set('Authorization', `Bearer ${token({ 'cems_wpms_requests:approve': 'OWN_FACTORY' })}`)
+        .send(
+          endpoint === 'verify-connection'
+            ? {}
+            : action === 'APPROVE_FORM'
+              ? { action }
+              : { action, revisionReason: 'ตรวจสอบอีกครั้ง' },
+        );
+      expect(response.status).toBe(404);
+      expect(state.row.status).toBe(status);
+      expect(state.history).toEqual([]);
+      expect(db.raw).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    {
+      action: 'APPROVE_FORM',
+      status: 'PENDING_DESIGN_REVIEW',
+      endpoint: 'status',
+      next: 'WAITING_CONNECTION',
+    },
+    {
+      action: 'REQUEST_REVISION',
+      status: 'PENDING_DESIGN_REVIEW',
+      endpoint: 'status',
+      next: 'WAITING_FACTORY_REVISION',
+    },
+    {
+      action: 'RETURN_TO_WAITING_CONNECTION',
+      status: 'CONNECTION_CONFIRMED',
+      endpoint: 'status',
+      next: 'WAITING_CONNECTION',
+    },
+    {
+      action: 'VERIFY_CONNECTION',
+      status: 'CONNECTION_CONFIRMED',
+      endpoint: 'verify-connection',
+      next: 'CONNECTED',
+    },
+  ])(
+    'permits $action when assigned approval access remains current in the transaction',
+    async ({ action, status, endpoint, next }) => {
+      const state = database(status);
+      state.row.connection_due_at = '2099-01-01T00:00:00.000Z';
+      const response = await request(createApp())
+        .post(`/api/v1/cems-wpms-requests/1/${endpoint}`)
+        .set('Authorization', `Bearer ${token({ 'cems_wpms_requests:approve': 'OWN_FACTORY' })}`)
+        .send(
+          endpoint === 'verify-connection'
+            ? {}
+            : action === 'APPROVE_FORM'
+              ? { action }
+              : { action, revisionReason: 'ตรวจสอบอีกครั้ง' },
+        );
+      expect(response.status).toBe(200);
+      expect(state.row.status).toBe(next);
+      expect(state.history).toHaveLength(1);
+    },
+  );
 
   it.each(['status', 'review'])(
     'keeps %s rejection inside approval data scope',
@@ -182,6 +284,7 @@ function database(status: string) {
     id: 1,
     request_no: 'REQ-001',
     factory_id: 'factory-001',
+    eligible_factory_id: 17,
     factory_name: 'Factory',
     factory_registration_no: 'REG-001',
     system_type: 'CEMS',
@@ -212,6 +315,7 @@ function database(status: string) {
       'whereNull',
       'leftJoin',
       'select',
+      'clearSelect',
       'orderBy',
       'forUpdate',
       'whereRaw',
@@ -227,6 +331,16 @@ function database(status: string) {
       if (table === 'cems_wpms_connection_requests')
         return scoped && !state.approvalVisible ? undefined : row;
       if (table === 'cems_wpms_request_factory_snapshots') return state.snapshot;
+      if (table === 'eligible_factories')
+        return {
+          id: 17,
+          latitude: null,
+          longitude: null,
+          eia_assessment: null,
+          eia_other: null,
+          has_eia: null,
+          project_name: null,
+        };
       return undefined;
     };
     chain.update = async (values: Record<string, unknown>) => {

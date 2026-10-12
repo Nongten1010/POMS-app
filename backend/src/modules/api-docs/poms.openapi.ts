@@ -473,6 +473,9 @@ const updateManagedUserExample = {
 const menuLocationAssignmentDescription =
   'permissionMode=role_default ใช้สิทธิ์เริ่มต้นของบทบาท; เมื่อบันทึก permissions หรือ permissionOverrides จะเปลี่ยนเป็น custom และใช้สิทธิ์ที่บันทึกทั้งชุด ไม่จำกัด action หรือ scope ด้วย role และไม่รับสิทธิ์ที่ไม่ได้บันทึกเพิ่มจาก role. พื้นที่รายเมนูที่ระบุมีผลก่อนพื้นที่โปรไฟล์และไม่ต้องตรงกัน ไม่แก้โปรไฟล์ตามเมนูอัตโนมัติ. ถ้าไม่ระบุพื้นที่ให้ใช้ค่าเริ่มต้นจากโปรไฟล์; ถ้าไม่มีทั้งสองแหล่งให้ไม่คืนข้อมูล. PATCH ที่ส่ง permissions, permissionOverrides (รวมชุดว่าง) หรือ permissionMode และการสร้างบัญชีพร้อมสิทธิ์ custom ต้องมี permissions:manage เพิ่มจาก users:edit มิฉะนั้นตอบ 403 FORBIDDEN. token เดิมใช้สิทธิ์ล่าสุดจากฐานข้อมูลตั้งแต่คำขอถัดไป; เงื่อนไขข้อมูล สถานะและขั้นตอน workflow ยังมีผล';
 
+const menuApprovalAccessDescription =
+  'Backend API: approve แยกรายเมนู ใช้ effective permission และ data scope ล่าสุดโดยไม่จำกัด role หรือ userType; ยังตรวจสถานะและขั้นตอนปัจจุบันของ workflow และไม่ให้สิทธิ์ข้ามเมนู. การเปิดอ่านเมนูใช้ view ตาม endpoint เดิม; ไม่เติม view หรือ edit ให้อัตโนมัติเมื่อบันทึก approve ใน custom snapshot';
+
 const replacePermissionsExample = {
   permissions: [
     {
@@ -5755,7 +5758,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List eligible factory candidates',
       operationId: 'listEligibleFactoryCandidates',
       description:
-        'คืน candidate จาก Fac60k เฉพาะ FFLAG 0, 1 และ 3 โดยไม่รวม FFLAG 2; mapping สถานะโรงงานคือ 0 = ยังไม่แจ้งประกอบ, 1 = แจ้งประกอบแล้ว, 2 = จำหน่ายทะเบียน และ 3 = หยุดชั่วคราว; ตัดรายการที่เลือกแล้วด้วยทั้งเลขทะเบียนใหม่และเดิมที่เก็บใน eligible_factories',
+        'คืน candidate จาก Fac60k เฉพาะ FFLAG 0, 1 และ 3 โดยไม่รวม FFLAG 2; mapping สถานะโรงงานคือ 0 = ยังไม่แจ้งประกอบ, 1 = แจ้งประกอบแล้ว, 2 = จำหน่ายทะเบียน และ 3 = หยุดชั่วคราว; ตัดรายการที่เลือกแล้วด้วยทั้งเลขทะเบียนใหม่และเดิมที่เก็บใน eligible_factories. IN_REGION แปลงชื่อจังหวัดจาก POMS province master เป็นรหัส PROV ของต้นทางด้วย canonical mapping ตามชื่อ ไม่ใช้ POMS province ID หรือคำนวณรหัส เช่น 1080 นครศรีธรรมราชใช้ PROV 80. จังหวัดที่ชื่อไม่อยู่ใน mapping ถูกตัดออกจากขอบเขต; ถ้าไม่มีจังหวัดที่แปลงได้คืน 200 พร้อม data [] และ meta.total 0 โดยไม่เรียกต้นทางหรือขยายเป็น ALL; response/query fields เดิม',
       parameters: [
         queryInteger('page', 'เลขหน้า; ต้องส่งคู่กับ perPage'),
         queryInteger('perPage', 'จำนวนรายการต่อหน้า; ต้องส่งคู่กับ page', false, 1, 200),
@@ -5840,7 +5843,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Review an eligible-factory add request',
       operationId: 'reviewEligibleFactoryAddRequest',
       description:
-        'Permission (ต้องมีครบ): eligible_factories:view + eligible_factories:approve. APPROVE และ REJECT เปลี่ยนเฉพาะสถานะคำขอพร้อมบันทึก reviewedBy, reviewedAt และ reviewNote โดยไม่สร้าง ไม่ restore และไม่แก้ไข eligible_factories; REJECT ต้องระบุ officerNote',
+        'Permission (ต้องมีครบ): eligible_factories:view + eligible_factories:approve. APPROVE และ REJECT เปลี่ยนเฉพาะสถานะคำขอพร้อมบันทึก reviewedBy, reviewedAt และ reviewNote โดยไม่สร้าง ไม่ restore และไม่แก้ไข eligible_factories; REJECT ต้องระบุ officerNote' +
+        ' ' +
+        menuApprovalAccessDescription,
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('ReviewEligibleFactoryAddRequest'),
@@ -6325,7 +6330,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Review a POMS factory edit request',
       operationId: 'reviewPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาใช้ effective factories:approve ไม่จำกัดด้วย role หรือ userType; ผู้มีสิทธิ์พิจารณาคำขอของตนเองได้ ทั้งกรณีเป็น original creator (createdBy) หรือ latest submitter (submittedBy) โดยใช้ได้กับ APPROVE, REQUEST_REVISION และ REJECT. REJECT ได้ทุกสถานะเป็น REJECTED และไม่บังคับเหตุผล; officerNote ส่ง null ค่าว่าง หรือละ field ได้. REJECT บันทึกการพิจารณาโดยไม่ย้อนข้อมูล current/live ที่เคยอนุมัติและคง approvedAt เดิม. APPROVE และ REQUEST_REVISION ยังคงตรวจสถานะเดิม. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาใช้ effective factories:approve ไม่จำกัดด้วย role หรือ userType; ผู้มีสิทธิ์พิจารณาคำขอของตนเองได้ ทั้งกรณีเป็น original creator (createdBy) หรือ latest submitter (submittedBy) โดยใช้ได้กับ APPROVE, REQUEST_REVISION และ REJECT. REJECT ได้ทุกสถานะเป็น REJECTED และไม่บังคับเหตุผล; officerNote ส่ง null ค่าว่าง หรือละ field ได้. REJECT บันทึกการพิจารณาโดยไม่ย้อนข้อมูล current/live ที่เคยอนุมัติและคง approvedAt เดิม. APPROVE และ REQUEST_REVISION ยังคงตรวจสถานะเดิม. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction' +
+        ' ' +
+        menuApprovalAccessDescription,
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditReviewRequest'),
@@ -6414,6 +6421,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Eligible Factories',
       summary: 'Select monitoring point form as eligible factory',
       operationId: 'selectMonitoringPointFormEligible',
+      description: menuApprovalAccessDescription,
       parameters: [formIdParameter],
       successStatus: '201',
     }),
@@ -6593,7 +6601,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Change BOD/COD workflow status',
       operationId: 'changeBodCodWorkflowStatus',
       description:
-        'ต้องมี bod_cod_errors:view + bod_cod_errors:approve และผ่านทั้งสอง data scope. REJECT ได้ทุกสถานะเป็น REJECTED และไม่ต้องมี current step; ไม่บังคับเหตุผล officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. REJECT, APPROVE และ REQUEST_REVISION ใช้ effective approveScope รวม OWN_FACTORY ได้ โดยไม่จำกัดชื่อ role. APPROVE/REQUEST_REVISION ยังคงต้องมี current step PENDING และสถานะตรงขั้น INSPECTOR, RESULT_NOTICE, REVIEWER หรือ APPROVER ตาม workflow; สิทธิ์ approve ไม่ข้ามขั้น. ตรวจสถานะภายใต้ lock ร่วมกับ cancel/resubmit',
+        'ต้องมี bod_cod_errors:view + bod_cod_errors:approve และผ่านทั้งสอง data scope. REJECT ได้ทุกสถานะเป็น REJECTED และไม่ต้องมี current step; ไม่บังคับเหตุผล officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. REJECT, APPROVE และ REQUEST_REVISION ใช้ effective approveScope รวม OWN_FACTORY ได้ โดยไม่จำกัดชื่อ role. APPROVE/REQUEST_REVISION ยังคงต้องมี current step PENDING และสถานะตรงขั้น INSPECTOR, RESULT_NOTICE, REVIEWER หรือ APPROVER ตาม workflow; สิทธิ์ approve ไม่ข้ามขั้น. ตรวจสถานะภายใต้ lock ร่วมกับ cancel/resubmit' +
+        ' ' +
+        menuApprovalAccessDescription,
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodWorkflowActionRequest'), {
         action: 'REJECT',
@@ -6620,7 +6630,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create BOD/COD result notice',
       operationId: 'createBodCodResultNotice',
       description:
-        'ต้องมี view + approve และผ่านทั้งสอง data scope; ใช้ effective bod_cod_errors:approve และ action scope รวม OWN_FACTORY โดยไม่จำกัด role; ต้องเป็น WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
+        'ต้องมี view + approve และผ่านทั้งสอง data scope; ใช้ effective bod_cod_errors:approve และ action scope รวม OWN_FACTORY โดยไม่จำกัด role; ต้องเป็น WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow' +
+        ' ' +
+        menuApprovalAccessDescription,
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodResultNoticeRequest'), {
         reportCorrectness: 'ถูกต้องครบถ้วน',
@@ -6645,7 +6657,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Update BOD/COD result notice',
       operationId: 'updateBodCodResultNotice',
       description:
-        'ต้องมี view + approve และผ่านทั้งสอง data scope; ใช้ effective bod_cod_errors:approve และ action scope รวม OWN_FACTORY โดยไม่จำกัด role; ต้องเป็น WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow',
+        'ต้องมี view + approve และผ่านทั้งสอง data scope; ใช้ effective bod_cod_errors:approve และ action scope รวม OWN_FACTORY โดยไม่จำกัด role; ต้องเป็น WAITING_RESULT_NOTICE / RESULT_NOTICE / PENDING. การบันทึกไม่เปลี่ยนขั้นหรือสิทธิ์ workflow action. เก็บ updatedAt เป็นเวลาบันทึกจริง ตรวจสถานะภายใต้ lock ร่วมกับ cancel/workflow' +
+        ' ' +
+        menuApprovalAccessDescription,
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('BodCodResultNoticeRequest'), {
         reportCorrectness: 'ไม่ถูกต้องครบถ้วน',
@@ -6948,7 +6962,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Change KWP workflow status',
       operationId: 'changeKwpWorkflowStatus',
       description:
-        'REJECT ได้ทุกสถานะเป็น REJECTED โดยไม่บังคับเหตุผล; ส่ง action อย่างเดียวได้ และ revisionReason/officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. ต้องมี effective kwp_forms:approve ผ่าน action data scope รวม OWN_FACTORY โดยไม่จำกัด role หรือ userType. CANCEL: ผู้มี kwp_forms:edit ผ่าน action scope ตัดกับ assigned ownership ของโรงงานโดยไม่จำกัด userType; นอก edit scope หรือไม่ใช่โรงงานที่ได้รับมอบหมายตอบ 404 NOT_FOUND. อนุญาตทุกสถานะยกเว้น APPROVED/CANCELLED; ตรวจสถานะซ้ำขณะ UPDATE และตอบ 409 เมื่อสถานะเปลี่ยน REQUEST_REVISION/APPROVE ยังคงใช้ข้อจำกัดสถานะเดิมและต้องมี effective kwp_forms:approve พร้อม action scope โดยไม่จำกัด role',
+        'REJECT ได้ทุกสถานะเป็น REJECTED โดยไม่บังคับเหตุผล; ส่ง action อย่างเดียวได้ และ revisionReason/officerNote เป็น optional nullable ค่าว่าง normalize เป็น null. ต้องมี effective kwp_forms:approve ผ่าน action data scope รวม OWN_FACTORY โดยไม่จำกัด role หรือ userType. CANCEL: ผู้มี kwp_forms:edit ผ่าน action scope ตัดกับ assigned ownership ของโรงงานโดยไม่จำกัด userType; นอก edit scope หรือไม่ใช่โรงงานที่ได้รับมอบหมายตอบ 404 NOT_FOUND. อนุญาตทุกสถานะยกเว้น APPROVED/CANCELLED; ตรวจสถานะซ้ำขณะ UPDATE และตอบ 409 เมื่อสถานะเปลี่ยน REQUEST_REVISION/APPROVE ยังคงใช้ข้อจำกัดสถานะเดิมและต้องมี effective kwp_forms:approve พร้อม action scope โดยไม่จำกัด role' +
+        ' ' +
+        menuApprovalAccessDescription,
       successSchema: schemaRef('KwpWorkflowResponse'),
       successDescription: 'เปลี่ยน workflow สำเร็จ; action REJECT คืน status REJECTED',
       parameters: [idParameter],

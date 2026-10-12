@@ -595,6 +595,8 @@ Minimal response:
 
 ### `GET /api/v1/kwp-form-submissions/:id/workflow`
 
+Backend API ใช้สิทธิ์อนุมัติรายเมนูและ scope ล่าสุดโดยไม่ติด role หรือ userType; การเปิดอ่าน API ต้องมี view ตาม contract เดิมและไม่เติม view จาก approve อัตโนมัติ รอบนี้ไม่ได้แก้ปุ่มหรือข้อจำกัด role ใน frontend ดู [สัญญาและข้อจำกัด UI](../permissions/README.md#สิทธิ์อนุมัติแยกรายเมนู)
+
 อ่านคำขอตามขอบเขต `kwp_forms:view` แต่คำนวณ `allowedActions` จากสิทธิ์ล่าสุดที่ใช้จริงและขอบเขตของแต่ละคำสั่งแยกกัน ไม่จำกัดด้วย role หรือ `userType`:
 
 | คำสั่ง | สิทธิ์และขอบเขต | สถานะที่รองรับ |

@@ -4,6 +4,8 @@
 
 ## Frontend Quick Start
 
+Backend API ใช้สิทธิ์อนุมัติรายเมนูและ scope ล่าสุดโดยไม่ติด role หรือ userType; การเปิดอ่าน API ต้องมี view ตาม contract เดิมและไม่เติม view จาก approve อัตโนมัติ รอบนี้ไม่ได้แก้ปุ่มหรือข้อจำกัด role ใน frontend ดู [สัญญาและข้อจำกัด UI](../permissions/README.md#สิทธิ์อนุมัติแยกรายเมนู)
+
 ตารางรายการคำขอใช้ [list summary และจุดเป้าหมาย](#edit-request-list-summary) จาก `GET /poms-factories/edit-requests`; แสดงประเภท/รหัสจุดจาก `targetMeasurementPoints[]` และเลิกอ่าน `proposedMeasurementPoints[0]` การเพิ่ม ID ใน `/form` เป็นคนละ contract กับ list summary นี้
 
 คู่มือปรับตารางและตรวจรับจาก handoff: [ข้อมูลสรุปรายการคำขอแก้ไขโรงงาน](../../../guides/frontend-handoffs/edit-request-list-summary/README.md) — รวมการแสดงหลายจุด คำขอเก่า และเงื่อนไขก่อนเปิดใช้

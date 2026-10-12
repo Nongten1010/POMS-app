@@ -68,6 +68,8 @@ curl --request POST \
 
 ### สิทธิ์การพิจารณา
 
+Backend API ใช้สิทธิ์อนุมัติรายเมนูและ scope ล่าสุดโดยไม่ติด role หรือ userType; การเปิดอ่าน API ต้องมี view ตาม contract เดิมและไม่เติม view จาก approve อัตโนมัติ รอบนี้ไม่ได้แก้ปุ่มหรือข้อจำกัด role ใน frontend ดู [สัญญาและข้อจำกัด UI](../permissions/README.md#สิทธิ์อนุมัติแยกรายเมนู)
+
 ทุก mutation ต้องมีสิทธิ์ที่ใช้งานจริง `view` ร่วมกับ `edit` หรือ `approve` ตามงาน และผ่าน data scope ทั้งสองสิทธิ์; หาก action เป็น binary grant (`scope: null`) ให้ใช้ scope ของ `view` โดยไม่ขยายพื้นที่ การเพิ่มหรือถอนสิทธิ์รายคนมีผลโดยไม่ถูกจำกัดด้วย role ของผู้ใช้
 
 | งาน | Permission และเงื่อนไข |

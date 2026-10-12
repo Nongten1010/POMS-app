@@ -83,6 +83,22 @@ Data-scoped `allow` ที่บันทึกใหม่ต้องมี sc
 
 `permissions:view` ใช้แสดงเมนูสิทธิ์เท่านั้น ไม่ให้ `permissions:manage` อัตโนมัติ สิทธิ์จัดการผู้ใช้และสิทธิ์จัดการสิทธิ์เป็นคนละ capability การบันทึกสิทธิ์หรือคืนค่าเริ่มต้นต้องตรวจ `permissions:manage` เสมอ
 
+### สิทธิ์อนุมัติแยกรายเมนู
+
+Backend API อนุญาตผู้ที่ได้รับ `approve` ของเมนูใดให้ทำรายการอนุมัติในเมนูนั้นตาม scope และสถานะ/ขั้นตอนปัจจุบัน โดยไม่จำกัดชื่อ role หรือ `userType` และคืน `allowedActions` ตามสิทธิ์จริงเมื่อ endpoint มี field นี้
+
+รอบนี้เปลี่ยนเฉพาะ backend และ OpenAPI ไม่ปรับ frontend หรือการ refresh สิทธิ์ใน App ข้อจำกัด role/userType เดิมในหน้าเว็บจึงยังอาจซ่อนหรือปิดปุ่มอนุมัติแม้ API อนุญาต ผลการแก้ backend ไม่ใช่การยืนยันว่าปุ่มหน้าเว็บรองรับครบแล้ว
+
+| เมนู | สิทธิ์อ่านเพื่อเปิดรายการ/รายละเอียด | สิทธิ์อนุมัติและ contract |
+| --- | --- | --- |
+| ขอเชื่อมต่อ | `cems_wpms_requests:view` | `cems_wpms_requests:approve`; [review/status/verify-connection](../connection-requests/README.md#approval-access) |
+| กวภ. | `kwp_forms:view` | `kwp_forms:approve`; [workflow](../kwp-forms/README.md#get-apiv1kwp-form-submissionsidworkflow) |
+| BOD/COD | `bod_cod_errors:view` | `bod_cod_errors:approve`; mutation ต้องมี view ร่วมด้วยและผ่านทั้งสอง scope; [สิทธิ์การพิจารณา](../bod-cod-deviation-reports/README.md#สิทธิ์การพิจารณา) |
+| คำขอแก้ไขโรงงาน POMS | `factories:view` | `factories:approve` ร่วมกับ view; [คำขอแก้ไขโรงงาน](../master-data/factory-edit-requests.md) |
+| โรงงานที่เข้าข่าย | `eligible_factories:view` | `eligible_factories:approve` ร่วมกับ view สำหรับ review; [พิจารณาคำขอเพิ่มโรงงาน](../eligible-factories/README.md#post-apiv1eligible-factoriesadd-requestsidreview) |
+
+`approve` เป็นคนละ grant ในแต่ละเมนู ไม่ให้ approve ของเมนูอื่น และไม่เติม `view` หรือ `edit` เข้า custom snapshot อัตโนมัติ การอ่านรายการและรายละเอียดผ่าน API ยังต้องมี view ของเมนูนั้นแยกตาม endpoint; การเลือก view และ approve ไม่ได้ยกเลิกข้อจำกัด UI เดิมใน release ที่แก้เฉพาะ backend นี้ ขอบเขตอ่านที่กว้างกว่าไม่ขยายขอบเขตอนุมัติ และสิทธิ์อนุมัติไม่ข้ามสถานะหรือ current step ของ workflow
+
 Account and assignment invariants (location assignment เป็นข้อกำหนดของ `role_default`; `custom` ใช้ scope และพื้นที่ที่บันทึกใน snapshot):
 
 - `roleCodes` ต้องมีสมาชิกหนึ่งค่าเท่านั้นทั้ง create/update
