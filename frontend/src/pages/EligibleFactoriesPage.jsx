@@ -850,9 +850,12 @@ function createEligibleFactoryPayload(row) {
   }
 }
 
-function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
+function EligibleFactoriesPage({ accessToken = '', userType = '', permissions = {} }) {
   const isOperator = userType === 'operator'
-  const [activeTab, setActiveTab] = useState(() => (isOperator ? 'eligible' : 'all'))
+  const canEditEligibleFactories = !isOperator && permissions?.eligible_factories?.edit === true
+  const canApproveEligibleFactories = !isOperator && permissions?.eligible_factories?.approve === true
+  const canViewAllFactories = canEditEligibleFactories
+  const [activeTab, setActiveTab] = useState(() => (canViewAllFactories ? 'all' : 'eligible'))
   const [factoryRows, setFactoryRows] = useState([])
   const [eligibleFactoryRows, setEligibleFactoryRows] = useState([])
   const [eligibleFactoryAddRequestRows, setEligibleFactoryAddRequestRows] = useState([])
@@ -899,13 +902,15 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
     [reviewingEligibleFactoryAddRequestIds],
   )
   const availableSubMenus = useMemo(
-    () => (isOperator ? subMenus.filter((menu) => menu.value === 'eligible') : subMenus),
-    [isOperator],
+    () => subMenus.filter((menu) => menu.value === 'eligible'
+      || (menu.value === 'all' && canViewAllFactories)
+      || (menu.value === 'requests' && canApproveEligibleFactories)),
+    [canApproveEligibleFactories, canViewAllFactories],
   )
 
   const loadFactoryCandidates = useCallback(
     async (signal) => {
-      if (!accessToken) {
+      if (!accessToken || !canViewAllFactories) {
         return
       }
 
@@ -950,7 +955,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         }
       }
     },
-    [accessToken],
+    [accessToken, canViewAllFactories],
   )
 
   const loadEligibleFactories = useCallback(
@@ -1005,7 +1010,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
 
   const loadEligibleFactoryAddRequests = useCallback(
     async (signal) => {
-      if (!accessToken || isOperator) {
+      if (!accessToken || !canApproveEligibleFactories) {
         return
       }
 
@@ -1036,11 +1041,11 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         }
       }
     },
-    [accessToken, isOperator],
+    [accessToken, canApproveEligibleFactories],
   )
 
   useEffect(() => {
-    if (!accessToken || isOperator) {
+    if (!accessToken || !canViewAllFactories) {
       return
     }
 
@@ -1055,7 +1060,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
     return () => {
       controller.abort()
     }
-  }, [accessToken, isOperator, loadFactoryCandidates])
+  }, [accessToken, canViewAllFactories, loadFactoryCandidates])
 
   useEffect(() => {
     if (!accessToken) {
@@ -1076,7 +1081,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
   }, [accessToken, loadEligibleFactories])
 
   useEffect(() => {
-    if (!accessToken || isOperator) {
+    if (!accessToken || !canApproveEligibleFactories) {
       return
     }
 
@@ -1091,7 +1096,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
     return () => {
       controller.abort()
     }
-  }, [accessToken, isOperator, loadEligibleFactoryAddRequests])
+  }, [accessToken, canApproveEligibleFactories, loadEligibleFactoryAddRequests])
 
   const effectiveFactoryRows = useMemo(
     () =>
@@ -1115,7 +1120,8 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
     : availableSubMenus[0]?.value ?? 'eligible'
 
   const handleOpenEligibleSheet = useCallback(async (row, options = {}) => {
-    setIsEligibleSheetReadOnly(Boolean(options.readOnly))
+    if (options.startEmpty && !canEditEligibleFactories) return
+    setIsEligibleSheetReadOnly(!canEditEligibleFactories || Boolean(options.readOnly))
     const shouldStartEmpty = options.startEmpty === true
     const existingPoints = !shouldStartEmpty && Array.isArray(row.measurementPoints)
       ? row.measurementPoints.map(mapMonitoringPointToForm)
@@ -1177,7 +1183,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
     } catch (requestError) {
       setEligibleActionError(requestError.message)
     }
-  }, [accessToken])
+  }, [accessToken, canEditEligibleFactories])
 
   const handleCloseEligibleSheet = useCallback(() => {
     setSelectedFactoryForSheet(null)
@@ -1195,6 +1201,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
 
   const handleSaveMonitoringPointForm = useCallback(
     async (row, nextMonitoringPoints = []) => {
+      if (!canEditEligibleFactories) return
       if (!accessToken) {
         setEligibleActionError('กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูลจุดตรวจวัด')
         return
@@ -1263,11 +1270,12 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         setSavingEligibleFactoryIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, handleCloseEligibleSheet, loadEligibleFactories],
+    [accessToken, canEditEligibleFactories, handleCloseEligibleSheet, loadEligibleFactories],
   )
 
   const handleRemoveEligible = useCallback(
     async (row) => {
+      if (!canEditEligibleFactories) return
       if (!accessToken) {
         setEligibleActionError('กรุณาเข้าสู่ระบบก่อนนำโรงงานออกจากรายการเข้าข่าย')
         return
@@ -1317,11 +1325,12 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         setDeletingEligibleFactoryIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, loadEligibleFactories],
+    [accessToken, canEditEligibleFactories, loadEligibleFactories],
   )
 
   const handleRejectEligibleFactoryAddRequest = useCallback(
     async (row) => {
+      if (!canApproveEligibleFactories) return false
       if (!accessToken) {
         setEligibleActionError('กรุณาเข้าสู่ระบบก่อนพิจารณาคำขอเพิ่มโรงงาน')
         return false
@@ -1363,11 +1372,12 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         setReviewingEligibleFactoryAddRequestIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, loadEligibleFactoryAddRequests],
+    [accessToken, canApproveEligibleFactories, loadEligibleFactoryAddRequests],
   )
 
   const handleApproveEligibleFactoryAddRequest = useCallback(
     async (row) => {
+      if (!canApproveEligibleFactories) return
       if (!accessToken) {
         setEligibleActionError('กรุณาเข้าสู่ระบบก่อนพิจารณาคำขอเพิ่มโรงงาน')
         return
@@ -1408,6 +1418,13 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
 
         await readJsonResponse(result, 'อนุมัติคำขอเพิ่มโรงงานไม่สำเร็จ')
 
+        if (!canEditEligibleFactories) {
+          await Promise.all([loadEligibleFactoryAddRequests(), loadEligibleFactories()])
+          setSnackbarMessage('อนุมัติคำขอเพิ่มโรงงานสำเร็จ')
+          setSnackbarOpen(true)
+          return
+        }
+
         const sourceResult = await fetch(
           `${eligibleFactorySourceFactoriesApiUrl}/${encodeURIComponent(sourceFactoryLookupId)}`,
           {
@@ -1442,11 +1459,12 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         setReviewingEligibleFactoryAddRequestIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, handleOpenEligibleSheet, loadEligibleFactories, loadEligibleFactoryAddRequests],
+    [accessToken, canApproveEligibleFactories, canEditEligibleFactories, handleOpenEligibleSheet, loadEligibleFactories, loadEligibleFactoryAddRequests],
   )
 
   const handleOpenEligibleFactoryAddRequestApprovalSheet = useCallback(
     async (row) => {
+      if (!canEditEligibleFactories) return
       if (!accessToken) {
         setEligibleActionError('กรุณาเข้าสู่ระบบก่อนเลือกโรงงานเข้าข่าย')
         return
@@ -1499,7 +1517,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         setReviewingEligibleFactoryAddRequestIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, handleOpenEligibleSheet],
+    [accessToken, canEditEligibleFactories, handleOpenEligibleSheet],
   )
 
   const allFactoryColumns = useMemo(
@@ -1520,7 +1538,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
               variant={isEligible ? 'outlined' : 'contained'}
               color="secondary"
               startIcon={<AddIcon />}
-              disabled={isEligible || isSaving}
+              disabled={!canEditEligibleFactories || isEligible || isSaving}
               onClick={() => handleOpenEligibleSheet(params.row, { startEmpty: true })}
             >
               {isSaving ? 'กำลังบันทึก' : 'เลือกเข้าข่าย'}
@@ -1530,7 +1548,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
       },
       ...baseColumns,
     ],
-    [eligibleFactoryKeySet, handleOpenEligibleSheet, savingEligibleFactoryIdSet],
+    [canEditEligibleFactories, eligibleFactoryKeySet, handleOpenEligibleSheet, savingEligibleFactoryIdSet],
   )
 
   const eligibleFactoryColumns = useMemo(
@@ -1538,13 +1556,13 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
       {
         field: 'option',
         headerName: 'Option',
-        width: isOperator ? 110 : 185,
+        width: canEditEligibleFactories ? 185 : 110,
         sortable: false,
         filterable: false,
         renderCell: (params) => {
           const isDeleting = deletingEligibleFactoryIdSet.has(params.row.id)
 
-          if (isOperator) {
+          if (!canEditEligibleFactories) {
             return (
               <Button
                 size="small"
@@ -1588,7 +1606,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
       ...eligibleMonitoringColumns,
       ...baseColumns.slice(3),
     ],
-    [deletingEligibleFactoryIdSet, handleOpenEligibleSheet, isOperator],
+    [canEditEligibleFactories, deletingEligibleFactoryIdSet, handleOpenEligibleSheet],
   )
 
   const eligibleFactoryAddRequestColumns = useMemo(
@@ -1625,6 +1643,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
           }
 
           if (isApproved) {
+            if (!canEditEligibleFactories) return null
             return (
               <Stack
                 direction="row"
@@ -1645,7 +1664,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
             )
           }
 
-          if (!isPendingReview) {
+          if (!isPendingReview || !canApproveEligibleFactories) {
             return null
           }
 
@@ -1684,6 +1703,8 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
     ],
     [
       handleApproveEligibleFactoryAddRequest,
+      canApproveEligibleFactories,
+      canEditEligibleFactories,
       handleOpenEligibleFactoryAddRequestApprovalSheet,
       eligibleFactoryIdentifierSet,
       reviewingEligibleFactoryAddRequestIdSet,
@@ -1903,7 +1924,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         activeMonitoringPointId={activeMonitoringPointId}
         accessToken={accessToken}
         saving={selectedFactoryForSheet ? savingEligibleFactoryIdSet.has(selectedFactoryForSheet.id) : false}
-        readOnly={isEligibleSheetReadOnly}
+        readOnly={isEligibleSheetReadOnly || !canEditEligibleFactories}
         onClose={handleCloseEligibleSheet}
         onActiveMonitoringPointChange={setActiveMonitoringPointId}
         onMonitoringPointsChange={handleMonitoringPointsChange}

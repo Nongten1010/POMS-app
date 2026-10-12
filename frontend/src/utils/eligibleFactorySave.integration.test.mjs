@@ -44,10 +44,11 @@ function response(data, status = 200) {
   })
 }
 
-function saveState(module, row, accessToken = 'test-only-placeholder') {
+function saveState(module, row, accessToken = 'test-only-placeholder', canEditEligibleFactories = true) {
   const state = { error: '', rows: [row], savingIds: [], closed: false, refreshed: 0, snackbar: false }
   const save = module.createSaveHandlerForTest({
     accessToken,
+    canEditEligibleFactories,
     setEligibleActionError: (error) => { state.error = error },
     setSavingEligibleFactoryIds: (update) => { state.savingIds = update(state.savingIds) },
     setFactoryRows: (update) => { state.rows = update(state.rows) },
@@ -75,7 +76,7 @@ test('eligible factory point saving uses the real row mapper, save handler and s
         return `${code}\n
           export { mapEligibleFactory, mapCandidateFactory, createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload };
           export function createSaveHandlerForTest(dependencies) {
-            const { accessToken, setEligibleActionError, setSavingEligibleFactoryIds,
+            const { accessToken, canEditEligibleFactories, setEligibleActionError, setSavingEligibleFactoryIds,
               setFactoryRows, loadEligibleFactories, handleCloseEligibleSheet,
               setSnackbarMessage, setSnackbarOpen } = dependencies;
             return ${callback};
@@ -94,6 +95,15 @@ test('eligible factory point saving uses the real row mapper, save handler and s
       eligibleParameters: type === 'CEMS' ? ['CO'] : ['BOD'],
     }))
 
+    await t.test('saving without edit permission makes no request or state changes', async (t) => {
+      const fetch = t.mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected request') })
+      const row = module.mapEligibleFactory(factory, 0)
+      const { save, state } = saveState(module, row, 'test-only-placeholder', false)
+      const before = structuredClone(state)
+      await save(row, points)
+      assert.equal(fetch.mock.callCount(), 0)
+      assert.deepEqual(state, before)
+    })
     await t.test('first points for an already eligible factory are POSTed as a monitoring form', async (t) => {
       const requests = []
       t.mock.method(globalThis, 'fetch', async (url, options) => {

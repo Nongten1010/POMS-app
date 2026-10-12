@@ -3,7 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { Children, isValidElement } from 'react'
+import { Children, createElement, isValidElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { getGridSingleSelectOperators } from '@mui/x-data-grid'
 import { createServer } from 'vite'
 
@@ -26,9 +27,29 @@ test('eligible factory status filters and monitoring-point form options', async 
   })
   try {
     const {
+      default: EligibleFactoriesPage,
       eligibleMonitoringColumns, mapEligibleFactory, mapEligibleFactoryAddRequest, MonitoringPointForm, ParameterMultiSelect,
       createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload,
     } = await server.ssrLoadModule('/src/pages/EligibleFactoriesPage.jsx')
+    await t.test('edit and approve independently control tabs while operators remain read-only', () => {
+      for (const userType of ['officer', 'operator']) {
+        for (const [edit, approve] of [
+          [undefined, undefined], [false, false], ['true', 'true'],
+          [true, false], [false, true], [true, true],
+        ]) {
+          const html = renderToStaticMarkup(createElement(EligibleFactoriesPage, {
+            userType, accessToken: 'test',
+            permissions: { eligible_factories: { view: true, edit, approve } },
+          }))
+          const canViewAll = userType !== 'operator' && edit === true
+          assert.equal(html.includes('โรงงานทั้งหมด'), canViewAll)
+          assert.ok(html.includes('โรงงานที่เข้าข่าย'))
+          assert.equal(html.includes('ขอเพิ่มโรงงาน'), userType !== 'operator' && approve === true)
+        }
+      }
+      const html = renderToStaticMarkup(createElement(EligibleFactoriesPage, { userType: 'officer' }))
+      assert.ok(!html.includes('โรงงานทั้งหมด'))
+    })
     await t.test('add-request rows preserve contact names and phone numbers with blank fallbacks', () => {
       const row = mapEligibleFactoryAddRequest({
         id: 8, factoryId: '91090001125583', status: 'APPROVED',
