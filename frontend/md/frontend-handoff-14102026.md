@@ -18,8 +18,9 @@
 3. ต้องใช้ขอบเขตการมองเห็นเดียวกับ API รายการของเมนูนั้น เช่น โรงงานที่ผูกหรือได้รับมอบหมาย ภาค จังหวัด และพื้นที่ตามสิทธิ์จริง ห้ามนับจากข้อมูลทั้งระบบ
 4. สองบัญชีที่มี role เดียวกันแต่มีขอบเขตข้อมูลต่างกัน อาจได้ค่า Badge ต่างกัน
 5. หลังจำกัดสิทธิ์และขอบเขตแล้ว ให้ตรวจว่ามีอย่างน้อยหนึ่งรายการตรงสถานะตามตารางด้านล่างหรือไม่
-6. ไม่เพิ่มการกรองด้วยสิทธิ์ `edit`/`approve`, `allowedActions`, ผู้สร้างคำขอ หรือ `currentStep` นอกเหนือจากกติกาการเข้าถึงรายการเดิมและเงื่อนไขที่ระบุด้านล่างโดยอัตโนมัติ หากต้องการนับเฉพาะรายการที่กดดำเนินการได้จริง ให้ตกลงเพิ่มเติมก่อน เพราะไม่ใช่เกณฑ์ Badge ที่ frontend ทำอยู่
+6. สำหรับ Badge งานคำขอ เจ้าหน้าที่ทุกระดับรวม Director และแอดมินต้องมี `permissions.<menu>.approve === true` ร่วมกับ `view` ของเมนูนั้น หากมีเพียง `view` หรือ `edit` ให้คืน `false` แม้มีรายการตรงสถานะในขอบเขต แอดมินไม่ข้ามเงื่อนไข `approve` นี้ ส่วนผู้ประกอบการใช้เงื่อนไขเดิม และเมนูการแจ้งเตือนไม่ต้องตรวจ `approve`
 7. Badge ไม่ให้สิทธิ์ดำเนินการเพิ่มเติม API บันทึก/อนุมัติยังต้องตรวจสิทธิ์ของตัวเองตามเดิม
+8. ไม่เพิ่มตัวกรอง `edit`, `allowedActions`, ผู้สร้างคำขอ หรือ `currentStep` นอกเหนือจากกติกาการเข้าถึงรายการเดิมและเงื่อนไขที่ระบุในเอกสารนี้โดยอัตโนมัติ หากจำเป็นให้ตกลงเพิ่มเติมก่อน
 
 ### สถานะที่ใช้ตัดสินแต่ละเมนู
 
@@ -28,14 +29,14 @@
 | Key ที่เสนอ | เมนู / สิทธิ์เข้าเมนู | กลุ่มผู้ใช้ | สถานะที่ทำให้คืน `true` |
 | --- | --- | --- | --- |
 | `factories` | ข้อมูลพื้นฐาน / `factories.view` | ผู้ประกอบการ | `REVISION_REQUESTED` |
-| `factories` | ข้อมูลพื้นฐาน / `factories.view` | เจ้าหน้าที่และแอดมิน | `PENDING_REVIEW`, `REVISED_PENDING_REVIEW` |
+| `factories` | ข้อมูลพื้นฐาน / `factories.view` และ `factories.approve` | เจ้าหน้าที่และแอดมิน | `PENDING_REVIEW`, `REVISED_PENDING_REVIEW` |
 | `connection` | ขอเชื่อมต่อ / `connection.view` | ผู้ประกอบการ | `WAITING_FACTORY_REVISION`, `WAITING_CONNECTION` |
-| `connection` | ขอเชื่อมต่อ / `connection.view` | เจ้าหน้าที่และแอดมิน | `PENDING_DESIGN_REVIEW`, `REVISED_PENDING_DESIGN_REVIEW`, `CONNECTION_CONFIRMED` |
+| `connection` | ขอเชื่อมต่อ / `connection.view` และ `connection.approve` | เจ้าหน้าที่และแอดมิน | `PENDING_DESIGN_REVIEW`, `REVISED_PENDING_DESIGN_REVIEW`, `CONNECTION_CONFIRMED` |
 | `kwp_forms` | แจ้งแบบ กวภ. / `kwp_forms.view` | ผู้ประกอบการ | `REVISION_REQUESTED` |
-| `kwp_forms` | แจ้งแบบ กวภ. / `kwp_forms.view` | เจ้าหน้าที่และแอดมิน | `SUBMITTED`, `UNDER_REVIEW` |
+| `kwp_forms` | แจ้งแบบ กวภ. / `kwp_forms.view` และ `kwp_forms.approve` | เจ้าหน้าที่และแอดมิน | `SUBMITTED`, `UNDER_REVIEW` |
 | `bod_cod_errors` | BOD/COD / `bod_cod_errors.view` | ผู้ประกอบการ | `REVISION_REQUESTED` |
-| `bod_cod_errors` | BOD/COD / `bod_cod_errors.view` | เจ้าหน้าที่ทั่วไปและแอดมิน | `SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_RESULT_NOTICE` |
-| `bod_cod_errors` | BOD/COD / `bod_cod_errors.view` | เจ้าหน้าที่กลุ่ม Director | `WAITING_REVIEW`, `WAITING_APPROVAL` |
+| `bod_cod_errors` | BOD/COD / `bod_cod_errors.view` และ `bod_cod_errors.approve` | เจ้าหน้าที่ทั่วไปและแอดมิน | `SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_RESULT_NOTICE` |
+| `bod_cod_errors` | BOD/COD / `bod_cod_errors.view` และ `bod_cod_errors.approve` | เจ้าหน้าที่กลุ่ม Director | `WAITING_REVIEW`, `WAITING_APPROVAL` |
 | `eligible_factories` | โรงงานที่เข้าข่าย / `eligible_factories.view` | ผู้ไม่ใช่ผู้ประกอบการ และมี `eligible_factories.approve === true` เพื่อเข้าถึงเมนูย่อยขอเพิ่มโรงงาน | `PENDING_REVIEW` |
 
 - ผู้ประกอบการหมายถึง `userType = operator`; เจ้าหน้าที่หมายถึง `userType = officer`; แอดมินหมายถึง role `admin`
@@ -50,6 +51,7 @@
 
 Key ที่เสนอ: `notifications`; ต้องมี `notifications.view` และใช้ scope ของผู้ใช้เดียวกับ API `/api/v1/alert-events`
 
+- เป็น Badge เหตุการณ์ ไม่ใช่งานอนุมัติ จึงไม่บังคับ `approve` แม้เป็นเจ้าหน้าที่หรือแอดมิน
 - คืน `true` เมื่อมีอย่างน้อยหนึ่งเหตุการณ์ที่เข้าเกณฑ์ของเมนูย่อยใดเมนูย่อยหนึ่งในกลุ่ม CEMS หรือ BOD/COD Online รวม 10 เมนูย่อย
 - ใช้ `eventDate` เท่ากับวันที่ปัจจุบันตาม `Asia/Bangkok` เท่านั้น ไม่ใช้ `createdAt` หรือ `detectedAt`
 - ไม่กรองว่ายังไม่อ่านหรือส่งแจ้งเตือนแล้วหรือไม่
@@ -92,7 +94,11 @@ Key ที่เสนอ: `notifications`; ต้องมี `notifications.vi
 
 ### กรณีที่ต้องทดสอบก่อนส่งต่อ
 
-- ไม่มี `view` แม้มีรายการในระบบ ต้องคืน `false`; เมนูขอเพิ่มโรงงานต้องผ่านเงื่อนไข `approve` เพิ่มด้วย
+- ไม่มี `view` แม้มีรายการในระบบ ต้องคืน `false`
+- เจ้าหน้าที่ แอดมิน และ Director ที่ไม่มี `approve` ของเมนูคำขอนั้นต้องได้ `false` แม้มี `view`/`edit` และมีรายการตรงสถานะ; ทดสอบทั้งค่า `false` และไม่มีค่า `approve`
+- มี `view` และ `approve === true` แต่ไม่มีรายการตรงสถานะในขอบเขตต้องได้ `false`; เมื่อมีอย่างน้อยหนึ่งรายการจึงได้ `true`
+- สิทธิ์ `approve` ของเมนูหนึ่งไม่ทำให้ Badge ของอีกเมนูเป็น `true`
+- ผู้ประกอบการไม่ต้องมี `approve` เพื่อเห็น Badge ตามเงื่อนไขเดิม และการแจ้งเตือนของเจ้าหน้าที่/แอดมินยังแสดงตาม `view`, scope และ `eventDate` แม้ไม่มี `approve`
 - บัญชี role เดียวกันแต่คนละโรงงาน/พื้นที่ ไม่เห็นผลจากข้อมูลของกันและกัน
 - แต่ละกลุ่มผู้ใช้ตรวจเฉพาะสถานะตามตาราง รวม Director และกรณีมี `admin` ร่วมด้วย
 - รายการตรงเกณฑ์อยู่ถัดจากหน้าแรกยังคืน `true`
