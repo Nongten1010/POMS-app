@@ -127,7 +127,7 @@ const menuItems = [
   },
 ]
 
-function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permissions }) {
+function DpomsSidebar({ open, selectedValue = 'home', userType = '', onClose, onSelect, permissions }) {
   const visibleMenuItems = menuItems.filter((item) => item.alwaysVisible || permissions?.[item.permissionKey]?.view === true)
 
   return (
@@ -163,12 +163,15 @@ function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permiss
         <List sx={{ px: 1, py: 1 }}>
           {visibleMenuItems.map((item) => {
             const isSelected = item.value === selectedValue
+            const isUnderMaintenance = userType === 'operator' && item.value === 'chat'
 
             return (
               <ListItemButton
                 key={item.label}
                 selected={isSelected}
+                disabled={isUnderMaintenance}
                 onClick={() => {
+                  if (isUnderMaintenance) return
                   onSelect?.(item.value)
                   onClose()
                 }}
@@ -194,7 +197,7 @@ function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permiss
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
-                  primary={item.label}
+                  primary={isUnderMaintenance ? `${item.label} (ปรับปรุง)` : item.label}
                   sx={{ minWidth: 0 }}
                   slotProps={{
                     primary: {

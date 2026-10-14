@@ -249,6 +249,7 @@ function App() {
       />
       <DpomsSidebar
         open={isMenuOpen}
+        userType={userType}
         selectedValue={visibleSelectedMenu}
         permissions={activePermissions}
         onSelect={setSelectedMenu}
