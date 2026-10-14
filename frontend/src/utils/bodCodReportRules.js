@@ -1,5 +1,20 @@
 import { isTerminalProcessRequest } from './requestProcessStatus.mjs'
 
+export function countPendingBodCodReports(rows, { userType, roleCode, roleCodes = [] } = {}) {
+  const roles = new Set([roleCode, ...roleCodes])
+  let statuses = []
+  if (roles.has('admin')) {
+    statuses = ['SUBMITTED', 'REVISED_PENDING_REVIEW', 'WAITING_RESULT_NOTICE']
+  } else if (userType === 'operator') {
+    statuses = ['REVISION_REQUESTED']
+  } else if (userType === 'officer') {
+    statuses = ['kpm_director', 'center_director', 'kwp_director'].some((role) => roles.has(role))
+      ? ['WAITING_REVIEW', 'WAITING_APPROVAL']
+      : ['SUBMITTED', 'REVISED_PENDING_REVIEW', 'WAITING_RESULT_NOTICE']
+  }
+  return rows.filter((row) => statuses.includes(getBodCodStatus(row))).length
+}
+
 export function getBodCodPeriod(now = new Date()) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Bangkok', year: 'numeric', month: 'numeric',

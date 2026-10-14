@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
+  Badge,
   Box,
   Chip,
   Paper,
@@ -11,6 +12,7 @@ import {
 } from '@mui/material'
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import { DataGrid } from '@mui/x-data-grid'
+import { fetchTodayNotificationCount, getThaiToday } from '../utils/notificationBadge.mjs'
 
 const alertEventsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/alert-events'
@@ -209,10 +211,54 @@ const abnormalMeasurementColumns = [
 ]
 
 function NotificationPage({ accessToken = '' }) {
+  const [today, setToday] = useState(() => getThaiToday())
+  const [badgeState, setBadgeState] = useState(null)
+  const [badgeError, setBadgeError] = useState(null)
+  const todayCounts = badgeState?.accessToken === accessToken && badgeState?.date === today
+    ? badgeState.counts : {}
   const [activeGroup, setActiveGroup] = useState(notificationGroups[0].value)
   const [notificationRows, setNotificationRows] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
+  useEffect(() => {
+    const updateDate = () => setToday(getThaiToday())
+    const timer = window.setInterval(updateDate, 60_000)
+    document.addEventListener('visibilitychange', updateDate)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', updateDate)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!accessToken) return
+    const controller = new AbortController()
+    const menus = notificationGroups.flatMap((group) => group.menus)
+    const counts = {}
+    let failed = false
+    // Limit background requests to two at a time, independently of the active table.
+    const loadCounts = async () => {
+      while (menus.length && !controller.signal.aborted) {
+        const menu = menus.shift()
+        try {
+          const count = await fetchTodayNotificationCount({
+            apiBaseUrl: alertEventsApiBaseUrl, query: menu.query, date: today,
+            accessToken, signal: controller.signal,
+          })
+          if (controller.signal.aborted) return
+          counts[menu.value] = count
+          setBadgeState({ accessToken, date: today, counts: { ...counts } })
+        } catch {
+          if (controller.signal.aborted) return
+          failed = true
+        }
+      }
+    }
+    Promise.all([loadCounts(), loadCounts()]).then(() => {
+      if (!controller.signal.aborted) setBadgeError(failed ? { accessToken, date: today } : null)
+    })
+    return () => controller.abort()
+  }, [accessToken, today])
   const activeGroupConfig = useMemo(
     () => notificationGroups.find((group) => group.value === activeGroup) ?? notificationGroups[0],
     [activeGroup],
@@ -412,13 +458,16 @@ function NotificationPage({ accessToken = '' }) {
           }}
         >
           {activeGroupConfig.menus.map((menu) => (
-            <Tab key={menu.value} value={menu.value} label={<TabLabel menu={menu} />} />
+            <Tab key={menu.value} value={menu.value} label={<TabLabel menu={menu} count={accessToken ? todayCounts[menu.value] : 0} />} />
           ))}
         </Tabs>
       </Paper>
 
       {!accessToken ? <Alert severity="warning">กรุณาเข้าสู่ระบบเพื่อดูข้อมูลการแจ้งเตือน</Alert> : null}
       {accessToken && loadError ? <Alert severity="error">{loadError}</Alert> : null}
+      {accessToken && badgeError?.accessToken === accessToken && badgeError?.date === today ? (
+        <Alert severity="warning">โหลดจำนวนการแจ้งเตือนของวันนี้บางรายการไม่สำเร็จ</Alert>
+      ) : null}
 
       <NotificationTable
         title={activeMenuConfig.label}
@@ -431,12 +480,8 @@ function NotificationPage({ accessToken = '' }) {
   )
 }
 
-function TabLabel({ menu }) {
-  if (!menu.tabLabelLines) {
-    return menu.label
-  }
-
-  return (
+function TabLabel({ menu, count = 0 }) {
+  const label = !menu.tabLabelLines ? menu.label : (
     <Box component="span" sx={{ display: 'block' }}>
       {menu.tabLabelLines.map((line) => (
         <Box key={line} component="span" sx={{ display: 'block' }}>
@@ -444,6 +489,16 @@ function TabLabel({ menu }) {
         </Box>
       ))}
     </Box>
+  )
+  if (!(count > 0)) return label
+  return (
+    <Badge
+      badgeContent={count}
+      color="error"
+      sx={{ pr: 2.5, width: '100%', '& .MuiBadge-badge': { right: 8, top: 4, minWidth: 18, height: 18, px: 0.6, fontSize: 10, fontWeight: 700 } }}
+    >
+      <Box component="span" sx={{ minWidth: 0 }}>{label}</Box>
+    </Badge>
   )
 }
 

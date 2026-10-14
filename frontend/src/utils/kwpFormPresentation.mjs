@@ -189,3 +189,9 @@ export function buildKwpAttachmentMetadata(file, attachmentType) {
 export function isKwpMeasurementAttachment(file) {
   return ['SAMPLING_PHOTO', 'LAB_REPORT'].includes(file?.attachmentType)
 }
+export function countPendingKwpRequests(rows, { isOperator = false, isOfficer = false, isAdmin = false } = {}) {
+  const statuses = isAdmin || isOfficer
+    ? ['SUBMITTED', 'UNDER_REVIEW']
+    : isOperator ? ['REVISION_REQUESTED'] : []
+  return rows.filter((row) => statuses.includes(row.statusCode || row.status)).length
+}

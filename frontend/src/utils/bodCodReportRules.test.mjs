@@ -1,6 +1,32 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatBodCodDate, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodSubmissionError } from './bodCodReportRules.js'
+import { countPendingBodCodReports, formatBodCodDate, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodSubmissionError } from './bodCodReportRules.js'
+
+test('report badge separates operator, officer/admin and director pending states', () => {
+  const ordinary = ['SUBMITTED', 'REVISED_PENDING_REVIEW', 'WAITING_RESULT_NOTICE']
+  const senior = ['WAITING_REVIEW', 'WAITING_APPROVAL']
+  const statuses = ['REVISION_REQUESTED', ...ordinary, ...senior, 'DRAFT', 'APPROVED', 'REJECTED', 'CANCELLED', 'UNKNOWN']
+  const audiences = [
+    [{ userType: 'operator' }, ['REVISION_REQUESTED']],
+    [{ userType: 'officer', roleCode: 'monitoring_kpm' }, ordinary],
+    [{ userType: 'officer', roleCode: 'monitoring_5_centers' }, ordinary],
+    [{ roleCode: 'admin' }, ordinary],
+    [{ userType: 'officer', roleCode: 'kpm_director', roleCodes: ['admin'] }, ordinary],
+    ...['kpm_director', 'center_director', 'kwp_director'].flatMap((role) => [
+      [{ userType: 'officer', roleCode: role }, senior],
+      [{ userType: 'officer', roleCodes: [role, role] }, senior],
+    ]),
+    [{ userType: 'citizen' }, []],
+    [{}, []],
+  ]
+  for (const [context, expected] of audiences) {
+    for (const statusCode of statuses) {
+      assert.equal(countPendingBodCodReports([{ statusCode, status: 'รอพิจารณา' }], context), Number(expected.includes(statusCode)))
+    }
+    assert.equal(countPendingBodCodReports(statuses.map((statusCode) => ({ statusCode })), context), expected.length)
+    assert.equal(countPendingBodCodReports([], context), 0)
+  }
+})
 
 const permissions = { bod_cod_errors: { view: true, edit: true, approve: true } }
 const operator = { userType: 'operator', roleCode: 'factory_operator', permissions }

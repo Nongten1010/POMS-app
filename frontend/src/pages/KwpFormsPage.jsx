@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Chip,
@@ -51,7 +52,7 @@ import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasur
 import { createKwpFormPdf } from '../utils/kwpFormPdf'
 import { isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
 import {
-  canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata,
+  canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata, countPendingKwpRequests,
   getKwpReportPeriod, getKwpAttachmentValidationError, getKwpLink, readKwpApiResponse,
   fetchKwpMeasurementPoints, withKwpParameterOptions, isKwpParameterError,
   buildKwpAttachmentMetadata, isKwpMeasurementAttachment, sortKwpRequestRows,
@@ -4976,6 +4977,9 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
   const [selectedSubMenu, setSelectedSubMenu] = useState(() => (isOperator ? 'factories' : 'requests'))
   const [factoryRows, setFactoryRows] = useState([])
   const [requestRows, setRequestRows] = useState([])
+  const pendingRequestCount = accessToken
+    ? countPendingKwpRequests(requestRows, { isOperator, isAdmin, isOfficer: userType === 'officer' })
+    : 0
   const [isLoadingFactories, setIsLoadingFactories] = useState(false)
   const [isLoadingRequests, setIsLoadingRequests] = useState(false)
   const [factoriesError, setFactoriesError] = useState('')
@@ -5103,10 +5107,6 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
   }, [effectiveSubMenu, loadFactoryRows])
 
   useEffect(() => {
-    if (effectiveSubMenu !== 'requests') {
-      return
-    }
-
     const controller = new AbortController()
     queueMicrotask(() => {
       loadRequestRows(controller.signal)
@@ -5484,7 +5484,19 @@ function KwpFormsPage({ userType = '', roleCode = '', roleCodes = [], accessToke
               }}
             >
               {availableSubMenus.map((menu) => (
-                <Tab key={menu.value} value={menu.value} label={menu.label} />
+                <Tab
+                  key={menu.value}
+                  value={menu.value}
+                  label={menu.value === 'requests' && pendingRequestCount > 0 ? (
+                    <Badge
+                      badgeContent={pendingRequestCount}
+                      color="error"
+                      sx={{ pr: 1.75, '& .MuiBadge-badge': { minWidth: 18, height: 18, px: 0.6, fontSize: 10, fontWeight: 700 } }}
+                    >
+                      <Box component="span">{menu.label}</Box>
+                    </Badge>
+                  ) : menu.label}
+                />
               ))}
             </Tabs>
           </Stack>

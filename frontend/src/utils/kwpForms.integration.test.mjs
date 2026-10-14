@@ -8,9 +8,28 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { PDFDocument } from 'pdf-lib'
 import { createServer } from 'vite'
 import {
-  canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, formatKwpDocumentDate,
+  canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, formatKwpDocumentDate, countPendingKwpRequests,
   getCurrentThaiYear, getKwpAttachmentValidationError, getKwpReportPeriod, sortKwpRequestRows,
 } from './kwpFormPresentation.mjs'
+
+test('KWP request badge counts only the requested audience statuses', () => {
+  for (const field of ['statusCode', 'status']) {
+    const statuses = ['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'REVISION_REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED', 'REVISED_PENDING_REVIEW', 'UNKNOWN']
+    for (const status of statuses) {
+      const rows = [{ [field]: status }]
+      assert.equal(countPendingKwpRequests(rows, { isOperator: true }), Number(status === 'REVISION_REQUESTED'))
+      for (const audience of [{ isOfficer: true }, { isAdmin: true }, { isAdmin: true, isOperator: true }]) {
+        assert.equal(countPendingKwpRequests(rows, audience), Number(['SUBMITTED', 'UNDER_REVIEW'].includes(status)))
+      }
+    }
+    const rows = statuses.map((status) => ({ [field]: status }))
+    assert.equal(countPendingKwpRequests(rows, { isOperator: true }), 1)
+    assert.equal(countPendingKwpRequests(rows, { isOfficer: true }), 2)
+    assert.equal(countPendingKwpRequests(rows), 0)
+  }
+  assert.equal(countPendingKwpRequests([], { isAdmin: true }), 0)
+  assert.equal(countPendingKwpRequests([{ statusCode: 'APPROVED', status: 'SUBMITTED' }], { isAdmin: true }), 0)
+})
 
 function findButtons(element) {
   if (!isValidElement(element)) return []

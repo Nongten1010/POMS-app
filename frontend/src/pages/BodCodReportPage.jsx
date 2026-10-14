@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Chip,
@@ -44,7 +45,7 @@ import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import locationOptions from '../option/locationOptions.json'
 import { calculateBodCodErrorValue, formatBodCodStandardDeviation, getBodCodStandardDeviation } from '../utils/bodCodDeviationCriteria'
 import { createBodCodReportPdf, createBodCodResultNoticePdf, getBodCodInspectorPosition, getBodCodResultNoticeSigners } from '../utils/bodCodReportPdf'
-import { findPendingBodCodReport, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodStatus, getBodCodSubmissionError, hasBodCodIdentityChanged } from '../utils/bodCodReportRules'
+import { countPendingBodCodReports, findPendingBodCodReport, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodStatus, getBodCodSubmissionError, hasBodCodIdentityChanged } from '../utils/bodCodReportRules'
 import { bodCodDeviationReportsApiBaseUrl, cancelBodCodReport, readBodCodApiResponse } from '../utils/bodCodReportApi'
 
 dayjs.locale('th')
@@ -2680,6 +2681,7 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
   const availableSubMenus = isOfficer ? officerSubMenus : operatorSubMenus
   const [factoryTableRows, setFactoryTableRows] = useState([])
   const [reportTableRows, setReportTableRows] = useState([])
+  const pendingReportCount = accessToken ? countPendingBodCodReports(reportTableRows, actionContext) : 0
   const [tableLoading, setTableLoading] = useState(false)
   const [tableError, setTableError] = useState('')
   const [previewSubmitting, setPreviewSubmitting] = useState(false)
@@ -2791,24 +2793,21 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
     return () => controller.abort()
   }, [effectiveSubMenu, fetchFactoryRows, isOfficer])
   useEffect(() => {
-    if (effectiveSubMenu === 'factories') {
-      return
-    }
-
     const controller = new AbortController()
     fetchReportRows({ signal: controller.signal })
       .then((rows) => {
+        if (controller.signal.aborted) return
         setReportTableRows(rows)
-        setTableError('')
+        if (effectiveSubMenu !== 'factories') setTableError('')
       })
       .catch((error) => {
         if (error.name !== 'AbortError') {
           setReportTableRows([])
-          setTableError(error instanceof Error ? error.message : 'โหลดรายการรายงานไม่สำเร็จ')
+          if (effectiveSubMenu !== 'factories') setTableError(error instanceof Error ? error.message : 'โหลดรายการรายงานไม่สำเร็จ')
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && effectiveSubMenu !== 'factories') {
           setTableLoading(false)
         }
       })
@@ -3195,7 +3194,19 @@ function BodCodReportPage({ userType = '', accessToken = '', roleCode = '', role
               }}
             >
               {availableSubMenus.map((menu) => (
-                <Tab key={menu.value} value={menu.value} label={menu.label} />
+                <Tab
+                  key={menu.value}
+                  value={menu.value}
+                  label={menu.value === 'reports' && pendingReportCount > 0 ? (
+                    <Badge
+                      badgeContent={pendingReportCount}
+                      color="error"
+                      sx={{ pr: 1.75, '& .MuiBadge-badge': { minWidth: 18, height: 18, px: 0.6, fontSize: 10, fontWeight: 700 } }}
+                    >
+                      <Box component="span">{menu.label}</Box>
+                    </Badge>
+                  ) : menu.label}
+                />
               ))}
             </Tabs>
           </Stack>

@@ -8020,7 +8020,7 @@ function getRequestColumns(
     {
       field: 'factoryRegistration',
       headerName: 'เลขทะเบียนโรงงาน',
-      width: 190,
+      width: 160,
       sortable: false,
       renderCell: (params) => (
         <Stack sx={{ justifyContent: 'center', minHeight: '100%' }}>
@@ -8029,17 +8029,17 @@ function getRequestColumns(
       ),
     },
     { field: 'province', headerName: 'จังหวัด', width: 130 },
-    { field: 'type', headerName: 'ประเภทจุดตรวจวัด', width: 150 },
+    { field: 'type', headerName: 'ประเภท', width: 100 },
     { field: 'requestNo', headerName: 'เลขที่คำขอ', width: 150 },
-    { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
-    { field: 'monitoringPointCode', headerName: 'รหัสจุดตรวจวัด', width: 170 },
-    { field: 'monitoringPointName', headerName: 'ชื่อจุดตรวจวัด', width: 200 },
-    { field: 'codeIssuedDate', headerName: 'วันที่ออกรหัส', width: 150 },
+    { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 125 },
+    { field: 'monitoringPointCode', headerName: 'รหัสจุดตรวจวัด', width: 130 },
+    { field: 'monitoringPointName', headerName: 'ชื่อจุดตรวจวัด', width: 140 },
+    { field: 'codeIssuedDate', headerName: 'วันที่ออกรหัส', width: 125 },
     { field: 'form', headerName: 'แบบฟอร์ม', width: 150 },
     {
       field: 'status',
       headerName: 'สถานะ',
-      width: 170,
+      width: 250,
       renderCell: (params) => (
         <StatusChip
           value={getRequestStatusChipValue(params.row)}
