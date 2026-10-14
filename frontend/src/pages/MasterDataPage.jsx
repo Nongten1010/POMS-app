@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Chip,
@@ -45,6 +46,7 @@ import {
   buildFactoryEditableProfilePatch,
   buildStatusManagementPayload,
   canCancelFactoryEditRequest,
+  countPendingFactoryEditRequests,
   formatFactoryEditRequestDate,
   getChangedFactoryGeneralInfoFieldNames,
   getFactoryDocumentFileError,
@@ -2336,6 +2338,9 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   const isOperator = String(userType).toLowerCase() === 'operator'
   const isOfficer = String(userType).toLowerCase() === 'officer'
   const canViewRequests = isAdmin || isOperator || isOfficer
+  const pendingRequestCount = accessToken
+    ? countPendingFactoryEditRequests(requestRows, { isOperator, isOfficer, isAdmin })
+    : 0
   const canEditRevision = (isAdmin || isOfficer) && permissions?.factories?.edit === true
   const canSubmitMeasurementRequest = canSubmitMasterDataForm(editingFactory, { isAdmin, isOperator, canEditRevision })
   const canSubmitGeneralRequest = canSubmitMasterDataForm(editingGeneralFactory, { isAdmin, isOperator, canEditRevision })
@@ -2420,14 +2425,14 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   }, [loadFactories])
 
   useEffect(() => {
-    if (effectiveSubMenu === 'requests') {
+    if (canViewRequests) {
       const timeoutId = window.setTimeout(() => {
         loadRequests()
       }, 0)
       return () => window.clearTimeout(timeoutId)
     }
     return undefined
-  }, [effectiveSubMenu, loadRequests])
+  }, [canViewRequests, effectiveSubMenu, loadRequests])
 
   const loadFactoryDetail = useCallback(async (factory) => {
     const factoryId = getFactoryRowId(factory)
@@ -2922,7 +2927,19 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
               }}
             >
               {visibleSubMenus.map((menu) => (
-                <Tab key={menu.value} value={menu.value} label={menu.label} />
+                <Tab
+                  key={menu.value}
+                  value={menu.value}
+                  label={menu.value === 'requests' && pendingRequestCount > 0 ? (
+                    <Badge
+                      badgeContent={pendingRequestCount}
+                      color="error"
+                      sx={{ pr: 1.75, '& .MuiBadge-badge': { minWidth: 18, height: 18, px: 0.6, fontSize: 10, fontWeight: 700 } }}
+                    >
+                      <Box component="span">{menu.label}</Box>
+                    </Badge>
+                  ) : menu.label}
+                />
               ))}
             </Tabs>
           </Stack>

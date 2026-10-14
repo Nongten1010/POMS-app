@@ -29,7 +29,7 @@ test('officers reuse request actions to edit revisions without gaining creation 
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          return `${code}\nexport { OfficerRequestActions, OperatorRequestActions, getRequestColumns, getFactoryColumns, MonitoringPointActions };`
+          return `${code}\nexport { OfficerRequestActions, OperatorRequestActions, getRequestColumns, getFactoryColumns, MonitoringPointActions, countPendingConnectionRequests };`
         }
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
           return `${code}\nexport { getPageRequestColumns, canSubmitMasterDataForm, isFactoryRequestAwaitingRevision };`
@@ -40,12 +40,29 @@ test('officers reuse request actions to edit revisions without gaining creation 
     }],
   })
   try {
-    const { OfficerRequestActions, OperatorRequestActions, getRequestColumns, getFactoryColumns, MonitoringPointActions } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+    const { OfficerRequestActions, OperatorRequestActions, getRequestColumns, getFactoryColumns, MonitoringPointActions, countPendingConnectionRequests } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
     globalThis.window = { location: { hostname: 'localhost' } }
     const { default: MasterDataPage, getPageRequestColumns, canSubmitMasterDataForm, isFactoryRequestAwaitingRevision } = await server.ssrLoadModule('/src/pages/MasterDataPage.jsx')
     if (originalWindow === undefined) delete globalThis.window
     else globalThis.window = originalWindow
 
+    await t.test('connection request badge counts only each audience pending statuses', () => {
+      const operatorStatuses = ['WAITING_FACTORY_REVISION', 'WAITING_CONNECTION', 'WAITING_FACTORY_DEVICE_CONFIG', 'WAITING_FACTORY_DEVICE_CONFIGURATION', 'WAITING_DEVICE_CONFIG']
+      const officerStatuses = ['PENDING_DESIGN_REVIEW', 'REVISED_PENDING_DESIGN_REVIEW', 'CONNECTION_CONFIRMED']
+      const statuses = [...operatorStatuses, ...officerStatuses, 'CONNECTED', 'REJECTED', 'CANCELED', 'CANCELLED', 'UNKNOWN', '']
+      for (const statusCode of statuses) {
+        const rows = [{ statusCode, status: 'รอโรงงานแก้ไข' }]
+        assert.equal(countPendingConnectionRequests(rows, { isOperator: true }), Number(operatorStatuses.includes(statusCode)))
+        for (const audience of [{ isOfficer: true }, { isAdmin: true }, { isAdmin: true, isOperator: true }]) {
+          assert.equal(countPendingConnectionRequests(rows, audience), Number(officerStatuses.includes(statusCode)))
+        }
+      }
+      const rows = statuses.map((statusCode) => ({ statusCode }))
+      assert.equal(countPendingConnectionRequests(rows, { isOperator: true }), 5)
+      assert.equal(countPendingConnectionRequests(rows, { isOfficer: true }), 3)
+      assert.equal(countPendingConnectionRequests([], { isAdmin: true }), 0)
+      assert.equal(countPendingConnectionRequests(rows), 0)
+    })
     await t.test('connection creation buttons require creation permission without disabling view', () => {
       for (const canCreateRequests of [false, true]) {
         const column = getFactoryColumns(false, () => {}, () => {}, () => {}, true, canCreateRequests)

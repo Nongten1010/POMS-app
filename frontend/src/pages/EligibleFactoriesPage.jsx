@@ -195,8 +195,12 @@ const eligibleMonitoringColumns = [
   },
 ]
 
+function getPendingAddRequestCount(rows = []) {
+  return rows.filter((row) => row.status === 'PENDING_REVIEW').length
+}
+
 function getSubMenuLabel(menu, requestCount = 0) {
-  if (menu.value !== 'requests') {
+  if (menu.value !== 'requests' || requestCount === 0) {
     return menu.label
   }
 
@@ -1768,7 +1772,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '', permissions = 
               <Tab
                 key={menu.value}
                 value={menu.value}
-                label={getSubMenuLabel(menu, eligibleFactoryAddRequestRows.length)}
+                label={getSubMenuLabel(menu, getPendingAddRequestCount(eligibleFactoryAddRequestRows))}
               />
             ))}
           </Tabs>

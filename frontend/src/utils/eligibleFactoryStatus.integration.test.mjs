@@ -20,7 +20,7 @@ test('eligible factory status filters and monitoring-point form options', async 
       enforce: 'pre',
       transform(code, id) {
         if (id.endsWith('/src/pages/EligibleFactoriesPage.jsx')) {
-          return `${code}\nexport { eligibleMonitoringColumns, mapEligibleFactory, mapEligibleFactoryAddRequest, MonitoringPointForm, ParameterMultiSelect, createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload };`
+          return `${code}\nexport { eligibleMonitoringColumns, mapEligibleFactory, mapEligibleFactoryAddRequest, MonitoringPointForm, ParameterMultiSelect, createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload, getPendingAddRequestCount, getSubMenuLabel };`
         }
       },
     }],
@@ -28,9 +28,27 @@ test('eligible factory status filters and monitoring-point form options', async 
   try {
     const {
       default: EligibleFactoriesPage,
+      getPendingAddRequestCount, getSubMenuLabel,
       eligibleMonitoringColumns, mapEligibleFactory, mapEligibleFactoryAddRequest, MonitoringPointForm, ParameterMultiSelect,
       createDefaultMonitoringPoint, mapMonitoringPointToForm, mapMonitoringPointFormPayload,
     } = await server.ssrLoadModule('/src/pages/EligibleFactoriesPage.jsx')
+    await t.test('request badge counts only pending reviews and disappears at zero', () => {
+      const menu = { value: 'requests', label: 'ขอเพิ่มโรงงาน' }
+      const rows = [
+        { status: 'PENDING_REVIEW' }, { status: 'APPROVED' }, { status: 'REJECTED' },
+        { status: 'PENDING_REVIEW' }, { status: 'UNKNOWN' },
+        { status: 'APPROVED', statusLabel: 'รอพิจารณา' },
+      ]
+      assert.equal(getPendingAddRequestCount(rows), 2)
+      assert.equal(getSubMenuLabel(menu, getPendingAddRequestCount(rows)).props.badgeContent, 2)
+      for (const data of [[], [{ status: 'APPROVED' }, { status: 'REJECTED' }]]) {
+        assert.equal(getPendingAddRequestCount(data), 0)
+        assert.equal(getSubMenuLabel(menu, getPendingAddRequestCount(data)), menu.label)
+      }
+      assert.equal(getPendingAddRequestCount(), 0)
+      assert.equal(getSubMenuLabel(menu), menu.label)
+      assert.equal(getSubMenuLabel({ value: 'eligible', label: 'โรงงานที่เข้าข่าย' }, 2), 'โรงงานที่เข้าข่าย')
+    })
     await t.test('edit and approve independently control tabs while operators remain read-only', () => {
       for (const userType of ['officer', 'operator']) {
         for (const [edit, approve] of [

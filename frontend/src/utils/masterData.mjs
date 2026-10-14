@@ -28,6 +28,13 @@ export function canCancelFactoryEditRequest(status) {
   return CANCELLABLE_FACTORY_EDIT_REQUEST_STATUSES.includes(String(status ?? '').trim())
 }
 
+export function countPendingFactoryEditRequests(rows, { isOperator = false, isOfficer = false, isAdmin = false } = {}) {
+  const statuses = isAdmin || isOfficer
+    ? ['PENDING_REVIEW', 'REVISED_PENDING_REVIEW']
+    : isOperator ? ['REVISION_REQUESTED'] : []
+  return rows.filter((row) => statuses.includes(row.statusCode)).length
+}
+
 export function getMasterDataFactoryRegistrationFields(...sources) {
   const factoryId = sources.map((source) => source?.factoryId ?? source?.newRegistrationNo)
     .find((value) => value != null) ?? ''

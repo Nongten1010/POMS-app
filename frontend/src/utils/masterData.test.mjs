@@ -8,6 +8,7 @@ import {
   buildFactoryEditReviewPayload,
   buildStatusManagementPayload,
   canCancelFactoryEditRequest,
+  countPendingFactoryEditRequests,
   formatFactoryEditRequestDate,
   getChangedFactoryGeneralInfoFieldNames,
   getFactoryDocumentFileError,
@@ -18,6 +19,23 @@ import {
   getPomsDisplayStatus,
   normalizeOfficerNotificationEmails,
 } from './masterData.mjs'
+
+test('request badge counts only the statuses actionable by each audience', () => {
+  const rows = [
+    'PENDING_REVIEW', 'REVISED_PENDING_REVIEW', 'REVISION_REQUESTED',
+    'REVISION_REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED', 'UNKNOWN',
+  ].map((statusCode) => ({ statusCode }))
+  rows.push({ statusCode: 'APPROVED', status: 'รอโรงงานแก้ไข' })
+  for (const audience of [{ isOperator: true }, { isOfficer: true }, { isAdmin: true }, { isAdmin: true, isOperator: true }]) {
+    assert.equal(countPendingFactoryEditRequests(rows, audience), 2)
+    assert.equal(countPendingFactoryEditRequests([], audience), 0)
+    assert.equal(countPendingFactoryEditRequests(rows.filter((row) => ['APPROVED', 'REJECTED', 'CANCELLED'].includes(row.statusCode)), audience), 0)
+  }
+  assert.equal(countPendingFactoryEditRequests([{ statusCode: 'PENDING_REVIEW' }], { isOperator: true }), 0)
+  assert.equal(countPendingFactoryEditRequests([{ statusCode: 'REVISION_REQUESTED' }], { isOfficer: true }), 0)
+  assert.equal(countPendingFactoryEditRequests([{ statusCode: 'REVISED_PENDING_REVIEW' }], { isAdmin: true }), 1)
+  assert.equal(countPendingFactoryEditRequests(rows), 0)
+})
 
 test('keeps canonical new and old factory registrations distinct even with stale aliases', () => {
   assert.deepEqual(getMasterDataFactoryRegistrationFields({

@@ -25,6 +25,7 @@ import {
   RadioGroup,
   Select,
   Alert,
+  Badge,
   Snackbar,
   Stack,
   Switch,
@@ -2556,6 +2557,15 @@ function OperatorFactoryActions({ row, canCreateRequests = false, onOpenRequestF
 function getRequestActionStatuses(request) {
   const statusCode = String(request?.statusCode ?? '').trim()
   return statusCode ? [statusCode] : [request?.status, request?.statusLabel]
+}
+
+function countPendingConnectionRequests(rows, { isOperator = false, isOfficer = false, isAdmin = false } = {}) {
+  const statuses = isAdmin || isOfficer
+    ? ['PENDING_DESIGN_REVIEW', 'REVISED_PENDING_DESIGN_REVIEW', 'CONNECTION_CONFIRMED']
+    : isOperator
+      ? ['WAITING_FACTORY_REVISION', 'WAITING_CONNECTION', 'WAITING_FACTORY_DEVICE_CONFIG', 'WAITING_FACTORY_DEVICE_CONFIGURATION', 'WAITING_DEVICE_CONFIG']
+      : []
+  return rows.filter((row) => statuses.includes(row.statusCode)).length
 }
 
 function OfficerRequestActions({ row, canProcessRequest = false, canEditRequest = false, onOpenRequestDocument, onOpenRequestProcess, onOpenRequestEdit, onOpenConnectionSettings }) {
@@ -8123,6 +8133,9 @@ function ConnectionRequestPage({
   const [requestFormSuccessMessage, setRequestFormSuccessMessage] = useState('')
   const isOperator = userType === 'operator'
   const isAdmin = roleCode === 'admin'
+  const pendingRequestCount = accessToken
+    ? countPendingConnectionRequests(requestTableRows, { isOperator, isAdmin, isOfficer: userType === 'officer' })
+    : 0
   const canApproveConnectionRequests = userType === 'officer' && permissions?.connection?.approve === true
   const canEditConnectionRequests = (isAdmin || userType === 'officer') && permissions?.connection?.edit === true
   const canCreateRequests = isOperator || canEditConnectionRequests
@@ -8904,10 +8917,6 @@ function ConnectionRequestPage({
     }
   }, [accessToken, canViewFactoryTable, effectiveSubMenu, fetchFactoryRows])
   useEffect(() => {
-    if (effectiveSubMenu !== 'requests') {
-      return
-    }
-
     if (!accessToken) {
       return
     }
@@ -9052,7 +9061,19 @@ function ConnectionRequestPage({
             }}
           >
             {availableSubMenus.map((menu) => (
-              <Tab key={menu.value} value={menu.value} label={menu.label} />
+              <Tab
+                key={menu.value}
+                value={menu.value}
+                label={menu.value === 'requests' && pendingRequestCount > 0 ? (
+                  <Badge
+                    badgeContent={pendingRequestCount}
+                    color="error"
+                    sx={{ pr: 1.75, '& .MuiBadge-badge': { minWidth: 18, height: 18, px: 0.6, fontSize: 10, fontWeight: 700 } }}
+                  >
+                    <Box component="span">{menu.label}</Box>
+                  </Badge>
+                ) : menu.label}
+              />
             ))}
           </Tabs>
         </Stack>
