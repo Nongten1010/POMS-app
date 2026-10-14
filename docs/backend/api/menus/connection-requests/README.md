@@ -427,6 +427,7 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 | `data[].province`    | string \| null | factory snapshot ของคำขอที่มาจาก active eligible factory                                     |
 | `data[].monitoringPointCode` | string \| null | รหัสจุดตรวจวัดจาก `measurementPoints[0].pointCode`; `null` เมื่อยังไม่มีรหัสหรือไม่มีจุด |
 | `data[].monitoringPointName` | string \| null | ชื่อจุดตรวจวัดจาก `measurementPoints[0].pointName` ใน snapshot ของคำขอ; `null` เมื่อไม่มีจุด |
+| `data[].waitingConnectionText` | string \| null | ข้อความ `รอโรงงานตั้งค่าอุปกรณ์ภายใน {waitingConnectionDaysRemaining} วัน` เช่น `รอโรงงานตั้งค่าอุปกรณ์ภายใน 21 วัน`; จำนวนวันคำนวณจากเวลาที่เหลือถึง `connectionDueAt` ปัดขึ้นและต่ำสุดเป็น `0`; คืน `null` เมื่อไม่ใช่ `WAITING_CONNECTION` หรือไม่มีกำหนดเวลาที่ถูกต้อง |
 
 ตารางรายการคำขอให้วางคอลัมน์ **ชื่อจุดตรวจวัด** (`monitoringPointName`) ถัดจาก **รหัสจุดตรวจวัด** (`monitoringPointCode`). Client กำหนดลำดับคอลัมน์เอง ไม่อาศัยลำดับ key ใน JSON. ทั้งสอง field อ้างอิงจุดแรกเดียวกันในคำขอ แม้คำขอมีหลายจุด และยังคืนชื่อเมื่อจุดนั้นยังไม่ได้รับรหัส. ชื่อใช้ snapshot คำขอ จึงไม่เปลี่ยนตามการแก้ชื่อ current/live POMS ในภายหลัง. ใช้กติกาเดียวกันทั้งเจ้าหน้าที่และผู้ประกอบการ โดยคง permission, scope, filters และจำนวนรายการเดิม.
 

@@ -2159,7 +2159,7 @@ function toWaitingConnectionCountdown(request: ConnectionRequestDTO): {
   return {
     connectionDueAt: request.connectionDueAt,
     daysRemaining,
-    text: `${CONNECTION_REQUEST_STATUS_LABELS.WAITING_CONNECTION} ${daysRemaining} วัน`,
+    text: `${CONNECTION_REQUEST_STATUS_LABELS.WAITING_CONNECTION}ภายใน ${daysRemaining} วัน`,
   };
 }
 

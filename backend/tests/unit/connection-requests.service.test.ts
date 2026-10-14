@@ -405,7 +405,7 @@ describe('connectionRequestsService', () => {
       status: 'รอโรงงานตั้งค่าอุปกรณ์',
       connectionDueAt: dueAt,
       waitingConnectionDaysRemaining: 18,
-      waitingConnectionText: 'รอโรงงานตั้งค่าอุปกรณ์ 18 วัน',
+      waitingConnectionText: 'รอโรงงานตั้งค่าอุปกรณ์ภายใน 18 วัน',
     });
     expect(result.data[1]).toMatchObject({
       monitoringPointCode: null,

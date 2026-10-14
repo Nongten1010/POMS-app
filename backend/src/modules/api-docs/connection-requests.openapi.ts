@@ -1083,7 +1083,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
       codeIssuedDate: { type: 'string', nullable: true },
       connectionDueAt: { type: 'string', format: 'date-time', nullable: true },
       waitingConnectionDaysRemaining: { type: 'integer', nullable: true },
-      waitingConnectionText: { type: 'string', nullable: true },
+      waitingConnectionText: {
+        type: 'string',
+        nullable: true,
+        description:
+          'ข้อความรอโรงงานตั้งค่าอุปกรณ์ภายใน {waitingConnectionDaysRemaining} วัน; null เมื่อไม่ใช่ WAITING_CONNECTION หรือไม่มีกำหนดเวลาที่ถูกต้อง',
+        example: 'รอโรงงานตั้งค่าอุปกรณ์ภายใน 21 วัน',
+      },
       form: { type: 'string' },
       status: { type: 'string' },
       statusCode: { type: 'string', enum: Object.keys(CONNECTION_REQUEST_STATUS_LABELS) },
