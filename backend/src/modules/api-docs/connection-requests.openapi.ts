@@ -15,6 +15,9 @@ import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-
 type OpenApiObject = Record<string, unknown>;
 type EnumLabelMap = Record<string, string>;
 
+const canceledPointCodeReuseDescription =
+  'รหัสเดิม เช่น P0267 จากคำขอ CANCELED ที่ยังไม่เคยเชื่อมต่อ ใช้กับคำขอใหม่ของโรงงานเดิมและ systemType เดิมได้. Backend ตรวจและเปลี่ยนเจ้าของการจองใน transaction ตอนกำหนดรหัส MANUAL_LEGACY หรือสร้าง direct connection โดยเก็บคำขอและจุดเดิมเป็นประวัติ; ใช้ได้กับคำขอที่ยกเลิกไว้ก่อน deploy ด้วย. ห้ามนำรหัสที่เคยเชื่อมต่อ รวมแถวที่เลิกใช้งานแล้ว รหัสที่มีจุดอื่นใช้อยู่หรือมี live device config กลับมาใช้; กรณีไม่เข้าเงื่อนไขยังตอบ 409 CONFLICT reason POINT_CODE_ALREADY_ASSIGNED. ช่วงรหัส legacy และการออกเลข AUTO ไม่เปลี่ยน';
+
 interface OperationOptions {
   tag: string;
   summary: string;
@@ -1946,7 +1949,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
         pattern: '^[SP]\\d{4}$',
         example: 'S1054',
         description:
-          'Required เมื่อ assignmentMode = MANUAL_LEGACY; ต้องเป็นรหัส legacy รูปแบบ S/P ตามด้วย 4 หลัก, ค่าตัวเลขช่วง 0001-1999 และ prefix ต้องตรงกับ systemType (CEMS = S, WPMS = P). รหัสที่ยังจองอยู่ตอบ 409 CONFLICT พร้อม reason POINT_CODE_ALREADY_ASSIGNED; รหัสที่คืนการจองแล้วจากการลบจุดที่ยังไม่เคยเชื่อมต่อขณะส่งแบบแก้ไข ใช้ได้หากยังว่าง',
+          'Required เมื่อ assignmentMode = MANUAL_LEGACY; ต้องเป็นรหัส legacy รูปแบบ S/P ตามด้วย 4 หลัก, ค่าตัวเลขช่วง 0001-1999 และ prefix ต้องตรงกับ systemType (CEMS = S, WPMS = P). รหัสที่ยังจองอยู่ตอบ 409 CONFLICT พร้อม reason POINT_CODE_ALREADY_ASSIGNED; รหัสที่คืนการจองแล้วจากการลบจุดที่ยังไม่เคยเชื่อมต่อขณะส่งแบบแก้ไข ใช้ได้หากยังว่าง. ' +
+          canceledPointCodeReuseDescription,
       },
       reason: {
         type: 'string',
@@ -1981,7 +1985,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
         minLength: 1,
         maxLength: 64,
         description:
-          'ห้ามซ้ำกับรหัสที่ยังจองอยู่ในทะเบียนกลาง รวมจุดที่เลิกใช้งานแล้ว; การส่งแบบแก้ไขคงรหัสของจุดเดิมที่ยังอยู่ในฟอร์ม คืนได้เฉพาะการจองของจุดที่ตัดออกจริงหรือ soft-delete เก่า ซึ่งยังไม่เคยเชื่อมต่อและผ่านการตรวจการใช้งานก่อนลบถาวร',
+          'ห้ามซ้ำกับรหัสที่ยังจองอยู่ในทะเบียนกลาง รวมจุดที่เลิกใช้งานแล้ว; การส่งแบบแก้ไขคงรหัสของจุดเดิมที่ยังอยู่ในฟอร์ม คืนได้เฉพาะการจองของจุดที่ตัดออกจริงหรือ soft-delete เก่า ซึ่งยังไม่เคยเชื่อมต่อและผ่านการตรวจการใช้งานก่อนลบถาวร. ' +
+          canceledPointCodeReuseDescription,
       },
       pointType: {
         ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels),
@@ -2913,6 +2918,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อนุมัติแบบหรือแจ้งแก้ไข',
       operationId: 'reviewConnectionRequest',
       description:
+        canceledPointCodeReuseDescription +
+        ' ' +
         'Permission: cems_wpms_requests:approve พร้อม data scope. decision REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ล็อกคำขอและตรวจ approve scope ซ้ำก่อนบันทึก; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. คำสั่งอื่นคงข้อจำกัดสถานะเดิม; คำสั่งที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
         addParameterOwnershipDescription +
         ' ' +
@@ -2990,6 +2997,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เปลี่ยนสถานะหรือแจ้งแก้ไข',
       operationId: 'changeConnectionRequestStatus',
       description:
+        canceledPointCodeReuseDescription +
+        ' ' +
         'ล็อกคำขอและตรวจ approve scope ซ้ำก่อน REJECT; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. คำสั่งอื่นที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
         'action REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ตรวจ approve permission และ data scope เดิม บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. ' +
         'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นผู้มีสิทธิ์ edit ตาม scope/assignment ของโรงงาน resubmit เพื่อเก็บ revision ใหม่ ทั้ง OPERATOR_FORM และ OFFICER_DIRECT_API โดยคง createdBy เดิม. กรณีอื่นคงข้อจำกัด transition เดิม. ' +
@@ -3079,7 +3088,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         'รองรับเฉพาะ OPERATOR_FORM. ' +
         `ยกเลิกได้ทุกขั้นตอนก่อนสถานะปลายทาง: ${CANCELLABLE_CONNECTION_REQUEST_STATUSES.join(', ')}. ` +
         'CONNECTED (เชื่อมต่อแล้ว) และ CANCELED (ยกเลิก) ตอบ 409 CONFLICT รวมถึงการยกเลิกซ้ำ; ไม่เปลี่ยนข้อมูลหรือเพิ่มประวัติซ้ำ. ' +
-        'ตรวจสิทธิ์และสถานะซ้ำหลัง lock แถวใน transaction; ไม่ลบข้อมูลคำขอหรือข้อมูลประกอบ',
+        'ตรวจสิทธิ์และสถานะซ้ำหลัง lock แถวใน transaction; ไม่ลบข้อมูลคำขอหรือข้อมูลประกอบ. ' +
+        canceledPointCodeReuseDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {

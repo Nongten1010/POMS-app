@@ -100,6 +100,7 @@
 - หากคำขอเป็น `CANCELED` อยู่แล้ว endpoint ตอบ `409 CONFLICT` และไม่แก้เหตุผล, เวลา, actor หรือเพิ่ม history ซ้ำ รวมกรณีมีการยกเลิกอีกคำสั่งก่อน lock แถวสำเร็จ.
 - Backend lock แถวคำขอใน transaction ก่อนตรวจสถานะและเขียน history เพื่อไม่ให้ cancel แข่งกับ action อื่นแล้วสำเร็จทั้งคู่.
 - ไม่ลบ request, factory snapshot, measurement points, documents, point codes หรือ device configs.
+- รหัสจากคำขอ `CANCELED` ที่ยังไม่เคยเชื่อมต่อ เช่น `P0267` สามารถนำไปใช้กับคำขอใหม่ของโรงงานเดิมและ `systemType` เดิมได้ รวมคำขอที่ยกเลิกไว้ก่อน deploy การยกเลิกยังเก็บการจองเดิมไว้; backend ตรวจและเปลี่ยนเจ้าของการจองอย่างปลอดภัยใน transaction ตอน [กำหนดรหัสให้คำขอใหม่](./request-payloads-and-validation.md#business-rules) หรือสร้าง direct connection โดยคงคำขอและจุดเก่าเป็นประวัติ รหัสที่เคยเชื่อมต่อแม้เลิกใช้งานแล้ว หรือยังมีจุดอื่น/live device config ใช้งานอยู่ ไม่เข้าเงื่อนไขนำกลับมาใช้
 - เวอร์ชันนี้ไม่ส่ง email, push notification หรือ notification อื่น.
 
 ### Errors
@@ -120,6 +121,7 @@
 
 ## Backend Maintainer Links
 
+- การนำรหัสจากคำขอยกเลิกกลับมาใช้: [`reclaim-canceled-point-code.ts`](../../../../../backend/src/modules/connection-requests/reclaim-canceled-point-code.ts), [`0138_allow_canceled_point_code_reuse.ts`](../../../../../backend/src/db/migrations/0138_allow_canceled_point_code_reuse.ts), [regression tests](../../../../../backend/tests/unit/connection-requests.current-factory-profile.repository.test.ts)
 - Workflow: [`workflows/operator-cancel-connection-request.md`](../../../../../workflows/operator-cancel-connection-request.md)
 - Route: [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts)
 - Controller: [`connection-requests.controller.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.controller.ts)

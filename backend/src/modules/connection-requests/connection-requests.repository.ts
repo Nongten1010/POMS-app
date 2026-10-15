@@ -12,6 +12,7 @@ import {
 } from '../alert-emails/alert-parameter-activations.repository';
 import { normalizeAlertActivationStationIdentity } from '../alert-emails/alert-parameter-activations';
 import { db } from '../../config/database';
+import { reclaimCanceledPointCode } from './reclaim-canceled-point-code';
 import { env } from '../../config/env';
 import {
   factoryProfileReadTable,
@@ -1211,6 +1212,7 @@ export const connectionRequestsRepository = {
 
         const requestId = Number(id);
         await upsertFactorySnapshot(trx, requestId, input, actorUserId);
+        await reclaimCanceledPointCode(trx, pointCode, requestId);
         const pointId = await insertDirectMeasurementPoint(
           trx,
           requestId,
@@ -4137,6 +4139,10 @@ async function reservePointCodeRegistryEntry(
 ): Promise<void> {
   const normalizedPointCode = normalizePointCode(input.pointCode);
   const numericMatch = normalizedPointCode.match(/^([SP])(\d{4})$/);
+
+  if (input.assignmentMode === POINT_CODE_ASSIGNMENT_MODE.MANUAL_LEGACY) {
+    await reclaimCanceledPointCode(trx, normalizedPointCode, input.requestId, input.errorPath);
+  }
 
   try {
     await trx('cems_wpms_point_code_registry').insert({

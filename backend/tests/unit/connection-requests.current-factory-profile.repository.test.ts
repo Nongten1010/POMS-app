@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import initSqlJs from 'sql.js';
 
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), { transaction: jest.fn() }),
@@ -21,6 +22,52 @@ const previousMode = env.FACTORY_PROFILE_MODE;
 const CONNECTED = 'cems_wpms_connected_measurement_points';
 const POINTS = 'cems_wpms_measurement_points';
 const REGISTRY = 'cems_wpms_point_code_registry';
+const sqlite = initSqlJs();
+
+async function executeReclaimSql(
+  tables: Record<string, Row[]>,
+  statement: string,
+  bindings: unknown[],
+) {
+  const SQL = await sqlite;
+  const connection = new SQL.Database();
+  const columns: Record<string, string[]> = {
+    cems_wpms_connection_requests: [
+      'id',
+      'factory_id',
+      'eligible_factory_id',
+      'status',
+      'system_type',
+      'deleted_at',
+    ],
+    [POINTS]: ['id', 'request_id', 'point_code', 'point_name', 'deleted_at'],
+    [REGISTRY]: ['id', 'normalized_point_code', 'source_request_id', 'source_measurement_point_id'],
+    [CONNECTED]: ['id', 'source_measurement_point_id', 'point_code', 'point_name', 'deleted_at'],
+    device_connection_configs: ['id', 'request_id', 'station_id', 'deleted_at'],
+  };
+  try {
+    for (const [table, fields] of Object.entries(columns)) {
+      connection.run(`CREATE TABLE ${table} (${fields.join(', ')})`);
+      for (const row of tables[table]) {
+        connection.run(
+          `INSERT INTO ${table} VALUES (${fields.map(() => '?').join(', ')})`,
+          fields.map((field) => (row[field] == null ? null : (row[field] as string | number))),
+        );
+      }
+    }
+    // Run the application's actual predicate; only SQL Server lock hints differ.
+    connection.run(
+      statement.replace(/\s+WITH\s*\(UPDLOCK,\s*HOLDLOCK\)/g, ''),
+      bindings as Array<string | number>,
+    );
+    const remaining = new Set(
+      connection.exec(`SELECT id FROM ${REGISTRY}`)[0]?.values.map(([id]) => Number(id)) ?? [],
+    );
+    tables[REGISTRY] = tables[REGISTRY].filter((row) => remaining.has(Number(row.id)));
+  } finally {
+    connection.close();
+  }
+}
 
 // Exercise the real repository with persisted rows; this adapter models query
 // operations only and does not decide which factory profile is authoritative.
@@ -86,6 +133,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
   }
   const locks: string[] = [];
   const beforeRegistryDelete = jest.fn<() => void>();
+  const beforeRegistryInsert = jest.fn<() => void>();
   const beforeHistoryInsert = jest.fn<() => void>();
   const checkActivePointNames = (points: Row[]) => {
     const namesByRequest = new Map<unknown, Set<string>>();
@@ -298,6 +346,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
           const inputs = Array.isArray(input) ? input : [input];
           if (table === 'cems_wpms_request_status_history') beforeHistoryInsert();
           if (table === REGISTRY) {
+            beforeRegistryInsert();
             const codes = new Set(tables[table].map((row) => row.normalized_point_code));
             for (const row of inputs) {
               if (codes.has(row.normalized_point_code)) {
@@ -335,7 +384,11 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
     },
     {
       fn: { now: () => '2026-09-11T00:00:00.000Z' },
-      raw(sql: string, [requestId, actorUserId]: unknown[]) {
+      raw(sql: string, bindings: unknown[]) {
+        if (sql.includes('/* reclaim-canceled-point-code */')) {
+          return executeReclaimSql(tables, sql, bindings);
+        }
+        const [requestId, actorUserId] = bindings;
         if (sql === '?? WITH (UPDLOCK, HOLDLOCK)') {
           locks.push(String(requestId));
           return String(requestId);
@@ -372,7 +425,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
       throw error;
     }
   });
-  return { tables, locks, beforeRegistryDelete, beforeHistoryInsert, trx };
+  return { tables, locks, beforeRegistryDelete, beforeRegistryInsert, beforeHistoryInsert, trx };
 }
 
 function currentPoint(): Row {
@@ -495,6 +548,48 @@ function resubmissionFixture() {
       { actorUserId: 7, scope: 'ALL', expectedUpdatedAt: '2026-09-13T00:00:00.000Z' },
     );
   return { ...fixture, input, resubmit };
+}
+
+function canceledCodeFixture() {
+  const fixture = resubmissionFixture();
+  const requests = fixture.tables.cems_wpms_connection_requests;
+  Object.assign(requests[0], {
+    status: 'CANCELED',
+    system_type: 'WPMS',
+    eligible_factory_id: 17,
+    submission_source: 'OPERATOR_FORM',
+  });
+  Object.assign(fixture.tables[POINTS][0], { point_code: 'P0267' });
+  Object.assign(fixture.tables[REGISTRY][0], {
+    point_code: 'P0267',
+    normalized_point_code: 'P0267',
+  });
+  requests.push({ ...requests[0], id: 10038, status: 'PENDING_DESIGN_REVIEW' });
+  fixture.tables[POINTS].push({
+    ...fixture.tables[POINTS][0],
+    id: 10042,
+    request_id: 10038,
+    point_code: null,
+    point_code_assignment_mode: null,
+  });
+  const approve = () =>
+    connectionRequestsRepository.updateStatus(
+      10038,
+      'WAITING_CONNECTION',
+      7,
+      {},
+      {
+        pointCodeAssignments: [
+          {
+            measurementPointId: 10042,
+            assignmentMode: 'MANUAL_LEGACY',
+            pointCode: 'P0267',
+            reason: 'ใช้รหัสเดิมหลังยกเลิกคำขอที่ยังไม่เคยเชื่อมต่อ',
+          },
+        ],
+      },
+    );
+  return { ...fixture, approve };
 }
 
 describe('connection profile persistence with a stale submitted factory', () => {
@@ -1130,6 +1225,229 @@ describe('connection profile persistence with a stale submitted factory', () => 
       ]);
     },
   );
+
+  it('reuses P0267 from a canceled, never-connected request without deleting its history', async () => {
+    const fixture = canceledCodeFixture();
+    const oldRequest = structuredClone(fixture.tables.cems_wpms_connection_requests[0]);
+    const oldPoint = structuredClone(fixture.tables[POINTS][0]);
+    const approved = await fixture.approve();
+    expect(approved.measurementPoints[0].pointCode).toBe('P0267');
+    expect(fixture.tables[REGISTRY]).toEqual([
+      expect.objectContaining({
+        normalized_point_code: 'P0267',
+        source_request_id: 10038,
+        source_measurement_point_id: 10042,
+      }),
+    ]);
+    expect(fixture.tables.cems_wpms_connection_requests[0]).toEqual(oldRequest);
+    expect(fixture.tables[POINTS][0]).toEqual(oldPoint);
+  });
+
+  it.each(['WAITING_CONNECTION', 'CONNECTED', 'REJECTED'])(
+    'does not reclaim a code from a request in %s',
+    async (status) => {
+      const fixture = canceledCodeFixture();
+      fixture.tables.cems_wpms_connection_requests[0].status = status;
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.approve()).rejects.toMatchObject({
+        code: 'CONFLICT',
+        details: { reason: 'POINT_CODE_ALREADY_ASSIGNED' },
+      });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it('restores the canceled reservation when assigning its replacement fails', async () => {
+    const fixture = canceledCodeFixture();
+    const before = structuredClone(fixture.tables);
+    fixture.beforeRegistryInsert.mockImplementationOnce(() => {
+      throw new Error('Simulated reservation storage failure');
+    });
+    await expect(fixture.approve()).rejects.toThrow('Simulated reservation storage failure');
+    expect(fixture.tables).toEqual(before);
+  });
+
+  it('returns a conflict if the database guard prevents reclamation', async () => {
+    const fixture = canceledCodeFixture();
+    const before = structuredClone(fixture.tables);
+    const original = fixture.trx.raw;
+    jest.spyOn(fixture.trx, 'raw').mockImplementation((statement, bindings) => {
+      if (statement.includes('/* reclaim-canceled-point-code */')) {
+        throw { originalError: { info: { number: 51096 } } };
+      }
+      return original(statement, bindings);
+    });
+    await expect(fixture.approve()).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: { reason: 'POINT_CODE_ALREADY_ASSIGNED', pointCode: 'P0267' },
+    });
+    expect(fixture.tables).toEqual(before);
+  });
+
+  it.each([null, '2026-10-14T00:00:00Z'])(
+    'does not reclaim a canceled source that ever connected (deleted: %s)',
+    async (deletedAt) => {
+      const fixture = canceledCodeFixture();
+      fixture.tables[CONNECTED].push({
+        id: 20,
+        source_measurement_point_id: 10041,
+        point_code: 'different-code',
+        deleted_at: deletedAt,
+      });
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.approve()).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it.each(['connected-code', 'connected-alias', 'live-config', 'another-point', 'other-factory'])(
+    'does not reclaim a canceled code with %s',
+    async (blocker) => {
+      const fixture = canceledCodeFixture();
+      if (blocker === 'connected-code')
+        fixture.tables[CONNECTED].push({ id: 20, point_code: ' p0267 ', deleted_at: 'retired' });
+      if (blocker === 'connected-alias')
+        fixture.tables[CONNECTED].push({ id: 20, point_name: ' p0267 ', deleted_at: null });
+      if (blocker === 'live-config')
+        fixture.tables.device_connection_configs.push({
+          id: 20,
+          request_id: null,
+          station_id: ' p0267 ',
+          deleted_at: null,
+        });
+      if (blocker === 'another-point')
+        fixture.tables[POINTS].push({
+          id: 20,
+          request_id: 999,
+          point_code: ' p0267 ',
+          deleted_at: null,
+        });
+      if (blocker === 'other-factory')
+        fixture.tables.cems_wpms_connection_requests[1].eligible_factory_id = 18;
+      const before = structuredClone(fixture.tables);
+      await expect(fixture.approve()).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it('cancels an issued request then reuses P0267 in a new request', async () => {
+    const fixture = canceledCodeFixture();
+    fixture.tables.cems_wpms_connection_requests[0].status = 'CONNECTION_CONFIRMED';
+    const oldConfig = { id: 31, request_id: 10037, station_id: 'P0267', deleted_at: null };
+    fixture.tables.device_connection_configs.push({ ...oldConfig });
+    const read = jest
+      .spyOn(connectionRequestsRepository, 'findById')
+      .mockResolvedValue({ id: 10037, status: 'CANCELED' } as never);
+    try {
+      await connectionRequestsRepository.cancelOperatorRequest(10037, 7, null, { scope: 'ALL' });
+      const approved = await fixture.approve();
+      expect(approved.measurementPoints[0].pointCode).toBe('P0267');
+      expect(fixture.tables.device_connection_configs).toEqual([oldConfig]);
+      expect(fixture.tables.cems_wpms_request_status_history).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ request_id: 10037, status: 'CANCELED' }),
+          expect.objectContaining({ request_id: 10038, status: 'WAITING_CONNECTION' }),
+        ]),
+      );
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  it('reuses P0267 again after the replacement request is also canceled', async () => {
+    const fixture = canceledCodeFixture();
+    await fixture.approve();
+    const requests = fixture.tables.cems_wpms_connection_requests;
+    requests[1].status = 'CANCELED';
+    requests.push({ ...requests[1], id: 10039, status: 'PENDING_DESIGN_REVIEW' });
+    fixture.tables[POINTS].push({
+      ...fixture.tables[POINTS][1],
+      id: 10043,
+      request_id: 10039,
+      point_code: null,
+    });
+    const approved = await connectionRequestsRepository.updateStatus(
+      10039,
+      'WAITING_CONNECTION',
+      7,
+      {},
+      {
+        pointCodeAssignments: [
+          {
+            measurementPointId: 10043,
+            assignmentMode: 'MANUAL_LEGACY',
+            pointCode: 'P0267',
+            reason: 'ขอใหม่หลังยกเลิก',
+          },
+        ],
+      },
+    );
+    expect(approved.measurementPoints[0].pointCode).toBe('P0267');
+    expect(fixture.tables[REGISTRY]).toEqual([
+      expect.objectContaining({ source_request_id: 10039 }),
+    ]);
+    expect(fixture.tables[POINTS]).toHaveLength(3);
+  });
+
+  it('reuses a canceled P0267 through the officer direct-connection flow', async () => {
+    const fixture = canceledCodeFixture();
+    const created = await connectionRequestsRepository.createDirectConnection(
+      {
+        ...fixture.input,
+        systemType: 'WPMS',
+        status: 'WAITING_FACTORY_REVISION',
+        revisionReason: 'ขอข้อมูลเพิ่ม',
+        measurementPoints: [
+          { pointName: 'จุดใหม่', pointType: 'WASTEWATER', pointCode: 'P0267', parameters: [] },
+        ],
+      } as never,
+      7,
+    );
+    expect(created.measurementPoints[0].pointCode).toBe('P0267');
+    expect(fixture.tables[REGISTRY]).toEqual([
+      expect.objectContaining({ source_request_id: created.id }),
+    ]);
+    expect(fixture.tables[POINTS][0].point_code).toBe('P0267');
+  });
+
+  it('can revise and reapprove a replacement without treating the canceled snapshot as a live owner', async () => {
+    const fixture = canceledCodeFixture();
+    await fixture.approve();
+    const current = fixture.tables.cems_wpms_connection_requests[1];
+    current.status = 'WAITING_FACTORY_REVISION';
+    const revised = await connectionRequestsRepository.replaceForm(
+      10038,
+      {
+        ...fixture.input,
+        systemType: 'WPMS',
+      } as never,
+      7,
+      'REVISED_PENDING_DESIGN_REVIEW',
+      {
+        actorUserId: 7,
+        scope: 'ALL',
+        expectedUpdatedAt: String(current.updated_at),
+      },
+    );
+    const approved = await connectionRequestsRepository.updateStatus(
+      10038,
+      'WAITING_CONNECTION',
+      7,
+      {},
+      {
+        pointCodeAssignments: [
+          {
+            measurementPointId: revised.measurementPoints[0].id,
+            assignmentMode: 'MANUAL_LEGACY',
+            pointCode: 'P0267',
+            reason: 'ใช้รหัสเดิมหลังแก้ไข',
+          },
+        ],
+      },
+    );
+    expect(approved.measurementPoints[0].pointCode).toBe('P0267');
+    expect(fixture.tables[POINTS][0]).toMatchObject({ request_id: 10037, point_code: 'P0267' });
+  });
 
   it('removes old ADD_PARAMETER snapshots while preserving the connected point owner and reservation', async () => {
     const fixture = resubmissionFixture();

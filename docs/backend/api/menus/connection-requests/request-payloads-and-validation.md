@@ -441,6 +441,7 @@ criteria normalization สำคัญ
 - ถ้าส่ง `measurementPointId` ที่ไม่อยู่ในคำขอ ระบบตอบ `400 BAD_REQUEST`
 - ถ้ารหัสยังจองอยู่ในคำขอที่รอเชื่อมต่อ จุดที่เชื่อมต่ออยู่ หรือประวัติที่เลิกใช้งานแล้ว ระบบตอบ `409 CONFLICT` พร้อม `error.details.reason = "POINT_CODE_ALREADY_ASSIGNED"` และไม่ reuse รหัสนั้น
 - รหัสที่คืนการจองอย่างปลอดภัยแล้วเมื่อ [ส่งแบบแก้ไข](#put-apiv1cems-wpms-requestsidform) และลบจุดที่ตัดออกจริงหรือ soft-delete เก่า ซึ่งยังไม่เคยเชื่อมต่อ สามารถใช้ `MANUAL_LEGACY` ตอนอนุมัติจุดใหม่ได้ หากรหัสยังว่างและผ่านกฎช่วง legacy เดิม
+- กรณีคำขอเดิม `CANCELED` และยังไม่เคยเชื่อมต่อ เจ้าหน้าที่กำหนดรหัสเดิม เช่น `P0267` ให้คำขอใหม่ของโรงงานเดิมและระบบเดิมด้วย `MANUAL_LEGACY` ได้ รวมคำขอที่ยกเลิกก่อน deploy โดยคืนและจองรหัสใน transaction เดียวกัน เก็บคำขอและจุดเดิมไว้เป็นประวัติ; ดู [กฎรหัสหลังยกเลิก](./operator-cancel-request.md#validation-and-business-rules)
 
 หมายเหตุ: schema/รูปแบบข้อมูลที่ไม่ถูกต้องตอบ `400 VALIDATION_ERROR`; business validation ที่ต้องตรวจจากข้อมูลคำขอ เช่น prefix ไม่ตรงระบบ, รายการไม่ครบ หรือ id ไม่อยู่ในคำขอ ตอบ `400 BAD_REQUEST`.
 
@@ -758,6 +759,7 @@ criteria normalization สำคัญ
 - จุดใหม่ในคำขอที่มีการกำหนดรหัสแล้วต้องไม่ส่งรหัสหรือส่ง `null`; ถ้าคำขอยังไม่มีจุดที่ได้รับรหัส ระบบยังล้าง client `pointCode` ตาม flow เดิม และรอออกเลขหรือให้เจ้าหน้าที่กำหนดในขั้นอนุมัติ
 - การแทนที่ฟอร์มลบถาวรจุดที่ตัดออกจริง แถว soft-delete เก่า และ snapshot ของจุดที่ยังไม่มีรหัส ซึ่งยังถูกลบแล้วสร้างใหม่ตาม flow เดิมแม้ยังอยู่ในฟอร์ม ไม่เก็บแถวที่ลบเป็นประวัติ และคืนเฉพาะการจองใน `cems_wpms_point_code_registry` ที่ผูกกับ `source_request_id` และ `source_measurement_point_id` ของจุดที่ลบจริง จุดเดิมที่มีรหัสและยังอยู่ไม่ถูกลบหรือคืนการจอง
 - ก่อนลบและคืนรหัส backend ตรวจข้อมูลใน transaction เดียวกัน: หากจุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ใน `cems_wpms_connected_measurement_points` รวมแถวที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้ ตอบ `409 CONFLICT` พร้อม `reason = "REQUEST_POINTS_ALREADY_CONNECTED"`; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ `reason = "POINT_CODE_RELEASE_BLOCKED"` โดยปฏิเสธทั้งรายการและไม่บันทึกบางส่วน
+- จุดประวัติในคำขอ `CANCELED` ที่ยังไม่เคยเชื่อมต่อและใช้รหัสเดียวกัน ไม่ถือเป็นผู้ใช้งานปัจจุบันและไม่ขวางการคืนรหัสของคำขอใหม่ ส่วนข้อมูลเชื่อมต่อและผู้ใช้งานอื่นยังถูกตรวจตามเดิม
 - การส่งกลับไม่ลบตัวคำขอหรือ `statusHistory`; จุดที่สร้างใหม่หรือ snapshot ที่ถูกแทนที่มี ID ใหม่ ให้ใช้ detail/response ล่าสุดก่อนอนุมัติ และส่ง `pointCodeAssignments` เฉพาะจุดที่ยังไม่มีรหัส จุดที่คงรหัสเดิมไม่ต้องกำหนดซ้ำ รหัส legacy ที่คืนจากการลบจริงอาจกำหนดให้จุดใหม่ด้วย `MANUAL_LEGACY` ได้หากยังว่าง
 - `ADD_PARAMETER` คง flow เดิม: แทนที่ snapshot ของจุดในคำขอและได้รับ ID ใหม่ แต่ใช้ `pointCode` ของจุดต้นทางและไม่คืนการจองที่เป็นของจุดหรือคำขออื่น
 - การส่งแบบแก้ไข `ADD_PARAMETER` ต้องผ่าน [กฎเจ้าของจุดต้นทางเดียวกับตอนสร้าง](#post-apiv1cems-wpms-requestsparameters); backend ตรวจ active point โรงงานและระบบซ้ำภายใน transaction ก่อนแทนที่ snapshot และบันทึกรหัสตามค่าที่เก็บจริงในจุดต้นทาง
@@ -911,6 +913,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 - ต้อง resolve active eligible factory ภายใน officer scope ได้ มิฉะนั้นตอบ `404`
 - `measurementPoints` ต้องมี exactly 1 row
 - `pointCode` ต้องไม่ว่าง, ยาวไม่เกิน 64, และต้องไม่ชนกับรหัสที่ยังจองอยู่ในทะเบียนรหัสกลาง
+- ยกเว้นรหัสที่ยังจองกับคำขอ `CANCELED` ของโรงงานเดิมและระบบเดิม ซึ่งยังไม่เคยเชื่อมต่อและผ่าน [กติกาการนำรหัสกลับมาใช้](#business-rules) backend เปลี่ยนเจ้าของการจองใน transaction เดียวกับการสร้าง direct connection โดยคงประวัติเดิม
 - `submissionAction = CONNECT` map เป็น `status = CONNECTED`; `submissionAction = REQUEST_FACTORY_REVISION` map เป็น `status = WAITING_FACTORY_REVISION`
 - ถ้าไม่ส่งทั้ง `submissionAction` และ `status` backend ใช้ `CONNECTED` เพื่อคงพฤติกรรมเดิม
 - ถ้าส่ง `submissionAction` และ legacy `status` พร้อมกัน ค่าต้อง map ตรงกัน มิฉะนั้นตอบ `400 VALIDATION_ERROR` ที่ `submissionAction`
@@ -930,7 +933,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                                                                              | login ใหม่                       |
 | `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:direct_connect`                                                                                                                     | ซ่อน action สำหรับ user นี้      |
 | `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory ภายใน scope                                                                                                                     | ตรวจ identifier และสิทธิ์พื้นที่ |
-| `409`       | `CONFLICT`         | `pointCode` ซ้ำกับรหัสที่ยังจองอยู่ ไม่ว่าจะรอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว                                                                       | เปลี่ยนรหัสจุดตรวจวัด            |
+| `409`       | `CONFLICT`         | `pointCode` ซ้ำกับรหัสที่ยังจองอยู่ ไม่ว่าจะรอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว ยกเว้นคำขอ `CANCELED` ของโรงงานเดิมที่ผ่านกติกาการนำรหัสกลับมาใช้                                                                       | เปลี่ยนรหัสจุดตรวจวัด            |
 
 ## Review Payloads ที่เกี่ยวข้องกับการส่งแบบแก้ไข
 

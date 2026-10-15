@@ -1212,3 +1212,5 @@ Minimal response:
 กรณีทะเบียนยังผูกกับจุดเก่าที่ถูกแทนที่ก่อนใช้พฤติกรรมใหม่นี้ ดู [คู่มือล้างจุดที่ยังไม่เชื่อมต่อและคืนรหัสค้าง](../../../guides/cleanup-unconnected-point-code.md) สำหรับสคริปต์ตรวจและล้างเฉพาะ `S0527` โดยคงจุดปัจจุบันและประวัติสถานะคำขอ.
 
 การตรวจเจ้าของจุด `ADD_PARAMETER`: [repository](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts), [regression การตรวจเจ้าของและ transaction](../../../../../backend/tests/unit/connection-requests.current-factory-profile.repository.test.ts) และ [runtime OpenAPI contract tests](../../../../../backend/tests/unit/connection-requests.parameter-ownership.openapi.test.ts).
+
+การขอรหัสซ้ำหลังยกเลิก: ดู [กฎรหัสจุดตรวจวัดหลังยกเลิก](./operator-cancel-request.md#validation-and-business-rules), [โมดูลคืนรหัสใน transaction](../../../../../backend/src/modules/connection-requests/reclaim-canceled-point-code.ts), [migration ตรวจการคืนรหัสจากคำขอที่ยกเลิก](../../../../../backend/src/db/migrations/0138_allow_canceled_point_code_reuse.ts) และ [runtime OpenAPI tests](../../../../../backend/tests/unit/canceled-point-code-reuse.openapi.test.ts).
