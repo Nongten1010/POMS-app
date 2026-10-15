@@ -1,5 +1,10 @@
 import {
   Box,
+  Alert,
+  Badge,
+  CircularProgress,
+  IconButton,
+  Tooltip,
   Drawer,
   List,
   ListItemButton,
@@ -22,6 +27,8 @@ import QueryStatsIcon from '@mui/icons-material/QueryStats'
 import SearchIcon from '@mui/icons-material/Search'
 import SupportAgentIcon from '@mui/icons-material/SupportAgent'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import useMenuBadges from './useMenuBadges'
 
 const appBarHeight = {
   xs: 64,
@@ -127,7 +134,8 @@ const menuItems = [
   },
 ]
 
-function DpomsSidebar({ open, selectedValue = 'home', userType = '', onClose, onSelect, permissions }) {
+function DpomsSidebar({ open, selectedValue = 'home', userType = '', onClose, onSelect, permissions, accessToken = '' }) {
+  const badges = useMenuBadges(accessToken)
   const visibleMenuItems = menuItems.filter((item) => item.alwaysVisible || permissions?.[item.permissionKey]?.view === true)
 
   return (
@@ -160,6 +168,20 @@ function DpomsSidebar({ open, selectedValue = 'home', userType = '', onClose, on
       }}
     >
       <Box sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
+        {accessToken && (
+          <Box sx={{ px: 2, pt: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Tooltip title="รีเฟรชการแจ้งเตือนเมนู">
+                <span>
+                  <IconButton aria-label="รีเฟรชการแจ้งเตือนเมนู" disabled={badges.loading} onClick={badges.refresh}>
+                    {badges.loading ? <CircularProgress size={24} /> : <RefreshIcon />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+            {badges.error && <Alert severity="warning" role="status">{badges.error}</Alert>}
+          </Box>
+        )}
         <List sx={{ px: 1, py: 1 }}>
           {visibleMenuItems.map((item) => {
             const isSelected = item.value === selectedValue
@@ -194,7 +216,9 @@ function DpomsSidebar({ open, selectedValue = 'home', userType = '', onClose, on
                     color: isSelected ? 'primary.dark' : 'text.secondary',
                   }}
                 >
-                  {item.icon}
+                  <Badge variant="dot" color="error" invisible={badges.data?.[item.permissionKey] !== true}>
+                    {item.icon}
+                  </Badge>
                 </ListItemIcon>
                 <ListItemText
                   primary={isUnderMaintenance ? `${item.label} (ปรับปรุง)` : item.label}
@@ -207,6 +231,11 @@ function DpomsSidebar({ open, selectedValue = 'home', userType = '', onClose, on
                     },
                   }}
                 />
+                {badges.data?.[item.permissionKey] === true && (
+                  <Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>
+                    มีรายการแจ้งเตือน
+                  </Box>
+                )}
               </ListItemButton>
             )
           })}

@@ -248,6 +248,8 @@ function App() {
         }}
       />
       <DpomsSidebar
+        key={accessToken || 'anonymous'}
+        accessToken={accessToken}
         open={isMenuOpen}
         userType={userType}
         selectedValue={visibleSelectedMenu}
