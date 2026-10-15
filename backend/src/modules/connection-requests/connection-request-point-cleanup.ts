@@ -60,11 +60,24 @@ export async function removeUnconnectedRequestPoints(
       .whereNull('deleted_at')
       .whereRaw('UPPER(LTRIM(RTRIM(point_name))) = ?', [pointCode])
       .first('id');
-    const otherPoint = await trx('cems_wpms_measurement_points')
+    const otherPoints = await trx('cems_wpms_measurement_points')
       .whereNull('deleted_at')
       .whereNotIn('id', pointIds)
       .whereRaw('UPPER(LTRIM(RTRIM(point_code))) = ?', [pointCode])
-      .first('id');
+      .select('id', 'request_id');
+    // Reused codes remain on canceled snapshots for historical display.
+    const canceledRequests =
+      otherPoints.length > 0
+        ? await trx('cems_wpms_connection_requests')
+            .whereIn(
+              'id',
+              otherPoints.map((point) => point.request_id),
+            )
+            .where('status', 'CANCELED')
+            .select('id')
+        : [];
+    const canceledIds = new Set(canceledRequests.map((request) => Number(request.id)));
+    const otherPoint = otherPoints.some((point) => !canceledIds.has(Number(point.request_id)));
     const liveDeviceConfig = await trx('device_connection_configs')
       .whereNull('request_id')
       .whereNull('deleted_at')
