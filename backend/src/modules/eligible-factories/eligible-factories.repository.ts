@@ -138,6 +138,15 @@ interface EligibleFactoryAddRequestRow {
 }
 
 export const eligibleFactoriesRepository = {
+  async hasPendingAddRequests(access: EligibleFactoryAccessContext): Promise<boolean> {
+    const filters = await resolveAddRequestBadgeAccessFilters(access);
+    const row = await buildEligibleFactoryAddRequestsBaseQuery([filters], access.actorUserId)
+      .clearSelect()
+      .where('ef.status', 'PENDING_REVIEW')
+      .first('ef.id');
+    return Boolean(row);
+  },
+
   async list(
     _query: ListEligibleFactoriesQuery,
     access?: EligibleFactoryAccessContext,
@@ -539,6 +548,68 @@ export const eligibleFactoriesRepository = {
     return this.findById(eligibleFactoryId, trx);
   },
 };
+
+async function resolveAddRequestBadgeAccessFilters(
+  access: EligibleFactoryAccessContext,
+): Promise<Awaited<ReturnType<typeof resolveSelectedFactoryAccessFilters>>> {
+  const scope =
+    access.scope && typeof access.scope === 'object'
+      ? (access.scope as typeof access.scope & {
+          estateId?: number | string | null;
+          estateName?: string | null;
+        })
+      : null;
+  if (scope?.scope !== 'IN_ESTATE') return resolveSelectedFactoryAccessFilters(access);
+
+  const normalize = (value: unknown): string | null => {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    return String(value).trim() || null;
+  };
+  const estateId = normalize(scope.estateId);
+  const estateCode = normalize(scope.estateCode);
+  const estateName = normalize(scope.estateName);
+  const legacyEstate = normalize(scope.estate);
+  const assignments: Array<[string, string | null]> = [
+    ['id', estateId],
+    ['code', estateCode],
+    ['name_th', estateName],
+    ['code', legacyEstate],
+    ['name_th', legacyEstate],
+  ];
+  const rows = assignments.some(([, value]) => value !== null)
+    ? await db<{ code: string | null; name_th: string | null }>('industrial_estates')
+        .where(function assignedEstate() {
+          for (const [column, value] of assignments) {
+            if (value !== null) this.orWhere(column, value);
+          }
+        })
+        .select('code', 'name_th')
+    : [];
+  // Keep the Badge lookup scoped on its first SQL compilation. The legacy list resolver
+  // mutates an outer builder in its nested callback and is left unchanged here.
+  const estateCodes = [
+    ...new Set(
+      rows.map((row) => normalize(row.code)).filter((value): value is string => value !== null),
+    ),
+  ];
+  const estateNames = [
+    ...new Set(
+      (rows.length > 0
+        ? rows.map((row) => normalize(row.name_th))
+        : [estateName, legacyEstate]
+      ).filter((value): value is string => value !== null),
+    ),
+  ];
+  return {
+    denyAll: estateCodes.length === 0 && estateNames.length === 0,
+    regionNames: [],
+    provinceNames: [],
+    estateCodes,
+    estateNames,
+    requireAssignedFactory: false,
+    requireFactoryType88: false,
+  };
+}
 
 function buildEligibleFactoryAddRequestsBaseQuery(
   filterSets: Array<Awaited<ReturnType<typeof resolveSelectedFactoryAccessFilters>>>,

@@ -517,6 +517,23 @@ export const connectionRequestsRepository = {
     };
   },
 
+  async hasTableRequestsInStatuses(
+    statuses: readonly string[],
+    access: ListAccess,
+  ): Promise<boolean> {
+    const row = await buildBaseQuery({}, {
+      ...access,
+      useAssignedFactoryAccess: true,
+      includeRequestOwnerAccess: false,
+    })
+      .clearSelect()
+      .clearOrder()
+      .select('id')
+      .whereIn('status', [...statuses])
+      .first();
+    return Boolean(row);
+  },
+
   async list(
     query: ListConnectionRequestsQuery,
     access: ListAccess,

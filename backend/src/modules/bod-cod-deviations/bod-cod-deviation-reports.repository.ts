@@ -238,6 +238,14 @@ export interface LatestReportRow {
 }
 
 export const bodCodDeviationReportsRepository = {
+  async hasReportsInStatuses(
+    statuses: readonly string[],
+    access: BodCodDeviationAccess,
+  ): Promise<boolean> {
+    const row = await buildReportAccessQuery(access).whereIn('r.status', statuses).first('r.id');
+    return Boolean(row);
+  },
+
   async listFactories(
     access: BodCodDeviationAccess,
   ): Promise<{ rows: BodCodDeviationFactoryTableRowDTO[]; total: number }> {
@@ -900,19 +908,9 @@ function buildFactoryQuery(
   return builder as unknown as Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]>;
 }
 
-function buildReportQuery(
-  query: ListBodCodDeviationReportsQuery,
+function buildReportAccessQuery(
   access: BodCodDeviationAccess,
 ): Knex.QueryBuilder<ReportTableRow, ReportTableRow[]> {
-  const measurementCounts = db('bod_cod_deviation_measurements')
-    .whereNull('deleted_at')
-    .select('report_id')
-    .count<{ report_id: number | string; measurement_count: number | string }[]>({
-      measurement_count: '*',
-    })
-    .groupBy('report_id')
-    .as('m');
-
   const builder = db<ReportTableRow>('bod_cod_deviation_reports as r')
     .leftJoin('factories as f', function joinReportFactory() {
       this.on('f.id', '=', 'r.factory_id').orOn(function legacyFactoryIdentity() {
@@ -935,9 +933,36 @@ function buildReportQuery(
           .orOn('ef.source_factory_id', '=', 'f.code');
       }).andOnNull('ef.deleted_at');
     })
+    .whereNull('r.deleted_at');
+
+  applyReportAccessFilter(builder, access);
+  applyLocationScopeFilter(builder, access.scope);
+  applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
+  if (access.viewScope !== undefined) {
+    applyReportAccessFilter(builder, { ...access, scope: access.viewScope });
+    applyLocationScopeFilter(builder, access.viewScope);
+    applyRegionalAccessFilter(builder, access.viewScope, access.regionalAccess);
+  }
+
+  return builder as unknown as Knex.QueryBuilder<ReportTableRow, ReportTableRow[]>;
+}
+
+function buildReportQuery(
+  query: ListBodCodDeviationReportsQuery,
+  access: BodCodDeviationAccess,
+): Knex.QueryBuilder<ReportTableRow, ReportTableRow[]> {
+  const measurementCounts = db('bod_cod_deviation_measurements')
+    .whereNull('deleted_at')
+    .select('report_id')
+    .count<{ report_id: number | string; measurement_count: number | string }[]>({
+      measurement_count: '*',
+    })
+    .groupBy('report_id')
+    .as('m');
+
+  const builder = buildReportAccessQuery(access)
     .leftJoin('users as cu', 'cu.id', 'r.created_by')
     .leftJoin(measurementCounts, 'm.report_id', 'r.id')
-    .whereNull('r.deleted_at')
     .select(
       'r.id',
       'r.report_no',
@@ -977,15 +1002,6 @@ function buildReportQuery(
         .orWhere('f.code', factoryId)
         .orWhere('r.factory_registration_no', factoryId);
     });
-  }
-
-  applyReportAccessFilter(builder, access);
-  applyLocationScopeFilter(builder, access.scope);
-  applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
-  if (access.viewScope !== undefined) {
-    applyReportAccessFilter(builder, { ...access, scope: access.viewScope });
-    applyLocationScopeFilter(builder, access.viewScope);
-    applyRegionalAccessFilter(builder, access.viewScope, access.regionalAccess);
   }
 
   return builder as unknown as Knex.QueryBuilder<ReportTableRow, ReportTableRow[]>;

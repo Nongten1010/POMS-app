@@ -11,7 +11,7 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **149**
+จำนวน explicit endpoints: **150**
 
 | Method   | Full path                                                                 | Canonical owner                                                                 | Guard                                                                           | Route source                                                                                                |
 | -------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -22,6 +22,7 @@
 | `GET`    | `/api/v1/openapi.json`                                                    | `docs/backend/api/shared/common-api/`                                           | `public contract when API_DOCS_ENABLED=true`                                    | `backend/src/modules/api-docs/api-docs.routes.ts`                                                           |
 | `POST`   | `/api/v1/auth/login`                                                      | `docs/backend/api/shared/authentication/`                                       | `public + loginRateLimiter`                                                     | `backend/src/modules/auth/auth.routes.ts`                                                                   |
 | `GET`    | `/api/v1/auth/me`                                                         | `docs/backend/api/shared/authentication/`                                       | `authenticate`                                                                  | `backend/src/modules/auth/auth.routes.ts`                                                                   |
+| `GET` | `/api/v1/me/menu-badges` | `docs/backend/api/shared/menu-badges/` | `authenticate; per-menu view/approve and list scope` | `backend/src/modules/menu-badges/menu-badges.routes.ts` |
 | `GET`    | `/api/v1/laws`                                                            | `docs/backend/api/menus/laws/`                                                  | `public`                                                                        | `backend/src/modules/laws/laws.routes.ts`                                                                  |
 | `POST`   | `/api/v1/laws`                                                            | `docs/backend/api/menus/laws/`                                                  | `authenticate + authorize(laws:edit)`                                           | `backend/src/modules/laws/laws.routes.ts`                                                                  |
 | `PUT`    | `/api/v1/laws/:id`                                                        | `docs/backend/api/menus/laws/`                                                  | `authenticate + authorize(laws:edit)`                                           | `backend/src/modules/laws/laws.routes.ts`                                                                  |

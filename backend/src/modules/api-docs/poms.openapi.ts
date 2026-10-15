@@ -1,4 +1,5 @@
 import { generalUploadPolicyDescription } from './upload-policy.openapi';
+import { menuBadgePaths, menuBadgeSchemas } from './menu-badges.openapi';
 import {
   pomsManagedStatusProperties,
   statusManagementPaths,
@@ -7308,6 +7309,7 @@ function menuTagForPath(path: string): string {
     path.startsWith('/docs') ||
     path === '/openapi.json' ||
     path.startsWith('/auth/') ||
+    path.startsWith('/me/') ||
     path.startsWith('/email-test/')
   ) {
     return MENU_TAGS.SYSTEM;
@@ -7366,6 +7368,7 @@ interface AuthorizationRequirement {
 function authorizationRequirementFor(path: string, method: string): AuthorizationRequirement {
   if (
     path === '/auth/me' ||
+    path === '/me/menu-badges' ||
     path === '/email-test/send' ||
     path === '/cems-wpms-requests/operator-factory-dashboard'
   ) {
@@ -7711,6 +7714,7 @@ const components: OpenApiObject = {
     ...componentSchemas,
     ...buildHomeFactorySchemas(componentSchemas),
     ...homeHandoffSchemas,
+    ...menuBadgeSchemas,
     ...statusManagementSchemas,
     ...baseSchemas,
     ...editRequestFormSchemas,
@@ -7749,6 +7753,7 @@ const paths = decorateWriteRequestValidationDocs(
         (baseDocument.paths as Record<string, OpenApiObject>) ?? {},
         extraPaths,
         statusManagementPaths,
+        menuBadgePaths,
       ),
     ),
   ),
@@ -7781,13 +7786,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.4.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 149 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 158 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 150 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 159 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 149,
+  'x-poms-canonical-operation-count': 150,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

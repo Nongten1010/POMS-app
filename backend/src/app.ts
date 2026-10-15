@@ -37,6 +37,7 @@ import { apiDocsRoutes } from './modules/api-docs/api-docs.routes';
 import { pomsFactoriesRoutes } from './modules/poms-factories/poms-factories.routes';
 import { lawsRoutes } from './modules/laws/laws.routes';
 import { faqsRoutes } from './modules/faqs/faqs.routes';
+import { menuBadgesRoutes } from './modules/menu-badges/menu-badges.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -111,6 +112,7 @@ export function createApp(): Application {
     app.use(env.API_PREFIX, apiDocsRoutes);
   }
   app.use(`${env.API_PREFIX}/auth`, authRoutes);
+  app.use(`${env.API_PREFIX}/me`, menuBadgesRoutes);
   app.use(`${env.API_PREFIX}/users`, usersRoutes);
   app.use(`${env.API_PREFIX}/eligible-factories`, eligibleFactoriesRoutes);
   app.use(`${env.API_PREFIX}/poms-factories`, pomsFactoriesRoutes);

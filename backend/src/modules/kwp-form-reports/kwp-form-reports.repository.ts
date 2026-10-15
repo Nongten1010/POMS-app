@@ -73,6 +73,19 @@ interface StatusHistoryRow {
 }
 
 export const kwpFormReportsRepository = {
+  async hasRequestsInStatuses(
+    statuses: readonly string[],
+    access: KwpFormReportAccess,
+  ): Promise<boolean> {
+    const row = await buildRequestQuery({}, access)
+      .clearSelect()
+      .clearOrder()
+      .select('s.id')
+      .whereIn('s.status', [...statuses])
+      .first();
+    return Boolean(row);
+  },
+
   async listFactories(
     access: KwpFormReportAccess,
   ): Promise<{ rows: KwpFormFactoryTableRowDTO[]; total: number }> {

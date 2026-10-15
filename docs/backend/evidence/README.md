@@ -50,6 +50,8 @@
 
 ## Shared operations
 
+- [จุด Badge บน Sidebar ตามสิทธิ์และขอบเขตปัจจุบัน](./shared/menu-badges.tdd.md)
+
 - [ล้างข้อมูลทดสอบด้วย SQL](./shared/test-data-cleanup.tdd.md)
 - [Frontend monitoring contract 05082026](./shared/frontend-monitoring-contract-05082026.tdd.md)
 - [ปฏิทินรายเดือนและจำนวนวันสรุปทั้งปี](./shared/calendar-summary-requested-year-counts.tdd.md)

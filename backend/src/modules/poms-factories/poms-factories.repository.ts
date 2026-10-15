@@ -217,6 +217,19 @@ const PARAMETER_DISPLAY_LABELS: Record<string, string> = {
 };
 
 export const pomsFactoriesRepository = {
+  async hasEditRequestsInStatuses(
+    statuses: readonly string[],
+    access: FactoryAccess,
+  ): Promise<boolean> {
+    const row = await buildEditRequestsQuery(access)
+      .clearSelect()
+      .clearOrder()
+      .select('req.id')
+      .whereIn('req.status', [...statuses])
+      .first();
+    return Boolean(row);
+  },
+
   async listFactories(
     access: FactoryAccess,
     search?: string,

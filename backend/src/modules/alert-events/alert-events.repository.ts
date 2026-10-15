@@ -36,6 +36,41 @@ interface AlertEventAccess {
 type AccessScope = string | null | undefined | PermissionScopeDetails;
 
 export const alertEventsRepository = {
+  async hasMenuBadgeEvents(eventDate: string, access: AlertEventAccess): Promise<boolean> {
+    const row = await buildAccessQuery(access)
+      .clearSelect()
+      .where('alert_events.event_date', eventDate)
+      .where(function menuSystemTypes() {
+        this.where('alert_events.system_type', 'CEMS').orWhere(function bodCodOnline() {
+          this.where('alert_events.system_type', 'WPMS').where(
+            'alert_events.display_system_type',
+            'BOD_COD_ONLINE',
+          );
+        });
+      })
+      .where(function menuAlertTypes() {
+        this.where(function standardExceeded() {
+          this.where('alert_events.alert_type', 'STANDARD_EXCEEDED').where(
+            'alert_events.threshold_type',
+            'STANDARD',
+          );
+        })
+          .orWhere(function eiaExceeded() {
+            this.where('alert_events.alert_type', 'EIA_EXCEEDED').where(
+              'alert_events.threshold_type',
+              'EIA',
+            );
+          })
+          .orWhereIn('alert_events.alert_type', [
+            'DAILY_COMPLETENESS_LOW',
+            'CONSECUTIVE_NO_REPORT',
+            'ABNORMAL_VALUE',
+          ]);
+      })
+      .first('alert_events.id');
+    return Boolean(row);
+  },
+
   async findByIdempotencyKey(idempotencyKey: string): Promise<AlertEventDTO | null> {
     const row = await db<AlertEventRow>('alert_events')
       .where({ idempotency_key: idempotencyKey })
