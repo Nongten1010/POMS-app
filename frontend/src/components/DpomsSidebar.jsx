@@ -2,9 +2,6 @@ import {
   Box,
   Alert,
   Badge,
-  CircularProgress,
-  IconButton,
-  Tooltip,
   Drawer,
   List,
   ListItemButton,
@@ -27,7 +24,6 @@ import QueryStatsIcon from '@mui/icons-material/QueryStats'
 import SearchIcon from '@mui/icons-material/Search'
 import SupportAgentIcon from '@mui/icons-material/SupportAgent'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
-import RefreshIcon from '@mui/icons-material/Refresh'
 import useMenuBadges from './useMenuBadges'
 
 const appBarHeight = {
@@ -168,18 +164,9 @@ function DpomsSidebar({ open, selectedValue = 'home', userType = '', onClose, on
       }}
     >
       <Box sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
-        {accessToken && (
+        {accessToken && badges.error && (
           <Box sx={{ px: 2, pt: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Tooltip title="รีเฟรชการแจ้งเตือนเมนู">
-                <span>
-                  <IconButton aria-label="รีเฟรชการแจ้งเตือนเมนู" disabled={badges.loading} onClick={badges.refresh}>
-                    {badges.loading ? <CircularProgress size={24} /> : <RefreshIcon />}
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Box>
-            {badges.error && <Alert severity="warning" role="status">{badges.error}</Alert>}
+            <Alert severity="warning" role="status">{badges.error}</Alert>
           </Box>
         )}
         <List sx={{ px: 1, py: 1 }}>
