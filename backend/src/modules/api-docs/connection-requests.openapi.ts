@@ -800,6 +800,7 @@ const annualDeviceConnectionExample = {
 const statusHistoryNoteSchema: OpenApiObject = {
   type: 'string',
   nullable: true,
+  maxLength: 10001,
   description:
     'หมายเหตุสำหรับแสดงผล: เหตุผลกับหมายเหตุที่เหมือนกันหลัง trim บันทึกครั้งเดียว; ข้อความต่างกันคั่นด้วย newline และไม่มีข้อความคืน null. เมื่อส่งฟอร์มซ้ำใช้ โรงงานแก้ไขข้อมูลและส่งแบบฟอร์มอีกครั้ง. ประวัติเก่า WAITING_FACTORY_REVISION ที่เป็นข้อความสองบล็อกเหมือนกันทุกบรรทัดแสดงบล็อกเดียว; REVISED_PENDING_DESIGN_REVIEW ที่ขึ้นต้น แก้ไขและส่งฟอร์มอีกครั้ง; fields: แสดงข้อความส่งฟอร์มซ้ำแบบใหม่ โดยเก็บข้อความเดิมในฐานข้อมูลไว้ ไม่เขียนทับหรือลบประวัติ',
 };
@@ -1158,6 +1159,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
             ),
           },
           statusLabel: { type: 'string' },
+          revisionReason: { type: 'string', maxLength: 5000, nullable: true },
+          officerNote: { type: 'string', maxLength: 5000, nullable: true },
           statusHistory: {
             type: 'array',
             items: {
@@ -2951,8 +2954,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               required: ['decision', 'revisionReason'],
               properties: {
                 decision: { ...enumSchema(['REQUEST_REVISION'], reviewDecisionLabels) },
-                revisionReason: { type: 'string', minLength: 1, maxLength: 1000 },
-                officerNote: { type: 'string', maxLength: 1000, nullable: true },
+                revisionReason: { type: 'string', minLength: 1, maxLength: 5000 },
+                officerNote: { type: 'string', maxLength: 5000, nullable: true },
               },
             },
             {
@@ -3032,8 +3035,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               required: ['action', 'revisionReason'],
               properties: {
                 action: { ...enumSchema(['REQUEST_REVISION'], statusActionLabels) },
-                revisionReason: { type: 'string', minLength: 1, maxLength: 1000 },
-                officerNote: { type: 'string', maxLength: 1000, nullable: true },
+                revisionReason: { type: 'string', minLength: 1, maxLength: 5000 },
+                officerNote: { type: 'string', maxLength: 5000, nullable: true },
               },
             },
             {
@@ -3042,8 +3045,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               required: ['action', 'revisionReason'],
               properties: {
                 action: { ...enumSchema(['RETURN_TO_WAITING_CONNECTION'], statusActionLabels) },
-                revisionReason: { type: 'string', minLength: 1, maxLength: 1000 },
-                officerNote: { type: 'string', maxLength: 1000, nullable: true },
+                revisionReason: { type: 'string', minLength: 1, maxLength: 5000 },
+                officerNote: { type: 'string', maxLength: 5000, nullable: true },
               },
             },
             {

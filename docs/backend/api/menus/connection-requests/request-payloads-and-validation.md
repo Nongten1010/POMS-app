@@ -945,8 +945,8 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 | ---------------- | -------- | ----------- | -------- | ------- | ----------------------------------------------------------- |
 | `id`             | path     | Yes         | No       | integer | จำนวนเต็ม >=1                                               |
 | `decision`       | body     | Yes         | No       | enum    | `APPROVE_DESIGN`, `REQUEST_REVISION` หรือ `REJECT` |
-| `revisionReason` | body     | Conditional | เฉพาะ `REJECT` | string | required เมื่อ `decision = "REQUEST_REVISION"` (trim 1-1000); `REJECT` เป็น optional และรับ `null`/blank |
-| `officerNote`    | body     | No          | Yes      | string  | trim <=1000; รับ omitted/null/blank |
+| `revisionReason` | body     | Conditional | เฉพาะ `REJECT` | string | required เมื่อ `decision = "REQUEST_REVISION"` (trim 1-5000); `REJECT` เป็น optional สูงสุด 1000 ตัวอักษร และรับ `null`/blank |
+| `officerNote`    | body     | No          | Yes      | string  | trim <=5000 เมื่อแจ้งแก้ไข; action/decision อื่น <=1000; รับ omitted/null/blank |
 
 ### `POST /api/v1/cems-wpms-requests/:id/status`
 
@@ -954,10 +954,39 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 | ---------------- | -------- | ----------- | -------- | ------- | ---------------------------------------------------------------------------------------------- |
 | `id`             | path     | Yes         | No       | integer | จำนวนเต็ม >=1                                                                                  |
 | `action`         | body     | Yes         | No       | enum    | `APPROVE_FORM`, `REQUEST_REVISION`, `RETURN_TO_WAITING_CONNECTION` หรือ `REJECT` |
-| `revisionReason` | body     | Conditional | เฉพาะ `REJECT` | string | required เมื่อ action เป็น `REQUEST_REVISION` หรือ `RETURN_TO_WAITING_CONNECTION` (trim 1-1000); `REJECT` เป็น optional และรับ `null`/blank |
-| `officerNote`    | body     | No          | Yes      | string  | trim <=1000; รับ omitted/null/blank |
+| `revisionReason` | body     | Conditional | เฉพาะ `REJECT` | string | required เมื่อ action เป็น `REQUEST_REVISION` หรือ `RETURN_TO_WAITING_CONNECTION` (trim 1-5000); `REJECT` เป็น optional สูงสุด 1000 ตัวอักษร และรับ `null`/blank |
+| `officerNote`    | body     | No          | Yes      | string  | trim <=5000 เมื่อแจ้งแก้ไข; action/decision อื่น <=1000; รับ omitted/null/blank |
 
 เมื่อเลือก `REJECT` ส่งเฉพาะ discriminator ของ endpoint ได้ ไม่จำกัดสถานะต้นทาง แม้เป็น `CONNECTED`, `CANCELED` หรือ `REJECTED`; optional `revisionReason`/`officerNote` ที่ละ field, `null`, ข้อความว่าง หรือช่องว่างล้วนไม่ทำให้ validation ล้มเหลว สถานะปลายทางคือ terminal `REJECTED` (`ไม่อนุมัติ`) โดยไม่เลิกใช้งานจุด live หรือย้อนข้อมูลโรงงานที่เคยเชื่อมต่อสำเร็จแล้ว รายละเอียด request/response และข้อผิดพลาดอยู่ใน [สัญญาการปฏิเสธคำขอ](./README.md#reject-request)
+
+รายละเอียดแจ้งแก้ไข (`revisionReason` และ `officerNote`) รองรับข้อความหลายบรรทัด สูงสุด field ละ 5,000 หน่วย UTF-16 หลัง trim หัวท้าย โดยนับช่องว่างภายใน การขึ้นบรรทัดใหม่ และสระ/วรรณยุกต์ไทยแยกกัน; เกินกำหนดตอบ `400 VALIDATION_ERROR` และไม่บันทึก ข้อความที่เหมือนกันหลัง trim เก็บในประวัติครั้งเดียว ส่วนข้อความต่างกันเก็บครบทั้งสอง field คั่นด้วย newline (สูงสุด 10,001 หน่วย)
+
+ตัวอย่างแจ้งแก้ไขผ่าน `/status` (สำหรับ `/review` ใช้ `decision` แทน `action`):
+
+```json
+{
+  "action": "REQUEST_REVISION",
+  "revisionReason": "กรุณาแก้ไขรายละเอียดเครื่องมือวัดและแนบผลตรวจสอบล่าสุด",
+  "officerNote": null
+}
+```
+
+ตัวอย่าง response ขั้นต่ำ (response จริงมีข้อมูลคำขอเพิ่มเติม):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 101,
+    "requestType": "NEW_CONNECTION",
+    "status": "WAITING_FACTORY_REVISION",
+    "revisionReason": "กรุณาแก้ไขรายละเอียดเครื่องมือวัดและแนบผลตรวจสอบล่าสุด",
+    "officerNote": null
+  }
+}
+```
+
+ก่อนใช้งานบนเซิร์ฟเวอร์ ต้องรัน migration `0140_expand_connection_request_revision_notes` เพื่อขยายคอลัมน์รายละเอียดและประวัติเป็น `NVARCHAR(MAX)` โดย API ยังคงบังคับความยาวตามข้างต้น การ rollback จะถูกปฏิเสธหากมีข้อความยาวเกินขนาดเดิม เพื่อไม่ให้ข้อมูลถูกตัดทิ้ง
 
 ## API ที่ใช้เทสหลังกรอกฟอร์ม
 
