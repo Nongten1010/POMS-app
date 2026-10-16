@@ -7786,7 +7786,8 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.4.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 150 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 159 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 150 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 159 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
+      '\n\nการแบ่งจังหวัดตามภาค: ภาคกลาง 11 จังหวัด, ภาคตะวันตก 8 จังหวัด, ภาคตะวันออก 8 จังหวัด, ภาคเหนือ 16 จังหวัด, ภาคตะวันออกเฉียงเหนือ 20 จังหวัด และภาคใต้ 14 จังหวัด รวม 77 จังหวัด. นครนายกอยู่ภาคตะวันออก; ตาก กำแพงเพชร และนครสวรรค์อยู่ภาคเหนือ; สมุทรสาคร สมุทรสงคราม นครปฐม และสุพรรณบุรีอยู่ภาคตะวันตก; อุทัยธานียังคงอยู่ภาคกลาง. region/regionName สำหรับข้อมูลปัจจุบันและ snapshot คำขอเชื่อมต่อที่ยังใช้งานอยู่ใช้พื้นที่ใหม่นี้ โดย regionCode ของ snapshot คำขอเชื่อมต่อเก็บชื่อภาคเดียวกับ regionName. IN_REGION ยังคงใช้ qualifier รายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ และไม่มีการเปลี่ยนชื่อภาคหรือสิทธิ์ผู้ใช้. แบบ กวภ. ที่มี submission_region_name แล้วคงภาคเดิมทั้งการแสดงผลและสิทธิ์ตามภาค; แบบเดิมที่ไม่มี snapshot และคำขอใหม่ใช้ provinces.region. เลขเอกสารและ running เดิมคงอยู่; รหัสภาคสำหรับออกเลขเอกสารยังเป็น 02-07. ต้องรัน migration 0139_update_provincial_regional_jurisdictions ก่อนใช้งาน',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,

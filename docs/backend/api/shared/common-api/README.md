@@ -28,6 +28,8 @@ Swagger UI ครอบคลุม 141 canonical endpoints และแสด�
 
 ## Shared Response Shape
 
+ค่า `region` / `regionName` และการกรอง `IN_REGION` ใช้ [การแบ่งจังหวัดตามพื้นที่รับผิดชอบ](../regional-jurisdictions/README.md) ร่วมกันทุกเมนู โดยมีข้อยกเว้นสำหรับภาคที่บันทึกไว้ตอนออกเลขแบบ กวภ.
+
 Success envelope ทั่วไป:
 
 ```json

@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="provincial-regional-jurisdictions"></a>
+
+## 2026-10-16 — ปรับจังหวัดตามพื้นที่รับผิดชอบ 6 ภาค
+
+- **Affected canonical docs:** [การแบ่งจังหวัดตามพื้นที่รับผิดชอบ](./shared/regional-jurisdictions/README.md)
+- **Impact:** ค่า `region` / `regionName`, ตัวกรองภาค และข้อมูลที่บัญชี `IN_REGION` เข้าถึงเปลี่ยนตามจังหวัดใหม่ 8 จังหวัด รวมถึง snapshot คำขอเชื่อมต่อที่ยังใช้งานอยู่; แบบ กวภ. ที่บันทึกภาคตอนออกเลขแล้วยังคงใช้ภาคเดิม
+- **Migration:** รัน `0139_update_provincial_regional_jurisdictions` ก่อนเปิด backend รุ่นนี้; client ล้าง cache จังหวัด/ภาคและโหลดรายการกับยอดสรุปใหม่ ไม่ต้องเปลี่ยน payload หรือชื่อสิทธิ์ ตรวจ runtime OpenAPI หลัง deploy ตามขั้นตอนใน canonical page
+- **Old contract:** กลาง 18, ตะวันตก 5, ตะวันออก 7, เหนือ 13, ตะวันออกเฉียงเหนือ 20 และใต้ 14 จังหวัด
+- **New contract:** กลาง 11, ตะวันตก 8, ตะวันออก 8, เหนือ 16, ตะวันออกเฉียงเหนือ 20 และใต้ 14 จังหวัด รวม 77 จังหวัด ตามรายชื่อที่ยืนยัน
+- **Breaking change:** yes — ขอบเขตข้อมูลตามภาคของ 8 จังหวัดเปลี่ยน แม้ request/response fields, auth, statuses และ error codes เดิมคงอยู่
+
 <a id="general-file-uploads"></a>
 
 ## 2026-10-12 — เปิดรับไฟล์ทั่วไปและกรองไฟล์เสี่ยงร่วมกัน

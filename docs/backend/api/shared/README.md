@@ -9,6 +9,7 @@ API contract ในกลุ่มนี้ใช้ข้ามหลายเ�
 | Directory                                                                   | Contract                                                           |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | [`common-api/`](./common-api/README.md)                                     | Base URL, headers, response envelope, pagination และ shared errors |
+| [`regional-jurisdictions/`](./regional-jurisdictions/README.md) | รายชื่อจังหวัดทั้ง 77 จังหวัดตามพื้นที่รับผิดชอบ 6 ภาค และผลต่อ `IN_REGION` |
 | [`authentication/`](./authentication/README.md)                             | Login และ current-user profile                                     |
 | [`menu-badges/`](./menu-badges/README.md) | จุด Badge งานค้างและเหตุการณ์ของบัญชีปัจจุบันครบ 6 เมนู |
 | [`connected-measurement-points/`](./connected-measurement-points/README.md) | Contract ที่หน้าหลัก, ขอเชื่อมต่อ และ กวภ. ใช้ร่วมกัน              |
