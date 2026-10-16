@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="connection-request-revision-note-2000"></a>
+
+## 2026-10-16 — จำกัดรายละเอียดแจ้งแก้ไขคำขอเชื่อมต่อเป็น 2,000 ตัวอักษร
+
+- **Affected canonical docs:** [รายละเอียดและ validation การแจ้งแก้ไข](./menus/connection-requests/request-payloads-and-validation.md#review-payloads-ที่เกี่ยวข้องกับการส่งแบบแก้ไข)
+- **Impact:** `revisionReason` และ `officerNote` ที่ส่งใหม่ผ่าน `REQUEST_REVISION` ของ `/review` และ `/status` รวมถึง `RETURN_TO_WAITING_CONNECTION` ต้องไม่เกิน field ละ 2,000 หน่วย UTF-16 หลัง trim; เกินกำหนดตอบ `400 VALIDATION_ERROR`
+- **Migration:** client จำกัดข้อความใหม่เป็น 2,000 และตรวจความยาวก่อนส่ง; ข้อความเดิมที่เกิน 2,000 ยังอ่านได้ครบ เมื่อแก้ไขและส่งใหม่ต้องลดให้ไม่เกินกำหนด ไม่ต้องรัน migration ใหม่หรือ rollback `0140`; คงคอลัมน์และ response capacity เดิมเพื่อไม่ตัดข้อมูลเก่า ตรวจ runtime OpenAPI หลัง deploy ว่า request branches ทั้งสามเป็น `maxLength: 2000`
+- **Old contract:** request รองรับ field ละ 5,000 หน่วย UTF-16
+- **New contract:** request รองรับ field ละ 2,000 หน่วย UTF-16; response รองรับข้อมูลเดิม 5,000 และประวัติเดิม 10,001 หน่วยตามเดิม
+- **Breaking change:** yes — ลดเพดาน validation ของข้อความใหม่
+
 <a id="provincial-regional-jurisdictions"></a>
 
 ## 2026-10-16 — ปรับจังหวัดตามพื้นที่รับผิดชอบ 6 ภาค

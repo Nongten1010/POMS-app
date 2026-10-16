@@ -28,9 +28,9 @@ type Operation = {
 };
 
 describe('connection request revision note capacity', () => {
-  it.each(revisionCases)('accepts 5000 units after trim for $payload', ({ schema, payload }) => {
-    const note = 'ก้\n '.repeat(1250).trimEnd() + 'กก';
-    expect(note.length).toBe(5000);
+  it.each(revisionCases)('accepts 2000 units after trim for $payload', ({ schema, payload }) => {
+    const note = 'ก้\n '.repeat(500).trimEnd() + 'กก';
+    expect(note.length).toBe(2000);
     const result = schema.parse({
       ...payload,
       revisionReason: `  ${note}  `,
@@ -46,7 +46,7 @@ describe('connection request revision note capacity', () => {
         const result = schema.safeParse({
           ...payload,
           revisionReason: 'กรุณาแก้ไข',
-          [field]: 'ก'.repeat(5001),
+          [field]: 'ก'.repeat(2001),
         });
         expect(result.success).toBe(false);
         if (!result.success) {
@@ -64,7 +64,7 @@ describe('connection request revision note capacity', () => {
     },
   );
 
-  it('publishes the same request and response limits in runtime OpenAPI', () => {
+  it('publishes 2000-unit requests while preserving historical response capacity', () => {
     const paths = pomsOpenApiDocument.paths as Record<string, { post: Operation }>;
     const schemas = [
       paths['/cems-wpms-requests/{id}/review'].post,
@@ -82,8 +82,8 @@ describe('connection request revision note capacity', () => {
       expect(revisionBranches.length).toBe(operation === schemas[0] ? 1 : 2);
       for (const branch of revisionBranches) {
         expect(branch.properties).toMatchObject({
-          revisionReason: { minLength: 1, maxLength: 5000 },
-          officerNote: { nullable: true, maxLength: 5000 },
+          revisionReason: { minLength: 1, maxLength: 2000 },
+          officerNote: { nullable: true, maxLength: 2000 },
         });
       }
     }
