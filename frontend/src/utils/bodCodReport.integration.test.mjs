@@ -15,7 +15,7 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
     cacheDir, optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'bod-cod-test-exports', enforce: 'pre', transform(code, id) {
-      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, StatusChip, getReportColumns, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus, BodCodPaperDocument, ResultNoticePaperDocument };`
+      if (id.endsWith('/src/pages/BodCodReportPage.jsx')) return `${code}\nexport { ReportActions, StatusChip, getReportColumns, mapBodCodReportRow, mapBodCodReportDetail, makeDraftReport, makeEditableReport, getBodCodFormValues, buildBodCodReportPayload, officerSubMenus, BodCodPaperDocument, ResultNoticePaperDocument, getBodCodRegionName };`
       if (id.endsWith('/src/utils/bodCodReportPdf.js')) return `${code}\nexport { drawDocumentMetadata, drawMeasurementTable, drawSignature, drawResultNoticeSignature, BodCodPdfLayout };`
     } }],
   })
@@ -315,6 +315,23 @@ test('BOD/COD UI, payload and PDF integration', async (t) => {
       }
       assert.equal(pdf.getBodCodInspectorPosition({ approvalTrack: 'REGIONAL', regionCode: 'R1', provinceName: 'จังหวัดเชียงใหม่' }), 'เจ้าหน้าที่ กฝม. ภาคเหนือ')
       assert.equal(pdf.getBodCodInspectorPosition({ approvalTrack: 'REGIONAL', regionCode: 'unknown' }), 'เจ้าหน้าที่ กฝม. ภาค...')
+    })
+    await t.test('DIW province fallback is shared by the form and PDF without overriding API region or track', () => {
+      const cases = {
+        นครสวรรค์: 'ภาคเหนือ', ตาก: 'ภาคเหนือ', นครนายก: 'ภาคตะวันออก',
+        นครปฐม: 'ภาคตะวันตก', สมุทรสาคร: 'ภาคตะวันตก', สมุทรสงคราม: 'ภาคตะวันตก', สุพรรณบุรี: 'ภาคตะวันตก',
+        ชัยนาท: 'ภาคกลาง', อุทัยธานี: 'ภาคกลาง',
+      }
+      for (const [province, regionName] of Object.entries(cases)) {
+        assert.equal(page.getBodCodRegionName({ province }), regionName)
+        assert.equal(page.getBodCodRegionName({ provinceName: `จังหวัด${province}` }), regionName)
+        if (regionName !== 'ภาคกลาง') {
+          assert.equal(pdf.getBodCodInspectorPosition({ provinceName: province }), `เจ้าหน้าที่ กฝม. ${regionName}`)
+        }
+        assert.equal(pdf.getBodCodInspectorPosition({ provinceName: province, approvalTrack: 'CENTRAL' }), 'เจ้าหน้าที่ กฝม.')
+        assert.equal(page.getBodCodRegionName({ province, regionName: 'ภาคใต้' }), 'ภาคใต้')
+        assert.equal(pdf.getBodCodInspectorPosition({ provinceName: province, regionName: 'ภาคใต้', approvalTrack: 'REGIONAL' }), 'เจ้าหน้าที่ กฝม. ภาคใต้')
+      }
     })
     await t.test('inspector position fits and is centered within its signature line', () => {
       const output = []
