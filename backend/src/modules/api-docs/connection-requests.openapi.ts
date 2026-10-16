@@ -2954,8 +2954,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               required: ['decision', 'revisionReason'],
               properties: {
                 decision: { ...enumSchema(['REQUEST_REVISION'], reviewDecisionLabels) },
-                revisionReason: { type: 'string', minLength: 1, maxLength: 5000 },
-                officerNote: { type: 'string', maxLength: 5000, nullable: true },
+                revisionReason: { type: 'string', minLength: 1, maxLength: 2000 },
+                officerNote: { type: 'string', maxLength: 2000, nullable: true },
               },
             },
             {
@@ -3035,8 +3035,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               required: ['action', 'revisionReason'],
               properties: {
                 action: { ...enumSchema(['REQUEST_REVISION'], statusActionLabels) },
-                revisionReason: { type: 'string', minLength: 1, maxLength: 5000 },
-                officerNote: { type: 'string', maxLength: 5000, nullable: true },
+                revisionReason: { type: 'string', minLength: 1, maxLength: 2000 },
+                officerNote: { type: 'string', maxLength: 2000, nullable: true },
               },
             },
             {
@@ -3045,8 +3045,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               required: ['action', 'revisionReason'],
               properties: {
                 action: { ...enumSchema(['RETURN_TO_WAITING_CONNECTION'], statusActionLabels) },
-                revisionReason: { type: 'string', minLength: 1, maxLength: 5000 },
-                officerNote: { type: 'string', maxLength: 5000, nullable: true },
+                revisionReason: { type: 'string', minLength: 1, maxLength: 2000 },
+                officerNote: { type: 'string', maxLength: 2000, nullable: true },
               },
             },
             {

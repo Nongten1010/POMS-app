@@ -1854,8 +1854,8 @@ export const reviewConnectionRequestSchema = z
     z
       .object({
         decision: z.literal('REQUEST_REVISION'),
-        revisionReason: trimmedString(5000),
-        officerNote: optionalNullableTrimmedString(5000),
+        revisionReason: trimmedString(2000),
+        officerNote: optionalNullableTrimmedString(2000),
       })
       .strict(),
   ])
@@ -1883,15 +1883,15 @@ export const changeConnectionRequestStatusSchema = z
     z
       .object({
         action: z.literal('REQUEST_REVISION'),
-        revisionReason: trimmedString(5000),
-        officerNote: optionalNullableTrimmedString(5000),
+        revisionReason: trimmedString(2000),
+        officerNote: optionalNullableTrimmedString(2000),
       })
       .strict(),
     z
       .object({
         action: z.literal('RETURN_TO_WAITING_CONNECTION'),
-        revisionReason: trimmedString(5000),
-        officerNote: optionalNullableTrimmedString(5000),
+        revisionReason: trimmedString(2000),
+        officerNote: optionalNullableTrimmedString(2000),
       })
       .strict(),
   ])
