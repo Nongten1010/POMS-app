@@ -162,9 +162,7 @@ const exampleClosed = {
   ],
 };
 const writePermissions = {
-  operator: ['chat:ask'],
-  officer: ['chat:answer'],
-  admin: ['chat:answer'],
+  anyOf: ['chat:ask', 'chat:answer'],
 };
 const writeRateLimit = {
   description:
@@ -188,7 +186,7 @@ const accessDescription = [
   'resource โรงงาน/Ticket ต้องมี chat:view และขอบเขตปัจจุบันจาก eligible_factories:view; operator ต้องมีความสัมพันธ์โรงงานที่ยังมีสิทธิ์ด้วย แม้ตั้ง scope เป็น ALL; scope ไม่ครบหรือใช้ไม่ได้ทำให้รายการว่างหรือ resource 404',
   'operator/OWN_FACTORY ต้องระบุตัวตนโรงงานได้เพียงหนึ่ง master โดยนับรวม master ที่ถูกลบด้วย แล้วจึงตรวจ active master และความสัมพันธ์ปัจจุบัน; เลขทะเบียนที่นำมาใช้ใหม่หรือ source/registration ที่กำกวมถูกปฏิเสธจนแก้ข้อมูล',
   'ตรวจบัญชี สิทธิ์และขอบเขตจาก server ทุก request; admin ไม่ข้ามสิทธิ์; ไม่รับ actor, role หรือ scope จาก client',
-  'เปิด Ticket ได้เฉพาะ operator ที่มี chat:ask; operator ส่งข้อความ/ปิดด้วย chat:ask ส่วน officer/admin ใช้ chat:answer',
+  'เปิด Ticket ด้วย chat:ask; ส่งข้อความและปิดด้วย chat:ask หรือ chat:answer โดยใช้สิทธิ์การทำงานเดียวกันสำหรับ operator, officer และ admin และยังตรวจขอบเขตโรงงานปัจจุบัน',
   'เป็น Ticket แบบ asynchronous โหลดเมื่อเข้าหน้าและกดรีเฟรช ไม่มี polling หรือ WebSocket',
   'ผลตอบกลับหลัง authentication ใช้ Cache-Control: private, no-store; query/body ที่ไม่อยู่ใน contract ถูกปฏิเสธเมื่อ endpoint รับข้อมูลชนิดนั้น',
   'Canonical docs: docs/backend/api/menus/chat/README.md',
@@ -208,7 +206,8 @@ export const chatSchemas: Record<string, OpenApiObject> = {
     limits: object({ messageMaxLength: { type: 'integer', enum: [2000] } }),
     canCreate: {
       type: 'boolean',
-      description: 'สิทธิ์เปิด Ticket ของบัญชี; โรงงานยังต้องผ่านการตรวจขอบเขตตอนสร้าง',
+      description:
+        'มี chat:ask จึงเปิด Ticket ได้ โดยไม่จำกัดเฉพาะ operator; โรงงานยังต้องผ่านการตรวจขอบเขตตอนสร้าง',
     },
   }),
   ChatOptionsResponse: {
@@ -376,7 +375,7 @@ export const chatPaths: Record<string, OpenApiObject> = {
       tags: ['Chat'],
       operationId: 'getChatOptions',
       summary: 'ข้อมูลผู้ใช้ หัวข้อ และข้อจำกัดสำหรับ Ticket',
-      description: `Authentication: Bearer token; Permission: chat:view. ตัวเลือกโหลดได้เมื่อมี chat:view; canCreate ขึ้นกับ persona และสิทธิ์ ส่วนทุก resource ต้องผ่าน eligible_factories:view\n\n${accessDescription}`,
+      description: `Authentication: Bearer token; Permission: chat:view. ตัวเลือกโหลดได้เมื่อมี chat:view; canCreate ขึ้นกับ chat:ask ส่วนทุก resource ต้องผ่าน eligible_factories:view\n\n${accessDescription}`,
       security,
       'x-poms-permissions': ['chat:view'],
       responses: { ...errors, '200': response('ข้อมูลตัวเลือก', ref('ChatOptionsResponse')) },

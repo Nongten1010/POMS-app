@@ -4,7 +4,7 @@
 
 ## เริ่มเชื่อมต่อจาก frontend
 
-Chat เป็นการเปิด Ticket พร้อมข้อความแรกเพื่อสอบถามหรือแจ้งปัญหา ผู้ประกอบการที่มีสิทธิ์ในโรงงานเดียวกันติดตามและตอบต่อกันได้ เจ้าหน้าที่อ่านและตอบตามขอบเขตที่ได้รับ ระบบโหลดข้อมูลเมื่อเข้าหน้า เปิด Ticket หรือกดรีเฟรช ไม่มี polling หรือ WebSocket
+Chat เป็นการเปิด Ticket พร้อมข้อความแรกเพื่อสอบถามหรือแจ้งปัญหา ผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแลเปิดเรื่อง ติดตาม และตอบได้ตามสิทธิ์การทำงานและขอบเขตโรงงานที่ได้รับ ระบบโหลดข้อมูลเมื่อเข้าหน้า เปิด Ticket หรือกดรีเฟรช ไม่มี polling หรือ WebSocket
 
 1. เรียก `GET /chat/options` เพื่อแสดงบัญชีปัจจุบัน หัวข้อ และสิทธิ์เปิดเรื่อง
 2. เรียก `GET /chat/factories` แล้ว `GET /chat/factories/:id/measurement-points` เพื่อเลือกโรงงานและจุดตรวจวัด ถ้าไม่เลือกจุดให้ส่ง `measurementPoint: null`
@@ -32,9 +32,8 @@ curl "$BASE_URL/api/v1/chat/tickets" \
 | --- | --- |
 | อ่านตัวเลือก `/options` | `chat:view` |
 | อ่านโรงงาน รายการ Ticket รายละเอียด และข้อความ | `chat:view` และขอบเขตปัจจุบันจาก `eligible_factories:view` |
-| เปิด Ticket | `userType=operator` และ `chat:ask` เพิ่มจากสิทธิ์อ่าน |
-| ส่งข้อความและปิด Ticket ของผู้ประกอบการ | `chat:ask` เพิ่มจากสิทธิ์อ่านและการเป็นผู้มีสิทธิ์ในโรงงานนั้น ไม่จำกัดเฉพาะผู้สร้าง Ticket |
-| ส่งข้อความและปิด Ticket ของเจ้าหน้าที่/ผู้ดูแล | `userType=officer` หรือ `admin` และ `chat:answer` เพิ่มจากสิทธิ์อ่าน |
+| เปิด Ticket | `chat:ask` เพิ่มจากสิทธิ์อ่าน ใช้ได้กับผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแล |
+| ส่งข้อความและปิด Ticket | `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่าน ไม่จำกัดเฉพาะผู้สร้าง Ticket |
 
 Backend โหลดสิทธิ์ปัจจุบันทุก request และตรวจขอบเขตโรงงานทุกครั้ง รวมถึงการส่งซ้ำด้วย idempotency key เดิม ผู้ดูแลไม่มีทางข้ามสิทธิ์หรือขอบเขต ผู้ประกอบการต้องมีความสัมพันธ์โรงงานที่ยังมีผลแม้ได้รับ scope `ALL` ไม่ใช้ชื่อ role, จังหวัด, เลขทะเบียน หรือ `userId` ที่ client ส่งมาเพื่อให้สิทธิ์
 
@@ -119,7 +118,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 | `data.viewer` | `ChatActor` | ไม่ | บัญชีปัจจุบัน |
 | `data.topics` | `{code,label}[]` | ไม่ | หัวข้อที่ backend รองรับ |
 | `data.limits.messageMaxLength` | integer | ไม่ | `2000` |
-| `data.canCreate` | boolean | ไม่ | เปิดเรื่องได้ตาม persona/permission; ยังต้องเลือกโรงงานที่มีสิทธิ์ |
+| `data.canCreate` | boolean | ไม่ | เป็น `true` เมื่อมี `chat:ask` ไม่จำกัดเฉพาะผู้ประกอบการ; ยังต้องเลือกโรงงานที่มีสิทธิ์ |
 
 ```json
 {"success":true,"data":{"viewer":{"userId":101,"name":"ผู้ประกอบการตัวอย่าง","roleCode":"factory_operator","roleLabel":"ผู้ประกอบการ"},"topics":[{"code":"factory_access","label":"ข้อมูลโรงงานและสิทธิ์การใช้งาน"},{"code":"connection_data","label":"การขอเชื่อมต่อและการส่งข้อมูล"},{"code":"measurements_alerts","label":"ผลตรวจวัดและการแจ้งเตือน"},{"code":"forms_reports","label":"แบบฟอร์มและการยื่นรายงาน"},{"code":"form_legal_guidance","label":"ข้อมูลในแบบฟอร์ม กฎหมายและประกาศฯ"},{"code":"other","label":"อื่นๆ"}],"limits":{"messageMaxLength":2000},"canCreate":true}}
@@ -205,7 +204,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `POST /chat/tickets`
 
-เฉพาะ operator ที่มีสิทธิ์เปิดเรื่อง สร้าง Ticket เหตุการณ์เปิด และข้อความแรกเป็นงานเดียวกัน ถ้าส่วนใดไม่สำเร็จจะไม่เหลือ Ticket ว่าง
+ต้องมี `chat:view`, `chat:ask` และเข้าถึงโรงงานตามขอบเขต `eligible_factories:view` ใช้ได้กับผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแล สร้าง Ticket เหตุการณ์เปิด และข้อความแรกเป็นงานเดียวกัน ถ้าส่วนใดไม่สำเร็จจะไม่เหลือ Ticket ว่าง
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -278,7 +277,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `POST /chat/tickets/:id/messages`
 
-ใช้สิทธิ์ส่งข้อความตาม persona และขอบเขตโรงงาน รับเฉพาะ Ticket ที่ยัง `open` สำหรับข้อความใหม่
+ต้องมี `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่านและขอบเขตโรงงาน รับเฉพาะ Ticket ที่ยัง `open` สำหรับข้อความใหม่
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -304,7 +303,7 @@ Idempotency แยกตามบัญชีและการทำงาน; 
 
 ## `POST /chat/tickets/:id/close`
 
-ใช้สิทธิ์ปิดตาม persona และขอบเขตโรงงาน ปิดแล้วอ่านประวัติได้แต่ส่งข้อความใหม่หรือเปิด Ticket เดิมอีกครั้งไม่ได้ การปิดกล่องสนทนาใน UI ไม่ใช่การเรียก endpoint นี้
+ต้องมี `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่านและขอบเขตโรงงาน ปิดแล้วอ่านประวัติได้แต่ส่งข้อความใหม่หรือเปิด Ticket เดิมอีกครั้งไม่ได้ การปิดกล่องสนทนาใน UI ไม่ใช่การเรียก endpoint นี้
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -334,7 +333,7 @@ Idempotency แยกตามบัญชีและการทำงาน; 
 | `400` | `VALIDATION_ERROR` | ทุก endpoint ที่รับ input | ID/query/body/header ผิดรูปแบบ, ข้อความว่าง/เกิน 2,000, field ที่ไม่อนุญาต, cursor ไม่ถูกต้อง; แก้ input |
 | `400` | `BAD_REQUEST` | request ที่มี body / อ่านข้อความ | JSON ผิดรูปแบบ หรือ cursor ถอดรหัสไม่ได้ รูปแบบภายในผิด/เป็นของ Ticket อื่น; แก้ JSON หรือใช้ cursor ล่าสุดจาก server |
 | `401` | `UNAUTHORIZED` | ทุก endpoint | ไม่มี/หมดอายุ token; เข้าสู่ระบบใหม่ |
-| `403` | `FORBIDDEN` | ทุก endpoint | ขาดสิทธิ์หรือ persona ที่ต้องใช้; โหลดสิทธิ์ใหม่และซ่อน action |
+| `403` | `FORBIDDEN` | ทุก endpoint | ขาด `chat:view` หรือสิทธิ์สำหรับ action; โหลดสิทธิ์ใหม่และซ่อน action |
 | `404` | `NOT_FOUND` | factory points, create, detail, messages, close | ไม่มี resource หรืออยู่นอกขอบเขต; ไม่เปิดเผยว่ามีข้อมูลของผู้อื่น |
 | `409` | `IDEMPOTENCY_KEY_CONFLICT` | create/send | key เดิมแต่ payload ไม่เหมือนเดิม; ตรวจการ retry ไม่ส่งซ้ำด้วย key ใหม่โดยอัตโนมัติ |
 | `409` | `CHAT_TICKET_CLOSED` | send | ส่งข้อความใหม่หลังปิด; รีเฟรช Ticket และปิดช่องพิมพ์ |

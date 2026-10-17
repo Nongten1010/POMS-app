@@ -32,6 +32,20 @@ describe('Chat runtime OpenAPI', () => {
     );
   });
 
+  it('publishes ticket creation based on chat:ask without an operator-only restriction', async () => {
+    const { body: document } = await request(app).get('/api/v1/openapi.json');
+    const create = document.paths['/chat/tickets']?.post;
+    expect(create?.['x-poms-permissions']).toEqual([
+      'chat:view',
+      'chat:ask',
+      'eligible_factories:view',
+    ]);
+    expect(create).not.toHaveProperty('x-allowed-user-types');
+    expect(document.components.schemas.ChatOptions.properties.canCreate.description).toContain(
+      'chat:ask',
+    );
+  });
+
   it('describes atomic ticket creation, strict inputs, point identity, and safe retries', async () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     const operation = document.paths['/chat/tickets']?.post;
@@ -128,15 +142,15 @@ describe('Chat runtime OpenAPI', () => {
     expect(document.components.schemas.ChatTicketDetail.required).toContain('events');
   });
 
-  it('explains conditional write permission, retries after close, and idempotent closure', async () => {
+  it('explains alternative write permissions, retries after close, and idempotent closure', async () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     const send = document.paths['/chat/tickets/{id}/messages']?.post;
     const close = document.paths['/chat/tickets/{id}/close']?.post;
-    expect(send?.['x-poms-write-permissions']).toEqual({
-      operator: ['chat:ask'],
-      officer: ['chat:answer'],
-      admin: ['chat:answer'],
-    });
+    for (const operation of [send, close]) {
+      expect(operation?.['x-poms-write-permissions']).toEqual({
+        anyOf: ['chat:ask', 'chat:answer'],
+      });
+    }
     expect(send?.description).toContain('หลังปิด');
     expect(send?.responses).toEqual(
       expect.objectContaining({
