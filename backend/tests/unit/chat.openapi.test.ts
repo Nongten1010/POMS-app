@@ -100,9 +100,9 @@ describe('Chat runtime OpenAPI', () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     expect(document.paths['/chat/factories']?.get.parameters).toContainEqual(
       expect.objectContaining({
-        name: 'pageSize',
+        name: 'q',
         in: 'query',
-        schema: { type: 'integer', enum: [25, 50, 100], default: 25 },
+        schema: { type: 'string', minLength: 1, maxLength: 200 },
       }),
     );
     expect(document.paths['/chat/factories/{id}/measurement-points']?.get).toMatchObject({
@@ -120,7 +120,40 @@ describe('Chat runtime OpenAPI', () => {
     });
   });
 
-  it('documents bounded ticket browsing and message continuation with current status', async () => {
+  it('publishes unpaged list requests and full-result metadata while retaining message cursors', async () => {
+    const { body: document } = await request(app).get('/api/v1/openapi.json');
+    for (const path of ['/chat/factories', '/chat/tickets']) {
+      const names = document.paths[path].get.parameters.map(
+        (parameter: { name: string }) => parameter.name,
+      );
+      expect(names).not.toContain('page');
+      expect(names).not.toContain('pageSize');
+      expect(names).toContain('q');
+    }
+    expect(document.components.schemas.ChatPagination.properties).toEqual({
+      page: expect.objectContaining({ type: 'integer', enum: [1] }),
+      pageSize: expect.objectContaining({ type: 'integer', minimum: 0 }),
+      total: { type: 'integer', minimum: 0 },
+      totalPages: expect.objectContaining({ type: 'integer', enum: [0, 1] }),
+    });
+    expect(document.components.schemas.ChatPagination.properties.pageSize).not.toHaveProperty(
+      'enum',
+    );
+    for (const name of ['ChatFactoryPage', 'ChatTicketPage']) {
+      expect(document.components.schemas[name].example.pagination).toEqual({
+        page: 1,
+        pageSize: 1,
+        total: 1,
+        totalPages: 1,
+      });
+    }
+    expect(
+      document.paths['/chat/tickets/{id}/messages'].get.parameters.map(
+        (parameter: { name: string }) => parameter.name,
+      ),
+    ).toEqual(['id', 'limit', 'olderCursor', 'afterMessageId']);
+  });
+  it('documents filtered ticket browsing and message continuation with current status', async () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     expect(document.paths['/chat/tickets']?.get.parameters).toContainEqual(
       expect.objectContaining({

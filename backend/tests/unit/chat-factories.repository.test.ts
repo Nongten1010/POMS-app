@@ -41,10 +41,10 @@ describe('chat factory and measurement-point repository', () => {
   });
 
   it('lists an operator’s active assigned factories including one without any monitoring points', async () => {
-    const result = await listChatFactories(operator, { page: 1, pageSize: 20 });
+    const result = await listChatFactories(operator, {});
 
     expect(result.data.map((factory) => factory.id)).toEqual([10, 30]);
-    expect(result.pagination).toEqual({ page: 1, pageSize: 20, total: 2, totalPages: 1 });
+    expect(result.pagination).toEqual({ page: 1, pageSize: 2, total: 2, totalPages: 1 });
   });
 
   it('limits an officer’s factory list and total to the explicit province', async () => {
@@ -53,7 +53,7 @@ describe('chat factory and measurement-point repository', () => {
         ...allOfficer,
         factoryScope: { scope: 'IN_PROVINCE', province: 'กรุงเทพมหานคร' },
       },
-      { page: 1, pageSize: 20 },
+      {},
     );
 
     expect(result.data.map((factory) => factory.id)).toEqual([20]);
@@ -66,14 +66,12 @@ describe('chat factory and measurement-point repository', () => {
       factoryScope: { scope: 'IN_REGION', region: 'ภาคกลาง' } as const,
       regionalAccess: { regions: ['ภาคตะวันออก'] },
     };
-    expect(
-      (await listChatFactories(regional, { page: 1, pageSize: 20 })).data.map((row) => row.id),
-    ).toEqual([20]);
+    expect((await listChatFactories(regional, {})).data.map((row) => row.id)).toEqual([20]);
     expect(
       (
         await listChatFactories(
           { ...regional, factoryScope: { scope: 'IN_REGION' }, regionalAccess: null },
-          { page: 1, pageSize: 20 },
+          {},
         )
       ).data,
     ).toEqual([]);
@@ -84,17 +82,12 @@ describe('chat factory and measurement-point repository', () => {
       (
         await listChatFactories(
           { ...allOfficer, factoryScope: { scope: 'IN_ESTATE', estateCode: 'IE-TEST' } },
-          { page: 1, pageSize: 20 },
+          {},
         )
       ).data.map((row) => row.id),
     ).toEqual([10]);
     expect(
-      (
-        await listChatFactories(
-          { ...allOfficer, factoryScope: { scope: 'IN_ESTATE' } },
-          { page: 1, pageSize: 20 },
-        )
-      ).data,
+      (await listChatFactories({ ...allOfficer, factoryScope: { scope: 'IN_ESTATE' } }, {})).data,
     ).toEqual([]);
   });
 
@@ -112,18 +105,14 @@ describe('chat factory and measurement-point repository', () => {
       ['2026-01-01', 101, 10],
     );
     expect(await findChatFactory(operator, 10)).toBeNull();
-    expect(
-      (await listChatFactories(operator, { page: 1, pageSize: 20 })).data.map((row) => row.id),
-    ).toEqual([30]);
+    expect((await listChatFactories(operator, {})).data.map((row) => row.id)).toEqual([30]);
   });
 
-  it('searches names and registrations literally before counting and paginating authorized factories', async () => {
-    const matches = await listChatFactories(allOfficer, { page: 1, pageSize: 1, q: 'REG-2' });
+  it('searches names and registrations literally across all authorized factories', async () => {
+    const matches = await listChatFactories(allOfficer, { q: 'REG-2' });
     expect(matches.data.map((row) => row.id)).toEqual([20]);
     expect(matches.pagination).toEqual({ page: 1, pageSize: 1, total: 1, totalPages: 1 });
-    expect((await listChatFactories(allOfficer, { page: 1, pageSize: 20, q: '%' })).data).toEqual(
-      [],
-    );
+    expect((await listChatFactories(allOfficer, { q: '%' })).data).toEqual([]);
   });
 
   it('returns typed eligible and connected point choices without merging equal point codes', async () => {
@@ -185,7 +174,7 @@ describe('chat factory and measurement-point repository', () => {
     ]);
     const result = await listChatFactories(
       { ...allOfficer, factoryScope: { scope: 'FACTORY_TYPE_88' } },
-      { page: 1, pageSize: 20 },
+      {},
     );
     expect(result.data.map((row) => row.id)).toEqual([10, 30]);
   });
@@ -196,7 +185,7 @@ describe('chat factory and measurement-point repository', () => {
       { ...allOfficer, userType: 'citizen' as const, roles: ['public_user'] },
       { ...allOfficer, userType: 'admin' as const, roles: ['admin'], factoryScope: undefined },
     ]) {
-      expect((await listChatFactories(access, { page: 1, pageSize: 20 })).data).toEqual([]);
+      expect((await listChatFactories(access, {})).data).toEqual([]);
       expect(await findChatFactory(access, 10)).toBeNull();
     }
   });
@@ -213,7 +202,7 @@ describe('chat factory and measurement-point repository', () => {
     ]);
     const result = await listChatFactories(
       { ...allOfficer, factoryScope: { scope: 'IN_ESTATE', estateCode: 'IE-TEST' } },
-      { page: 1, pageSize: 20 },
+      {},
     );
     expect(result.data.map((row) => row.id)).toEqual([10]);
   });
@@ -221,9 +210,7 @@ describe('chat factory and measurement-point repository', () => {
   it('keeps operators restricted to current assignments even when their effective factory scope is ALL', async () => {
     fixture.execute('UPDATE factories SET juristic_id = ? WHERE id = ?', [10, 20]);
     const access = { ...operator, factoryScope: { scope: 'ALL' } as const };
-    expect(
-      (await listChatFactories(access, { page: 1, pageSize: 20 })).data.map((row) => row.id),
-    ).toEqual([10, 30]);
+    expect((await listChatFactories(access, {})).data.map((row) => row.id)).toEqual([10, 30]);
     expect(await findChatFactory(access, 20)).toBeNull();
     fixture.execute(
       'INSERT INTO user_juristics (user_id, juristic_id, revoked_at) VALUES (?, ?, ?)',

@@ -4,12 +4,16 @@
 
 ## เริ่มเชื่อมต่อจาก frontend
 
+รายการไฟล์และขั้นตอนปรับ frontend ให้ตรงสัญญาอยู่ที่ [ส่งต่อ frontend: หน้า Chat](../../../guides/frontend-handoffs/chat/README.md)
+
 Chat เป็นการเปิด Ticket พร้อมข้อความแรกเพื่อสอบถามหรือแจ้งปัญหา ผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแลเปิดเรื่อง ติดตาม และตอบได้ตามสิทธิ์การทำงานและขอบเขตโรงงานที่ได้รับ ระบบโหลดข้อมูลเมื่อเข้าหน้า เปิด Ticket หรือกดรีเฟรช ไม่มี polling หรือ WebSocket
 
+การถอด `page`/`pageSize` ของรายการโรงงานและ Ticket ในสัญญานี้ยังไม่ deploy ขึ้น production ต้องส่งต่อ [ขั้นตอนเปลี่ยน frontend](../../../guides/frontend-handoffs/chat/README.md) และตรวจ live OpenAPI หลัง deploy ก่อนใช้เป็นหลักฐานว่า production เปลี่ยนแล้ว ดู [breaking change และ migration](../../CHANGELOG.md#chat-unpaged-lists)
+
 1. เรียก `GET /chat/options` เพื่อแสดงบัญชีปัจจุบัน หัวข้อ และสิทธิ์เปิดเรื่อง
-2. เรียก `GET /chat/factories` แล้ว `GET /chat/factories/:id/measurement-points` เพื่อเลือกโรงงานและจุดตรวจวัด ถ้าไม่เลือกจุดให้ส่ง `measurementPoint: null`
+2. เรียก `GET /chat/factories` โดยไม่ส่ง `page`/`pageSize` เพื่อรับทุกโรงงานที่มีสิทธิ์ แล้ว `GET /chat/factories/:id/measurement-points` เพื่อเลือกโรงงานและจุดตรวจวัด ถ้าไม่เลือกจุดให้ส่ง `measurementPoint: null`
 3. เปิดเรื่องด้วย `POST /chat/tickets` พร้อมข้อความแรกและ `Idempotency-Key` ใหม่ เก็บ key เดิมไว้เมื่อจำเป็นต้องส่งคำขอเดิมซ้ำ
-4. เรียกรายการ `GET /chat/tickets` และรายละเอียด/ข้อความเมื่อเปิดสนทนา ใช้ `capabilities` ตัดสินว่าจะแสดงปุ่มตอบและปิดหรือไม่
+4. เรียกรายการ `GET /chat/tickets` โดยไม่ส่ง `page`/`pageSize` เพื่อรับทุกรายการตามสิทธิ์/ตัวกรอง ให้ frontend แบ่งหน้าเอง และโหลดรายละเอียด/ข้อความเมื่อเปิดสนทนา ใช้ `capabilities` ตัดสินว่าจะแสดงปุ่มตอบและปิดหรือไม่
 5. หลังส่งข้อความหรือปิด Ticket ใช้ผลตอบกลับปรับสถานะทันที แล้วรีเฟรชรายการเมื่อจำเป็น
 
 ทุก path ด้านล่างมี prefix `/api/v1` และใช้ [Bearer authentication](../../shared/authentication/README.md) ตัวอย่างใช้ token จาก environment ของผู้ทดสอบ:
@@ -86,8 +90,9 @@ Backend โหลดสิทธิ์ปัจจุบันทุก request 
 | `ChatEvent.id` | integer | ไม่ | ID เหตุการณ์ |
 | `ChatEvent.type` | `opened` / `closed` | ไม่ | การเปิดหรือปิดเรื่อง แยกจากข้อความ |
 | `ChatEvent.actor`, `createdAt` | `ChatActor`, string date-time | ไม่ | ผู้ดำเนินการและเวลา UTC |
-| `ChatPagination.page`, `pageSize` | integer | ไม่ | หน้าปัจจุบันและจำนวนต่อหน้า |
-| `ChatPagination.total`, `totalPages` | integer | ไม่ | จำนวนรายการและจำนวนหน้าตามสิทธิ์และตัวกรอง |
+| `ChatPagination.page` | integer | ไม่ | คง `1` เสมอ เป็น metadata เพื่อความเข้ากันได้ ไม่ใช่หน้าจอปัจจุบัน |
+| `ChatPagination.pageSize`, `total` | integer ≥ 0 | ไม่ | ทั้งสองค่าเท่ากับ `data.length` ซึ่งเป็นผลทั้งหมดตามสิทธิ์/ตัวกรอง; ว่างเป็น `0` |
+| `ChatPagination.totalPages` | integer `0` / `1` | ไม่ | `1` เมื่อมีข้อมูล, `0` เมื่อว่าง ไม่ใช่จำนวนหน้าที่ frontend แบ่ง |
 
 โครงสร้าง Ticket ที่ใช้ร่วมกัน:
 
@@ -130,27 +135,25 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `GET /chat/factories`
 
-คืนโรงงานในขอบเขตปัจจุบัน รวมโรงงานที่ยังไม่มีจุดตรวจวัด ใช้สิทธิ์อ่าน
+คืนโรงงานทั้งหมดในขอบเขตปัจจุบันที่ตรง `q` รวมโรงงานที่ยังไม่มีจุดตรวจวัด ใช้สิทธิ์อ่าน ไม่มีการตัดเหลือ 25/50/100 รายการหรือแบ่งหน้าฝั่ง server ส่ง `page` หรือ `pageSize` จะตอบ `400 VALIDATION_ERROR`
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
 | `q` | query | string | ไม่ | trim; 1–200 ตัวอักษร; ค้นชื่อโรงงาน/เลขทะเบียน |
-| `page` | query | integer 1–1,000,000 | ไม่ | ค่าเริ่มต้น `1` |
-| `pageSize` | query | `25` / `50` / `100` | ไม่ | ค่าเริ่มต้น `25` |
 
 ตัวอย่าง query ในรูป JSON (ส่งเป็น URL query ไม่ใช่ body):
 
 ```json
-{"page":1,"pageSize":25}
+{"q":"โรงงานตัวอย่าง"}
 ```
 
 | Response field | Type | Nullable | คำอธิบาย |
 | --- | --- | --- | --- |
-| `data` | `ChatFactory[]` | ไม่ | รายการโรงงานที่มีสิทธิ์ |
-| `pagination` | `ChatPagination` | ไม่ | จำนวนตามตัวกรองและสิทธิ์ |
+| `data` | `ChatFactory[]` | ไม่ | ทุกโรงงานที่มีสิทธิ์และตรงตัวกรอง |
+| `pagination` | `ChatPagination` | ไม่ | metadata ของผลทั้งหมดตามนิยามด้านบน; frontend แบ่งหน้าเอง |
 
 ```json
-{"success":true,"data":[{"id":10,"name":"โรงงานตัวอย่าง","registrationNo":"EXAMPLE-001","provinceName":"ระยอง","regionName":"ภาคตะวันออก"}],"pagination":{"page":1,"pageSize":25,"total":1,"totalPages":1}}
+{"success":true,"data":[{"id":10,"name":"โรงงานตัวอย่าง","registrationNo":"EXAMPLE-001","provinceName":"ระยอง","regionName":"ภาคตะวันออก"}],"pagination":{"page":1,"pageSize":1,"total":1,"totalPages":1}}
 ```
 
 ## `GET /chat/factories/:id/measurement-points`
@@ -175,11 +178,10 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `GET /chat/tickets`
 
-ใช้สิทธิ์อ่าน คืนเฉพาะรายการในขอบเขตปัจจุบัน ไม่มีข้อความหรือประวัติเหตุการณ์ทั้งหมดในแต่ละแถว
+ใช้สิทธิ์อ่าน คืนทุกรายการในขอบเขตปัจจุบันที่ตรงตัวกรองตามลำดับที่เลือก ไม่มีข้อความหรือประวัติเหตุการณ์ทั้งหมดในแต่ละแถว ไม่มีการแบ่งหน้าฝั่ง server ส่ง `page` หรือ `pageSize` จะตอบ `400 VALIDATION_ERROR`
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
-| `page`, `pageSize` | query | integer | ไม่ | เช่นเดียวกับรายการโรงงาน |
 | `q` | query | string | ไม่ | trim; 1–200 ตัวอักษร; ค้นเลข Ticket หัวข้อ ชื่อ/เลขทะเบียนโรงงาน จังหวัด และภาคใน snapshot |
 | `status` | query | `open` / `closed` | ไม่ | กรองสถานะ |
 | `topicCode` | query | topic code | ไม่ | หนึ่งใน 6 หัวข้อจาก `/options` |
@@ -192,19 +194,21 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 ตัวอย่าง query:
 
 ```json
-{"page":1,"pageSize":25,"status":"open","sort":"lastMessageAt","order":"desc"}
+{"status":"open","sort":"lastMessageAt","order":"desc"}
 ```
 
 | Response field | Type | Nullable | คำอธิบาย |
 | --- | --- | --- | --- |
-| `data` | `ChatTicketSummary[]` | ไม่ | ใช้โครงสร้าง Ticket ด้านบนโดยไม่มี `events` |
-| `pagination` | `ChatPagination` | ไม่ | จำนวนหลังกรองขอบเขตและเงื่อนไข |
+| `data` | `ChatTicketSummary[]` | ไม่ | ทุกรายการที่ตรงสิทธิ์/ตัวกรอง ใช้โครงสร้าง Ticket ด้านบนโดยไม่มี `events` |
+| `pagination` | `ChatPagination` | ไม่ | metadata ของผลทั้งหมดตามนิยามด้านบน; frontend แบ่งหน้าเอง |
 
 ```json
-{"success":true,"data":[{"id":1,"ticketNo":"TK-69-00001","topic":{"code":"other","label":"อื่นๆ"},"factory":{"id":10,"name":"โรงงานตัวอย่าง","registrationNo":"EXAMPLE-001","provinceName":"ระยอง","regionName":"ภาคตะวันออก"},"measurementPoint":null,"status":"open","openedBy":{"userId":101,"name":"ผู้ประกอบการตัวอย่าง","roleCode":"factory_operator","roleLabel":"ผู้ประกอบการ"},"openedAt":"2026-10-17T03:00:00.000Z","closedBy":null,"closedAt":null,"lastMessageAt":"2026-10-17T03:00:00.000Z","capabilities":{"canReply":true,"canClose":true}}],"pagination":{"page":1,"pageSize":25,"total":1,"totalPages":1}}
+{"success":true,"data":[{"id":1,"ticketNo":"TK-69-00001","topic":{"code":"other","label":"อื่นๆ"},"factory":{"id":10,"name":"โรงงานตัวอย่าง","registrationNo":"EXAMPLE-001","provinceName":"ระยอง","regionName":"ภาคตะวันออก"},"measurementPoint":null,"status":"open","openedBy":{"userId":101,"name":"ผู้ประกอบการตัวอย่าง","roleCode":"factory_operator","roleLabel":"ผู้ประกอบการ"},"openedAt":"2026-10-17T03:00:00.000Z","closedBy":null,"closedAt":null,"lastMessageAt":"2026-10-17T03:00:00.000Z","capabilities":{"canReply":true,"canClose":true}}],"pagination":{"page":1,"pageSize":1,"total":1,"totalPages":1}}
 ```
 
-รายการเป็นข้อมูลปัจจุบัน เมื่อมีข้อความใหม่ระหว่างเปลี่ยนหน้าหรือรีเฟรช แถวอาจเลื่อนหน้าได้ ไม่มี snapshot ของทั้งชุดผลลัพธ์
+frontend เก็บ `data` ทั้งชุดแล้วแบ่งหน้าเอง การเปลี่ยนหน้า/จำนวนแถวต่อหน้าไม่ต้องเรียก API ใหม่ เมื่อค้นหา กรอง เรียง หรือรีเฟรช ให้โหลดผลทั้งชุดใหม่ตาม query และปรับหน้าจอให้ไม่เกินจำนวนแถวที่เหลือ ข้อมูลอาจเปลี่ยนระหว่างคำขอแต่ละครั้ง
+
+ผลว่างของทั้งสองรายการใช้ `{"success":true,"data":[],"pagination":{"page":1,"pageSize":0,"total":0,"totalPages":0}}` ส่วน `GET /chat/tickets/:id/messages` ยังคงใช้ `limit` และ cursor ตามเดิม การเปลี่ยนนี้ไม่กระทบการแบ่งหน้าของเมนูอื่น
 
 ## `POST /chat/tickets`
 
@@ -334,7 +338,7 @@ Idempotency แยกตามบัญชีและการทำงาน; 
 
 | HTTP | Code | ใช้กับ | เงื่อนไข/แนวทาง client |
 | --- | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | ทุก endpoint ที่รับ input | ID/query/body/header ผิดรูปแบบ, ข้อความว่าง/เกิน 2,000, field ที่ไม่อนุญาต, cursor ไม่ถูกต้อง; แก้ input |
+| `400` | `VALIDATION_ERROR` | ทุก endpoint ที่รับ input | ID/query/body/header ผิดรูปแบบ, ข้อความว่าง/เกิน 2,000, field ที่ไม่อนุญาต (รวม `page`/`pageSize` ของรายการโรงงานและ Ticket), cursor ไม่ถูกต้อง; แก้ input |
 | `400` | `BAD_REQUEST` | request ที่มี body / อ่านข้อความ | JSON ผิดรูปแบบ หรือ cursor ถอดรหัสไม่ได้ รูปแบบภายในผิด/เป็นของ Ticket อื่น; แก้ JSON หรือใช้ cursor ล่าสุดจาก server |
 | `401` | `UNAUTHORIZED` | ทุก endpoint | ไม่มี/หมดอายุ token; เข้าสู่ระบบใหม่ |
 | `403` | `FORBIDDEN` | ทุก endpoint | ขาด `chat:view`; โหลดสิทธิ์ใหม่และซ่อนเมนู Chat |

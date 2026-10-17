@@ -137,7 +137,7 @@ describe('Chat persistence public interface', () => {
       chatRepository.sendMessage({ ...coworker, canWrite: false }, ticket.id, 'ตอบแล้ว', 'reply'),
     ).rejects.toMatchObject({ statusCode: 403 });
   });
-  it('lists only visible ticket summaries with stable pagination and intersecting filters', async () => {
+  it('lists only visible ticket summaries with stable ordering and intersecting filters', async () => {
     fixture = await createChatSqlFixture(db);
     const first = await chatRepository.createTicket(
       operator,
@@ -165,17 +165,12 @@ describe('Chat persistence public interface', () => {
       'hidden',
     );
     await chatRepository.closeTicket(operator, first.ticket.id);
-    const query = { page: 1, pageSize: 1, sort: 'lastMessageAt' as const, order: 'desc' as const };
+    const query = { sort: 'lastMessageAt' as const, order: 'desc' as const };
     const page = await chatRepository.listTickets(operator, query);
-    expect(page.pagination).toEqual({ page: 1, pageSize: 1, total: 2, totalPages: 2 });
-    expect(page.data.map((ticket) => ticket.id)).toEqual([second.ticket.id]);
+    expect(page.pagination).toEqual({ page: 1, pageSize: 2, total: 2, totalPages: 1 });
+    expect(page.data.map((ticket) => ticket.id)).toEqual([second.ticket.id, first.ticket.id]);
     expect(page.data[0]).not.toHaveProperty('messages');
     expect(page.data[0]).not.toHaveProperty('events');
-    expect(
-      (await chatRepository.listTickets(operator, { ...query, page: 2 })).data.map(
-        (ticket) => ticket.id,
-      ),
-    ).toEqual([first.ticket.id]);
     const filtered = await chatRepository.listTickets(operator, {
       ...query,
       q: 'REG-10',
@@ -275,8 +270,6 @@ describe('Chat persistence public interface', () => {
     expect(
       (
         await chatRepository.listTickets(operator, {
-          page: 1,
-          pageSize: 25,
           sort: 'lastMessageAt',
           order: 'desc',
         })
@@ -300,8 +293,6 @@ describe('Chat persistence public interface', () => {
     expect(
       (
         await chatRepository.listTickets(operator, {
-          page: 1,
-          pageSize: 25,
           sort: 'lastMessageAt',
           order: 'desc',
         })
@@ -339,8 +330,6 @@ describe('Chat persistence public interface', () => {
     expect(
       (
         await chatRepository.listTickets(operator, {
-          page: 1,
-          pageSize: 25,
           sort: 'lastMessageAt',
           order: 'desc',
         })

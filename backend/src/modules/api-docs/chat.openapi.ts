@@ -51,9 +51,7 @@ const query = (name: string, schema: OpenApiObject, description: string): OpenAp
   schema,
   description,
 });
-const pageParameters = [
-  query('page', { type: 'integer', minimum: 1, maximum: 1000000, default: 1 }, 'หน้ารายการ'),
-  query('pageSize', { type: 'integer', enum: [25, 50, 100], default: 25 }, 'จำนวนรายการต่อหน้า'),
+const searchParameters = [
   query('q', { type: 'string', minLength: 1, maxLength: 200 }, 'ข้อความค้นหา; trim ก่อนใช้'),
 ];
 const idempotencyKey = {
@@ -149,7 +147,7 @@ const exampleMessage = {
   sender: exampleActor,
   createdAt: '2026-10-17T03:00:00.000Z',
 };
-const examplePagination = { page: 1, pageSize: 25, total: 1, totalPages: 1 };
+const examplePagination = { page: 1, pageSize: 1, total: 1, totalPages: 1 };
 const exampleClosed = {
   ...exampleDetail,
   status: 'closed',
@@ -283,10 +281,22 @@ export const chatSchemas: Record<string, OpenApiObject> = {
   },
   ChatCreateResponse: envelope(ref('ChatCreateResult')),
   ChatPagination: object({
-    page: { type: 'integer', minimum: 1 },
-    pageSize: { type: 'integer', enum: [25, 50, 100] },
+    page: {
+      type: 'integer',
+      enum: [1],
+      description: 'ข้อมูลที่ตรงสิทธิ์และตัวกรองทั้งหมดในผลลัพธ์เดียว',
+    },
+    pageSize: {
+      type: 'integer',
+      minimum: 0,
+      description: 'จำนวนแถวที่คืน เท่ากับ data.length และ total; 0 เมื่อไม่มีข้อมูล',
+    },
     total: { type: 'integer', minimum: 0 },
-    totalPages: { type: 'integer', minimum: 0 },
+    totalPages: {
+      type: 'integer',
+      enum: [0, 1],
+      description: '1 เมื่อมีข้อมูล หรือ 0 เมื่อไม่มีข้อมูล',
+    },
   }),
   ChatFactoryPage: {
     ...object({
@@ -387,10 +397,10 @@ export const chatPaths: Record<string, OpenApiObject> = {
       tags: ['Chat'],
       operationId: 'listChatTickets',
       summary: 'รายการ Ticket ตามสิทธิ์ ตัวกรอง และลำดับ',
-      description: `${accessDescription}\n\nรายการไม่มีข้อความหรือ events; ทุกแถวมี capabilities ของผู้เรียกปัจจุบัน ใช้ ID เป็นลำดับรองเมื่อ sort เท่ากัน ข้อมูลสดอาจเลื่อนหน้าเมื่อมีข้อความใหม่ระหว่างเปลี่ยนหน้าหรือรีเฟรช\n\nfrom/to กรอง lastMessageAt แบบรวมขอบเขตทั้งสองด้าน ต้อง from<=to; รับ ISO 8601 ที่มี Z หรือ timezone offset และ normalize UTC; q ค้น Ticket และข้อมูลโรงงาน; query ที่ไม่ได้ระบุถูกปฏิเสธ`,
+      description: `${accessDescription}\n\nรายการไม่มีข้อความหรือ events; ทุกแถวมี capabilities ของผู้เรียกปัจจุบัน ใช้ ID เป็นลำดับรองเมื่อ sort เท่ากัน คืนทั้งหมดที่ตรงสิทธิ์และตัวกรองในคำขอเดียว ให้ frontend แบ่งหน้าเอง; ไม่รับ page/pageSize หากส่งมาตอบ 400 VALIDATION_ERROR\n\nfrom/to กรอง lastMessageAt แบบรวมขอบเขตทั้งสองด้าน ต้อง from<=to; รับ ISO 8601 ที่มี Z หรือ timezone offset และ normalize UTC; q ค้น Ticket และข้อมูลโรงงาน; query ที่ไม่ได้ระบุถูกปฏิเสธ`,
       security,
       parameters: [
-        ...pageParameters,
+        ...searchParameters,
         query('status', { type: 'string', enum: ['open', 'closed'] }, 'กรองสถานะ'),
         query('topicCode', ref('ChatTopicCode'), 'กรองหัวข้อ'),
         query('eligibleFactoryId', positiveId, 'กรองโรงงานที่ยังอยู่ในขอบเขต'),
@@ -436,7 +446,10 @@ export const chatPaths: Record<string, OpenApiObject> = {
       ],
       responses: {
         ...errors,
-        '200': response('รายการ Ticket และ pagination ที่ระดับบนสุด', ref('ChatTicketPage')),
+        '200': response(
+          'รายการ Ticket ทั้งหมดพร้อม metadata จำนวนผลลัพธ์ที่ระดับบนสุด',
+          ref('ChatTicketPage'),
+        ),
       },
     },
     post: {
@@ -470,12 +483,15 @@ export const chatPaths: Record<string, OpenApiObject> = {
       tags: ['Chat'],
       operationId: 'listChatFactories',
       summary: 'โรงงานที่ผู้ใช้มีสิทธิ์เลือกเปิดเรื่อง',
-      description: `${accessDescription}\n\nค้นชื่อโรงงาน/เลขทะเบียน; รวมโรงงานที่เข้าข่ายที่ยังไม่เชื่อมต่อหรือไม่มีจุดตรวจวัดเมื่อมีสิทธิ์ ไม่สร้างสิทธิ์จากการกรอกเลขทะเบียนเอง`,
+      description: `${accessDescription}\n\nค้นชื่อโรงงาน/เลขทะเบียน; รวมโรงงานที่เข้าข่ายที่ยังไม่เชื่อมต่อหรือไม่มีจุดตรวจวัดเมื่อมีสิทธิ์ ไม่สร้างสิทธิ์จากการกรอกเลขทะเบียนเอง; คืนทั้งหมดที่ตรงสิทธิ์และคำค้นในคำขอเดียว ให้ frontend แบ่งหน้าเอง; ไม่รับ page/pageSize หากส่งมาตอบ 400 VALIDATION_ERROR`,
       security,
-      parameters: pageParameters,
+      parameters: searchParameters,
       responses: {
         ...errors,
-        '200': response('รายการโรงงานและ pagination ที่ระดับบนสุด', ref('ChatFactoryPage')),
+        '200': response(
+          'รายการโรงงานทั้งหมดพร้อม metadata จำนวนผลลัพธ์ที่ระดับบนสุด',
+          ref('ChatFactoryPage'),
+        ),
       },
     },
   },

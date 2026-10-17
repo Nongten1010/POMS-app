@@ -1,5 +1,17 @@
 # API Breaking Changes
 
+<a id="chat-unpaged-lists"></a>
+
+## 2026-10-18 — Chat คืนรายการโรงงานและ Ticket ทั้งหมดตามสิทธิ์/ตัวกรอง
+
+- **Affected endpoints:** `GET /api/v1/chat/factories`, `GET /api/v1/chat/tickets`; [สัญญา Chat](./menus/chat/README.md), [งานเปลี่ยน frontend](../guides/frontend-handoffs/chat/README.md)
+- **Impact:** ถอด `page` และ `pageSize` ออกจาก query ทั้งสอง endpoint; ส่ง key ใด key หนึ่งตอบ `400 VALIDATION_ERROR` เพราะตรวจ query แบบ strict ผล `data` คืนทั้งหมดตามสิทธิ์และตัวกรอง ไม่มีเพดาน 25/50/100 รายการ; `q`, ตัวกรองและการเรียง Ticket รวมการตรวจสิทธิ์คงเดิม
+- **Old contract:** รับ `page` (default `1`) และ `pageSize` (`25`/`50`/`100`, default `25`) และคืนข้อมูลเฉพาะหน้าที่ขอ
+- **New contract:** ไม่รับ pagination query; คง response `pagination` เพื่อความเข้ากันได้โดย `page=1`, `pageSize=total=data.length`, `totalPages=1` เมื่อมีผล หรือ `0` เมื่อว่าง (`pageSize=total=0`) metadata นี้ไม่ใช่หน้าที่ frontend แบ่ง
+- **Migration:** ลบ pagination query จาก helper และผู้เรียกทั้งสองรายการ เลิก loop โหลดโรงงานทีละหน้า ให้ DataGrid แบ่งหน้าจาก `data` ทั้งชุดโดยไม่โหลดใหม่เมื่อเปลี่ยนหน้า; คง server search/filter/sort และโหลดใหม่เมื่อ query เหล่านี้เปลี่ยน ไม่ใช้ response `totalPages` จำกัดหน้าจอ ไม่ต้อง migrate ฐานข้อมูล; message `limit`/cursors และรายการโรงงานเมนูอื่นคงเดิม
+- **Release:** การเปลี่ยนนี้ยังไม่ deploy; ประสาน frontend ก่อนเปิด backend รุ่นนี้ เพราะ client เดิมยังส่ง query ที่ถูกถอด และ frontend รุ่นใหม่ที่อ่านเพียงคำขอเดียวจะได้เพียง 25 รายการแรกหากชี้ backend รุ่นเก่า ตรวจ live OpenAPI และผลเกิน 100 รายการหลัง deploy ก่อนถือว่าเสร็จ
+- **Breaking change:** yes — ถอด request fields และเปลี่ยนความหมาย pagination metadata ของสองรายการ
+
 <a id="connection-request-revision-note-2000"></a>
 
 ## 2026-10-16 — จำกัดรายละเอียดแจ้งแก้ไขคำขอเชื่อมต่อเป็น 2,000 ตัวอักษร
