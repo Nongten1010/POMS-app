@@ -537,6 +537,12 @@ function editablePermissionGroupSchema(module: string, complete: boolean): OpenA
       : {}),
     ...Object.fromEntries(actions.map((action) => [action, { type: 'boolean' }])),
   };
+  if (module === 'chat') {
+    properties.view.description =
+      'มีสิทธิ์ใช้งาน: map เป็น chat:view; เปิด Ticket ส่งข้อความ และปิดเรื่องได้ภายในขอบเขต eligible_factories:view ปัจจุบัน โดยไม่ต้องเพิ่ม chat:ask หรือ chat:answer';
+    properties.edit.description =
+      'ตอบคำถาม (Admin): map เป็น legacy chat:answer ตามเดิม ไม่เปลี่ยน role บัญชี และไม่ใช่เงื่อนไขเพิ่มสำหรับ Chat endpoints';
+  }
 
   return {
     type: 'object',
@@ -2315,7 +2321,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'string',
         minLength: 1,
         maxLength: 80,
-        description: 'เลขทะเบียนสำหรับแสดงผล; ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่ ไม่ใช่ factoryId เสมอไป',
+        description:
+          'เลขทะเบียนสำหรับแสดงผล; ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่ ไม่ใช่ factoryId เสมอไป',
         example: '3-34(3)-3/54นบ',
       },
       factoryName: { type: 'string', minLength: 1, maxLength: 500 },
@@ -7375,9 +7382,7 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
   if (path.startsWith('/chat/')) {
     if (path === '/chat/options') return { permissions: ['chat:view'], mode: 'all' };
     return {
-      permissions: path === '/chat/tickets' && method === 'post'
-        ? ['chat:view', 'chat:ask', 'eligible_factories:view']
-        : ['chat:view', 'eligible_factories:view'],
+      permissions: ['chat:view', 'eligible_factories:view'],
       mode: 'all',
     };
   }

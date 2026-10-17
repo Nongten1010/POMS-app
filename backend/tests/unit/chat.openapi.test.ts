@@ -32,18 +32,26 @@ describe('Chat runtime OpenAPI', () => {
     );
   });
 
-  it('publishes ticket creation based on chat:ask without an operator-only restriction', async () => {
+  it('publishes ticket creation from the Chat use checkbox without extra action grants', async () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     const create = document.paths['/chat/tickets']?.post;
-    expect(create?.['x-poms-permissions']).toEqual([
-      'chat:view',
-      'chat:ask',
-      'eligible_factories:view',
-    ]);
+    expect(create?.['x-poms-permissions']).toEqual(['chat:view', 'eligible_factories:view']);
     expect(create).not.toHaveProperty('x-allowed-user-types');
     expect(document.components.schemas.ChatOptions.properties.canCreate.description).toContain(
-      'chat:ask',
+      'chat:view',
     );
+  });
+
+  it('connects the editable Chat use checkbox to ticket actions without granting an admin role', async () => {
+    const { body: document } = await request(app).get('/api/v1/openapi.json');
+    for (const name of ['EditablePermissionGroups', 'EditablePermissionGroupsResponse']) {
+      const chat = document.components.schemas[name].properties.chat;
+      expect(chat.properties.view.description).toContain('chat:view');
+      expect(chat.properties.view.description).toContain('เปิด Ticket');
+      expect(chat.properties.edit.description).toContain('chat:answer');
+      expect(chat.properties.edit.description).toContain('ไม่เปลี่ยน role');
+      expect(Object.keys(chat.properties)).toEqual(['view', 'edit']);
+    }
   });
 
   it('describes atomic ticket creation, strict inputs, point identity, and safe retries', async () => {
@@ -142,14 +150,15 @@ describe('Chat runtime OpenAPI', () => {
     expect(document.components.schemas.ChatTicketDetail.required).toContain('events');
   });
 
-  it('explains alternative write permissions, retries after close, and idempotent closure', async () => {
+  it('explains chat:view write permission, retries after close, and idempotent closure', async () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     const send = document.paths['/chat/tickets/{id}/messages']?.post;
     const close = document.paths['/chat/tickets/{id}/close']?.post;
     for (const operation of [send, close]) {
       expect(operation?.['x-poms-write-permissions']).toEqual({
-        anyOf: ['chat:ask', 'chat:answer'],
+        anyOf: ['chat:view'],
       });
+      expect(operation?.['x-poms-permissions']).toEqual(['chat:view', 'eligible_factories:view']);
     }
     expect(send?.description).toContain('หลังปิด');
     expect(send?.responses).toEqual(

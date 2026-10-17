@@ -32,12 +32,16 @@ curl "$BASE_URL/api/v1/chat/tickets" \
 | --- | --- |
 | อ่านตัวเลือก `/options` | `chat:view` |
 | อ่านโรงงาน รายการ Ticket รายละเอียด และข้อความ | `chat:view` และขอบเขตปัจจุบันจาก `eligible_factories:view` |
-| เปิด Ticket | `chat:ask` เพิ่มจากสิทธิ์อ่าน ใช้ได้กับผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแล |
-| ส่งข้อความและปิด Ticket | `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่าน ไม่จำกัดเฉพาะผู้สร้าง Ticket |
+| เปิด Ticket | `chat:view` และขอบเขตปัจจุบันจาก `eligible_factories:view` ใช้ได้กับผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแล |
+| ส่งข้อความและปิด Ticket | `chat:view` และขอบเขตปัจจุบันจาก `eligible_factories:view` ไม่จำกัดเฉพาะผู้สร้าง Ticket |
+
+ในหน้าจัดการสิทธิ์ ช่อง **มีสิทธิ์ใช้งาน** คือ `permissions.chat.view` และบันทึกเป็น `chat:view` เพียงช่องนี้ก็เปิดเรื่อง ส่งข้อความ และปิด Ticket ที่อยู่ในขอบเขตได้ทันที ทั้งสิทธิ์ที่บันทึกอยู่เดิมและการบันทึกใหม่ ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม
+
+ช่อง **ตอบคำถาม (Admin)** คือ `permissions.chat.edit` ซึ่งยังบันทึกเป็น `chat:answer` ตามเดิมและไม่เปลี่ยน role บัญชี ระบบยังรับและคืน legacy `chat:ask`/`chat:answer` เพื่อความเข้ากันได้ แต่ไม่ใช้เป็นเงื่อนไขเพิ่มของ Chat endpoints เมื่อถอน `chat:view` จะใช้ Chat ไม่ได้แม้ยังมีสิทธิ์ legacy เหล่านี้ ดูรูปแบบการบันทึกที่ [จัดการสิทธิ์การใช้งาน](../permissions/README.md)
 
 Backend โหลดสิทธิ์ปัจจุบันทุก request และตรวจขอบเขตโรงงานทุกครั้ง รวมถึงการส่งซ้ำด้วย idempotency key เดิม ผู้ดูแลไม่มีทางข้ามสิทธิ์หรือขอบเขต ผู้ประกอบการต้องมีความสัมพันธ์โรงงานที่ยังมีผลแม้ได้รับ scope `ALL` ไม่ใช้ชื่อ role, จังหวัด, เลขทะเบียน หรือ `userId` ที่ client ส่งมาเพื่อให้สิทธิ์
 
-ถ้า scope โรงงานหายไป ใช้ไม่ได้ หรือข้อมูลกำหนดพื้นที่ไม่ครบ ผลรายการจะว่างและ resource นอกขอบเขตตอบ `404` ส่วนการขาด `chat:view` หรือ permission สำหรับ action ตอบ `403` ผลตอบกลับหลังผ่าน authentication ใช้ `Cache-Control: private, no-store`
+ถ้า scope โรงงานหายไป ใช้ไม่ได้ หรือข้อมูลกำหนดพื้นที่ไม่ครบ ผลรายการจะว่างและ resource นอกขอบเขตตอบ `404` ส่วนการขาด `chat:view` ตอบ `403` ผลตอบกลับหลังผ่าน authentication ใช้ `Cache-Control: private, no-store`
 
 โรงงานในเมนูนี้อ้างถึง `eligible_factories` โดยเลือกได้แม้ยังไม่เชื่อมต่อ POMS หรือยังไม่มีจุดตรวจวัด หากบัญชีมีสิทธิ์เข้าถึงอยู่แล้ว การกรอกเลขทะเบียนเองไม่สร้างสิทธิ์ให้ผู้ใช้ ส่วนข้อมูลโรงงาน current/live ใน POMS คือ active rows ใน `cems_wpms_connected_measurement_points` และตาราง `factories` ใช้ประกอบการยืนยันตัวตน/สิทธิ์โรงงาน
 
@@ -118,7 +122,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 | `data.viewer` | `ChatActor` | ไม่ | บัญชีปัจจุบัน |
 | `data.topics` | `{code,label}[]` | ไม่ | หัวข้อที่ backend รองรับ |
 | `data.limits.messageMaxLength` | integer | ไม่ | `2000` |
-| `data.canCreate` | boolean | ไม่ | เป็น `true` เมื่อมี `chat:ask` ไม่จำกัดเฉพาะผู้ประกอบการ; ยังต้องเลือกโรงงานที่มีสิทธิ์ |
+| `data.canCreate` | boolean | ไม่ | เป็น `true` เมื่อมี `chat:view` จากช่องมีสิทธิ์ใช้งาน; ยังต้องเลือกโรงงานที่มีสิทธิ์ |
 
 ```json
 {"success":true,"data":{"viewer":{"userId":101,"name":"ผู้ประกอบการตัวอย่าง","roleCode":"factory_operator","roleLabel":"ผู้ประกอบการ"},"topics":[{"code":"factory_access","label":"ข้อมูลโรงงานและสิทธิ์การใช้งาน"},{"code":"connection_data","label":"การขอเชื่อมต่อและการส่งข้อมูล"},{"code":"measurements_alerts","label":"ผลตรวจวัดและการแจ้งเตือน"},{"code":"forms_reports","label":"แบบฟอร์มและการยื่นรายงาน"},{"code":"form_legal_guidance","label":"ข้อมูลในแบบฟอร์ม กฎหมายและประกาศฯ"},{"code":"other","label":"อื่นๆ"}],"limits":{"messageMaxLength":2000},"canCreate":true}}
@@ -204,7 +208,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `POST /chat/tickets`
 
-ต้องมี `chat:view`, `chat:ask` และเข้าถึงโรงงานตามขอบเขต `eligible_factories:view` ใช้ได้กับผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแล สร้าง Ticket เหตุการณ์เปิด และข้อความแรกเป็นงานเดียวกัน ถ้าส่วนใดไม่สำเร็จจะไม่เหลือ Ticket ว่าง
+ต้องมี `chat:view` และเข้าถึงโรงงานตามขอบเขต `eligible_factories:view` ใช้ได้กับผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแล สร้าง Ticket เหตุการณ์เปิด และข้อความแรกเป็นงานเดียวกัน ถ้าส่วนใดไม่สำเร็จจะไม่เหลือ Ticket ว่าง
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -277,7 +281,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `POST /chat/tickets/:id/messages`
 
-ต้องมี `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่านและขอบเขตโรงงาน รับเฉพาะ Ticket ที่ยัง `open` สำหรับข้อความใหม่
+ต้องมี `chat:view` และเข้าถึง Ticket ตามขอบเขตโรงงานปัจจุบัน รับเฉพาะ Ticket ที่ยัง `open` สำหรับข้อความใหม่
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -303,7 +307,7 @@ Idempotency แยกตามบัญชีและการทำงาน; 
 
 ## `POST /chat/tickets/:id/close`
 
-ต้องมี `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่านและขอบเขตโรงงาน ปิดแล้วอ่านประวัติได้แต่ส่งข้อความใหม่หรือเปิด Ticket เดิมอีกครั้งไม่ได้ การปิดกล่องสนทนาใน UI ไม่ใช่การเรียก endpoint นี้
+ต้องมี `chat:view` และเข้าถึง Ticket ตามขอบเขตโรงงานปัจจุบัน ปิดแล้วอ่านประวัติได้แต่ส่งข้อความใหม่หรือเปิด Ticket เดิมอีกครั้งไม่ได้ การปิดกล่องสนทนาใน UI ไม่ใช่การเรียก endpoint นี้
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -333,7 +337,7 @@ Idempotency แยกตามบัญชีและการทำงาน; 
 | `400` | `VALIDATION_ERROR` | ทุก endpoint ที่รับ input | ID/query/body/header ผิดรูปแบบ, ข้อความว่าง/เกิน 2,000, field ที่ไม่อนุญาต, cursor ไม่ถูกต้อง; แก้ input |
 | `400` | `BAD_REQUEST` | request ที่มี body / อ่านข้อความ | JSON ผิดรูปแบบ หรือ cursor ถอดรหัสไม่ได้ รูปแบบภายในผิด/เป็นของ Ticket อื่น; แก้ JSON หรือใช้ cursor ล่าสุดจาก server |
 | `401` | `UNAUTHORIZED` | ทุก endpoint | ไม่มี/หมดอายุ token; เข้าสู่ระบบใหม่ |
-| `403` | `FORBIDDEN` | ทุก endpoint | ขาด `chat:view` หรือสิทธิ์สำหรับ action; โหลดสิทธิ์ใหม่และซ่อน action |
+| `403` | `FORBIDDEN` | ทุก endpoint | ขาด `chat:view`; โหลดสิทธิ์ใหม่และซ่อนเมนู Chat |
 | `404` | `NOT_FOUND` | factory points, create, detail, messages, close | ไม่มี resource หรืออยู่นอกขอบเขต; ไม่เปิดเผยว่ามีข้อมูลของผู้อื่น |
 | `409` | `IDEMPOTENCY_KEY_CONFLICT` | create/send | key เดิมแต่ payload ไม่เหมือนเดิม; ตรวจการ retry ไม่ส่งซ้ำด้วย key ใหม่โดยอัตโนมัติ |
 | `409` | `CHAT_TICKET_CLOSED` | send | ส่งข้อความใหม่หลังปิด; รีเฟรช Ticket และปิดช่องพิมพ์ |

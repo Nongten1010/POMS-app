@@ -68,15 +68,30 @@ Coverage ของ `src/modules/chat/`: statements **93.52%**, branches **86.64%
 - ตรวจ deployment ล่าสุดที่แตะ backend: run `38900838578`, commit `028fb97bf559dcd44790aefeee59e19b9f8b986a`; ไม่มี backend delta จาก commit นั้นถึง main ก่อน Chat จึงเพิ่ม migration `0141` เพียงรายการเดียวใน release นี้
 - Migration เพิ่มตาราง Chat 4 ตารางและ index/FK โดยไม่แก้ข้อมูลธุรกิจเดิม; หากคืน application ต้องคง migration/schema Chat ไว้ ไม่ใช้ `down` เพื่อลบข้อมูล
 
-## ตรวจแก้การเปิดเรื่องตามสิทธิ์
+## ผลตรวจ release ก่อนหน้า: การเปิดเรื่องตามสิทธิ์
 
-ผู้ใช้ยืนยันว่าเมื่อให้ `chat:ask` แล้ว เจ้าหน้าที่ต้องเปิด Ticket ได้ จึงแก้เงื่อนไขการทำงานให้ยึดสิทธิ์ปัจจุบัน: เปิดเรื่องต้องมี `chat:view` และ `chat:ask`; ส่งข้อความ/ปิดเรื่องใช้ `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่าน ขอบเขตโรงงานและความสัมพันธ์โรงงานของผู้ประกอบการยังตรวจตามเดิม ไม่แก้สิทธิ์หรือประเภทบัญชีจริง
+release ก่อนหน้าแก้กรณีเจ้าหน้าที่ที่มี `chat:ask` เปิด Ticket ไม่ได้ โดยขณะนั้นกำหนดว่า: เปิดเรื่องต้องมี `chat:view` และ `chat:ask`; ส่งข้อความ/ปิดเรื่องใช้ `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่าน ขอบเขตโรงงานและความสัมพันธ์โรงงานของผู้ประกอบการยังตรวจตามเดิม ไม่แก้สิทธิ์หรือประเภทบัญชีจริง
 
 - Regression ผ่าน HTTP พบก่อนแก้ว่าเจ้าหน้าที่มี `chat:ask` แต่ได้ `403`; หลังแก้ได้ `201` และ `/options` คืน `canCreate=true`
 - กรณีเจ้าหน้าที่มี `chat:ask` อย่างเดียวเคยได้ `canReply=false`/`canClose=false`; หลังแก้ส่งข้อความและปิดเรื่องได้
 - ตรวจถอนสิทธิ์หลังออก token, custom permissions, โรงงานนอกจังหวัด, ผู้ดูแลที่ไม่มี `chat:ask` และเจ้าหน้าที่ที่มีเฉพาะ `chat:answer` ผ่าน
 - Chat HTTP/persistence/factory/OpenAPI regression: 4 suites, 72 tests ผ่านด้วยข้อมูลสมมติ ไม่มีการสร้าง token แทนบัญชีจริงหรือเขียนข้อมูลทดสอบลง production
 - Runtime OpenAPI และ canonical contract ปรับกติกาสิทธิ์ตรงกันแล้ว; independent diff/security review ไม่พบข้อบกพร่องที่ต้องแก้
+
+## ตรวจสิทธิ์จากช่องมีสิทธิ์ใช้งาน
+
+ข้อกำหนดปัจจุบันคือ `permissions.chat.view` / `chat:view` ใช้เปิด Ticket ส่งข้อความ และปิดเรื่องภายในขอบเขตโรงงานเดิม ทั้งบัญชีที่บันทึกสิทธิ์ไว้แล้วและการบันทึกใหม่ ไม่ต้องเพิ่ม `chat:ask` หรือ `chat:answer` ไม่แก้ role สิทธิ์รายบัญชี หรือข้อมูล production เพื่อให้ผ่านการตรวจสิทธิ์
+
+- Runtime OpenAPI test ที่ `GET /api/v1/openapi.json` พบก่อนแก้ว่าสัญญาเปิด Ticket ยังบังคับ `chat:ask`; หลังแก้ระบุ `chat:view` และ `eligible_factories:view` ตามขอบเขตจริง
+- Runtime OpenAPI test ส่งข้อความ/ปิดเรื่องพบก่อนแก้ว่า metadata ยังบังคับ legacy ask/answer; หลังแก้ใช้ `chat:view`
+- Runtime OpenAPI test ของ editable permission matrix พบว่าช่อง Chat ไม่มีคำอธิบายการใช้งาน; หลังแก้อธิบาย `view` สำหรับเปิดเรื่อง/สนทนา/ปิด และ `edit` ยังคง map `chat:answer` โดยไม่เปลี่ยน role
+- Canonical Chat และ Permission Management อธิบาย checkbox และ legacy grants ตรงกับ runtime OpenAPI; ขอบเขตโรงงานและข้อกำหนดความสัมพันธ์โรงงานไม่เปลี่ยน
+- Runtime OpenAPI ของ Chat และสัญญารวม: 2 suites, 85 tests ผ่าน; lint source OpenAPI และ Chat contract tests ไม่มี error/warning ส่วน test สัญญารวมมี non-null assertion warnings เดิม 2 รายการนอกบรรทัดที่แก้; relative links และ JSON examples ในเอกสารที่แก้ครบ 3 ไฟล์ผ่าน
+- ระหว่างรันสอง OpenAPI suites ครั้งแรก health check ใน rate-limit test ได้ `501` หนึ่งครั้ง; ตรวจ route เดิมและรัน Chat suite แยกผ่าน 9 tests จากนั้นรันสอง suites ร่วมกันซ้ำผ่าน 85 tests โดยไม่แก้ application code
+- HTTP regression ยืนยัน RED ว่าบัญชี custom ที่มีเพียง `chat:view` ได้ `canCreate=false`; หลังแก้เปิดเรื่อง ส่งข้อความ อ่านประวัติ และปิดเรื่องได้ รวมถึงกรณี legacy ask/answer ถูก deny ขณะที่การถอน `chat:view` หลังออก token และโรงงานนอกขอบเขตยังถูกปฏิเสธ
+- Final backend verification: build/typecheck ผ่าน; 338 suites, 4,460 tests ผ่าน และ SQL integration 4 tests ข้ามเพราะไม่มีฐานทดสอบแยก ใช้ค่า environment จำลองตามที่ชุดทดสอบคาดหมาย (`PUBLIC_BASE_URL` และ `PARAMETER_DB_SCHEMA`) โดยไม่เชื่อม production
+- Lint ทั้ง backend ไม่มี error; warning เดิมนอกส่วนแก้ยังคงอยู่ ไม่มี warning เพิ่มในส่วนแก้ ตรวจ diff และ review ด้านสิทธิ์โดยอิสระไม่พบข้อบกพร่อง
+- Deployment และการทดสอบด้วยการล็อกอินปกติของบัญชี production ยังรอยืนยัน ณ เวลาเตรียม release นี้ ยังไม่อ้างว่าเปิด–ตอบ–ปิดบน production ผ่านหรือมีข้อมูลทดสอบที่ล้างแล้ว
 
 ## ข้อจำกัดและการส่งต่อ
 
@@ -86,10 +101,10 @@ Release แรก deploy ผ่าน [run 39033795135](https://github.com/Nongt
 
 Docs impact: updated
 
-Canonical docs: [Chat API](../../api/menus/chat/README.md)
+Canonical docs: [Chat API](../../api/menus/chat/README.md), [จัดการสิทธิ์การใช้งาน](../../api/menus/permissions/README.md)
 
-Reason: เพิ่ม API และพฤติกรรม Ticket ใหม่ครบ 9 operations พร้อม runtime OpenAPI
+Reason: ปรับสิทธิ์ใช้งาน Chat ให้ตรงกับ checkbox มีสิทธิ์ใช้งาน พร้อม runtime OpenAPI และ canonical contract
 
-Client impact: เพิ่ม API สำหรับ frontend เชื่อมต่อ Chat; UI เดิมยังไม่ได้ wire ในงานนี้
+Client impact: บัญชีที่มี chat:view ใช้เปิดเรื่อง/สนทนา/ปิดเรื่องได้ภายในขอบเขตเดิมโดยไม่ต้องเพิ่ม legacy grants; UI เดิมยังไม่ได้ wire ในงานนี้
 
 Breaking change: no

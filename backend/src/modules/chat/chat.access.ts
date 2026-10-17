@@ -17,15 +17,14 @@ export function getChatAccess(user: AuthenticatedUser | undefined): ChatAccess {
         })
       : undefined,
     regionalAccess: user.regionalAccess ?? null,
-    canCreateTicket: granted('chat:ask'),
-    canWrite: granted('chat:ask') || granted('chat:answer'),
+    // Permission Management's Chat use checkbox grants the complete conversation flow.
+    canCreateTicket: true,
+    canWrite: true,
   };
 }
 
 export function requireChatWrite(access: ChatAccess, create = false): void {
   if (create ? !access.canCreateTicket : !access.canWrite) {
-    throw new ForbiddenError(
-      create ? 'Chat ask permission required' : 'Chat write permission required',
-    );
+    throw new ForbiddenError('Chat use permission required');
   }
 }

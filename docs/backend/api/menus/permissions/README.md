@@ -190,13 +190,15 @@ Raw code `cems_wpms_requests:*` ใช้กับ backend route guard, ตา�
 | `feedback` | `view` | ไม่มี `data`, `region`, `province` |
 | `laws` | `view`, `edit` | ไม่มี `data`, `region`, `province` |
 | `faq` | `view`, `edit` | ไม่มี `data`, `region`, `province` |
-| `chat` | `view`, `edit` | ไม่มี `data`, `region`, `province`; `edit` map ไป raw `chat:answer` |
+| `chat` | `view`, `edit` | ไม่มี location fields; `view` map ไป `chat:view` ใช้เปิดเรื่อง/สนทนา/ปิดเรื่องภายในขอบเขตโรงงาน; `edit` map ไป legacy `chat:answer` |
 | `permissions` | `view` | ไม่มี `data`, `region`, `province`; ไม่มี `manage` ในหน้าแก้สิทธิ์ |
 | `eligible_factories` | `view`, `edit`, `approve` | scoped module |
 
 Scoped permission groups ใช้ `data`, `region`, `province` และ optional `estateCode` สำหรับนิคมรายเมนูหนึ่งแห่งเมื่อ `data=IN_ESTATE`; `estate` เป็น compatibility alias และ client ใหม่ควรใช้ `estateCode` Response คืน `estateCode` ของ scope นี้ เพื่อให้ส่งกลับผ่าน grouped PATCH โดยไม่สูญเสียพื้นที่รายเมนู ถ้าไม่ระบุนิคมใช้ profile fallback และยังคงจำกัดหนึ่งนิคม
 
 `data` ใน grouped response แสดงขอบเขตรวมของเมนู แต่ scope ของแต่ละ action อาจต่างกัน เช่น `view=ALL` และ `edit=IN_PROVINCE` การส่ง grouped matrix กลับโดยไม่เปลี่ยนขอบเขตเมนูต้องคง scope/qualifier ราย action ที่แคบกว่า ไม่ใช้ค่า display ที่กว้างที่สุดขยาย edit หรือ approve อัตโนมัติ ถ้าต้องการแก้ scope แยกแต่ละ action ให้ใช้ raw GET/PUT ตาม [API สิทธิ์รายบัญชี](./user-management-api.md#permission-override-api)
+
+สำหรับ Chat ช่อง **มีสิทธิ์ใช้งาน** (`permissions.chat.view=true`) ให้ `chat:view` ซึ่งใช้เปิด Ticket ส่งข้อความ และปิดเรื่องได้ภายในขอบเขต `eligible_factories:view` ปัจจุบัน ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม และไม่ต้องบันทึกสิทธิ์เดิมซ้ำ ช่อง **ตอบคำถาม (Admin)** (`permissions.chat.edit`) ยังบันทึก raw `chat:answer` ตามเดิมโดยไม่เปลี่ยน role บัญชี หากถอน `chat:view` จะใช้ Chat ไม่ได้แม้ยังมี legacy ask/answer ดู [Chat API](../chat/README.md) สำหรับ endpoint และขอบเขตโรงงาน
 
 `api_documentation` และ internal actions เช่น `statistics:export`, `chat:ask`, `permissions:manage`, `eligible_factories:manage` ไม่อยู่ใน editable matrix เมื่อ grouped PATCH เปลี่ยนบัญชีเป็น `custom` ระบบเก็บสิทธิ์ internal ที่มีผลอยู่ก่อนบันทึกไว้ใน snapshot เพื่อไม่ให้สิทธิ์หายหรือเปิดกลับจาก role โดยไม่ตั้งใจ Raw PUT เป็นช่องทางแทนที่สิทธิ์ทุก code รวม internal actions ผู้ที่มีเพียง `permissions:view` จะไม่ได้สิทธิ์แก้ผู้ใช้หรือแก้สิทธิ์เพิ่ม
 
@@ -220,7 +222,7 @@ Scoped permission groups ใช้ `data`, `region`, `province` และ option
 | `kwp_director` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL` | `eligible_factories:view=ALL` | `cems_wpms_requests:view=ALL` | `kwp_forms:view=ALL` | `bod_cod_errors:view=ALL`, `bod_cod_errors:approve=ALL` | `notifications:view=ALL` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | - |
 | `admin` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL`, `factories:edit`, `factories:approve` | `eligible_factories:view=ALL`, `eligible_factories:edit=ALL`, `eligible_factories:approve=ALL`, `eligible_factories:manage` (deprecated) | `cems_wpms_requests:view=ALL`, `cems_wpms_requests:edit`, `cems_wpms_requests:approve`, `cems_wpms_requests:direct_connect=ALL` | `kwp_forms:view=ALL`, `kwp_forms:edit`, `kwp_forms:approve` | `bod_cod_errors:view=ALL`, `bod_cod_errors:edit`, `bod_cod_errors:approve=ALL` | `notifications:view=ALL`, `notifications:view_status=ALL`, `notifications:edit`, `notifications:approve` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `laws:edit`, `faq:view`, `faq:edit`, `chat:view`, `chat:answer` | `permissions:view`, `permissions:manage`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view`, `api_documentation:view` |
 
-Admin target intentionally **does not include** `chat:ask`
+Admin target ไม่รวม `chat:ask`; การใช้งาน Chat อาศัย `chat:view` และขอบเขตโรงงานปัจจุบันตาม [Chat API](../chat/README.md)
 
 ### Explicit action-scope rules
 
@@ -271,7 +273,7 @@ Admin target intentionally **does not include** `chat:ask`
 | `cems_wpms_requests:direct_connect` | `permissions.connection.direct_connect` เฉพาะ runtime auth response; ไม่อยู่ใน Permission Management |
 | `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve` | `permissions.eligible_factories.view`, `permissions.eligible_factories.edit`, `permissions.eligible_factories.approve` |
 | `permissions:view`, `permissions:manage` | runtime response อาจมี `view`/`manage`; Permission Management มีเฉพาะ `view` และไม่มี `data` |
-| `chat:view`, `chat:ask`, `chat:answer` | runtime response มี `view`, `ask`, `edit` และ compatibility `answer`; Permission Management มีเฉพาะ `view`, `edit` และไม่มี `data` |
+| `chat:view`, `chat:ask`, `chat:answer` | runtime response มี `view`, `ask`, `edit` และ compatibility `answer`; Permission Management มีเฉพาะ `view`, `edit` และไม่มี `data`; Chat endpoints ใช้ `chat:view` โดยไม่ต้องมี legacy ask/answer เพิ่ม |
 
 Frontend ต้องใช้ grouped response เป็น canonical UI contract โดยเฉพาะ `permissions.connection.*`; raw permission code มีไว้สำหรับส่งกลับใน API ที่ระบุ field `code` และสำหรับ backend authorization เท่านั้น
 
