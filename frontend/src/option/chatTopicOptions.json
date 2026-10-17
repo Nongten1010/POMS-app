@@ -1,0 +1,8 @@
+[
+  { "code": "factory_access", "label": "ข้อมูลโรงงานและสิทธิ์การใช้งาน" },
+  { "code": "connection_data", "label": "การขอเชื่อมต่อและการส่งข้อมูล" },
+  { "code": "measurements_alerts", "label": "ผลตรวจวัดและการแจ้งเตือน" },
+  { "code": "forms_reports", "label": "แบบฟอร์มและการยื่นรายงาน" },
+  { "code": "form_legal_guidance", "label": "ข้อมูลในแบบฟอร์ม กฎหมายและประกาศฯ" },
+  { "code": "other", "label": "อื่นๆ" }
+]

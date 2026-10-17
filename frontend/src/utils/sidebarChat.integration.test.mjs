@@ -13,9 +13,12 @@ function findElements(element, predicate) {
   return matches
 }
 
-test('sidebar Chat maintenance applies only to operators and preserves menu permissions', async () => {
+test('sidebar Chat is enabled for every permitted user and preserves menu permissions', async () => {
   const cacheDir = await mkdtemp(join(tmpdir(), 'poms-sidebar-chat-'))
   const server = await createServer({
+    plugins: [{ name: 'sidebar-badge-test-fixture', enforce: 'pre', transform(code, id) {
+      if (id.endsWith('/src/components/DpomsSidebar.jsx')) return code.replace("import useMenuBadges from './useMenuBadges'", 'const useMenuBadges = () => ({ data: null, error: "" })')
+    } }],
     cacheDir, optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
   })
@@ -31,14 +34,14 @@ test('sidebar Chat maintenance applies only to operators and preserves menu perm
       })
       const chat = findElements(tree, (element) => element.key === 'Chat')[0]
       assert.ok(chat)
-      assert.equal(chat.props.disabled, userType === 'operator')
+      assert.ok(!chat.props.disabled)
       const labels = findElements(chat, (element) => typeof element.props.primary === 'string')
-      assert.equal(labels[0].props.primary, userType === 'operator' ? 'Chat (ปรับปรุง)' : 'Chat')
+      assert.equal(labels[0].props.primary, 'Chat')
       chat.props.onClick()
-      assert.equal(selected, userType === 'operator' ? null : 'chat')
-      assert.equal(closed, userType !== 'operator')
+      assert.equal(selected, 'chat')
+      assert.equal(closed, true)
       const home = findElements(tree, (element) => element.key === 'หน้าหลัก')[0]
-      assert.equal(home.props.disabled, false)
+      assert.ok(!home.props.disabled)
       home.props.onClick()
       assert.equal(selected, 'home')
       assert.equal(closed, true)

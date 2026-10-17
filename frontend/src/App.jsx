@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Box, Container } from '@mui/material'
 import DpomsAppBar from './components/DpomsAppBar'
 import DpomsLoginDialog from './components/DpomsLoginDialog'
@@ -206,6 +206,26 @@ function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isLoginOpen, setIsLoginOpen] = useState(false)
   const [authResponse, setAuthResponse] = useState(() => loadStoredAuth())
+  const handleChatAccessError = useCallback((status) => {
+    if (status === 401) {
+      localStorage.removeItem(authStorageKey)
+      legacyAuthStorageKeys.forEach((key) => localStorage.removeItem(key))
+      setAuthResponse(null)
+      setIsLoginOpen(true)
+    } else if (status === 403) {
+      setAuthResponse((current) => {
+        if (!current) return current
+        const response = getAuthResponsePayload(current)
+        const permissions = { ...getPermissionsFromAuth(current), chat: { ...getPermissionsFromAuth(current).chat, view: false } }
+        const nextResponse = response.data?.permissions
+          ? { ...response, data: { ...response.data, permissions } }
+          : { ...response, permissions }
+        const next = current.response ? { ...current, response: nextResponse } : nextResponse
+        localStorage.setItem(authStorageKey, JSON.stringify(next))
+        return next
+      })
+    }
+  }, [])
   const currentUser = getUserFromAuth(authResponse)
   const accessToken = getAccessTokenFromAuth(authResponse)
   const userType = getUserTypeFromAuth(authResponse)
@@ -322,7 +342,7 @@ function App() {
             isAdmin={roleCode === 'admin' || activePermissions?.faq?.edit === true}
           />
         ) : visibleSelectedMenu === 'chat' ? (
-          <ChatPage isStaff={userType === 'officer' || roleCode === 'admin' || activePermissions?.chat?.edit === true} />
+          <ChatPage accessToken={accessToken} userType={userType} permissions={activePermissions} onAccessError={handleChatAccessError} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} userType={userType} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'manuals' ? (
