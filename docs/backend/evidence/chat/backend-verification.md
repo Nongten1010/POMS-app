@@ -68,11 +68,21 @@ Coverage ของ `src/modules/chat/`: statements **93.52%**, branches **86.64%
 - ตรวจ deployment ล่าสุดที่แตะ backend: run `38900838578`, commit `028fb97bf559dcd44790aefeee59e19b9f8b986a`; ไม่มี backend delta จาก commit นั้นถึง main ก่อน Chat จึงเพิ่ม migration `0141` เพียงรายการเดียวใน release นี้
 - Migration เพิ่มตาราง Chat 4 ตารางและ index/FK โดยไม่แก้ข้อมูลธุรกิจเดิม; หากคืน application ต้องคง migration/schema Chat ไว้ ไม่ใช้ `down` เพื่อลบข้อมูล
 
+## ตรวจแก้การเปิดเรื่องตามสิทธิ์
+
+ผู้ใช้ยืนยันว่าเมื่อให้ `chat:ask` แล้ว เจ้าหน้าที่ต้องเปิด Ticket ได้ จึงแก้เงื่อนไขการทำงานให้ยึดสิทธิ์ปัจจุบัน: เปิดเรื่องต้องมี `chat:view` และ `chat:ask`; ส่งข้อความ/ปิดเรื่องใช้ `chat:ask` หรือ `chat:answer` เพิ่มจากสิทธิ์อ่าน ขอบเขตโรงงานและความสัมพันธ์โรงงานของผู้ประกอบการยังตรวจตามเดิม ไม่แก้สิทธิ์หรือประเภทบัญชีจริง
+
+- Regression ผ่าน HTTP พบก่อนแก้ว่าเจ้าหน้าที่มี `chat:ask` แต่ได้ `403`; หลังแก้ได้ `201` และ `/options` คืน `canCreate=true`
+- กรณีเจ้าหน้าที่มี `chat:ask` อย่างเดียวเคยได้ `canReply=false`/`canClose=false`; หลังแก้ส่งข้อความและปิดเรื่องได้
+- ตรวจถอนสิทธิ์หลังออก token, custom permissions, โรงงานนอกจังหวัด, ผู้ดูแลที่ไม่มี `chat:ask` และเจ้าหน้าที่ที่มีเฉพาะ `chat:answer` ผ่าน
+- Chat HTTP/persistence/factory/OpenAPI regression: 4 suites, 72 tests ผ่านด้วยข้อมูลสมมติ ไม่มีการสร้าง token แทนบัญชีจริงหรือเขียนข้อมูลทดสอบลง production
+- Runtime OpenAPI และ canonical contract ปรับกติกาสิทธิ์ตรงกันแล้ว; independent diff/security review ไม่พบข้อบกพร่องที่ต้องแก้
+
 ## ข้อจำกัดและการส่งต่อ
 
 SQL Server integration tests 4 ข้อถูกข้ามอย่างชัดเจน เพราะยังไม่มีฐานทดสอบแยกที่ตั้งค่าไว้ และ Docker daemon ไม่ทำงาน การทดสอบ SQL.js ไม่ยืนยัน lock/concurrency/deadlock/dialect ของ SQL Server ดู [วิธีเตรียมและรันฐานทดสอบ SQL Server](./sql-server-verification.md) ก่อนนำขึ้นใช้งานจริง
 
-ยังไม่ได้รัน migration บน production, เชื่อม frontend กับ API, commit, push หรือ deploy หลัง deployment ต้องตรวจ runtime `/api/v1/openapi.json` ว่าตรงกับสัญญา canonical ก่อนถือว่าปล่อยใช้งานครบ
+Release แรก deploy ผ่าน [run 39033795135](https://github.com/Nongten1010/POMS-app/actions/runs/39033795135) แล้ว และตรวจ production พบ migration 0141, ตาราง 4 ตาราง, indexes 11 รายการ, foreign keys 9 รายการ และ check constraints 4 รายการครบและใช้งานอยู่ การตรวจนี้ยังไม่ใช่ authenticated HTTP lifecycle test; frontend ยังเป็น mockup และยังไม่เชื่อม API หลังแต่ละ deployment ต้องตรวจ runtime `/api/v1/openapi.json` ว่าตรงกับสัญญา canonical ก่อนถือว่าปล่อยใช้งานครบ
 
 Docs impact: updated
 

@@ -7,8 +7,6 @@ export function getChatAccess(user: AuthenticatedUser | undefined): ChatAccess {
   if (!user) throw new UnauthorizedError('Authentication required');
   const granted = (permission: string) => Object.hasOwn(user.scopes, permission);
   if (!granted('chat:view')) throw new ForbiddenError('Chat view permission required');
-  const operator = user.userType === 'operator';
-  const officer = user.userType === 'officer' || user.userType === 'admin';
   return {
     actorUserId: user.id,
     userType: user.userType,
@@ -19,15 +17,15 @@ export function getChatAccess(user: AuthenticatedUser | undefined): ChatAccess {
         })
       : undefined,
     regionalAccess: user.regionalAccess ?? null,
-    canCreateTicket: operator && granted('chat:ask'),
-    canWrite: (operator && granted('chat:ask')) || (officer && granted('chat:answer')),
+    canCreateTicket: granted('chat:ask'),
+    canWrite: granted('chat:ask') || granted('chat:answer'),
   };
 }
 
 export function requireChatWrite(access: ChatAccess, create = false): void {
   if (create ? !access.canCreateTicket : !access.canWrite) {
     throw new ForbiddenError(
-      create ? 'Only authorized operators can open tickets' : 'Chat write permission required',
+      create ? 'Chat ask permission required' : 'Chat write permission required',
     );
   }
 }

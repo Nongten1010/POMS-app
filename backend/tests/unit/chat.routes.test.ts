@@ -133,7 +133,8 @@ describe('Chat ticket HTTP API', () => {
       capabilities: { canReply: true, canClose: true },
     });
   });
-  it('allows an authorized officer to answer with server-derived identity and replay a send', async () => {
+  it('allows an officer with only chat:answer to answer with server-derived identity and replay a send', async () => {
+    fixture.execute('DELETE FROM role_permissions WHERE role_id = 2 AND permission_id = 2');
     const app = createApp();
     const opened = await openTicket(app);
     const id = opened.body.data.ticket.id;
@@ -340,28 +341,115 @@ describe('Chat ticket HTTP API', () => {
     expect(conflict.status).toBe(409);
     expect(conflict.body.error.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
   });
-  it('permits creation only by operators and requires an officer answer grant for writes', async () => {
+  it('allows an officer with chat:ask to open a ticket using current permissions', async () => {
     const app = createApp();
-    const opened = await openTicket(app);
     const token = signAccessToken({ sub: '201', userType: 'officer', roles: [], scopes: {} });
     const create = await request(app)
       .post('/api/v1/chat/tickets')
       .auth(token, { type: 'bearer' })
       .set('Idempotency-Key', randomUUID())
       .send(createInput);
-    expect(create.status).toBe(403);
+    expect(create.status).toBe(201);
+    expect(create.body.data.ticket.openedBy).toMatchObject({
+      userId: 201,
+      roleCode: 'diw_central',
+    });
+    const options = await request(app).get('/api/v1/chat/options').auth(token, { type: 'bearer' });
+    expect(options.status).toBe(200);
+    expect(options.body.data.canCreate).toBe(true);
+  });
+  it('lets an officer with only chat:ask continue and close an accessible conversation', async () => {
     fixture.execute('DELETE FROM role_permissions WHERE role_id = 2 AND permission_id = 3');
+    const app = createApp();
+    const token = signAccessToken({ sub: '201', userType: 'officer', roles: [], scopes: {} });
+    const created = await request(app)
+      .post('/api/v1/chat/tickets')
+      .auth(token, { type: 'bearer' })
+      .set('Idempotency-Key', randomUUID())
+      .send(createInput);
+    expect(created.status).toBe(201);
+    const id = created.body.data.ticket.id;
+    expect(created.body.data.ticket.capabilities).toEqual({ canReply: true, canClose: true });
+    const reply = await request(app)
+      .post(`/api/v1/chat/tickets/${id}/messages`)
+      .auth(token, { type: 'bearer' })
+      .set('Idempotency-Key', randomUUID())
+      .send({ message: 'ข้อมูลเพิ่มเติมจากเจ้าหน้าที่ผู้เปิดเรื่อง' });
+    expect(reply.status).toBe(201);
+    const closed = await request(app)
+      .post(`/api/v1/chat/tickets/${id}/close`)
+      .auth(token, { type: 'bearer' })
+      .send({});
+    expect(closed.status).toBe(200);
+    expect(closed.body.data).toMatchObject({ status: 'closed', closedBy: { userId: 201 } });
+  });
+  it('revokes officer create, reply and close permissions even for an existing token', async () => {
+    const app = createApp();
+    const token = signAccessToken({ sub: '201', userType: 'officer', roles: [], scopes: {} });
+    const create = () =>
+      request(app)
+        .post('/api/v1/chat/tickets')
+        .auth(token, { type: 'bearer' })
+        .set('Idempotency-Key', randomUUID())
+        .send(createInput);
+    const opened = await create();
+    expect(opened.status).toBe(201);
+    const id = opened.body.data.ticket.id;
+    fixture.execute('DELETE FROM role_permissions WHERE role_id = 2 AND permission_id IN (2, 3)');
+    expect((await create()).status).toBe(403);
+    const options = await request(app).get('/api/v1/chat/options').auth(token, { type: 'bearer' });
+    expect(options.body.data.canCreate).toBe(false);
     const detail = await request(app)
-      .get(`/api/v1/chat/tickets/${opened.body.data.ticket.id}`)
+      .get(`/api/v1/chat/tickets/${id}`)
       .auth(token, { type: 'bearer' });
     expect(detail.status).toBe(200);
     expect(detail.body.data.capabilities).toEqual({ canReply: false, canClose: false });
-    const reply = await request(app)
-      .post(`/api/v1/chat/tickets/${opened.body.data.ticket.id}/messages`)
-      .auth(token, { type: 'bearer' })
-      .set('Idempotency-Key', randomUUID())
-      .send({ message: 'คำตอบ' });
-    expect(reply.status).toBe(403);
+    expect(
+      (
+        await request(app)
+          .post(`/api/v1/chat/tickets/${id}/messages`)
+          .auth(token, { type: 'bearer' })
+          .set('Idempotency-Key', randomUUID())
+          .send({ message: 'คำตอบ' })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .post(`/api/v1/chat/tickets/${id}/close`)
+          .auth(token, { type: 'bearer' })
+          .send({})
+      ).status,
+    ).toBe(403);
+  });
+  it('uses the saved custom ask grant without expanding the officer factory scope', async () => {
+    const app = createApp();
+    const token = signAccessToken({ sub: '203', userType: 'officer', roles: [], scopes: {} });
+    const create = (eligibleFactoryId: number) =>
+      request(app)
+        .post('/api/v1/chat/tickets')
+        .auth(token, { type: 'bearer' })
+        .set('Idempotency-Key', randomUUID())
+        .send({ ...createInput, eligibleFactoryId });
+    expect((await create(10)).status).toBe(403);
+    fixture.execute(
+      "INSERT INTO user_permissions (user_id, permission_id, effect, scope) VALUES (203, 2, 'allow', NULL)",
+    );
+    expect((await create(10)).status).toBe(201);
+    expect((await create(20)).status).toBe(404);
+  });
+  it('requires an explicit ask grant for an admin to create a ticket', async () => {
+    const app = createApp();
+    const token = signAccessToken({ sub: '204', userType: 'admin', roles: [], scopes: {} });
+    const create = () =>
+      request(app)
+        .post('/api/v1/chat/tickets')
+        .auth(token, { type: 'bearer' })
+        .set('Idempotency-Key', randomUUID())
+        .send(createInput);
+    expect((await create()).status).toBe(201);
+    fixture.execute('DELETE FROM role_permissions WHERE role_id = 4 AND permission_id = 2');
+    expect((await create()).status).toBe(403);
   });
   it('uses current factory membership for history, writes and successful-create retries', async () => {
     const app = createApp();
