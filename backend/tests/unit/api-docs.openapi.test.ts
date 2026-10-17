@@ -568,7 +568,7 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('covers all 150 canonical registry endpoints plus 9 annual testing variants', () => {
+  it('covers all 159 canonical registry endpoints plus 9 annual testing variants', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const documentedOperations: string[] = [];
@@ -582,14 +582,14 @@ describe('POMS OpenAPI contract', () => {
     }
 
     const registryOperations = readEndpointRegistryOperations();
-    expect(registryOperations).toHaveLength(150);
+    expect(registryOperations).toHaveLength(159);
     expect(documentedOperations.sort()).toEqual(
       [...registryOperations, ...annualTestingVariants].sort(),
     );
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 150,
-      operationCount: 159,
-      tagCount: 13,
+      canonicalOperationCount: 159,
+      operationCount: 168,
+      tagCount: 14,
     });
   });
 
@@ -610,10 +610,10 @@ describe('POMS OpenAPI contract', () => {
       }
     }
 
-    expect(writeOperations).toHaveLength(61);
+    expect(writeOperations).toHaveLength(64);
     expect(
       writeOperations.filter(([, , operation]) => isRequestBody(operation.requestBody)),
-    ).toHaveLength(58);
+    ).toHaveLength(61);
 
     for (const [pathKey, method, operation] of writeOperations) {
       const hasRequestBody = isRequestBody(operation.requestBody);
@@ -627,12 +627,17 @@ describe('POMS OpenAPI contract', () => {
       const description = String(hasRequestBody ? container.description : operation.description);
 
       expect(description).toContain('Validation ของ Request body');
-      expect(documentation.bodyRequired).toBe(hasRequestBody);
+      expect(documentation.bodyRequired).toBe(hasRequestBody && container.required === true);
       expect(Array.isArray(documentation.mediaTypes)).toBe(true);
 
       if (hasRequestBody) {
-        expect(description).toContain('| Field | การส่งค่า | รับ `null` | Data type |');
-        expect((documentation.mediaTypes as JsonObject[]).length).toBeGreaterThan(0);
+        const mediaTypes = documentation.mediaTypes as JsonObject[];
+        expect(mediaTypes.length).toBeGreaterThan(0);
+        expect(description).toContain(
+          mediaTypes.some((media) => Array.isArray(media.fields) && media.fields.length > 0)
+            ? '| Field | การส่งค่า | รับ `null` | Data type |'
+            : 'Schema นี้ไม่มี field ย่อยที่ต้องกรอก',
+        );
       } else {
         expect(description).toContain('Operation นี้ไม่รับ request body');
         expect(documentation.mediaTypes).toEqual([]);

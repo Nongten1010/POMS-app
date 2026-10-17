@@ -1,5 +1,6 @@
 import { generalUploadPolicyDescription } from './upload-policy.openapi';
 import { menuBadgePaths, menuBadgeSchemas } from './menu-badges.openapi';
+import { chatPaths, chatSchemas } from './chat.openapi';
 import {
   pomsManagedStatusProperties,
   statusManagementPaths,
@@ -7286,6 +7287,10 @@ const tags: OpenApiObject[] = [
     description: 'คำถาม คำตอบ หมวดหมู่ และการดูแลคำถามที่พบบ่อย',
   },
   {
+    name: MENU_TAGS.CHAT,
+    description: 'เปิดเรื่อง สอบถามเจ้าหน้าที่ และติดตามประวัติการสนทนาตามสิทธิ์โรงงาน',
+  },
+  {
     name: MENU_TAGS.INTEGRATIONS,
     description: 'API key contract สำหรับอุปกรณ์และระบบภายนอก',
   },
@@ -7356,6 +7361,7 @@ function menuTagForPath(path: string): string {
   }
   if (path.startsWith('/laws')) return MENU_TAGS.LAWS;
   if (path.startsWith('/faqs')) return MENU_TAGS.FAQS;
+  if (path.startsWith('/chat/')) return MENU_TAGS.CHAT;
   if (path.startsWith('/integrations')) return MENU_TAGS.INTEGRATIONS;
   throw new Error(`OpenAPI path is not assigned to a POMS menu: ${path}`);
 }
@@ -7366,6 +7372,15 @@ interface AuthorizationRequirement {
 }
 
 function authorizationRequirementFor(path: string, method: string): AuthorizationRequirement {
+  if (path.startsWith('/chat/')) {
+    if (path === '/chat/options') return { permissions: ['chat:view'], mode: 'all' };
+    return {
+      permissions: path === '/chat/tickets' && method === 'post'
+        ? ['chat:view', 'chat:ask', 'eligible_factories:view']
+        : ['chat:view', 'eligible_factories:view'],
+      mode: 'all',
+    };
+  }
   if (
     path === '/auth/me' ||
     path === '/me/menu-badges' ||
@@ -7715,6 +7730,7 @@ const components: OpenApiObject = {
     ...buildHomeFactorySchemas(componentSchemas),
     ...homeHandoffSchemas,
     ...menuBadgeSchemas,
+    ...chatSchemas,
     ...statusManagementSchemas,
     ...baseSchemas,
     ...editRequestFormSchemas,
@@ -7754,6 +7770,7 @@ const paths = decorateWriteRequestValidationDocs(
         extraPaths,
         statusManagementPaths,
         menuBadgePaths,
+        chatPaths,
       ),
     ),
   ),
@@ -7786,14 +7803,14 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.4.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 150 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 159 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 159 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 168 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
       '\n\nการแบ่งจังหวัดตามภาค: ภาคกลาง 11 จังหวัด, ภาคตะวันตก 8 จังหวัด, ภาคตะวันออก 8 จังหวัด, ภาคเหนือ 16 จังหวัด, ภาคตะวันออกเฉียงเหนือ 20 จังหวัด และภาคใต้ 14 จังหวัด รวม 77 จังหวัด. นครนายกอยู่ภาคตะวันออก; ตาก กำแพงเพชร และนครสวรรค์อยู่ภาคเหนือ; สมุทรสาคร สมุทรสงคราม นครปฐม และสุพรรณบุรีอยู่ภาคตะวันตก; อุทัยธานียังคงอยู่ภาคกลาง. region/regionName สำหรับข้อมูลปัจจุบันและ snapshot คำขอเชื่อมต่อที่ยังใช้งานอยู่ใช้พื้นที่ใหม่นี้ โดย regionCode ของ snapshot คำขอเชื่อมต่อเก็บชื่อภาคเดียวกับ regionName. IN_REGION ยังคงใช้ qualifier รายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ และไม่มีการเปลี่ยนชื่อภาคหรือสิทธิ์ผู้ใช้. แบบ กวภ. ที่มี submission_region_name แล้วคงภาคเดิมทั้งการแสดงผลและสิทธิ์ตามภาค; แบบเดิมที่ไม่มี snapshot และคำขอใหม่ใช้ provinces.region. เลขเอกสารและ running เดิมคงอยู่; รหัสภาคสำหรับออกเลขเอกสารยังเป็น 02-07. ต้องรัน migration 0139_update_provincial_regional_jurisdictions ก่อนใช้งาน',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 150,
+  'x-poms-canonical-operation-count': 159,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

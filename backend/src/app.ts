@@ -38,6 +38,7 @@ import { pomsFactoriesRoutes } from './modules/poms-factories/poms-factories.rou
 import { lawsRoutes } from './modules/laws/laws.routes';
 import { faqsRoutes } from './modules/faqs/faqs.routes';
 import { menuBadgesRoutes } from './modules/menu-badges/menu-badges.routes';
+import { chatErrorHandler, createChatRoutes } from './modules/chat/chat.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -113,6 +114,8 @@ export function createApp(): Application {
   }
   app.use(`${env.API_PREFIX}/auth`, authRoutes);
   app.use(`${env.API_PREFIX}/me`, menuBadgesRoutes);
+  app.use(`${env.API_PREFIX}/chat`, createChatRoutes());
+  app.use(`${env.API_PREFIX}/chat`, chatErrorHandler);
   app.use(`${env.API_PREFIX}/users`, usersRoutes);
   app.use(`${env.API_PREFIX}/eligible-factories`, eligibleFactoriesRoutes);
   app.use(`${env.API_PREFIX}/poms-factories`, pomsFactoriesRoutes);

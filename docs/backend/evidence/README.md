@@ -15,6 +15,11 @@
 
 - [ข้อมูลทั่วไปโรงงานเข้าข่ายและ POMS: ผลตรวจและขอบเขตหลักฐาน](./master-data/factory-profile-consistency.md)
 
+## Chat
+
+- [Chat: ผลตรวจ implementation, TDD และความปลอดภัย](./chat/backend-verification.md)
+- [Chat: ฐานทดสอบสมมติและการตรวจ concurrency บน SQL Server](./chat/sql-server-verification.md)
+
 ## Connection requests
 
 - [ชื่อจุดตรวจวัดในหน้าขอเชื่อมต่อหลังอนุมัติแก้ไข](./connection-requests/current-point-name-after-approval.tdd.md)
