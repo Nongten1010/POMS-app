@@ -1,4 +1,4 @@
-import request from 'supertest';
+import supertest from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { createApp } from '../../src/app';
 import { db } from '../../src/config/database';
@@ -7,6 +7,10 @@ import { createChatSqlFixture, type ChatSqlFixture } from '../helpers/chat-sql-f
 import { randomUUID } from 'node:crypto';
 import { logger } from '../../src/config/logger';
 import { inspect } from 'node:util';
+
+// Do not reuse sockets between the short-lived HTTP servers created for these requests.
+const request = (app: ReturnType<typeof createApp>) =>
+  supertest.agent(app).set('Connection', 'close');
 
 const operatorToken = () =>
   signAccessToken({ sub: '101', userType: 'operator', roles: [], scopes: {} });
@@ -79,7 +83,41 @@ describe('Chat ticket HTTP API', () => {
       .auth(operatorToken(), { type: 'bearer' });
     expect(response.status).toBe(200);
     expect(response.body.data.map((factory: { id: number }) => factory.id)).toEqual([10, 30]);
-    expect(response.body.pagination).toEqual({ page: 1, pageSize: 25, total: 2, totalPages: 1 });
+    expect(response.body.pagination).toEqual({ page: 1, pageSize: 2, total: 2, totalPages: 1 });
+  });
+  it('returns every authorized factory beyond the former first page without pagination inputs', async () => {
+    for (let id = 100; id < 126; id += 1) {
+      fixture.execute(
+        'INSERT INTO factories (id, fid, code, name, is_active) VALUES (?, ?, ?, ?, ?)',
+        [id, `FIXTURE-${id}`, `REG-${id}`, `โรงงานเพิ่มเติม ${id}`, 1],
+      );
+      fixture.execute(
+        'INSERT INTO eligible_factories (id, source_factory_id, factory_registration_no_new, factory_name, province_name) VALUES (?, ?, ?, ?, ?)',
+        [id, `FIXTURE-${id}`, `REG-${id}`, `โรงงานเพิ่มเติม ${id}`, 'ระยอง'],
+      );
+      fixture.execute('INSERT INTO user_factory_access (user_id, factory_id) VALUES (?, ?)', [
+        101,
+        id,
+      ]);
+    }
+    const app = createApp();
+    const response = await request(app)
+      .get('/api/v1/chat/factories')
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveLength(28);
+    const ids = response.body.data.map((factory: { id: number }) => factory.id);
+    expect(ids).toEqual(expect.arrayContaining([10, 30, 100, 125]));
+    expect(ids).not.toContain(20);
+    expect(ids).not.toContain(40);
+    expect(response.body.pagination).toEqual({ page: 1, pageSize: 28, total: 28, totalPages: 1 });
+    const filtered = await request(app)
+      .get('/api/v1/chat/factories')
+      .query({ q: 'REG-125' })
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(filtered.status).toBe(200);
+    expect(filtered.body.data.map((factory: { id: number }) => factory.id)).toEqual([125]);
+    expect(filtered.body.pagination).toEqual({ page: 1, pageSize: 1, total: 1, totalPages: 1 });
   });
   it('returns typed point identities and hides points outside the operator factory', async () => {
     const app = createApp();
@@ -200,7 +238,6 @@ describe('Chat ticket HTTP API', () => {
     const response = await request(app)
       .get('/api/v1/chat/tickets')
       .query({
-        pageSize: 25,
         q: 'โรงงานสมมติ',
         status: 'open',
         topicCode: 'other',
@@ -218,6 +255,47 @@ describe('Chat ticket HTTP API', () => {
       .get('/api/v1/chat/tickets')
       .auth(outsider, { type: 'bearer' });
     expect(hidden.body).toMatchObject({ success: true, data: [], pagination: { total: 0 } });
+  });
+  it('returns all matching tickets beyond 25 while preserving scope, filters and ordering', async () => {
+    const app = createApp();
+    const openedIds: number[] = [];
+    for (let index = 0; index < 28; index += 1) {
+      const opened = await openTicket(app);
+      expect(opened.status).toBe(201);
+      openedIds.push(opened.body.data.ticket.id);
+    }
+    const closed = await request(app)
+      .post(`/api/v1/chat/tickets/${openedIds[0]}/close`)
+      .auth(operatorToken(), { type: 'bearer' })
+      .send({});
+    expect(closed.status).toBe(200);
+    const outsider = signAccessToken({ sub: '103', userType: 'operator', roles: [], scopes: {} });
+    const hidden = await request(app)
+      .post('/api/v1/chat/tickets')
+      .auth(outsider, { type: 'bearer' })
+      .set('Idempotency-Key', randomUUID())
+      .send({ ...createInput, eligibleFactoryId: 20 });
+    expect(hidden.status).toBe(201);
+    const response = await request(app)
+      .get('/api/v1/chat/tickets')
+      .query({ status: 'open', sort: 'ticketNo', order: 'asc' })
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveLength(27);
+    expect(response.body.data.map((ticket: { id: number }) => ticket.id)).toEqual(
+      openedIds.slice(1),
+    );
+    expect(response.body.pagination).toEqual({ page: 1, pageSize: 27, total: 27, totalPages: 1 });
+    const empty = await request(app)
+      .get('/api/v1/chat/tickets')
+      .query({ q: 'REG-20' })
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(empty.status).toBe(200);
+    expect(empty.body).toEqual({
+      success: true,
+      data: [],
+      pagination: { page: 1, pageSize: 0, total: 0, totalPages: 0 },
+    });
   });
   it('loads history and refreshes status even when no new messages arrive', async () => {
     const app = createApp();
@@ -521,6 +599,18 @@ describe('Chat ticket HTTP API', () => {
       .set('Idempotency-Key', randomUUID())
       .send({ message: 'ไม่มีสิทธิ์แล้ว' });
     expect(send.status).toBe(404);
+  });
+  it.each([
+    '/factories?page=1',
+    '/factories?pageSize=25',
+    '/tickets?page=1',
+    '/tickets?pageSize=25',
+  ])('rejects removed pagination inputs at %s', async (path) => {
+    const response = await request(createApp())
+      .get(`/api/v1/chat${path}`)
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({ success: false, error: { code: 'VALIDATION_ERROR' } });
   });
   it.each([
     '/tickets?sort=body;DROP%20TABLE%20users',

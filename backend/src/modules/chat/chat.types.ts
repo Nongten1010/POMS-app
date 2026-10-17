@@ -72,6 +72,7 @@ export interface ChatTicketSummary {
 export interface ChatTicketDetail extends ChatTicketSummary {
   events: ChatEvent[];
 }
+// Compatibility metadata: list endpoints return every matching row in one response.
 export interface ChatPagination {
   page: number;
   pageSize: number;
@@ -83,8 +84,6 @@ export interface ChatPage<T> {
   pagination: ChatPagination;
 }
 export interface ChatFactoryQuery {
-  page: number;
-  pageSize: number;
   q?: string;
 }
 export interface ChatTicketQuery extends ChatFactoryQuery {

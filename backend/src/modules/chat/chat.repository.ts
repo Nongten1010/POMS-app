@@ -178,8 +178,6 @@ async function listTickets(
       }
     });
   }
-  const count = await builder.clone().count('ct.id as total').first();
-  const total = Number(count?.total ?? 0);
   const sortColumns: Record<ChatTicketQuery['sort'], string> = {
     lastMessageAt: 'ct.last_message_at',
     ticketNo: 'ct.ticket_no',
@@ -193,16 +191,15 @@ async function listTickets(
   const rows = (await builder
     .select('ct.*')
     .orderBy(sortColumns[query.sort], query.order)
-    .orderBy('ct.id', query.order)
-    .offset((query.page - 1) * query.pageSize)
-    .limit(query.pageSize)) as Row[];
+    .orderBy('ct.id', query.order)) as Row[];
+  const total = rows.length;
   return {
     data: rows.map((row) => summaryFrom(row, access)),
     pagination: {
-      page: query.page,
-      pageSize: query.pageSize,
+      page: 1,
+      pageSize: total,
       total,
-      totalPages: Math.ceil(total / query.pageSize),
+      totalPages: total > 0 ? 1 : 0,
     },
   };
 }
