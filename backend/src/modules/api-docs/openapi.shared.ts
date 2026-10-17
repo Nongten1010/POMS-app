@@ -11,6 +11,7 @@ export const MENU_TAGS = {
   ELIGIBLE_FACTORIES: 'โรงงานที่เข้าข่าย',
   LAWS: 'กฎหมายที่เกี่ยวข้อง',
   FAQS: 'คำถามที่พบบ่อย',
+  CHAT: 'Chat',
   INTEGRATIONS: 'ระบบเชื่อมต่อภายนอก',
 } as const;
 

@@ -6,11 +6,11 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 149 รายการ ส่วน **Operations ใน Swagger** มี 158 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 159 รายการ ส่วน **Operations ใน Swagger** มี 168 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ระบบทั่วไปและการเข้าสู่ระบบ             |             8 |                     8 | [Common API](../shared/common-api/README.md), [Authentication](../shared/authentication/README.md), [Internal tools](../shared/internal-tools/README.md) |
+| ระบบทั่วไปและการเข้าสู่ระบบ             |             9 |                     9 | [Common API](../shared/common-api/README.md), [Authentication](../shared/authentication/README.md), [Internal tools](../shared/internal-tools/README.md) |
 | หน้าหลัก                                |             4 |                     4 | [หน้าหลัก](./home/README.md)                                                                                                                             |
 | ข้อมูลพื้นฐาน                           |            19 |                    23 | [ข้อมูลพื้นฐาน](./master-data/README.md)                                                                                                                 |
 | ขอเชื่อมต่อ                             |            33 |                    33 | [ขอเชื่อมต่อ](./connection-requests/README.md)                                                                                                           |
@@ -23,7 +23,8 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 | กฎหมายที่เกี่ยวข้อง                     |             5 |                     5 | [กฎหมายที่เกี่ยวข้อง](./laws/README.md)                                                                                                                  |
 | คำถามที่พบบ่อย                          |             5 |                     5 | [คำถามที่พบบ่อย](./faqs/README.md)                                                                                                                       |
 | ระบบเชื่อมต่อภายนอก                     |             4 |                     5 | [Integrations](../integrations/README.md)                                                                                                                |
-| **รวม**                                 |       **149** |               **158** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| Chat | 9 | 9 | [Chat](./chat/README.md) |
+| **รวม**                                 |       **159** |               **168** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/
@@ -57,6 +58,7 @@ menus/
 | สิทธิ์การใช้งาน                         | `permissions/`               | users, roles และ permission overrides                                       |
 | กฎหมายที่เกี่ยวข้อง                     | `laws/`                      | public law list, PDF download และ content management                        |
 | คำถามที่พบบ่อย                          | `faqs/`                      | public FAQ list และ content management                                      |
+| Chat | `chat/` | เปิด Ticket, ข้อความ, เหตุการณ์เปิด/ปิด และขอบเขตโรงงาน |
 
 ## Canonical Menu Pages
 
@@ -71,6 +73,7 @@ menus/
 - [สิทธิ์การใช้งาน](./permissions/README.md) — contract การจัดการผู้ใช้, role grants, permission overrides และ data scope
 - [กฎหมายที่เกี่ยวข้อง](./laws/README.md) — contract รายการกฎหมาย การจัดการ metadata และดาวน์โหลด PDF
 - [คำถามที่พบบ่อย](./faqs/README.md) — contract รายการคำถาม คำตอบ หมวดหมู่ และการจัดการเนื้อหา
+- [Chat](./chat/README.md) — Ticket แบบ asynchronous, สิทธิ์ปัจจุบัน, ข้อความและประวัติ, idempotency และ pagination
 
 API ที่หลายเมนูใช้ร่วมกัน เช่น authentication และ connected measurement points อยู่ใต้ `../shared/` และให้หน้าเมนูลิงก์อ้างอิง
 

@@ -11,7 +11,7 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **150**
+จำนวน explicit endpoints: **159**
 
 | Method   | Full path                                                                 | Canonical owner                                                                 | Guard                                                                           | Route source                                                                                                |
 | -------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -163,6 +163,15 @@
 | `GET`    | `/api/v1/officer-notification-email-recipients`                           | `docs/backend/api/shared/notification-recipients/`                              | `authenticate + authorize(notifications:edit)`                                  | `backend/src/modules/officer-notification-email-recipients/officer-notification-email-recipients.routes.ts` |
 | `POST`   | `/api/v1/officer-notification-email-recipients`                           | `docs/backend/api/shared/notification-recipients/`                              | `authenticate + authorize(notifications:edit)`                                  | `backend/src/modules/officer-notification-email-recipients/officer-notification-email-recipients.routes.ts` |
 | `POST`   | `/api/v1/officer-notification-email-recipients/:id/emails`                | `docs/backend/api/shared/notification-recipients/`                              | `authenticate + authorize(notifications:edit)`                                  | `backend/src/modules/officer-notification-email-recipients/officer-notification-email-recipients.routes.ts` |
+| `GET` | `/api/v1/chat/options` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view` | `backend/src/modules/chat/chat.routes.ts` |
+| `GET` | `/api/v1/chat/factories` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
+| `GET` | `/api/v1/chat/factories/:id/measurement-points` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
+| `GET` | `/api/v1/chat/tickets` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
+| `POST` | `/api/v1/chat/tickets` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + chat:ask + eligible_factories:view; operator only; current factory ownership` | `backend/src/modules/chat/chat.routes.ts` |
+| `GET` | `/api/v1/chat/tickets/:id` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
+| `GET` | `/api/v1/chat/tickets/:id/messages` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
+| `POST` | `/api/v1/chat/tickets/:id/messages` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope; operator chat:ask or officer/admin chat:answer` | `backend/src/modules/chat/chat.routes.ts` |
+| `POST` | `/api/v1/chat/tickets/:id/close` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope; operator chat:ask or officer/admin chat:answer` | `backend/src/modules/chat/chat.routes.ts` |
 
 ## ข้อสังเกตที่ต้องแก้ระหว่าง migration
 
