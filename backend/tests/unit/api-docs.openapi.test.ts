@@ -248,8 +248,8 @@ describe('POMS OpenAPI contract', () => {
 
     expect(editableInput.additionalProperties).toBe(false);
     expect(chatInputProperties).toEqual({
-      view: { type: 'boolean' },
-      edit: { type: 'boolean' },
+      view: { type: 'boolean', description: expect.stringContaining('chat:view') },
+      edit: { type: 'boolean', description: expect.stringContaining('chat:answer') },
     });
     expect(connectionInputProperties).toHaveProperty('data');
     expect(connectionInputProperties).toHaveProperty('estateCode');

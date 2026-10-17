@@ -341,7 +341,53 @@ describe('Chat ticket HTTP API', () => {
     expect(conflict.status).toBe(409);
     expect(conflict.body.error.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
   });
-  it('allows an officer with chat:ask to open a ticket using current permissions', async () => {
+  it.each([false, true])(
+    'lets the Chat use checkbox open, continue and close with legacy grants denied=%s',
+    async (denyLegacyGrants) => {
+      fixture.execute('DELETE FROM user_permissions WHERE user_id = 203 AND permission_id = 3');
+      if (denyLegacyGrants) {
+        fixture.execute(
+          "INSERT INTO user_permissions (user_id, permission_id, effect, scope) VALUES (203, 2, 'deny', NULL), (203, 3, 'deny', NULL)",
+        );
+      }
+      const app = createApp();
+      const token = signAccessToken({ sub: '203', userType: 'officer', roles: [], scopes: {} });
+      const options = await request(app)
+        .get('/api/v1/chat/options')
+        .auth(token, { type: 'bearer' });
+      expect(options.status).toBe(200);
+      expect(options.body.data.canCreate).toBe(true);
+      const created = await request(app)
+        .post('/api/v1/chat/tickets')
+        .auth(token, { type: 'bearer' })
+        .set('Idempotency-Key', randomUUID())
+        .send(createInput);
+      expect(created.status).toBe(201);
+      const id = created.body.data.ticket.id;
+      expect(created.body.data.ticket.capabilities).toEqual({ canReply: true, canClose: true });
+      const reply = await request(app)
+        .post(`/api/v1/chat/tickets/${id}/messages`)
+        .auth(token, { type: 'bearer' })
+        .set('Idempotency-Key', randomUUID())
+        .send({ message: 'ข้อมูลเพิ่มเติมจากผู้มีสิทธิ์ใช้งาน Chat' });
+      expect(reply.status).toBe(201);
+      const history = await request(app)
+        .get(`/api/v1/chat/tickets/${id}/messages`)
+        .auth(token, { type: 'bearer' });
+      expect(history.body.data.messages.map((message: { text: string }) => message.text)).toEqual([
+        'สอบถามการใช้งาน',
+        'ข้อมูลเพิ่มเติมจากผู้มีสิทธิ์ใช้งาน Chat',
+      ]);
+      const closed = await request(app)
+        .post(`/api/v1/chat/tickets/${id}/close`)
+        .auth(token, { type: 'bearer' })
+        .send({});
+      expect(closed.status).toBe(200);
+      expect(closed.body.data).toMatchObject({ status: 'closed', closedBy: { userId: 203 } });
+    },
+  );
+  it('allows an officer with only chat:view to open a ticket using current permissions', async () => {
+    fixture.execute('DELETE FROM role_permissions WHERE role_id = 2 AND permission_id IN (2, 3)');
     const app = createApp();
     const token = signAccessToken({ sub: '201', userType: 'officer', roles: [], scopes: {} });
     const create = await request(app)
@@ -358,8 +404,8 @@ describe('Chat ticket HTTP API', () => {
     expect(options.status).toBe(200);
     expect(options.body.data.canCreate).toBe(true);
   });
-  it('lets an officer with only chat:ask continue and close an accessible conversation', async () => {
-    fixture.execute('DELETE FROM role_permissions WHERE role_id = 2 AND permission_id = 3');
+  it('lets an officer with only chat:view continue and close an accessible conversation', async () => {
+    fixture.execute('DELETE FROM role_permissions WHERE role_id = 2 AND permission_id IN (2, 3)');
     const app = createApp();
     const token = signAccessToken({ sub: '201', userType: 'officer', roles: [], scopes: {} });
     const created = await request(app)
@@ -395,15 +441,14 @@ describe('Chat ticket HTTP API', () => {
     const opened = await create();
     expect(opened.status).toBe(201);
     const id = opened.body.data.ticket.id;
-    fixture.execute('DELETE FROM role_permissions WHERE role_id = 2 AND permission_id IN (2, 3)');
+    fixture.execute('DELETE FROM role_permissions WHERE role_id = 2 AND permission_id = 1');
     expect((await create()).status).toBe(403);
     const options = await request(app).get('/api/v1/chat/options').auth(token, { type: 'bearer' });
-    expect(options.body.data.canCreate).toBe(false);
+    expect(options.status).toBe(403);
     const detail = await request(app)
       .get(`/api/v1/chat/tickets/${id}`)
       .auth(token, { type: 'bearer' });
-    expect(detail.status).toBe(200);
-    expect(detail.body.data.capabilities).toEqual({ canReply: false, canClose: false });
+    expect(detail.status).toBe(403);
     expect(
       (
         await request(app)
@@ -422,7 +467,8 @@ describe('Chat ticket HTTP API', () => {
       ).status,
     ).toBe(403);
   });
-  it('uses the saved custom ask grant without expanding the officer factory scope', async () => {
+  it('uses the saved Chat use checkbox without expanding the officer factory scope', async () => {
+    fixture.execute('DELETE FROM user_permissions WHERE user_id = 203 AND permission_id IN (1, 3)');
     const app = createApp();
     const token = signAccessToken({ sub: '203', userType: 'officer', roles: [], scopes: {} });
     const create = (eligibleFactoryId: number) =>
@@ -433,12 +479,12 @@ describe('Chat ticket HTTP API', () => {
         .send({ ...createInput, eligibleFactoryId });
     expect((await create(10)).status).toBe(403);
     fixture.execute(
-      "INSERT INTO user_permissions (user_id, permission_id, effect, scope) VALUES (203, 2, 'allow', NULL)",
+      "INSERT INTO user_permissions (user_id, permission_id, effect, scope) VALUES (203, 1, 'allow', NULL)",
     );
     expect((await create(10)).status).toBe(201);
     expect((await create(20)).status).toBe(404);
   });
-  it('requires an explicit ask grant for an admin to create a ticket', async () => {
+  it('requires the Chat use checkbox for an admin even when legacy write grants remain', async () => {
     const app = createApp();
     const token = signAccessToken({ sub: '204', userType: 'admin', roles: [], scopes: {} });
     const create = () =>
@@ -448,7 +494,7 @@ describe('Chat ticket HTTP API', () => {
         .set('Idempotency-Key', randomUUID())
         .send(createInput);
     expect((await create()).status).toBe(201);
-    fixture.execute('DELETE FROM role_permissions WHERE role_id = 4 AND permission_id = 2');
+    fixture.execute('DELETE FROM role_permissions WHERE role_id = 4 AND permission_id = 1');
     expect((await create()).status).toBe(403);
   });
   it('uses current factory membership for history, writes and successful-create retries', async () => {
