@@ -8,10 +8,11 @@ import ChatCreateDialog from './ChatCreateDialog'
 import ChatConversation from './ChatConversation'
 import useChatResource from './useChatResource'
 import { TicketStatus } from './chatPresentation'
-import { createChatClient, errorText, formatChatDate, ticketQuery } from '../utils/chatApi.mjs'
+import { createChatClient, errorText, formatChatDate } from '../utils/chatApi.mjs'
 import chatTopics from '../option/chatTopicOptions.json'
+import { CHAT_MESSAGE_MAX_LENGTH } from '../utils/chatSession.mjs'
 
-export default function ChatWorkspace({ accessToken, userType, onAccessError }) {
+export default function ChatWorkspace({ accessToken, viewerId, userType, onAccessError }) {
   const client = useMemo(() => createChatClient(accessToken, { userType }), [accessToken, userType])
   const [drafts] = useState(() => new Map())
   const [selectedId, setSelectedId] = useState(null)
@@ -20,7 +21,6 @@ export default function ChatWorkspace({ accessToken, userType, onAccessError }) 
   const [pagination, setPagination] = useState({ page: 0, pageSize: 25 })
   const [sort, setSort] = useState([{ field: 'latest', sort: 'desc' }])
   const [filter, setFilter] = useState({ items: [], quickFilterValues: [] })
-  const [total, setTotal] = useState(0)
   const [revision, setRevision] = useState(0)
   const handleError = useCallback((error) => {
     if ([401, 403].includes(error.status)) {
@@ -32,27 +32,15 @@ export default function ChatWorkspace({ accessToken, userType, onAccessError }) 
   const handleListError = useCallback((error) => {
     if ([401, 403].includes(error.status)) handleError(error)
   }, [handleError])
-  const options = useChatResource(client, '/options', {}, !accessError, handleListError)
-  const query = ticketQuery(pagination, sort, filter)
-  const list = useChatResource(client, '/tickets', query, Boolean(options.response) && !accessError, handleListError)
+  const list = useChatResource(client, '/tickets', {}, !accessError, handleListError)
   const refreshList = list.refresh
-  const refreshOptions = options.refresh
   useEffect(() => () => { client.dispose(); drafts.clear() }, [client, drafts])
   useEffect(() => {
     if (!revision) return
-    refreshList(); refreshOptions()
-  }, [revision, refreshList, refreshOptions])
-  useEffect(() => {
-    if (!list.response) return
-    const response = list.response
-    queueMicrotask(() => {
-      setTotal(response.pagination.total)
-      const lastPage = Math.max(0, response.pagination.totalPages - 1)
-      if (pagination.page > lastPage) setPagination((value) => ({ ...value, page: lastPage }))
-    })
-  }, [list.response, pagination.page])
-  const data = options.response?.data
-  const canCreate = userType === 'operator' && data?.canCreate === true && !accessError
+    refreshList()
+  }, [revision, refreshList])
+  const data = { viewer: { userId: viewerId }, limits: { messageMaxLength: CHAT_MESSAGE_MAX_LENGTH } }
+  const canCreate = userType === 'operator' && !accessError
   const rows = (list.response?.data || []).map((ticket) => ({ ...ticket, topic: ticket.topic.code, topicLabel: ticket.topic.label, factoryName: ticket.factory.name, registration: ticket.factory.registrationNo, region: ticket.factory.regionName || '-', province: ticket.factory.provinceName, latest: new Date(ticket.lastMessageAt) }))
   const columns = [
     { field: 'ticketNo', headerName: 'Ticket No.', width: 110, filterable: false },
@@ -68,13 +56,13 @@ export default function ChatWorkspace({ accessToken, userType, onAccessError }) 
   return <Stack spacing={2} sx={{ height: '100%', minHeight: 0 }}>
     <Paper elevation={0} sx={{ px: { xs: 1.5, md: 2 }, py: 1.5, border: 1, borderColor: 'divider' }}><Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' } }}>
       <Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="h5" component="h1">Chat</Typography><Typography variant="body2" color="text.secondary">แจ้งปัญหาการใช้งานกับเจ้าหน้าที่</Typography></Box>
-      <Tooltip title="รีเฟรชรายการ"><span><IconButton aria-label="รีเฟรชรายการ" disabled={list.loading || options.loading || Boolean(accessError)} onClick={() => { list.refresh(); options.refresh() }}><RefreshIcon /></IconButton></span></Tooltip>
+      <Tooltip title="รีเฟรชรายการ"><span><IconButton aria-label="รีเฟรชรายการ" disabled={list.loading || Boolean(accessError)} onClick={list.refresh}><RefreshIcon /></IconButton></span></Tooltip>
       {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewOpen(true)}>เปิดการสนทนา</Button>}
     </Stack></Paper>
-    {(accessError || options.error || list.error) && <Alert severity="error" action={!accessError && <Button onClick={() => { options.refresh(); list.refresh() }}>ลองใหม่</Button>}>{accessError || options.error || list.error}</Alert>}
+    {(accessError || list.error) && <Alert severity="error" action={!accessError && <Button onClick={list.refresh}>ลองใหม่</Button>}>{accessError || list.error}</Alert>}
     <Paper elevation={0} sx={{ flex: 1, minHeight: 0, border: 1, borderColor: 'divider', overflow: 'hidden' }}>
-      <DataGrid rows={accessError ? [] : rows} columns={columns} loading={options.loading || list.loading} rowCount={accessError ? 0 : total} disableRowSelectionOnClick showToolbar showCellVerticalBorder showColumnVerticalBorder label="รายการสนทนา" pageSizeOptions={[25, 50, 100]}
-        paginationMode="server" sortingMode="server" filterMode="server" paginationModel={pagination} sortModel={sort} filterModel={filter}
+      <DataGrid rows={accessError ? [] : rows} columns={columns} loading={list.loading} disableRowSelectionOnClick showToolbar showCellVerticalBorder showColumnVerticalBorder label="รายการสนทนา" pageSizeOptions={[25, 50, 100]}
+        paginationMode="client" sortingMode="client" filterMode="client" paginationModel={pagination} sortModel={sort} filterModel={filter}
         onPaginationModelChange={setPagination} onSortModelChange={(value) => { setSort(value.slice(0, 1)); setPagination((current) => ({ ...current, page: 0 })) }}
         onFilterModelChange={(value) => { setFilter(value); setPagination((current) => ({ ...current, page: 0 })) }}
         slotProps={{ toolbar: { csvOptions: { disableToolbarButton: true }, printOptions: { disableToolbarButton: true }, showQuickFilter: true, quickFilterProps: { debounceMs: 400 } } }}

@@ -153,15 +153,18 @@ test('non-operators cannot create through write or request, but can read, reply 
   }
 })
 
-test('production route has no mock dependency, uses capabilities, server grid and manual refresh', () => {
+test('production route has no mock dependency, uses capabilities, client grid and manual refresh', () => {
   const source = (file) => readFileSync(new URL(file, import.meta.url), 'utf8')
   for (const file of ['../pages/ChatPage.jsx', '../components/ChatWorkspace.jsx', '../components/ChatCreateDialog.jsx', '../components/ChatConversation.jsx']) {
     assert.doesNotMatch(source(file), /mockPeople|mockFactories|makeMockTickets|chatTicketMock|ChatTicketMockup|setInterval|WebSocket/)
   }
   const workspace = source('../components/ChatWorkspace.jsx')
-  assert.match(workspace, /paginationMode="server" sortingMode="server" filterMode="server"/)
+  assert.match(workspace, /paginationMode="client" sortingMode="client" filterMode="client"/)
+  assert.match(workspace, /useChatResource\(client, '\/tickets', \{\}, !accessError, handleListError\)/)
+  assert.doesNotMatch(workspace, /ticketQuery|response\.pagination|rowCount=/)
   assert.match(workspace, /canCreate/)
-  assert.match(workspace, /const canCreate = userType === 'operator' && data\?\.canCreate === true && !accessError/)
+  assert.match(workspace, /const canCreate = userType === 'operator' && !accessError/)
+  assert.doesNotMatch(workspace, /['"]\/options['"]|options\.response/)
   assert.match(workspace, /\{canCreate && <Button/)
   assert.match(workspace, /\{canCreate && <ChatCreateDialog/)
   assert.match(source('../pages/ChatPage.jsx'), /userType=\{userType\}/)

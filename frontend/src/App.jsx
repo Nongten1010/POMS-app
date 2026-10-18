@@ -5,6 +5,7 @@ import DpomsLoginDialog from './components/DpomsLoginDialog'
 import DpomsSidebar from './components/DpomsSidebar'
 import BodCodReportPage from './pages/BodCodReportPage'
 import ChatPage from './pages/ChatPage'
+import { getChatViewerId } from './utils/chatSession.mjs'
 import ConditionalSearchPage from './pages/ConditionalSearchPage'
 import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
@@ -342,7 +343,7 @@ function App() {
             isAdmin={roleCode === 'admin' || activePermissions?.faq?.edit === true}
           />
         ) : visibleSelectedMenu === 'chat' ? (
-          <ChatPage accessToken={accessToken} userType={userType} permissions={activePermissions} onAccessError={handleChatAccessError} />
+          <ChatPage accessToken={accessToken} viewerId={getChatViewerId(authResponse)} userType={userType} permissions={activePermissions} onAccessError={handleChatAccessError} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} userType={userType} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'manuals' ? (
