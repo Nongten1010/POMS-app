@@ -280,7 +280,8 @@ const permissionSections = [
     hideDataScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
-      { label: 'ตอบคำถาม (Admin)', action: 'edit' },
+      { label: 'เปิดการสนทนา', uiOnly: true },
+      { label: 'ตอบคำถาม', action: 'edit' },
     ],
   },
   {
@@ -468,6 +469,8 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
       }
 
       section.permissions.forEach((item) => {
+        // Keep pending UI controls out of the API payload until the contract is agreed.
+        if (item.uiOnly) return
         const checked = formData.get(`permission.${section.permissionKey}.${item.name ?? item.label}`) === 'on'
         const actions = Array.isArray(item.action) ? item.action : [item.action]
         actions.forEach((action) => {
@@ -1496,8 +1499,8 @@ function PermissionSection({ section, permissions = {}, locationErrors = {}, onC
               key={item.label}
               control={
                 <Checkbox
-                  name={`permission.${section.permissionKey}.${item.name ?? item.label}`}
-                  defaultChecked={isActionChecked(permission, item.action)}
+                  name={item.uiOnly ? undefined : `permission.${section.permissionKey}.${item.name ?? item.label}`}
+                  defaultChecked={item.uiOnly ? false : isActionChecked(permission, item.action)}
                 />
               }
               label={item.label}
