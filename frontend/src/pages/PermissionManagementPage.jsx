@@ -277,10 +277,9 @@ const permissionSections = [
     title: 'Chat',
     permissionKey: 'chat',
     locationScope: true,
-    scopeUiOnly: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
-      { label: 'เปิดการสนทนา', uiOnly: true },
+      { label: 'เปิดการสนทนา', action: 'ask' },
       { label: 'ตอบคำถาม', action: 'edit' },
     ],
   },
@@ -403,7 +402,7 @@ function validatePermissionLocationFields(formData) {
   const errors = {}
 
   permissionSections.forEach((section) => {
-    if (!section.locationScope || section.scopeUiOnly) {
+    if (!section.locationScope) {
       return
     }
 
@@ -439,7 +438,7 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
       const currentPermission = currentPermissions?.[section.permissionKey] ?? {}
       const permission = {}
 
-      if (!section.hideDataScope && !section.scopeUiOnly) {
+      if (!section.hideDataScope) {
         const scopeInput = formData.get(`permission.${section.permissionKey}.data`)
         const dataScope =
           scopeInput === null
@@ -450,7 +449,7 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
         permission.data = dataScope
       }
 
-      if (section.locationScope && !section.scopeUiOnly) {
+      if (section.locationScope) {
         const dataScope = permission.data ?? currentPermission.data ?? 'ALL'
         const regionInput = formData.get(`permission.${section.permissionKey}.region`)
         const provinceInput = formData.get(`permission.${section.permissionKey}.province`)
@@ -469,8 +468,6 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
       }
 
       section.permissions.forEach((item) => {
-        // Keep pending UI controls out of the API payload until the contract is agreed.
-        if (item.uiOnly) return
         const checked = formData.get(`permission.${section.permissionKey}.${item.name ?? item.label}`) === 'on'
         const actions = Array.isArray(item.action) ? item.action : [item.action]
         actions.forEach((action) => {
@@ -1499,8 +1496,8 @@ function PermissionSection({ section, permissions = {}, locationErrors = {}, onC
               key={item.label}
               control={
                 <Checkbox
-                  name={item.uiOnly ? undefined : `permission.${section.permissionKey}.${item.name ?? item.label}`}
-                  defaultChecked={item.uiOnly ? false : isActionChecked(permission, item.action)}
+                  name={`permission.${section.permissionKey}.${item.name ?? item.label}`}
+                  defaultChecked={isActionChecked(permission, item.action)}
                 />
               }
               label={item.label}

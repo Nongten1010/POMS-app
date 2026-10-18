@@ -23,12 +23,40 @@ test('permission management account location fields and payloads', async (t) => 
     server: { middlewareMode: true, hmr: false }, appType: 'custom',
     plugins: [{ name: 'user-location-test-exports', enforce: 'pre', transform(code, id) {
       if (id.endsWith('/src/pages/PermissionManagementPage.jsx')) {
-        return `${code}\nexport { getUserLocationField, validateUserLocationFields, buildUserPermissionPayload, mapApiUser, UserLocationField };`
+        return `${code}\nexport { getUserLocationField, validateUserLocationFields, buildUserPermissionPayload, mapApiUser, UserLocationField, buildPermissionsFromForm, validatePermissionLocationFields, permissionSections, PermissionSection };`
       }
     } }],
   })
   try {
     const api = await server.ssrLoadModule('/src/pages/PermissionManagementPage.jsx')
+    await t.test('Chat saves independent scoped view, ask and edit without the answer alias', () => {
+      const data = form({
+        'permission.chat.data': 'IN_PROVINCE',
+        'permission.chat.province': 'ระยอง',
+        'permission.chat.มีสิทธิ์ใช้งาน': 'on',
+        'permission.chat.เปิดการสนทนา': 'on',
+      })
+      const result = api.buildPermissionsFromForm(data, { eligible_factories: { data: 'ALL' }, chat: { answer: true, edit: true } })
+      assert.deepEqual(result.chat, { data: 'IN_PROVINCE', region: null, province: 'ระยอง', view: true, ask: true, edit: false })
+      assert.equal(api.validatePermissionLocationFields(data)['chat.province'], undefined)
+      data.set('permission.chat.province', '')
+      assert.ok(api.validatePermissionLocationFields(data)['chat.province'])
+      data.set('permission.chat.data', 'IN_REGION')
+      assert.ok(api.validatePermissionLocationFields(data)['chat.region'])
+      data.set('permission.chat.region', 'ภาคตะวันออก')
+      data.set('permission.chat.ตอบคำถาม', 'on')
+      const region = api.buildPermissionsFromForm(data).chat
+      assert.deepEqual(region, { data: 'IN_REGION', region: 'ภาคตะวันออก', province: null, view: true, ask: true, edit: true })
+    })
+    await t.test('Chat initializes all three checkbox values from grouped permissions', () => {
+      const section = api.permissionSections.find((item) => item.permissionKey === 'chat')
+      const html = renderToStaticMarkup(createElement(api.PermissionSection, { section, permissions: { chat: { data: 'ALL', view: true, ask: true, edit: false } } }))
+      for (const label of ['มีสิทธิ์ใช้งาน', 'เปิดการสนทนา', 'ตอบคำถาม']) {
+        assert.ok(html.includes(`name="permission.chat.${label}"`))
+      }
+      assert.equal((html.match(/checked=""/g) || []).length, 2)
+      assert.ok(!html.includes('ตอบคำถาม (Admin)'))
+    })
     await t.test('only regional roles and provincial office require a selectable location', () => {
       for (const role of ['monitoring_5_centers', 'center_director']) {
         const field = api.getUserLocationField(role)
