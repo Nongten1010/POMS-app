@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
 
 describe('menu badge runtime OpenAPI', () => {
-  it('publishes the authenticated endpoint with six required boolean fields and errors', () => {
+  it('publishes the authenticated endpoint with seven required boolean fields and errors', () => {
     const document = pomsOpenApiDocument as unknown as {
       paths: Record<
         string,
@@ -43,13 +43,17 @@ describe('menu badge runtime OpenAPI', () => {
       'bod_cod_errors',
       'eligible_factories',
       'notifications',
+      'chat',
     ]);
     expect(data.additionalProperties).toBe(false);
     expect(Object.values(data.properties)).toEqual(
-      Array(6).fill(expect.objectContaining({ type: 'boolean' })),
+      Array(7).fill(expect.objectContaining({ type: 'boolean' })),
     );
     expect(operation.description).toContain('Asia/Bangkok');
     expect(operation.description).toContain('approve');
+    expect(operation.description).toContain('chat:view');
+    expect(operation.description).toContain('status=open');
+    expect(operation.description).toContain('status=closed');
     expect(operation.responses['200'].headers['Cache-Control'].schema.example).toBe(
       'private, no-store',
     );

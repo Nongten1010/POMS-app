@@ -7,6 +7,7 @@ import { kwpFormReportsRepository } from '../../src/modules/kwp-form-reports/kwp
 import { bodCodDeviationReportsRepository } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository';
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
 import { alertEventsRepository } from '../../src/modules/alert-events/alert-events.repository';
+import { chatRepository } from '../../src/modules/chat/chat.repository';
 import {
   flattenPermissionScopes,
   groupPermissions,
@@ -31,6 +32,9 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', 
 jest.mock('../../src/modules/alert-events/alert-events.repository', () => ({
   alertEventsRepository: { hasMenuBadgeEvents: jest.fn() },
 }));
+jest.mock('../../src/modules/chat/chat.repository', () => ({
+  chatRepository: { hasOpenTicketsAwaitingReply: jest.fn() },
+}));
 
 const checks = {
   factories: jest.mocked(pomsFactoriesRepository.hasEditRequestsInStatuses),
@@ -39,6 +43,7 @@ const checks = {
   bod_cod_errors: jest.mocked(bodCodDeviationReportsRepository.hasReportsInStatuses),
   eligible_factories: jest.mocked(eligibleFactoriesRepository.hasPendingAddRequests),
   notifications: jest.mocked(alertEventsRepository.hasMenuBadgeEvents),
+  chat: jest.mocked(chatRepository.hasOpenTicketsAwaitingReply),
 };
 const requestMenus = [
   'factories',
@@ -57,7 +62,7 @@ function actor(
     userType,
     roles,
     scopes: Object.fromEntries(
-      [...requestMenus, 'notifications'].flatMap((menu) => [
+      [...requestMenus, 'notifications', 'chat'].flatMap((menu) => [
         [`${permissionPrefix(menu)}:view`, 'ALL'],
         [`${permissionPrefix(menu)}:approve`, null],
       ]),
@@ -74,7 +79,7 @@ afterEach(() => {
 });
 
 describe('menu badge rules', () => {
-  it('returns all six keys and reflects both true and false existence results', async () => {
+  it('returns all seven keys and reflects both true and false existence results', async () => {
     checks.connection.mockResolvedValue(false);
     checks.bod_cod_errors.mockResolvedValue(false);
     expect(await menuBadgesService.get(actor())).toEqual({
@@ -84,6 +89,7 @@ describe('menu badge rules', () => {
       bod_cod_errors: false,
       eligible_factories: true,
       notifications: true,
+      chat: true,
     });
   });
 
@@ -134,6 +140,7 @@ describe('menu badge rules', () => {
       bod_cod_errors: true,
       eligible_factories: false,
       notifications: true,
+      chat: true,
     });
     expect(checks.factories).toHaveBeenCalledWith(
       ['REVISION_REQUESTED'],
@@ -207,6 +214,39 @@ describe('menu badge rules', () => {
       });
     expect(result.eligible_factories).toBe(true);
     expect(result.notifications).toBe(true);
+    expect(result.chat).toBe(false);
+    expect(checks.chat).not.toHaveBeenCalled();
+  });
+
+  it.each(['operator', 'officer', 'admin'] as const)(
+    'requires only chat view for %s and passes current Chat access',
+    async (userType) => {
+      const user = actor(userType, [userType === 'admin' ? 'admin' : 'custom-role']);
+      user.scopes = { 'chat:view': 'IN_PROVINCE' };
+      user.scopeDetails = { 'chat:view': { scope: 'IN_PROVINCE', province: 'ระยอง' } };
+      expect((await menuBadgesService.get(user)).chat).toBe(true);
+      expect(checks.chat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorUserId: user.id,
+          userType,
+          roles: user.roles,
+          factoryScope: user.scopeDetails['chat:view'],
+          canWrite: false,
+        }),
+      );
+      delete user.scopes['chat:view'];
+      checks.chat.mockClear();
+      expect((await menuBadgesService.get(user)).chat).toBe(false);
+      expect(checks.chat).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refreshes the Chat badge after replies and propagates query errors', async () => {
+    checks.chat.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    expect((await menuBadgesService.get(actor())).chat).toBe(true);
+    expect((await menuBadgesService.get(actor())).chat).toBe(false);
+    checks.chat.mockRejectedValue(new Error('chat database unavailable'));
+    await expect(menuBadgesService.get(actor())).rejects.toThrow('chat database unavailable');
   });
 
   it('does not require approve for notifications and denies absent notification view', async () => {

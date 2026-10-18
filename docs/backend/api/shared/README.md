@@ -11,7 +11,7 @@ API contract ในกลุ่มนี้ใช้ข้ามหลายเ�
 | [`common-api/`](./common-api/README.md)                                     | Base URL, headers, response envelope, pagination และ shared errors |
 | [`regional-jurisdictions/`](./regional-jurisdictions/README.md) | รายชื่อจังหวัดทั้ง 77 จังหวัดตามพื้นที่รับผิดชอบ 6 ภาค และผลต่อ `IN_REGION` |
 | [`authentication/`](./authentication/README.md)                             | Login และ current-user profile                                     |
-| [`menu-badges/`](./menu-badges/README.md) | จุด Badge งานค้างและเหตุการณ์ของบัญชีปัจจุบันครบ 6 เมนู |
+| [`menu-badges/`](./menu-badges/README.md) | จุด Badge งานค้าง เหตุการณ์ และ Chat ของบัญชีปัจจุบันครบ 7 เมนู |
 | [`connected-measurement-points/`](./connected-measurement-points/README.md) | Contract ที่หน้าหลัก, ขอเชื่อมต่อ และ กวภ. ใช้ร่วมกัน              |
 | [`notification-recipients/`](./notification-recipients/README.md)           | การตั้งค่าผู้รับอีเมลเจ้าหน้าที่                                   |
 | [`internal-tools/`](./internal-tools/README.md)                             | Internal-only endpoints เช่น email test                            |

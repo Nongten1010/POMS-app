@@ -2,7 +2,7 @@
 
 [กลับไป Shared API](../README.md)
 
-`GET /api/v1/me/menu-badges` สรุปว่าบัญชีที่เข้าสู่ระบบมีรายการเข้าเกณฑ์แสดงจุด Badge ในแต่ละเมนูหรือไม่ คืน boolean ครบทั้ง 6 เมนู ไม่มีจำนวน สี หรือรายละเอียดรายการ สีและการแสดงจุดเป็นหน้าที่ของ client
+`GET /api/v1/me/menu-badges` สรุปว่าบัญชีที่เข้าสู่ระบบมีรายการเข้าเกณฑ์แสดงจุด Badge ในแต่ละเมนูหรือไม่ คืน boolean ครบทั้ง 7 เมนู รวม Chat ไม่มีจำนวน สี หรือรายละเอียดรายการ สีและการแสดงจุดเป็นหน้าที่ของ client
 
 ## เริ่มเชื่อมต่อ
 
@@ -22,6 +22,7 @@ curl 'https://d-poms.diw.go.th/api/v1/me/menu-badges' \
 - งานคำขอของเจ้าหน้าที่และแอดมิน รวม Director ต้องมี `approve` ของเมนูเดียวกันด้วย แม้มีเพียง `view` หรือ `edit` ก็ได้ `false` แอดมินไม่ข้ามเงื่อนไขนี้
 - ผู้ประกอบการใช้ `view` โดยไม่บังคับ `approve` และไม่เห็น Badge คำขอเพิ่มโรงงานเข้าข่าย
 - การแจ้งเตือนใช้เพียง `notifications:view` ไม่บังคับ `approve`
+- Chat ใช้เพียง `chat:view` และขอบเขตอ่านเดียวกับรายการ Chat ไม่บังคับ `chat:ask`, `chat:answer` หรือ `approve`
 - ใช้ขอบเขตเดียวกับ API รายการของแต่ละเมนู เช่น โรงงานที่ผูก/มอบหมาย ภาค จังหวัด นิคม และประเภทโรงงานตาม effective scope บัญชี role เดียวกันจึงอาจได้ผลต่างกัน
 - Badge ไม่ให้สิทธิ์บันทึกหรืออนุมัติเพิ่มเติม API ดำเนินการต้องตรวจสิทธิ์ของตัวเองตามเดิม
 
@@ -33,6 +34,7 @@ curl 'https://d-poms.diw.go.th/api/v1/me/menu-badges' \
 | `bod_cod_errors` | `bod_cod_errors:view` | `bod_cod_errors:approve` |
 | `eligible_factories` | `eligible_factories:view` | `eligible_factories:approve` สำหรับผู้ไม่ใช่ operator |
 | `notifications` | `notifications:view` | ไม่ใช้ |
+| `chat` | `chat:view` | ไม่ใช้ |
 
 `connection` เป็น key ฝั่ง client ซึ่งจับคู่กับ backend permission `cems_wpms_requests:*` ตาม alias เดิม ไม่สร้าง permission ใหม่
 
@@ -57,6 +59,7 @@ HTTP `200` พร้อม `Cache-Control: private, no-store`
 | `data.bod_cod_errors` | boolean | No | BOD/COD มีรายงานเข้าเกณฑ์ |
 | `data.eligible_factories` | boolean | No | มีคำขอเพิ่มโรงงานเข้าข่ายรอพิจารณา |
 | `data.notifications` | boolean | No | มีเหตุการณ์เข้าเกณฑ์ของวันนี้ตามเวลาไทย |
+| `data.chat` | boolean | No | มีห้อง Chat ที่เปิดการสนทนาและข้อความล่าสุดมาจากอีกฝ่ายอย่างน้อยหนึ่งห้องในขอบเขต |
 
 ```json
 {
@@ -67,12 +70,13 @@ HTTP `200` พร้อม `Cache-Control: private, no-store`
     "kwp_forms": true,
     "bod_cod_errors": false,
     "eligible_factories": true,
-    "notifications": true
+    "notifications": true,
+    "chat": true
   }
 }
 ```
 
-คืนทั้ง 6 key เสมอ ไม่มีสิทธิ์หรือไม่มีรายการตรงเกณฑ์ให้ใช้ `false` หากประมวลผลล้มเหลวให้ตอบ error ไม่แทนข้อผิดพลาดด้วย `false`
+คืนทั้ง 7 key เสมอ ไม่มีสิทธิ์หรือไม่มีรายการตรงเกณฑ์ให้ใช้ `false` หากประมวลผลล้มเหลวให้ตอบ error ไม่แทนข้อผิดพลาดด้วย `false`
 
 ### สถานะงานคำขอ
 
@@ -98,6 +102,22 @@ HTTP `200` พร้อม `Cache-Control: private, no-store`
 - หากข้อมูลมี alias `WAITING_FACTORY_DEVICE_CONFIG`, `WAITING_FACTORY_DEVICE_CONFIGURATION`, `WAITING_DEVICE_CONFIG` ให้นับเหมือน `WAITING_CONNECTION` โดยไม่สร้างสถานะใหม่
 - ไม่เพิ่มตัวกรอง `edit`, `allowedActions`, ผู้สร้างคำขอ หรือ `currentStep` นอกเหนือจากขอบเขตการเข้าถึงรายการเดิม
 - กลุ่มผู้ใช้อื่นคืน `false` สำหรับงานคำขอที่ไม่มีเกณฑ์รองรับ โดยเมนู `eligible_factories` ใช้เงื่อนไขผู้ไม่ใช่ operator ตามตาราง
+
+### Chat ที่มีข้อความล่าสุดจากอีกฝ่าย
+
+ใช้สิทธิ์และขอบเขตเดียวกับ [`GET /chat/tickets`](../../menus/chat/README.md) ตรวจแต่ละห้องแยกกันโดยไม่ขึ้นกับ pagination หรือห้องที่มีการเคลื่อนไหวล่าสุดทั้งระบบ
+
+| ผู้ดู Badge | เงื่อนไขที่ทำให้ `data.chat = true` |
+| --- | --- |
+| `userType = operator` | มีอย่างน้อยหนึ่งห้อง `status = open` (เปิดการสนทนา) ที่ข้อความล่าสุดมาจาก `officer` หรือ `admin` |
+| `userType = officer` หรือ `admin` | มีอย่างน้อยหนึ่งห้อง `status = open` ที่ข้อความล่าสุดมาจาก `operator` |
+| กลุ่มอื่น เช่น `citizen` | `false` |
+
+- ห้อง `status = closed` (ปิดการสนทนา) ไม่นับทุกกรณี
+- ข้อความล่าสุดใช้ message `id` สูงสุดของห้อง เช่นเดียวกับลำดับประวัติ Chat จึงตัดสินได้แม้ `createdAt` เท่ากัน ไม่มีข้อความให้ใช้ `false`
+- แยกฝั่งตาม persona ณ เวลาส่งที่บันทึกใน `sender_role_label`: `ผู้ประกอบการ`, `เจ้าหน้าที่`, `ผู้ดูแลระบบ` ไม่ใช้ผู้เปิดเรื่องหรือเพียง user ID ต่างกัน และไม่เปลี่ยนฝั่งข้อความเก่าตามชนิดบัญชีที่เปลี่ยนภายหลัง
+- เพื่อนร่วมโรงงานเป็นฝั่งผู้ประกอบการเดียวกัน เจ้าหน้าที่และผู้ดูแลระบบเป็นฝั่งเดียวกัน
+- ไม่จำกัดวันและไม่ผูกกับสถานะอ่าน เมื่ออีกฝ่ายตอบกลับหรือปิดห้องสำเร็จให้รีเฟรช endpoint นี้ ค่าอาจยังเป็น `true` หากมีห้องเปิดอื่นเข้าเกณฑ์
 
 ### เหตุการณ์การแจ้งเตือน
 
@@ -142,5 +162,8 @@ HTTP `200` พร้อม `Cache-Control: private, no-store`
 - [BOD/COD report query](../../../../../backend/src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository.ts)
 - [Eligible add-request query](../../../../../backend/src/modules/eligible-factories/eligible-factories.repository.ts)
 - [Alert-event query](../../../../../backend/src/modules/alert-events/alert-events.repository.ts)
+- [Chat query และลำดับข้อความ](../../../../../backend/src/modules/chat/chat.repository.ts)
+- [Chat Badge tests](../../../../../backend/tests/unit/menu-badges.chat.repository.test.ts)
+- [ผลตรวจ Chat Badge และข้อจำกัด](../../../evidence/chat/menu-badge-verification.md)
 - Tests: [route](../../../../../backend/tests/unit/menu-badges.route.test.ts), [service](../../../../../backend/tests/unit/menu-badges.service.test.ts), [request repositories](../../../../../backend/tests/unit/menu-badges.requests.repository.test.ts), [event repositories](../../../../../backend/tests/unit/menu-badges.events.repository.test.ts), [OpenAPI](../../../../../backend/tests/unit/menu-badges.openapi.test.ts)
 - [หลักฐาน TDD และข้อจำกัด](../../../evidence/shared/menu-badges.tdd.md)
