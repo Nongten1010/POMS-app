@@ -109,6 +109,8 @@ curl --request GET \
 
 Response นี้ใช้เติมหน้าแก้ไข โดยคืน `user.permissionMode` และ grouped effective permissions ตามโหมดปัจจุบัน ทุก module/action ใน [editable contract](./README.md#permission-management-editable-contract) มีค่าครบเป็น boolean; scoped module มี `data`, `region`, `province` และคืน `estateCode` เมื่อนิคมเป็น `IN_ESTATE` ส่วน binary module ไม่มี location fields:
 
+`permissions.chat.ask` เป็น boolean ที่ใช้ค่าเดียวกับ [login และ `/auth/me`](../../shared/authentication/README.md#response-fields) สำหรับผู้ใช้และชุดสิทธิ์เดียวกัน: หากไม่มี effective `chat:ask` จะคืน `false` รวม explicit deny และ custom ที่ไม่บันทึก action นี้ แม้มี role `admin` การคืนค่าใน response ไม่เพิ่มสิทธิ์ให้บัญชี
+
 ```json
 {
   "user": {

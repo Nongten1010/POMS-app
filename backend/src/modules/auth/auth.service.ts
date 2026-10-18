@@ -5,7 +5,7 @@ import { signAccessToken } from '../../shared/utils/jwt';
 import { verifyPassword, bufferToHashString } from '../../shared/utils/password';
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
-import { flattenPermissionScopes, groupPermissions } from './permissions';
+import { flattenPermissionScopes, groupAuthPermissions } from './permissions';
 import type { PermissionDataScope, PermissionMode, PermissionScopeDetails } from './permissions';
 import type { AuthenticatedUser } from '../../shared/types/express';
 import { inferRegionalAccessFromText, parseRegionalAccessJson } from './regional-access';
@@ -516,7 +516,7 @@ function buildLoginResponse(args: {
   return {
     accessToken,
     user: toAuthUserDTO(args.user, args.profile, args.roles, permissionMode),
-    permissions: groupPermissions(effectiveScopes),
+    permissions: groupAuthPermissions(effectiveScopes),
   };
 }
 
@@ -537,7 +537,7 @@ function buildMeResponse(args: {
   );
   return {
     user: toAuthUserDTO(args.user, args.profile, args.roles, permissionMode),
-    permissions: groupPermissions(effectiveScopes),
+    permissions: groupAuthPermissions(effectiveScopes),
   };
 }
 

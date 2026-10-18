@@ -788,6 +788,7 @@ describe('authService login completion', () => {
           data: 'ALL',
           manage: true,
         },
+        chat: { ask: false },
       },
     });
     expect(mockedSignAccessToken).toHaveBeenCalledWith(

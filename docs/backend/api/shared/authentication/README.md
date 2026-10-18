@@ -47,6 +47,9 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 | `user.permissionMode` | `role_default` \| `custom` | โหมดที่ใช้คำนวณสิทธิ์ปัจจุบัน; ดู [โมเดลสิทธิ์รายคน](../../menus/permissions/README.md#approved-permission-model) |
 | `user.ownedFactoryIds` | `string[]`    | มีเฉพาะ operator persona และคำนวณจากสิทธิ์โรงงานปัจจุบัน                           |
 | `permissions`          | `object`      | Permission groups ของ persona เดียว พร้อม data scope                               |
+| `permissions.chat.ask` | `boolean` | ส่งเสมอทั้ง login และ `/auth/me`: `true` เมื่อมี effective `chat:ask`; `false` เมื่อไม่มีสิทธิ์ |
+
+`permissions.chat.ask` ใช้ค่าเดียวกับ [รายละเอียดผู้ใช้ `GET /users/:id`](../../menus/permissions/user-management-api.md#get-apiv1usersid) เมื่อเป็นผู้ใช้และชุดสิทธิ์เดียวกัน กรณี explicit `deny`, custom snapshot ที่ไม่บันทึก `chat:ask` หรือไม่มีสิทธิ์ Chat ทั้งหมด จะคืน `false` อย่างชัดเจน แม้ role เป็น `admin` ถ้าไม่มีสิทธิ์ Chat ใดเลย auth response จะคืน `"chat": { "ask": false }` Client ต้องตรวจ `ask === true` เพื่อเปิดการสนทนา ไม่อนุมานสิทธิ์จากการมี object `chat` การเติม boolean ใน response ไม่เพิ่ม grant ใน JWT หรือเปลี่ยนสิทธิ์ที่บันทึกไว้
 
 อายุ access token เป็นไปตาม `JWT_EXPIRES_IN` ของ environment ที่ออก token โดยไม่มี production-only cap เพิ่มเติม และ backend ยอมรับ token ที่ลายเซ็นถูกต้องจนถึงค่า `exp` ของ token นั้น การเปลี่ยน `JWT_EXPIRES_IN` มีผลกับ token ที่ออกใหม่เท่านั้น
 
@@ -124,7 +127,8 @@ Client เรียก `/auth/me` หลังแก้สิทธิ์หร�
     "factories": {
       "data": "OWN_FACTORY",
       "view": true
-    }
+    },
+    "chat": { "ask": false }
   }
 }
 ```
@@ -176,7 +180,8 @@ Backend ตั้งใจเก็บ `401` เป็นข้อความ�
     "factories": {
       "data": "OWN_FACTORY",
       "view": true
-    }
+    },
+    "chat": { "ask": false }
   }
 }
 ```
@@ -194,3 +199,4 @@ Endpoint นี้ตรวจว่า user row ยัง active และไ�
 - [DIW identity mapping](../../../../../backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts)
 - คำนำหน้า 64 ตัวอักษร: [migration 0135](../../../../../backend/src/db/migrations/0135_expand_user_prename.ts) และ [migration regression](../../../../../backend/tests/unit/user-prename-migration.test.ts)
 - Tests: [route persona](../../../../../backend/tests/unit/auth.login-personas.route.test.ts), [service](../../../../../backend/tests/unit/auth.service.test.ts), [repository](../../../../../backend/tests/unit/auth.repository.test.ts), [provider](../../../../../backend/tests/unit/diw-user-login.identity-provider.test.ts)
+- Tests สำหรับ Chat: [เปรียบเทียบ login, me และรายละเอียดผู้ใช้](../../../../../backend/tests/unit/auth.chat-ask-response.test.ts), [OpenAPI contract](../../../../../backend/tests/unit/auth.chat-ask.openapi.test.ts)

@@ -188,6 +188,17 @@ export function groupPermissions(
   return groups;
 }
 
+/** Auth responses keep Chat ask explicit even when no Chat permissions are granted. */
+export function groupAuthPermissions(
+  scopes: Record<string, string | null | PermissionScopeDetails>,
+): PermissionGroups {
+  const groups = groupPermissions(scopes);
+  return {
+    ...groups,
+    chat: { ...groups.chat, ask: groups.chat?.ask === true },
+  };
+}
+
 /** Projects effective permissions into the stable matrix editable by Permission Management. */
 export function projectEditablePermissionGroups(groups: PermissionGroups): PermissionGroups {
   return Object.fromEntries(

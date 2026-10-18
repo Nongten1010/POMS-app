@@ -1484,7 +1484,31 @@ const componentSchemas: Record<string, OpenApiObject> = {
         required: ['permissionMode'],
         properties: { permissionMode: schemaRef('PermissionMode') },
       },
-      permissions: { type: 'object', additionalProperties: true },
+      permissions: schemaRef('AuthPermissionGroups'),
+    },
+  },
+  AuthPermissionGroups: {
+    type: 'object',
+    required: ['chat'],
+    additionalProperties: schemaRef('PermissionGroup'),
+    properties: {
+      chat: {
+        allOf: [
+          schemaRef('PermissionGroup'),
+          {
+            type: 'object',
+            required: ['ask'],
+            properties: {
+              ask: {
+                type: 'boolean',
+                description:
+                  'คืนเสมอ: true เมื่อมี effective chat:ask; false เมื่อไม่มีสิทธิ์ รวม explicit deny, custom ที่ไม่บันทึก action นี้ และบัญชีที่ไม่มีสิทธิ์ Chat ทั้งหมด. ใช้ค่าเดียวกับ GET /users/{id}; role admin ไม่ข้าม custom deny. การมี object chat ไม่ได้หมายความว่ามีสิทธิ์ Chat',
+              },
+            },
+          },
+        ],
+        example: { data: 'ALL', view: true, edit: true, answer: true, ask: false },
+      },
     },
   },
   PermissionMode: {
