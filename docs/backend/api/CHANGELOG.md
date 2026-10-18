@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="chat-operator-only-creation"></a>
+
+## 2026-10-18 — เปิด Ticket ได้เฉพาะผู้ประกอบการ
+
+- **Affected canonical docs:** [Chat: สิทธิ์และขอบเขตข้อมูล](./menus/chat/README.md#chat-operator-only-creation)
+- **Impact:** `GET /api/v1/chat/options` คืน `canCreate=false` สำหรับ `officer`, `admin`, `citizen` รวมบัญชี custom ที่ไม่ใช่ `operator` แม้มี `chat:view`; การเรียก `POST /api/v1/chat/tickets` จากบัญชีเหล่านี้ตอบ `403 FORBIDDEN` รวมการส่งซ้ำ สิทธิ์อ่าน ตอบ และปิดเรื่องยังใช้ `chat:view` และขอบเขตโรงงานปัจจุบันตามเดิม
+- **Migration:** client ใช้ `canCreate` จาก options เพื่อตัดสินการแสดง action เปิดเรื่อง โหลด options ใหม่เมื่อสิทธิ์เปลี่ยน และรับมือ `403` หากบัญชีหรือสิทธิ์เปลี่ยนระหว่าง session ให้ผู้ประกอบการเป็นผู้เริ่มเรื่อง ส่วนเจ้าหน้าที่ใช้รายการและรายละเอียดเดิมเพื่อตอบหรือปิดเรื่อง ไม่ต้อง migrate ฐานข้อมูลหรือเปลี่ยน payload, response fields, หัวข้อทั้ง 6 รหัส หรือ pagination; ตรวจ runtime OpenAPI หลัง deploy
+- **Old contract:** ทุก persona ที่มี `chat:view` เปิด Ticket ได้ภายในขอบเขตโรงงานปัจจุบัน และ options คืน `canCreate=true`
+- **New contract:** เฉพาะ `userType=operator` ที่มี `chat:view` เปิด Ticket ได้และ options คืน `canCreate=true`; ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม และ legacy permission codes ยังรับและคืนตามเดิม
+- **Breaking change:** yes — จำกัด persona ที่เปิดเรื่องใหม่ได้ โดยคงสิทธิ์อ่าน ตอบ ปิดเรื่อง และประวัติเดิม
+
 <a id="connection-request-revision-note-2000"></a>
 
 ## 2026-10-16 — จำกัดรายละเอียดแจ้งแก้ไขคำขอเชื่อมต่อเป็น 2,000 ตัวอักษร

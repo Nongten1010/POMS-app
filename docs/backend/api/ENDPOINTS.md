@@ -167,11 +167,11 @@
 | `GET` | `/api/v1/chat/factories` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
 | `GET` | `/api/v1/chat/factories/:id/measurement-points` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
 | `GET` | `/api/v1/chat/tickets` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
-| `POST` | `/api/v1/chat/tickets` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + chat:ask + eligible_factories:view; operator only; current factory ownership` | `backend/src/modules/chat/chat.routes.ts` |
+| `POST` | `/api/v1/chat/tickets` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view; operator only; current factory ownership` | `backend/src/modules/chat/chat.routes.ts` |
 | `GET` | `/api/v1/chat/tickets/:id` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
 | `GET` | `/api/v1/chat/tickets/:id/messages` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
-| `POST` | `/api/v1/chat/tickets/:id/messages` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope; operator chat:ask or officer/admin chat:answer` | `backend/src/modules/chat/chat.routes.ts` |
-| `POST` | `/api/v1/chat/tickets/:id/close` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope; operator chat:ask or officer/admin chat:answer` | `backend/src/modules/chat/chat.routes.ts` |
+| `POST` | `/api/v1/chat/tickets/:id/messages` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
+| `POST` | `/api/v1/chat/tickets/:id/close` | `docs/backend/api/menus/chat/README.md` | `authenticate + chat:view + eligible_factories:view + current factory scope` | `backend/src/modules/chat/chat.routes.ts` |
 
 ## ข้อสังเกตที่ต้องแก้ระหว่าง migration
 

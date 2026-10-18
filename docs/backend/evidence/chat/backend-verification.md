@@ -1,5 +1,7 @@
 # ผลตรวจ backend Chat / Ticket
 
+เอกสารนี้เป็นหลักฐาน release Chat ก่อนจำกัดผู้เปิดเรื่องเฉพาะผู้ประกอบการ กรณีที่เจ้าหน้าที่หรือบัญชี custom เปิดเรื่องได้อ้างถึง release ก่อนหน้าเท่านั้น ดู [ผลตรวจสิทธิ์เปิดเรื่องรอบปัจจุบัน](./operator-only-ticket-creation.md) และ [สัญญาปัจจุบัน](../../api/menus/chat/README.md#chat-operator-only-creation)
+
 อ้างอิง [สัญญา API เมนู Chat](../../api/menus/chat/README.md) และ frontend handoff `frontend/md/frontend-handoff-17102026.md` ที่ดึงจาก `origin/main` commit `6a22b5ec5caf9d4000fd59f91048784b42969adc` ก่อนเริ่ม implementation
 
 ## ขอบเขตและวิธีทดสอบ
@@ -78,9 +80,9 @@ release ก่อนหน้าแก้กรณีเจ้าหน้าท
 - Chat HTTP/persistence/factory/OpenAPI regression: 4 suites, 72 tests ผ่านด้วยข้อมูลสมมติ ไม่มีการสร้าง token แทนบัญชีจริงหรือเขียนข้อมูลทดสอบลง production
 - Runtime OpenAPI และ canonical contract ปรับกติกาสิทธิ์ตรงกันแล้ว; independent diff/security review ไม่พบข้อบกพร่องที่ต้องแก้
 
-## ตรวจสิทธิ์จากช่องมีสิทธิ์ใช้งาน
+## ผลตรวจ release ก่อนหน้า: สิทธิ์จากช่องมีสิทธิ์ใช้งาน
 
-ข้อกำหนดปัจจุบันคือ `permissions.chat.view` / `chat:view` ใช้เปิด Ticket ส่งข้อความ และปิดเรื่องภายในขอบเขตโรงงานเดิม ทั้งบัญชีที่บันทึกสิทธิ์ไว้แล้วและการบันทึกใหม่ ไม่ต้องเพิ่ม `chat:ask` หรือ `chat:answer` ไม่แก้ role สิทธิ์รายบัญชี หรือข้อมูล production เพื่อให้ผ่านการตรวจสิทธิ์
+ข้อกำหนดของ release นี้ขณะตรวจคือ `permissions.chat.view` / `chat:view` ใช้เปิด Ticket ส่งข้อความ และปิดเรื่องภายในขอบเขตโรงงานเดิม ทั้งบัญชีที่บันทึกสิทธิ์ไว้แล้วและการบันทึกใหม่ ไม่ต้องเพิ่ม `chat:ask` หรือ `chat:answer` ไม่แก้ role สิทธิ์รายบัญชี หรือข้อมูล production เพื่อให้ผ่านการตรวจสิทธิ์
 
 - Runtime OpenAPI test ที่ `GET /api/v1/openapi.json` พบก่อนแก้ว่าสัญญาเปิด Ticket ยังบังคับ `chat:ask`; หลังแก้ระบุ `chat:view` และ `eligible_factories:view` ตามขอบเขตจริง
 - Runtime OpenAPI test ส่งข้อความ/ปิดเรื่องพบก่อนแก้ว่า metadata ยังบังคับ legacy ask/answer; หลังแก้ใช้ `chat:view`

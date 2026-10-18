@@ -4,11 +4,11 @@
 
 ## เริ่มเชื่อมต่อจาก frontend
 
-Chat เป็นการเปิด Ticket พร้อมข้อความแรกเพื่อสอบถามหรือแจ้งปัญหา ผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแลเปิดเรื่อง ติดตาม และตอบได้ตามสิทธิ์การทำงานและขอบเขตโรงงานที่ได้รับ ระบบโหลดข้อมูลเมื่อเข้าหน้า เปิด Ticket หรือกดรีเฟรช ไม่มี polling หรือ WebSocket
+Chat เป็นการเปิด Ticket พร้อมข้อความแรกเพื่อสอบถามหรือแจ้งปัญหา เฉพาะผู้ประกอบการเปิดเรื่องใหม่ได้ ผู้ประกอบการที่มีสิทธิ์ในโรงงานเดียวกันติดตามและตอบต่อกันได้ เจ้าหน้าที่และผู้ดูแลอ่าน ตอบ และปิดเรื่องตามสิทธิ์และขอบเขตที่ได้รับ ระบบโหลดข้อมูลเมื่อเข้าหน้า เปิด Ticket หรือกดรีเฟรช ไม่มี polling หรือ WebSocket
 
-1. เรียก `GET /chat/options` เพื่อแสดงบัญชีปัจจุบัน หัวข้อ และสิทธิ์เปิดเรื่อง
-2. เรียก `GET /chat/factories` แล้ว `GET /chat/factories/:id/measurement-points` เพื่อเลือกโรงงานและจุดตรวจวัด ถ้าไม่เลือกจุดให้ส่ง `measurementPoint: null`
-3. เปิดเรื่องด้วย `POST /chat/tickets` พร้อมข้อความแรกและ `Idempotency-Key` ใหม่ เก็บ key เดิมไว้เมื่อจำเป็นต้องส่งคำขอเดิมซ้ำ
+1. เรียก `GET /chat/options` เพื่อแสดงบัญชีปัจจุบัน หัวข้อ และสิทธิ์เปิดเรื่อง แสดงปุ่มเปิดเรื่องเฉพาะเมื่อ `canCreate=true`
+2. สำหรับผู้ประกอบการที่เปิดเรื่องได้ เรียก `GET /chat/factories` แล้ว `GET /chat/factories/:id/measurement-points` เพื่อเลือกโรงงานและจุดตรวจวัด ถ้าไม่เลือกจุดให้ส่ง `measurementPoint: null` รายการโรงงานมี pagination ต้องโหลดหน้าที่ต้องใช้ให้ครบหรือค้นหาผ่าน `q`
+3. ผู้ประกอบการเปิดเรื่องด้วย `POST /chat/tickets` พร้อมข้อความแรกและ `Idempotency-Key` ใหม่ เก็บ key เดิมไว้เมื่อจำเป็นต้องส่งคำขอเดิมซ้ำ
 4. เรียกรายการ `GET /chat/tickets` และรายละเอียด/ข้อความเมื่อเปิดสนทนา ใช้ `capabilities` ตัดสินว่าจะแสดงปุ่มตอบและปิดหรือไม่
 5. หลังส่งข้อความหรือปิด Ticket ใช้ผลตอบกลับปรับสถานะทันที แล้วรีเฟรชรายการเมื่อจำเป็น
 
@@ -28,20 +28,24 @@ curl "$BASE_URL/api/v1/chat/tickets" \
 
 ## สิทธิ์และขอบเขตข้อมูล
 
+<a id="chat-operator-only-creation"></a>
+
 | การทำงาน | เงื่อนไข |
 | --- | --- |
 | อ่านตัวเลือก `/options` | `chat:view` |
 | อ่านโรงงาน รายการ Ticket รายละเอียด และข้อความ | `chat:view` และขอบเขตปัจจุบันจาก `eligible_factories:view` |
-| เปิด Ticket | `chat:view` และขอบเขตปัจจุบันจาก `eligible_factories:view` ใช้ได้กับผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแล |
-| ส่งข้อความและปิด Ticket | `chat:view` และขอบเขตปัจจุบันจาก `eligible_factories:view` ไม่จำกัดเฉพาะผู้สร้าง Ticket |
+| เปิด Ticket | `userType=operator` และ `chat:view` พร้อมขอบเขตโรงงานปัจจุบันจาก `eligible_factories:view` |
+| ส่งข้อความและปิด Ticket | `chat:view` และขอบเขตโรงงานปัจจุบันตามเดิม ไม่จำกัดเฉพาะผู้สร้าง Ticket; ส่งข้อความใหม่และปิดได้เมื่อ Ticket ยัง `open` การปิดซ้ำยังสำเร็จโดยไม่เพิ่มเหตุการณ์ |
 
-ในหน้าจัดการสิทธิ์ ช่อง **มีสิทธิ์ใช้งาน** คือ `permissions.chat.view` และบันทึกเป็น `chat:view` เพียงช่องนี้ก็เปิดเรื่อง ส่งข้อความ และปิด Ticket ที่อยู่ในขอบเขตได้ทันที ทั้งสิทธิ์ที่บันทึกอยู่เดิมและการบันทึกใหม่ ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม
+`GET /chat/options` คืน `canCreate=true` เฉพาะบัญชีที่มี `userType=operator` และ `chat:view` ส่วน `officer`, `admin`, `citizen` รวมบัญชี custom ที่ไม่ใช่ `operator` ได้ `canCreate=false` แม้มี `chat:view` การเรียก `POST /chat/tickets` โดยบัญชีเหล่านี้ตอบ `403 FORBIDDEN` รวมถึงการส่งคำขอเดิมซ้ำ สิทธิ์อ่าน ส่งข้อความ และปิดเรื่องยังใช้กติกาเดิม
 
-ช่อง **ตอบคำถาม (Admin)** คือ `permissions.chat.edit` ซึ่งยังบันทึกเป็น `chat:answer` ตามเดิมและไม่เปลี่ยน role บัญชี ระบบยังรับและคืน legacy `chat:ask`/`chat:answer` เพื่อความเข้ากันได้ แต่ไม่ใช้เป็นเงื่อนไขเพิ่มของ Chat endpoints เมื่อถอน `chat:view` จะใช้ Chat ไม่ได้แม้ยังมีสิทธิ์ legacy เหล่านี้ ดูรูปแบบการบันทึกที่ [จัดการสิทธิ์การใช้งาน](../permissions/README.md)
+ในหน้าจัดการสิทธิ์ ช่อง **มีสิทธิ์ใช้งาน** คือ `permissions.chat.view` และบันทึกเป็น `chat:view` ผู้ประกอบการใช้สิทธิ์นี้เปิดเรื่องได้ ส่วนบัญชีที่มีสิทธิ์นี้อ่าน ส่งข้อความ และปิด Ticket ในขอบเขตได้ตามเดิม ทั้งสิทธิ์ที่บันทึกอยู่เดิมและการบันทึกใหม่ ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม
+
+ช่อง **ตอบคำถาม (Admin)** คือ `permissions.chat.edit` ซึ่งยังบันทึกเป็น `chat:answer` ตามเดิมและไม่เปลี่ยน role หรือ `userType` บัญชี ระบบยังรับและคืน legacy `chat:ask`/`chat:answer` เพื่อความเข้ากันได้ แต่ไม่ใช้เป็นเงื่อนไขเพิ่มของ Chat endpoints เมื่อถอน `chat:view` จะใช้ Chat ไม่ได้แม้ยังมีสิทธิ์ legacy เหล่านี้ ดูรูปแบบการบันทึกที่ [จัดการสิทธิ์การใช้งาน](../permissions/README.md) และผลกระทบต่อ client ใน [breaking change](../../CHANGELOG.md#chat-operator-only-creation)
 
 Backend โหลดสิทธิ์ปัจจุบันทุก request และตรวจขอบเขตโรงงานทุกครั้ง รวมถึงการส่งซ้ำด้วย idempotency key เดิม ผู้ดูแลไม่มีทางข้ามสิทธิ์หรือขอบเขต ผู้ประกอบการต้องมีความสัมพันธ์โรงงานที่ยังมีผลแม้ได้รับ scope `ALL` ไม่ใช้ชื่อ role, จังหวัด, เลขทะเบียน หรือ `userId` ที่ client ส่งมาเพื่อให้สิทธิ์
 
-ถ้า scope โรงงานหายไป ใช้ไม่ได้ หรือข้อมูลกำหนดพื้นที่ไม่ครบ ผลรายการจะว่างและ resource นอกขอบเขตตอบ `404` ส่วนการขาด `chat:view` ตอบ `403` ผลตอบกลับหลังผ่าน authentication ใช้ `Cache-Control: private, no-store`
+ถ้า scope โรงงานหายไป ใช้ไม่ได้ หรือข้อมูลกำหนดพื้นที่ไม่ครบ ผลรายการจะว่างและ resource นอกขอบเขตตอบ `404` ส่วนการขาด `chat:view` หรือเปิดเรื่องด้วย `userType` ที่ไม่ใช่ `operator` ตอบ `403` ผลตอบกลับหลังผ่าน authentication ใช้ `Cache-Control: private, no-store`
 
 โรงงานในเมนูนี้อ้างถึง `eligible_factories` โดยเลือกได้แม้ยังไม่เชื่อมต่อ POMS หรือยังไม่มีจุดตรวจวัด หากบัญชีมีสิทธิ์เข้าถึงอยู่แล้ว การกรอกเลขทะเบียนเองไม่สร้างสิทธิ์ให้ผู้ใช้ ส่วนข้อมูลโรงงาน current/live ใน POMS คือ active rows ใน `cems_wpms_connected_measurement_points` และตาราง `factories` ใช้ประกอบการยืนยันตัวตน/สิทธิ์โรงงาน
 
@@ -109,7 +113,7 @@ Backend โหลดสิทธิ์ปัจจุบันทุก request 
 
 ## `GET /chat/options`
 
-ข้อมูลเริ่มต้นของหน้า ต้องมี `chat:view` ไม่ต้องส่ง body หรือ query การมี `canCreate=true` ยังไม่รับรองสิทธิ์ในโรงงานที่เลือก
+ข้อมูลเริ่มต้นของหน้า ต้องมี `chat:view` ไม่ต้องส่ง body หรือ query `canCreate=true` เฉพาะ `userType=operator` ส่วน persona อื่นเป็น `false` การมี `canCreate=true` ยังไม่รับรองสิทธิ์ในโรงงานที่เลือก
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -122,7 +126,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 | `data.viewer` | `ChatActor` | ไม่ | บัญชีปัจจุบัน |
 | `data.topics` | `{code,label}[]` | ไม่ | หัวข้อที่ backend รองรับ |
 | `data.limits.messageMaxLength` | integer | ไม่ | `2000` |
-| `data.canCreate` | boolean | ไม่ | เป็น `true` เมื่อมี `chat:view` จากช่องมีสิทธิ์ใช้งาน; ยังต้องเลือกโรงงานที่มีสิทธิ์ |
+| `data.canCreate` | boolean | ไม่ | `true` เฉพาะ `userType=operator` ที่มี `chat:view`; `officer`/`admin`/`citizen` และ persona อื่นเป็น `false` แม้มี `chat:view`; ยังต้องเลือกโรงงานที่มีสิทธิ์ |
 
 ```json
 {"success":true,"data":{"viewer":{"userId":101,"name":"ผู้ประกอบการตัวอย่าง","roleCode":"factory_operator","roleLabel":"ผู้ประกอบการ"},"topics":[{"code":"factory_access","label":"ข้อมูลโรงงานและสิทธิ์การใช้งาน"},{"code":"connection_data","label":"การขอเชื่อมต่อและการส่งข้อมูล"},{"code":"measurements_alerts","label":"ผลตรวจวัดและการแจ้งเตือน"},{"code":"forms_reports","label":"แบบฟอร์มและการยื่นรายงาน"},{"code":"form_legal_guidance","label":"ข้อมูลในแบบฟอร์ม กฎหมายและประกาศฯ"},{"code":"other","label":"อื่นๆ"}],"limits":{"messageMaxLength":2000},"canCreate":true}}
@@ -208,7 +212,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `POST /chat/tickets`
 
-ต้องมี `chat:view` และเข้าถึงโรงงานตามขอบเขต `eligible_factories:view` ใช้ได้กับผู้ประกอบการ เจ้าหน้าที่ และผู้ดูแล สร้าง Ticket เหตุการณ์เปิด และข้อความแรกเป็นงานเดียวกัน ถ้าส่วนใดไม่สำเร็จจะไม่เหลือ Ticket ว่าง
+เฉพาะ `userType=operator` ที่มี `chat:view` และสิทธิ์ในโรงงานปัจจุบัน ไม่ต้องมี `chat:ask` เพิ่ม บัญชี `officer`/`admin`/`citizen` และ persona อื่นตอบ `403 FORBIDDEN` แม้มี `chat:view` สร้าง Ticket เหตุการณ์เปิด และข้อความแรกเป็นงานเดียวกัน ถ้าส่วนใดไม่สำเร็จจะไม่เหลือ Ticket ว่าง
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -281,7 +285,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `POST /chat/tickets/:id/messages`
 
-ต้องมี `chat:view` และเข้าถึง Ticket ตามขอบเขตโรงงานปัจจุบัน รับเฉพาะ Ticket ที่ยัง `open` สำหรับข้อความใหม่
+ใช้ `chat:view` และขอบเขตโรงงานปัจจุบันตามเดิม ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม รับเฉพาะ Ticket ที่ยัง `open` สำหรับข้อความใหม่
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -307,7 +311,7 @@ Idempotency แยกตามบัญชีและการทำงาน; 
 
 ## `POST /chat/tickets/:id/close`
 
-ต้องมี `chat:view` และเข้าถึง Ticket ตามขอบเขตโรงงานปัจจุบัน ปิดแล้วอ่านประวัติได้แต่ส่งข้อความใหม่หรือเปิด Ticket เดิมอีกครั้งไม่ได้ การปิดกล่องสนทนาใน UI ไม่ใช่การเรียก endpoint นี้
+ใช้ `chat:view` และขอบเขตโรงงานปัจจุบันตามเดิม ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม ปิดแล้วอ่านประวัติได้แต่ส่งข้อความใหม่หรือเปิด Ticket เดิมอีกครั้งไม่ได้ การปิดกล่องสนทนาใน UI ไม่ใช่การเรียก endpoint นี้
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -366,6 +370,7 @@ ID ที่รับจาก client ต้องเป็น integer ระห
 | Contract publication tests | [chat.openapi.test.ts](../../../../../backend/tests/unit/chat.openapi.test.ts) |
 | SQL Server transaction checks | [chat.sql-server.test.ts](../../../../../backend/tests/integration/chat.sql-server.test.ts) |
 | ผลตรวจ implementation | [TDD, tests และ security review](../../../evidence/chat/backend-verification.md) |
+| การจำกัดผู้เปิดเรื่อง | [หลักฐานการตรวจผู้ประกอบการเปิดเรื่องและสิทธิ์เดิม](../../../evidence/chat/operator-only-ticket-creation.md) |
 | ผลตรวจและเงื่อนไขฐานทดสอบ | [หลักฐานการตรวจ SQL Server](../../../evidence/chat/sql-server-verification.md) |
 
 ดู [ขอบเขตสิทธิ์](../permissions/README.md) และ [โรงงานที่เข้าข่าย](../eligible-factories/README.md) สำหรับสัญญาร่วมของข้อมูลโรงงานและสิทธิ์ การใช้งานจริงต้องรัน migration ของ Chat ก่อนให้ client เรียก endpoint ชุดนี้

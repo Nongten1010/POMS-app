@@ -17,6 +17,7 @@
 
 ## Chat
 
+- [Chat: เปิดเรื่องเฉพาะผู้ประกอบการและคงสิทธิ์อ่าน ตอบ ปิดเรื่องเดิม](./chat/operator-only-ticket-creation.md)
 - [Chat: ผลตรวจ implementation, TDD และความปลอดภัย](./chat/backend-verification.md)
 - [Chat: ฐานทดสอบสมมติและการตรวจ concurrency บน SQL Server](./chat/sql-server-verification.md)
 

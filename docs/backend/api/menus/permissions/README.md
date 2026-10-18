@@ -190,7 +190,7 @@ Raw code `cems_wpms_requests:*` ใช้กับ backend route guard, ตา�
 | `feedback` | `view` | ไม่มี `data`, `region`, `province` |
 | `laws` | `view`, `edit` | ไม่มี `data`, `region`, `province` |
 | `faq` | `view`, `edit` | ไม่มี `data`, `region`, `province` |
-| `chat` | `view`, `edit` | ไม่มี location fields; `view` map ไป `chat:view` ใช้เปิดเรื่อง/สนทนา/ปิดเรื่องภายในขอบเขตโรงงาน; `edit` map ไป legacy `chat:answer` |
+| `chat` | `view`, `edit` | ไม่มี location fields; `view` map ไป `chat:view` ใช้อ่าน/สนทนา/ปิดเรื่องภายในขอบเขตโรงงาน; เฉพาะ `userType=operator` เปิดเรื่องได้; `edit` map ไป legacy `chat:answer` |
 | `permissions` | `view` | ไม่มี `data`, `region`, `province`; ไม่มี `manage` ในหน้าแก้สิทธิ์ |
 | `eligible_factories` | `view`, `edit`, `approve` | scoped module |
 
@@ -198,7 +198,7 @@ Scoped permission groups ใช้ `data`, `region`, `province` และ option
 
 `data` ใน grouped response แสดงขอบเขตรวมของเมนู แต่ scope ของแต่ละ action อาจต่างกัน เช่น `view=ALL` และ `edit=IN_PROVINCE` การส่ง grouped matrix กลับโดยไม่เปลี่ยนขอบเขตเมนูต้องคง scope/qualifier ราย action ที่แคบกว่า ไม่ใช้ค่า display ที่กว้างที่สุดขยาย edit หรือ approve อัตโนมัติ ถ้าต้องการแก้ scope แยกแต่ละ action ให้ใช้ raw GET/PUT ตาม [API สิทธิ์รายบัญชี](./user-management-api.md#permission-override-api)
 
-สำหรับ Chat ช่อง **มีสิทธิ์ใช้งาน** (`permissions.chat.view=true`) ให้ `chat:view` ซึ่งใช้เปิด Ticket ส่งข้อความ และปิดเรื่องได้ภายในขอบเขต `eligible_factories:view` ปัจจุบัน ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม และไม่ต้องบันทึกสิทธิ์เดิมซ้ำ ช่อง **ตอบคำถาม (Admin)** (`permissions.chat.edit`) ยังบันทึก raw `chat:answer` ตามเดิมโดยไม่เปลี่ยน role บัญชี หากถอน `chat:view` จะใช้ Chat ไม่ได้แม้ยังมี legacy ask/answer ดู [Chat API](../chat/README.md) สำหรับ endpoint และขอบเขตโรงงาน
+สำหรับ Chat ช่อง **มีสิทธิ์ใช้งาน** (`permissions.chat.view=true`) ให้ `chat:view` ซึ่งใช้อ่าน ส่งข้อความ และปิดเรื่องได้ภายในขอบเขต `eligible_factories:view` ปัจจุบันตามเดิม เฉพาะ `userType=operator` เปิด Ticket ได้ ส่วนเจ้าหน้าที่ ผู้ดูแล และ persona อื่นได้ `canCreate=false` และเปิดเรื่องผ่าน API ไม่ได้ ไม่ต้องมี `chat:ask` หรือ `chat:answer` เพิ่ม และไม่ต้องบันทึกสิทธิ์เดิมซ้ำ ช่อง **ตอบคำถาม (Admin)** (`permissions.chat.edit`) ยังบันทึก raw `chat:answer` ตามเดิมโดยไม่เปลี่ยน role บัญชี หากถอน `chat:view` จะใช้ Chat ไม่ได้แม้ยังมี legacy ask/answer ดู [Chat API](../chat/README.md#chat-operator-only-creation) สำหรับ endpoint และขอบเขตโรงงาน
 
 `api_documentation` และ internal actions เช่น `statistics:export`, `chat:ask`, `permissions:manage`, `eligible_factories:manage` ไม่อยู่ใน editable matrix เมื่อ grouped PATCH เปลี่ยนบัญชีเป็น `custom` ระบบเก็บสิทธิ์ internal ที่มีผลอยู่ก่อนบันทึกไว้ใน snapshot เพื่อไม่ให้สิทธิ์หายหรือเปิดกลับจาก role โดยไม่ตั้งใจ Raw PUT เป็นช่องทางแทนที่สิทธิ์ทุก code รวม internal actions ผู้ที่มีเพียง `permissions:view` จะไม่ได้สิทธิ์แก้ผู้ใช้หรือแก้สิทธิ์เพิ่ม
 

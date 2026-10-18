@@ -539,7 +539,7 @@ function editablePermissionGroupSchema(module: string, complete: boolean): OpenA
   };
   if (module === 'chat') {
     properties.view.description =
-      'มีสิทธิ์ใช้งาน: map เป็น chat:view; เปิด Ticket ส่งข้อความ และปิดเรื่องได้ภายในขอบเขต eligible_factories:view ปัจจุบัน โดยไม่ต้องเพิ่ม chat:ask หรือ chat:answer';
+      'มีสิทธิ์ใช้งาน: map เป็น chat:view; เฉพาะ userType=operator เปิด Ticket ได้ ส่วนอ่าน ส่งข้อความ และปิดเรื่องใช้สิทธิ์นี้ภายในขอบเขต eligible_factories:view ปัจจุบัน โดยไม่ต้องเพิ่ม chat:ask หรือ chat:answer';
     properties.edit.description =
       'ตอบคำถาม (Admin): map เป็น legacy chat:answer ตามเดิม ไม่เปลี่ยน role บัญชี และไม่ใช่เงื่อนไขเพิ่มสำหรับ Chat endpoints';
   }

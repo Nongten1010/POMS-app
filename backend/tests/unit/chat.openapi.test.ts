@@ -30,13 +30,20 @@ describe('Chat runtime OpenAPI', () => {
     expect(response.body.components.schemas.ChatOptions.required).toEqual(
       expect.arrayContaining(['viewer', 'topics', 'limits', 'canCreate']),
     );
+    const canCreateDescription =
+      response.body.components.schemas.ChatOptions.properties.canCreate.description;
+    expect(canCreateDescription).toContain('userType=operator');
+    expect(canCreateDescription).toContain('chat:view');
+    expect(canCreateDescription).toContain('officer/admin/citizen');
+    expect(canCreateDescription).toContain('false');
   });
 
-  it('publishes ticket creation from the Chat use checkbox without extra action grants', async () => {
+  it('limits opening tickets to operators with the Chat use checkbox', async () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     const create = document.paths['/chat/tickets']?.post;
     expect(create?.['x-poms-permissions']).toEqual(['chat:view', 'eligible_factories:view']);
     expect(create).not.toHaveProperty('x-allowed-user-types');
+    expect(create?.['x-poms-user-types']).toEqual(['operator']);
     expect(document.components.schemas.ChatOptions.properties.canCreate.description).toContain(
       'chat:view',
     );
@@ -48,6 +55,7 @@ describe('Chat runtime OpenAPI', () => {
       const chat = document.components.schemas[name].properties.chat;
       expect(chat.properties.view.description).toContain('chat:view');
       expect(chat.properties.view.description).toContain('เปิด Ticket');
+      expect(chat.properties.view.description).toContain('userType=operator');
       expect(chat.properties.edit.description).toContain('chat:answer');
       expect(chat.properties.edit.description).toContain('ไม่เปลี่ยน role');
       expect(Object.keys(chat.properties)).toEqual(['view', 'edit']);
@@ -57,6 +65,13 @@ describe('Chat runtime OpenAPI', () => {
   it('describes atomic ticket creation, strict inputs, point identity, and safe retries', async () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     const operation = document.paths['/chat/tickets']?.post;
+    expect(operation?.['x-poms-permissions']).toEqual(['chat:view', 'eligible_factories:view']);
+    expect(operation?.['x-poms-user-types']).toEqual(['operator']);
+    expect(operation?.responses['403']).toMatchObject({
+      description: expect.stringContaining('userType ไม่ใช่ operator'),
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } },
+    });
+    expect(operation?.responses['403'].description).toContain('officer/admin/citizen');
     expect(operation?.parameters).toContainEqual(
       expect.objectContaining({
         name: 'Idempotency-Key',
@@ -78,7 +93,7 @@ describe('Chat runtime OpenAPI', () => {
       required: ['eligibleFactoryId', 'topicCode', 'message'],
       properties: {
         message: { type: 'string', minLength: 1, maxLength: 2000 },
-        measurementPoint: expect.any(Object),
+        measurementPoint: expect.objectContaining({ nullable: true, default: null }),
       },
     });
     expect(schemas.ChatPointReference).toMatchObject({
@@ -150,15 +165,15 @@ describe('Chat runtime OpenAPI', () => {
     expect(document.components.schemas.ChatTicketDetail.required).toContain('events');
   });
 
-  it('explains chat:view write permission, retries after close, and idempotent closure', async () => {
+  it('preserves chat:view write permission, retries after close, and idempotent closure', async () => {
     const { body: document } = await request(app).get('/api/v1/openapi.json');
     const send = document.paths['/chat/tickets/{id}/messages']?.post;
     const close = document.paths['/chat/tickets/{id}/close']?.post;
     for (const operation of [send, close]) {
-      expect(operation?.['x-poms-write-permissions']).toEqual({
-        anyOf: ['chat:view'],
-      });
       expect(operation?.['x-poms-permissions']).toEqual(['chat:view', 'eligible_factories:view']);
+      expect(operation?.['x-poms-write-permissions']).toEqual({ anyOf: ['chat:view'] });
+      expect(operation).not.toHaveProperty('x-poms-user-types');
+      expect(operation?.description).toContain('ไม่ต้องมี chat:ask หรือ chat:answer เพิ่ม');
     }
     expect(send?.description).toContain('หลังปิด');
     expect(send?.responses).toEqual(
@@ -209,7 +224,7 @@ describe('Chat runtime OpenAPI', () => {
   it('publishes the actual global rate-limit media type served before chat authentication', async () => {
     const limitedApp = createApp();
     for (let index = 0; index < 300; index += 1) {
-      await request(limitedApp).get('/health').expect(200);
+      await request(limitedApp).get('/api/v1/chat/options').expect(401);
     }
     const limited = await request(limitedApp).get('/api/v1/chat/options');
     expect(limited.status).toBe(429);

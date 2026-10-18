@@ -17,14 +17,16 @@ export function getChatAccess(user: AuthenticatedUser | undefined): ChatAccess {
         })
       : undefined,
     regionalAccess: user.regionalAccess ?? null,
-    // Permission Management's Chat use checkbox grants the complete conversation flow.
-    canCreateTicket: true,
+    // Only operators start tickets; chat:view retains the existing reply/close flow.
+    canCreateTicket: user.userType === 'operator',
     canWrite: true,
   };
 }
 
 export function requireChatWrite(access: ChatAccess, create = false): void {
   if (create ? !access.canCreateTicket : !access.canWrite) {
-    throw new ForbiddenError('Chat use permission required');
+    throw new ForbiddenError(
+      create ? 'Only authorized operators can open tickets' : 'Chat use permission required',
+    );
   }
 }
