@@ -298,21 +298,23 @@ describe('RBAC seed catalog', () => {
       'provincial_office',
       'industrial_estate',
     ]) {
+      const scope = findGrant(role, 'eligible_factories:view')?.scope ?? null;
       expect(findGrant(role, 'chat:view')).toEqual(
-        expect.objectContaining({ role, permission: 'chat:view', scope: null }),
+        expect.objectContaining({ role, permission: 'chat:view', scope }),
       );
       expect(findGrant(role, 'chat:ask')).toEqual(
-        expect.objectContaining({ role, permission: 'chat:ask', scope: null }),
+        expect.objectContaining({ role, permission: 'chat:ask', scope }),
       );
       expect(findGrant(role, 'chat:answer')).toBeUndefined();
     }
 
     for (const role of ['monitoring_kpm', 'monitoring_5_centers', 'admin']) {
+      const scope = findGrant(role, 'eligible_factories:view')?.scope ?? null;
       expect(findGrant(role, 'chat:view')).toEqual(
-        expect.objectContaining({ role, permission: 'chat:view', scope: null }),
+        expect.objectContaining({ role, permission: 'chat:view', scope }),
       );
       expect(findGrant(role, 'chat:answer')).toEqual(
-        expect.objectContaining({ role, permission: 'chat:answer', scope: null }),
+        expect.objectContaining({ role, permission: 'chat:answer', scope }),
       );
     }
 
@@ -322,6 +324,17 @@ describe('RBAC seed catalog', () => {
       expect(findGrant(role, 'chat:ask')).toBeUndefined();
       expect(findGrant(role, 'chat:answer')).toBeUndefined();
     }
+  });
+
+  it('initializes each Chat audience from the prior factory audience without granting new actions', () => {
+    for (const grant of GRANTS.filter((candidate) => candidate.permission.startsWith('chat:'))) {
+      expect(grant.scope).toBe(findGrant(grant.role, 'eligible_factories:view')?.scope ?? null);
+    }
+    expect(findGrant('factory_operator', 'chat:view')?.scope).toBe('OWN_FACTORY');
+    expect(findGrant('provincial_office', 'chat:view')?.scope).toBe('IN_PROVINCE');
+    expect(findGrant('monitoring_5_centers', 'chat:answer')?.scope).toBe('IN_REGION');
+    expect(findGrant('erc_office', 'chat:view')?.scope).toBe('FACTORY_TYPE_88');
+    expect(findGrant('public_user', 'chat:view')?.scope).toBeNull();
   });
 
   it('adds workflow approvals for directors and keeps binary permissions null-scoped', () => {

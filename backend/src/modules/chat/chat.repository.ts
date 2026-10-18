@@ -79,7 +79,7 @@ function messageFrom(row: Row): ChatMessage {
     createdAt: iso(row.created_at),
   };
 }
-function summaryFrom(row: Row, access: ChatAccess): ChatTicketSummary {
+function summaryFrom(row: Row, canWrite: boolean): ChatTicketSummary {
   const status = row.status as 'open' | 'closed';
   const pointId = row.eligible_point_id ?? row.connected_point_id;
   return {
@@ -113,8 +113,8 @@ function summaryFrom(row: Row, access: ChatAccess): ChatTicketSummary {
     closedAt: row.closed_at == null ? null : iso(row.closed_at),
     lastMessageAt: iso(row.last_message_at),
     capabilities: {
-      canReply: status === 'open' && access.canWrite,
-      canClose: status === 'open' && access.canWrite,
+      canReply: status === 'open' && canWrite,
+      canClose: status === 'open' && canWrite,
     },
   };
 }
@@ -127,6 +127,31 @@ function ticketQuery(access: ChatAccess, executor: Executor): Knex.QueryBuilder 
     access,
   );
 }
+
+// Reuse current factory access filters for action scopes as well as visibility.
+// A single query resolves capabilities for a whole page without trusting ticket snapshots.
+async function writableTicketIds(
+  access: ChatAccess,
+  ids: number[],
+  executor: Executor,
+): Promise<Set<number>> {
+  if (!access.canWrite || ids.length === 0) return new Set();
+  const rows = (await ticketQuery(access, executor)
+    .whereIn('ct.id', ids)
+    .where(function actionAccess() {
+      this.where(function answerAccess() {
+        // ALL intentionally adds no factory predicates; retain a true branch
+        // so Knex cannot discard it as an empty WHERE group.
+        this.whereRaw('1 = 1');
+        applyChatFactoryAccess(this, { ...access, factoryScope: access.answerScope });
+      }).orWhere(function requesterAccess() {
+        this.where('ct.opened_by', access.actorUserId);
+        applyChatFactoryAccess(this, { ...access, factoryScope: access.createScope });
+      });
+    })
+    .select('ct.id')) as Array<{ id: number | string }>;
+  return new Set(rows.map((row) => Number(row.id)));
+}
 async function readTicket(
   access: ChatAccess,
   id: number,
@@ -136,11 +161,13 @@ async function readTicket(
     | Row
     | undefined;
   if (!row) return null;
+  const writable =
+    row.status === 'open' && (await writableTicketIds(access, [id], executor)).has(id);
   const events = (await executor('chat_ticket_events')
     .where('ticket_id', id)
     .orderBy('id', 'asc')) as Row[];
   return {
-    ...summaryFrom(row, access),
+    ...summaryFrom(row, writable),
     events: events.map(
       (event): ChatEvent => ({
         id: Number(event.id),
@@ -196,8 +223,13 @@ async function listTickets(
     .orderBy('ct.id', query.order)
     .offset((query.page - 1) * query.pageSize)
     .limit(query.pageSize)) as Row[];
+  const writable = await writableTicketIds(
+    access,
+    rows.filter((row) => row.status === 'open').map((row) => Number(row.id)),
+    db,
+  );
   return {
-    data: rows.map((row) => summaryFrom(row, access)),
+    data: rows.map((row) => summaryFrom(row, writable.has(Number(row.id)))),
     pagination: {
       page: query.page,
       pageSize: query.pageSize,
@@ -315,6 +347,8 @@ async function createTicket(
       trx,
     );
     if (!factory) throw new NotFoundError('ไม่พบโรงงานที่มีสิทธิ์ติดต่อ');
+    if (!(await findChatFactory({ ...access, factoryScope: access.createScope }, factory.id, trx)))
+      throw new NotFoundError('ไม่พบโรงงานที่มีสิทธิ์เปิดเรื่อง');
     if (existing) {
       if (existing.creation_hash !== requestHash) {
         throw new AppError(
@@ -419,6 +453,11 @@ async function lockAccessibleTicket(
   return ticket;
 }
 
+async function requireTicketWrite(access: ChatAccess, id: number, trx: Knex.Transaction) {
+  if (!(await writableTicketIds(access, [id], trx)).has(id))
+    throw new NotFoundError('ไม่พบเรื่องติดต่อที่มีสิทธิ์ดำเนินการ');
+}
+
 async function sendMessage(
   access: ChatAccess,
   id: number,
@@ -428,6 +467,7 @@ async function sendMessage(
   requireChatWrite(access);
   return chatTransaction(async (trx) => {
     const current = await lockAccessibleTicket(access, id, trx);
+    await requireTicketWrite(access, id, trx);
     const hash = fingerprint({ text });
     const existing = (await trx('chat_messages')
       .where({ ticket_id: id, sender_id: access.actorUserId, idempotency_key: idempotencyKey })
@@ -468,6 +508,7 @@ async function closeTicket(access: ChatAccess, id: number): Promise<ChatTicketDe
   requireChatWrite(access);
   return chatTransaction(async (trx) => {
     const current = await lockAccessibleTicket(access, id, trx);
+    await requireTicketWrite(access, id, trx);
     if (current.status === 'open') {
       const actor = await getActor(access, trx);
       const now = new Date();

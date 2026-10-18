@@ -18,6 +18,8 @@ export interface ChatAccess {
   userType: AuthenticatedUser['userType'];
   roles: string[];
   factoryScope: PermissionScopeDetails | undefined;
+  createScope: PermissionScopeDetails | undefined;
+  answerScope: PermissionScopeDetails | undefined;
   regionalAccess: RegionalAccessDTO | null;
   canCreateTicket: boolean;
   canWrite: boolean;

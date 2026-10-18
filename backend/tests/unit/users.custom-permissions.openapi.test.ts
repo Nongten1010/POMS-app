@@ -101,6 +101,27 @@ describe('custom user permission OpenAPI contract', () => {
     expect(schemas.EditablePermissionGroups.description).toContain('ราย action');
   });
 
+  it('publishes scoped Chat view, ask, and edit actions on the permission editor', () => {
+    for (const name of ['EditablePermissionGroups', 'EditablePermissionGroupsResponse']) {
+      const chat = schemas[name].properties.chat;
+      expect(chat.required).toContain('data');
+      expect(chat.properties).toMatchObject({
+        view: { type: 'boolean' },
+        ask: { type: 'boolean' },
+        edit: { type: 'boolean' },
+        data: {
+          type: 'string',
+          enum: expect.arrayContaining(['ALL', 'IN_REGION', 'IN_PROVINCE']),
+        },
+        region: { type: 'string' },
+        province: { type: 'string' },
+      });
+      expect(chat.properties).not.toHaveProperty('answer');
+      expect(chat.description).toContain('chat:answer');
+      expect(chat.description).toContain('อิสระจาก eligible_factories');
+    }
+  });
+
   it('publishes raw legacy PATCH permissions without internal parser metadata', () => {
     const properties = schemas.LegacyUpdateManagedUserRequest.properties;
     expect(properties.permissionOverrides).toMatchObject({

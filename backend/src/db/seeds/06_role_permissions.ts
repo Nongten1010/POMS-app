@@ -1,10 +1,20 @@
 import type { Knex } from 'knex';
-import {
-  RBAC_MATRIX_V20260810_GRANTS as GRANTS,
-  type RolePermissionScope,
-} from './rbac_matrix_v20260810';
+import { RBAC_MATRIX_V20260810_GRANTS, type RolePermissionScope } from './rbac_matrix_v20260810';
 
-export { GRANTS };
+// Keep the historical matrix immutable for migration 0089. Chat now carries
+// its own audience; new role defaults start with the audience used previously.
+export const GRANTS = RBAC_MATRIX_V20260810_GRANTS.map((grant) =>
+  grant.permission.startsWith('chat:')
+    ? {
+        ...grant,
+        scope:
+          RBAC_MATRIX_V20260810_GRANTS.find(
+            (candidate) =>
+              candidate.role === grant.role && candidate.permission === 'eligible_factories:view',
+          )?.scope ?? null,
+      }
+    : grant,
+);
 
 export async function seed(knex: Knex): Promise<void> {
   const roles = await knex('roles').select('id', 'code');

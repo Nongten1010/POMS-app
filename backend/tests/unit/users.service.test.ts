@@ -272,7 +272,7 @@ describe('usersService permissions', () => {
     await expect(
       usersService.replacePermissions(
         44,
-        { permissions: [{ code: 'chat:answer', effect: 'allow', scope: null }] },
+        { permissions: [{ code: 'chat:answer', effect: 'allow', scope: 'ALL' }] },
         7,
       ),
     ).resolves.toBeDefined();
@@ -367,7 +367,14 @@ describe('usersService permissions', () => {
       edit: false,
       approve: false,
     });
-    expect(result.permissions.chat).toEqual({ view: false, edit: false });
+    expect(result.permissions.chat).toEqual({
+      data: null,
+      region: null,
+      province: null,
+      view: false,
+      ask: false,
+      edit: false,
+    });
     expect(result.permissions.permissions).toEqual({ view: false });
     expect(result.permissions).not.toHaveProperty('api_documentation');
   });

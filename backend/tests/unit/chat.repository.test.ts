@@ -10,6 +10,8 @@ const operator: ChatAccess = {
   userType: 'operator',
   roles: ['factory_operator'],
   factoryScope: { scope: 'OWN_FACTORY' },
+  createScope: { scope: 'OWN_FACTORY' },
+  answerScope: undefined,
   regionalAccess: null,
   canCreateTicket: true,
   canWrite: true,
@@ -112,7 +114,11 @@ describe('Chat persistence public interface', () => {
       { eligibleFactoryId: 10, measurementPoint: null, topicCode: 'other', message: 'คำถาม' },
       'question',
     );
-    const coworker = { ...operator, actorUserId: 102 };
+    const coworker: ChatAccess = {
+      ...operator,
+      actorUserId: 102,
+      answerScope: { scope: 'OWN_FACTORY' },
+    };
     const reply = await chatRepository.sendMessage(coworker, ticket.id, 'ตอบแล้ว', 'reply');
     const closed = await chatRepository.closeTicket(coworker, ticket.id);
     const closedAgain = await chatRepository.closeTicket(operator, ticket.id);

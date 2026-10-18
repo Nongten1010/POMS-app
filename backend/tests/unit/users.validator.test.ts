@@ -12,6 +12,37 @@ describe('managed users validators', () => {
   const passwordField = 'password';
   const validTestPassword = 'valid-test-password';
 
+  it.each([
+    { data: 'ALL', view: true, ask: true, edit: false },
+    { data: 'IN_REGION', region: 'ภาคตะวันออก', view: true, ask: false, edit: true },
+    { data: 'IN_PROVINCE', province: 'ระยอง', view: true, ask: true, edit: false },
+    { data: 'OWN_FACTORY', view: true, ask: true, edit: false },
+  ])('accepts the scoped Chat permission form %j', (chat) => {
+    const result = updateManagedUserSchema.parse({
+      user: { fullName: 'Example', username: 'example', roles: 'diw_central', isActive: true },
+      permissions: { chat },
+    });
+    expect(result.permissionOverrides).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'chat:view', effect: 'allow', scope: chat.data }),
+        expect.objectContaining({ code: 'chat:ask', effect: chat.ask ? 'allow' : 'deny' }),
+        expect.objectContaining({ code: 'chat:answer', effect: chat.edit ? 'allow' : 'deny' }),
+      ]),
+    );
+  });
+
+  it.each([
+    { view: true, ask: true },
+    { data: 'ALL', view: true, answer: true },
+  ])('rejects Chat without a scope or with a noncanonical answer action %j', (chat) => {
+    expect(
+      updateManagedUserSchema.safeParse({
+        user: { fullName: 'Example', username: 'example', roles: 'admin', isActive: true },
+        permissions: { chat },
+      }).success,
+    ).toBe(false);
+  });
+
   it('defaults list queries to fetch all users', () => {
     const result = listManagedUsersQuerySchema.parse({});
 
@@ -194,7 +225,7 @@ describe('managed users validators', () => {
           approve: false,
         },
         helpdesk: { view: true },
-        chat: { view: true, edit: false },
+        chat: { data: 'ALL', view: true, ask: false, edit: false },
         permissions: { view: true },
       },
     });
@@ -738,6 +769,7 @@ describe('managed users validators', () => {
       },
       permissions: {
         chat: {
+          data: 'FACTORY_TYPE_88',
           view: true,
           edit: true,
         },
@@ -757,7 +789,7 @@ describe('managed users validators', () => {
 
     expect((result as { permissionOverrides?: unknown }).permissionOverrides).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'chat:answer', effect: 'allow', scope: null }),
+        expect.objectContaining({ code: 'chat:answer', effect: 'allow', scope: 'FACTORY_TYPE_88' }),
         expect.objectContaining({ code: 'permissions:view', effect: 'allow', scope: null }),
         expect.objectContaining({
           code: 'eligible_factories:view',

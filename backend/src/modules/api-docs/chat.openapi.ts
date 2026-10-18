@@ -106,7 +106,17 @@ const ticketFields = {
   closedBy: { ...object(actorFields), nullable: true },
   closedAt: { ...timestamp, nullable: true },
   lastMessageAt: { ...timestamp, description: 'เวลาข้อความล่าสุด; การปิด Ticket ไม่เปลี่ยนค่านี้' },
-  capabilities: object({ canReply: { type: 'boolean' }, canClose: { type: 'boolean' } }),
+  capabilities: object({
+    canReply: {
+      type: 'boolean',
+      description:
+        'Ticket ยัง open และอยู่ใน chat:view scope พร้อม chat:answer scope หรือเป็นผู้เปิดเรื่องเองภายใน chat:ask scope; มีเพียง chat:view เป็น false',
+    },
+    canClose: {
+      type: 'boolean',
+      description: 'ใช้สิทธิ์และขอบเขตเดียวกับ canReply; Ticket ที่ปิดแล้วเป็น false',
+    },
+  }),
 };
 const exampleActor = {
   userId: 101,
@@ -162,7 +172,9 @@ const exampleClosed = {
   ],
 };
 const writePermissions = {
-  anyOf: ['chat:view'],
+  allOf: ['chat:view'],
+  anyOf: ['chat:ask', 'chat:answer'],
+  requesterOnly: ['chat:ask'],
 };
 const writeRateLimit = {
   description:
@@ -183,12 +195,13 @@ const writeRateLimit = {
   },
 };
 const accessDescription = [
-  'resource โรงงาน/Ticket ต้องมี chat:view และขอบเขตปัจจุบันจาก eligible_factories:view; operator ต้องมีความสัมพันธ์โรงงานที่ยังมีสิทธิ์ด้วย แม้ตั้ง scope เป็น ALL; scope ไม่ครบหรือใช้ไม่ได้ทำให้รายการว่างหรือ resource 404',
+  'resource โรงงาน/Ticket ต้องมี chat:view และอยู่ในขอบเขตปัจจุบันของ chat:view เอง ไม่ใช้ eligible_factories:view; operator ต้องมีความสัมพันธ์โรงงานที่ยังมีสิทธิ์ด้วย แม้ตั้ง scope เป็น ALL; scope ไม่ครบหรือใช้ไม่ได้ทำให้รายการว่างหรือ resource 404',
   'operator/OWN_FACTORY ต้องระบุตัวตนโรงงานได้เพียงหนึ่ง master โดยนับรวม master ที่ถูกลบด้วย แล้วจึงตรวจ active master และความสัมพันธ์ปัจจุบัน; เลขทะเบียนที่นำมาใช้ใหม่หรือ source/registration ที่กำกวมถูกปฏิเสธจนแก้ข้อมูล',
   'ตรวจบัญชี สิทธิ์และขอบเขตจาก server ทุก request; admin ไม่ข้ามสิทธิ์; ไม่รับ actor, role หรือ scope จาก client',
-  'เปิด Ticket ได้เฉพาะ userType=operator ที่มี chat:view; officer/admin/citizen รวมบัญชี custom ที่ไม่ใช่ operator เปิดไม่ได้แม้มี chat:view และ POST /chat/tickets ตอบ 403 FORBIDDEN',
-  'ช่อง “มีสิทธิ์ใช้งาน” คือ permissions.chat.view/raw chat:view; อ่าน ส่งข้อความ และปิด Ticket ใช้สิทธิ์นี้และขอบเขตโรงงานปัจจุบันตามเดิม ไม่ต้องมี chat:ask หรือ chat:answer เพิ่ม; capabilities ของ Ticket ที่ปิดแล้วเป็น false',
-  'สิทธิ์ legacy chat:ask/chat:answer ยังบันทึกและคืนได้ตามเดิม แต่ไม่ใช่เงื่อนไขของ Chat endpoints; ช่อง “ตอบคำถาม (Admin)” ยังคง map เป็น chat:answer และไม่เปลี่ยน role หรือ userType บัญชี',
+  'เปิด Ticket ได้เมื่อ userType=operator/officer/admin มี chat:view และ chat:ask และโรงงานอยู่ใน scope ของทั้งสอง action; citizen หรือ persona อื่นเปิดไม่ได้; ขาดสิทธิ์ action ตอบ 403 FORBIDDEN ส่วน resource นอก view/action scope ตอบ 404 NOT_FOUND รวมการส่งซ้ำ',
+  'ส่งข้อความและปิด Ticket ต้องมี chat:view ร่วมกับ chat:answer ภายใน scope ของ action นั้น หรือ chat:ask ภายใน scope ของ action นั้นและเป็นผู้เปิด Ticket เอง; ผู้มีเพียง chat:view อ่านได้อย่างเดียวและเขียนตอบ 403; มี action แต่ Ticket นอก scope หรือมีเพียง chat:ask กับเรื่องของผู้อื่นตอบ 404; capabilities คำนวณราย Ticket จากสิทธิ์ พื้นที่โรงงานปัจจุบัน ผู้เปิดเรื่อง และสถานะ open; Ticket ที่ปิดแล้วเป็น false',
+  'citizen ที่มี chat:view อ่าน options ได้ แต่ canCreate=false และรายการ resource ว่าง; การเข้าถึงโรงงาน/Ticket เฉพาะรายการตอบ 404',
+  'หน้า Permission Management รับ chat.view, chat.ask, chat.edit พร้อม data/region/province; edit map เป็น raw chat:answer เพื่อคง compatibility; data เป็นขอบเขต Chat อิสระ รองรับ ALL, IN_REGION, IN_PROVINCE และ scope อื่นตาม permission contract; runtime auth response ยังคืน compatibility answer แต่ grouped request ใช้ edit',
   'เป็น Ticket แบบ asynchronous โหลดเมื่อเข้าหน้าและกดรีเฟรช ไม่มี polling หรือ WebSocket',
   'ผลตอบกลับหลัง authentication ใช้ Cache-Control: private, no-store; query/body ที่ไม่อยู่ใน contract ถูกปฏิเสธเมื่อ endpoint รับข้อมูลชนิดนั้น',
   'Canonical docs: docs/backend/api/menus/chat/README.md',
@@ -209,7 +222,7 @@ export const chatSchemas: Record<string, OpenApiObject> = {
     canCreate: {
       type: 'boolean',
       description:
-        'true เฉพาะ userType=operator ที่มี chat:view; officer/admin/citizen และ userType อื่นเป็น false แม้มี chat:view; โรงงานยังต้องผ่านการตรวจขอบเขตตอนสร้าง',
+        'true เมื่อ userType=operator/officer/admin มี chat:view และ chat:ask พร้อม scope ที่ใช้ได้ทั้งสอง action; citizen หรือ persona อื่นเป็น false; โรงงานที่เลือกยังต้องผ่านขอบเขตของทั้งสอง action ตอนสร้าง',
     },
   }),
   ChatOptionsResponse: {
@@ -377,7 +390,7 @@ export const chatPaths: Record<string, OpenApiObject> = {
       tags: ['Chat'],
       operationId: 'getChatOptions',
       summary: 'ข้อมูลผู้ใช้ หัวข้อ และข้อจำกัดสำหรับ Ticket',
-      description: `Authentication: Bearer token; Permission: chat:view. ตัวเลือกโหลดได้เมื่อมี chat:view; canCreate=true เฉพาะ userType=operator และ false สำหรับ officer/admin/citizen; ทุก resource ยังต้องผ่านขอบเขต eligible_factories:view\n\n${accessDescription}`,
+      description: `Authentication: Bearer token; Permission: chat:view. ตัวเลือกโหลดได้เมื่อมี chat:view; canCreate ใช้ chat:ask ร่วมกับ persona และ scope ที่ใช้ได้; ทุก resource ต้องผ่านขอบเขต Chat ของแต่ละ action\n\n${accessDescription}`,
       security,
       'x-poms-permissions': ['chat:view'],
       responses: { ...errors, '200': response('ข้อมูลตัวเลือก', ref('ChatOptionsResponse')) },
@@ -446,8 +459,8 @@ export const chatPaths: Record<string, OpenApiObject> = {
       summary: 'เปิด Ticket พร้อมข้อความแรก',
       description: `${accessDescription}\n\nสร้าง Ticket เลขลำดับ เหตุการณ์เปิด และข้อความแรกใน transaction เดียว ไม่มี Ticket ว่าง; ตรวจจุดยังใช้งานและอยู่ในโรงงานโดย kind+id ไม่จับคู่ด้วย pointCode\n\nIdempotency แยกตามบัญชีและการเปิดเรื่อง; key เดิม/payload เดิมคืน Ticket เดิม 200 แม้ปิดหรือจุดเดิมถูกถอดไปแล้ว โดยยังตรวจสิทธิ์และขอบเขตโรงงานปัจจุบันก่อน replay; key เดิม/payload ต่างตอบ 409`,
       security,
-      'x-poms-permissions': ['chat:view', 'eligible_factories:view'],
-      'x-poms-user-types': ['operator'],
+      'x-poms-permissions': ['chat:view', 'chat:ask'],
+      'x-poms-user-types': ['operator', 'officer', 'admin'],
       parameters: [idempotencyKey],
       requestBody: {
         required: true,
@@ -456,7 +469,7 @@ export const chatPaths: Record<string, OpenApiObject> = {
       responses: {
         ...errors,
         '403': response(
-          'FORBIDDEN: ไม่มี chat:view หรือ userType ไม่ใช่ operator; officer/admin/citizen เปิดเรื่องไม่ได้แม้มี chat:view รวมถึงการส่งซ้ำ',
+          'FORBIDDEN: ไม่มี chat:view หรือ chat:ask หรือ userType ไม่ใช่ operator/officer/admin; citizen เปิดเรื่องไม่ได้ รวมถึงการส่งซ้ำ',
           ref('ErrorEnvelope'),
         ),
         '200': response('ส่งซ้ำสำเร็จ; replayed=true', ref('ChatCreateResponse')),

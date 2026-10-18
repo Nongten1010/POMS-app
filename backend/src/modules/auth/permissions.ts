@@ -42,7 +42,7 @@ export const EDITABLE_PERMISSION_ACTIONS = {
   feedback: ['view'],
   laws: ['view', 'edit'],
   faq: ['view', 'edit'],
-  chat: ['view', 'edit'],
+  chat: ['view', 'ask', 'edit'],
   permissions: ['view'],
   eligible_factories: ['view', 'edit', 'approve'],
 } as const;
@@ -57,6 +57,7 @@ export const EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES = new Set<string>([
   'statistics',
   'conditional_search',
   'eligible_factories',
+  'chat',
 ]);
 
 type PermissionAlias = { module: string; action: string };
@@ -124,6 +125,7 @@ const locationScopedPermissionModules = new Set([
   'statistics',
   'conditional_search',
   'eligible_factories',
+  'chat',
 ]);
 
 const binaryPermissionCodes = new Set([
@@ -134,9 +136,6 @@ const binaryPermissionCodes = new Set([
   'laws:edit',
   'faq:view',
   'faq:edit',
-  'chat:view',
-  'chat:ask',
-  'chat:answer',
   'permissions:view',
   'permissions:manage',
   'eligible_factories:manage',

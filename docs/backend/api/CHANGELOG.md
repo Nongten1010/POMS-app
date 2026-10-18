@@ -1,8 +1,22 @@
 # API Breaking Changes
 
+<a id="chat-scoped-actions"></a>
+
+## 2026-10-18 — แยกสิทธิ์และขอบเขต Chat พร้อมให้เจ้าหน้าที่เปิดเรื่อง
+
+- **Affected canonical docs:** [Chat: สิทธิ์และขอบเขตข้อมูล](./menus/chat/README.md#chat-scoped-actions), [Permission Management editable contract](./menus/permissions/README.md#permission-management-editable-contract), [API แก้ไขผู้ใช้](./menus/permissions/user-management-api.md#update-managed-user)
+- **Impact:** `chat:view` ใช้อ่านอย่างเดียว เปิดเรื่องต้องมี `chat:ask` เพิ่มและรองรับ `operator`/`officer`/`admin`; `citizen` เปิดไม่ได้ ตอบ/ปิดต้องมี `chat:answer` หรือมี `chat:ask` และเป็นผู้เปิดเรื่องเอง ทุก resource ใช้ scope ของ Chat อิสระจาก `eligible_factories:view` และทุก write ต้องผ่านทั้ง scope อ่านและ action ขาด action ตอบ `403`; resource นอก scope หรือผู้มีเพียง `ask` เขียนเรื่องที่ผู้อื่นเปิดตอบ `404`
+- **Migration:** รัน `0142_scope_chat_permissions` ก่อนใช้งาน ย้ายเฉพาะ Chat grants เดิมที่ scope เป็น `null` ตาม `eligible_factories:view` ที่มีผลก่อนย้าย โดยรักษา custom/deny/qualifier; ไม่เพิ่ม `ALL` เมื่อไม่มีขอบเขตที่อนุญาต ไม่เพิ่ม Chat action ที่ขาดหรือถูก deny ผู้ดูแลตรวจ `view`/`ask`/`edit` และพื้นที่ให้ตรงงาน Client ที่บันทึก grouped Chat ต้องส่ง `data` พร้อม `region` หรือ `province` ตาม scope และใช้ `view`, `ask`, `edit`; payload binary เดิมที่ไม่มี `data` ตอบ `400 VALIDATION_ERROR` คง raw code `chat:answer` และ runtime response compatibility `answer` แต่ grouped request ไม่รับ `answer` หลังบันทึกโหลดสิทธิ์/options ใหม่ ใช้ `canCreate` และ capabilities ราย Ticket เพื่อแสดง actions และรับมือ `403`/`404` เมื่อสิทธิ์เปลี่ยน ตรวจ runtime OpenAPI หลัง deploy
+- **Rollback:** migration สำรองทั้งตารางเป็น `dbo.chat_scope_20261018_role_permissions_backup` และ `dbo.chat_scope_20261018_user_permissions_backup` ภายใน transaction ก่อนแก้สิทธิ์ โดยล็อกต้นทาง ตรวจจำนวนแถวตรงกัน และหยุดหากชื่อตารางสำรองมีอยู่ก่อนโดยไม่เขียนทับ; `down` ปฏิเสธ rollback อัตโนมัติเพื่อไม่ทับการแก้สิทธิ์ภายหลัง ต้องตรวจ snapshot เดิมเทียบสิทธิ์ปัจจุบันก่อนกู้คืน ดู [รายละเอียดการสำรอง](./menus/chat/README.md#chat-scoped-actions)
+- **Old contract:** เฉพาะ operator เปิดเรื่อง; อ่าน ตอบ และปิดใช้ `chat:view` พร้อม scope จาก `eligible_factories:view`; `ask`/`answer` ไม่ได้บังคับใช้และ Chat ใน permission editor เป็น binary `view`/`edit`
+- **New contract:** scoped Chat editor รับ/คืน `data`, `region`, `province`, `view`, `ask`, `edit`; อ่านด้วย `view` เปิดเรื่องด้วย `ask` ตอบเรื่องในขอบเขตด้วย `answer` และติดตามเรื่องที่ตนเปิดด้วย `ask`; options/capabilities ใช้สิทธิ์และ scope ปัจจุบัน Payload/response ของ Ticket หัวข้อทั้ง 6 รหัสและ pagination คงเดิม
+- **Breaking change:** yes — บังคับ action permissions และ scope ของ Chat; แทนที่นโยบาย [เปิด Ticket ได้เฉพาะผู้ประกอบการ](#chat-operator-only-creation) ด้านล่าง
+
 <a id="chat-operator-only-creation"></a>
 
 ## 2026-10-18 — เปิด Ticket ได้เฉพาะผู้ประกอบการ
+
+> ประวัตินโยบายเดิม: แทนที่ด้วย [สิทธิ์และขอบเขต Chat](#chat-scoped-actions) แล้ว ข้อความ Old/New ด้านล่างอธิบายรุ่นก่อนหน้า
 
 - **Affected canonical docs:** [Chat: สิทธิ์และขอบเขตข้อมูล](./menus/chat/README.md#chat-operator-only-creation)
 - **Impact:** `GET /api/v1/chat/options` คืน `canCreate=false` สำหรับ `officer`, `admin`, `citizen` รวมบัญชี custom ที่ไม่ใช่ `operator` แม้มี `chat:view`; การเรียก `POST /api/v1/chat/tickets` จากบัญชีเหล่านี้ตอบ `403 FORBIDDEN` รวมการส่งซ้ำ สิทธิ์อ่าน ตอบ และปิดเรื่องยังใช้ `chat:view` และขอบเขตโรงงานปัจจุบันตามเดิม

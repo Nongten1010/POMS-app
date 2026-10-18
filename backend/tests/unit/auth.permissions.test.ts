@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   groupPermissions,
+  isBinaryPermissionCode,
+  isEditablePermissionCode,
   isSameOrNarrowerPermissionScope,
   mergePermissionScopesWithOverrides,
   permissionGroupsToScopes,
@@ -9,6 +11,70 @@ import {
 } from '../../src/modules/auth/permissions';
 
 describe('groupPermissions', () => {
+  it('exposes all three scoped Chat actions in the editable matrix', () => {
+    const scope = { scope: 'IN_REGION' as const, region: 'ภาคตะวันออก' };
+    const editable = projectEditablePermissionGroups(
+      groupPermissions({ 'chat:view': scope, 'chat:ask': scope, 'chat:answer': scope }),
+    );
+
+    expect(editable.chat).toEqual({
+      data: 'IN_REGION',
+      region: 'ภาคตะวันออก',
+      province: null,
+      view: true,
+      ask: true,
+      edit: true,
+    });
+    for (const code of ['chat:view', 'chat:ask', 'chat:answer']) {
+      expect(isEditablePermissionCode(code)).toBe(true);
+      expect(isBinaryPermissionCode(code)).toBe(false);
+    }
+    expect(permissionGroupsToUserPermissionOverrides({ chat: editable.chat })).toEqual([
+      {
+        code: 'chat:view',
+        effect: 'allow',
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+      },
+      {
+        code: 'chat:ask',
+        effect: 'allow',
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+      },
+      {
+        code: 'chat:answer',
+        effect: 'allow',
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+      },
+    ]);
+  });
+
+  it('keeps explicit Chat action denials and denies every action when the scope is disabled', () => {
+    expect(
+      permissionGroupsToUserPermissionOverrides({
+        chat: { data: 'IN_PROVINCE', province: 'ระยอง', view: true, ask: false, edit: false },
+      }),
+    ).toEqual([
+      { code: 'chat:view', effect: 'allow', scope: 'IN_PROVINCE', province: 'ระยอง' },
+      { code: 'chat:ask', effect: 'deny', scope: null },
+      { code: 'chat:answer', effect: 'deny', scope: null },
+    ]);
+    expect(
+      permissionGroupsToUserPermissionOverrides({
+        chat: { data: null, view: true, ask: true, edit: true },
+      }),
+    ).toEqual([
+      { code: 'chat:view', effect: 'deny', scope: null },
+      { code: 'chat:ask', effect: 'deny', scope: null },
+      { code: 'chat:answer', effect: 'deny', scope: null },
+    ]);
+  });
+
   it('projects the complete permission-management matrix without internal actions or binary scopes', () => {
     const grouped = groupPermissions({
       'dashboard:view': 'ALL',
@@ -63,7 +129,7 @@ describe('groupPermissions', () => {
         province: null,
         view: true,
       },
-      chat: { view: true, edit: true },
+      chat: { data: null, region: null, province: null, view: true, ask: true, edit: true },
       permissions: { view: true },
       eligible_factories: {
         data: 'ALL',
@@ -86,9 +152,9 @@ describe('groupPermissions', () => {
     expect(editable).not.toHaveProperty('notifications.view_status');
     expect(editable).not.toHaveProperty('notifications.edit');
     expect(editable).not.toHaveProperty('statistics.export');
-    expect(editable).not.toHaveProperty('chat.ask');
+    expect(editable).toHaveProperty('chat.ask', true);
     expect(editable).not.toHaveProperty('chat.answer');
-    expect(editable).not.toHaveProperty('chat.data');
+    expect(editable).toHaveProperty('chat.data', null);
     expect(editable).not.toHaveProperty('permissions.manage');
     expect(editable).not.toHaveProperty('permissions.data');
     expect(editable).not.toHaveProperty('eligible_factories.manage');
@@ -374,12 +440,12 @@ describe('groupPermissions', () => {
         eligible_factories: { data: 'FACTORY_TYPE_88', approve: true },
       }),
     ).toEqual({
-      'chat:answer': null,
+      'chat:answer': 'FACTORY_TYPE_88',
       'eligible_factories:approve': 'FACTORY_TYPE_88',
     });
   });
 
-  it('ignores menu data scopes for binary permissions', () => {
+  it('preserves Chat data scopes while keeping binary permissions null-scoped', () => {
     expect(
       permissionGroupsToUserPermissionOverrides({
         dashboard: { data: 'ALL', favorite: true },
@@ -387,7 +453,7 @@ describe('groupPermissions', () => {
       }),
     ).toEqual([
       { code: 'dashboard.alerts:view', effect: 'allow', scope: null },
-      { code: 'chat:answer', effect: 'allow', scope: null },
+      { code: 'chat:answer', effect: 'allow', scope: 'FACTORY_TYPE_88' },
     ]);
   });
 

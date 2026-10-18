@@ -247,8 +247,19 @@ describe('POMS OpenAPI contract', () => {
     );
 
     expect(editableInput.additionalProperties).toBe(false);
+    expect(chatInput.required).toEqual(['data']);
     expect(chatInputProperties).toEqual({
+      data: {
+        type: 'string',
+        enum: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY', 'FACTORY_TYPE_88'],
+        nullable: true,
+      },
+      region: expect.objectContaining({ type: 'string', maxLength: 128, nullable: true }),
+      province: expect.objectContaining({ type: 'string', maxLength: 128, nullable: true }),
+      estateCode: expect.objectContaining({ type: 'string', maxLength: 32, nullable: true }),
+      estate: expect.objectContaining({ type: 'string', maxLength: 32, nullable: true }),
       view: { type: 'boolean', description: expect.stringContaining('chat:view') },
+      ask: { type: 'boolean', description: expect.stringContaining('chat:ask') },
       edit: { type: 'boolean', description: expect.stringContaining('chat:answer') },
     });
     expect(connectionInputProperties).toHaveProperty('data');

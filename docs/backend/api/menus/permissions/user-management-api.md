@@ -603,14 +603,16 @@ Top-level fields:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `data` | scope \| `null` | conditional | บังคับสำหรับ scoped module; ห้ามส่งใน `permissions`, `helpdesk`, `feedback`, `laws`, `faq`, `chat` |
+| `data` | scope \| `null` | conditional | บังคับสำหรับ scoped module รวม `chat`; ห้ามส่งใน `permissions`, `helpdesk`, `feedback`, `laws`, `faq` |
 | `region` | string | conditional | qualifier เมื่อ `data=IN_REGION` |
 | `province` | string | conditional | qualifier เมื่อ `data=IN_PROVINCE` |
 | `estateCode` | string \| `null` | no | qualifier ของหนึ่งนิคมเมื่อ `data=IN_ESTATE`; มีผลก่อนนิคมโปรไฟล์ รับรหัส/ชื่อที่ resolve กับ master ได้ `1-32` |
 | `estate` | string \| `null` | no | compatibility alias ของ `estateCode`; client ใหม่ใช้ `estateCode` |
 | `<action>` | boolean | no | `true` = allow แม้ role ไม่มี; `false` หรือ action ที่ละไว้ = ปิด เช่น `view`, `edit`, `approve`, `export` |
 
-Grouped permissions รับ `estateCode` หรือ `estate` เมื่อ `data=IN_ESTATE` สำหรับนิคมหนึ่งแห่ง; ถ้าไม่ส่งใช้ estate assignment ระดับ user profile การคืน `estateCode` ใน grouped response ทำให้ส่งสิทธิ์กลับได้โดยไม่ทำ qualifier รายเมนูหาย `data` รองรับ `FACTORY_TYPE_88` ยกเว้น module `factories` ใน frontend. Binary modules ใช้ boolean action โดยตรงและ backend เก็บ raw action เป็น scope `null`. Module `chat` รับ action `edit` และ map ไป raw code `chat:answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย. Module/action/field นอก editable matrix ตอบ `400 VALIDATION_ERROR`.
+Grouped permissions รับ `estateCode` หรือ `estate` เมื่อ `data=IN_ESTATE` สำหรับนิคมหนึ่งแห่ง; ถ้าไม่ส่งใช้ estate assignment ระดับ user profile การคืน `estateCode` ใน grouped response ทำให้ส่งสิทธิ์กลับได้โดยไม่ทำ qualifier รายเมนูหาย `data` รองรับ `FACTORY_TYPE_88` ยกเว้น module `factories` ใน frontend. Binary modules ใช้ boolean action โดยตรงและ backend เก็บ raw action เป็น scope `null`. Module `chat` เป็น scoped module รับ `view`, `ask`, `edit` พร้อม `data`, `region`, `province`; `edit` map ไป raw code `chat:answer` และไม่รับ request alias `answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย. Module/action/field นอก editable matrix ตอบ `400 VALIDATION_ERROR`.
+
+Chat ใช้ scope รายเมนูอิสระจาก `eligible_factories:view` ตัวอย่างส่วนหนึ่งของ grouped permissions คือ `{"chat":{"data":"IN_REGION","region":"ภาคตะวันออก","view":true,"ask":true,"edit":false}}` ผู้มีเพียง `view` อ่านได้อย่างเดียว ผู้มี `ask` ที่เป็น `operator`/`officer`/`admin` เปิดเรื่องและติดตามหรือปิดเรื่องที่ตนเปิดได้ ผู้มี `edit` ตอบหรือปิดเรื่องในขอบเขตที่มองเห็นได้ ทุกการเขียนตรวจทั้ง scope อ่านและ action; ดู [Chat](../chat/README.md#chat-scoped-actions) ต้องเติม `data` ให้ payload Chat แบบ binary เดิม มิฉะนั้นตอบ `400 VALIDATION_ERROR` และเรียก `GET /users/:id` หลังบันทึกเพื่อรับ matrix ปัจจุบัน
 
 Grouped `data` เป็นค่ารวมสำหรับแสดงเมนูและอาจกว้างกว่า scope บาง action เช่น `view=ALL`, `edit=IN_PROVINCE` การบันทึก grouped matrix ที่ไม่เปลี่ยนขอบเขตเมนูคง scope และ qualifier ราย action ที่แคบกว่าไว้ ไม่ขยายสิทธิ์นั้นด้วยค่ารวม ถ้าต้องการแก้ scope แยกราย action ให้อ่าน `data.overrides[]` ผ่าน raw GET แล้วส่ง raw PUT ทั้งชุดพร้อม scope ที่ตั้งใจให้แต่ละ code โดย PUT เป็น explicit replacement และไม่รักษา scope ที่ละไว้
 

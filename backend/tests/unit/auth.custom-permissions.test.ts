@@ -10,6 +10,41 @@ const merge = mergePermissionScopesWithOverrides;
 const applyPersona = applyPersonaPermissionOverrides;
 
 describe('saved custom permissions', () => {
+  it.each(['chat:view', 'chat:ask', 'chat:answer'])(
+    'requires an explicit valid saved scope for the independent %s permission',
+    (code) => {
+      expect(
+        merge(
+          [{ code, scope: 'ALL' }],
+          [
+            { code, effect: 'allow', scope: null },
+            { code: 'eligible_factories:view', effect: 'allow', scope: 'ALL' },
+          ],
+          'custom',
+        ),
+      ).toEqual({
+        'eligible_factories:view': { scope: 'ALL', region: undefined, province: undefined },
+      });
+      expect(
+        merge([], [{ code, effect: 'allow', scope: 'IN_REGION', region: null }], 'custom'),
+      ).toEqual({});
+    },
+  );
+
+  it('does not infer null Chat ask or answer scopes from a saved Chat view grant', () => {
+    expect(
+      merge(
+        [],
+        [
+          { code: 'chat:view', effect: 'allow', scope: 'IN_PROVINCE', province: 'ระยอง' },
+          { code: 'chat:ask', effect: 'allow', scope: null },
+          { code: 'chat:answer', effect: 'allow', scope: null },
+        ],
+        'custom',
+      ),
+    ).toEqual({ 'chat:view': { scope: 'IN_PROVINCE', province: 'ระยอง', region: undefined } });
+  });
+
   it.each([
     'kwp_forms:view',
     'bod_cod_errors:view',
@@ -194,10 +229,10 @@ describe('saved custom permissions', () => {
     expect(
       applyPersona(
         { 'dashboard:view': 'OWN_FACTORY' },
-        [{ code: 'chat:answer', effect: 'allow', scope: null }],
+        [{ code: 'chat:answer', effect: 'allow', scope: 'ALL' }],
         'custom',
       ),
-    ).toEqual({ 'chat:answer': { scope: null } });
+    ).toEqual({ 'chat:answer': { scope: 'ALL' } });
   });
 
   it('retains the restrictive role_default behavior until a custom set is saved', () => {

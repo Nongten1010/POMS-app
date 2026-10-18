@@ -70,21 +70,19 @@ export function chatFixtureTables(): Record<string, ChatFixtureRow[]> {
         role_id: role.id,
         permission_id: permissionId,
         scope:
-          permissionId !== 4
-            ? null
-            : role.code === 'factory_operator'
-              ? 'OWN_FACTORY'
-              : role.code === 'provincial_office'
-                ? 'IN_PROVINCE'
-                : 'ALL',
+          role.code === 'factory_operator'
+            ? 'OWN_FACTORY'
+            : role.code === 'provincial_office'
+              ? 'IN_PROVINCE'
+              : 'ALL',
       }));
     }),
     user_permissions: [1, 3, 4].map((permissionId) => ({
       user_id: 203,
       permission_id: permissionId,
       effect: 'allow',
-      scope: permissionId === 4 ? 'IN_PROVINCE' : null,
-      province_id: permissionId === 4 ? '2100' : null,
+      scope: 'IN_PROVINCE',
+      province_id: '2100',
       region_name: null,
       estate_code: null,
     })),

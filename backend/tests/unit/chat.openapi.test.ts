@@ -7,9 +7,21 @@ import { createApp } from '../../src/app';
 const app = express();
 app.use('/api/v1', apiDocsRoutes);
 
+async function loadOpenApiDocument() {
+  const response = await request(app)
+    .get('/api/v1/openapi.json')
+    .expect(200)
+    .expect('Content-Type', /application\/json/);
+  expect(response.body).toMatchObject({ openapi: expect.any(String), paths: expect.any(Object) });
+  return response.body;
+}
+
 describe('Chat runtime OpenAPI', () => {
   it('lets clients discover authenticated chat options and the six supported topics', async () => {
-    const response = await request(app).get('/api/v1/openapi.json');
+    const response = await request(app)
+      .get('/api/v1/openapi.json')
+      .expect(200)
+      .expect('Content-Type', /application\/json/);
     expect(response.status).toBe(200);
     expect(response.body.paths['/chat/options']?.get).toMatchObject({
       security: [{ bearerAuth: [] }],
@@ -34,44 +46,57 @@ describe('Chat runtime OpenAPI', () => {
       response.body.components.schemas.ChatOptions.properties.canCreate.description;
     expect(canCreateDescription).toContain('userType=operator');
     expect(canCreateDescription).toContain('chat:view');
-    expect(canCreateDescription).toContain('officer/admin/citizen');
+    expect(canCreateDescription).toContain('chat:ask');
+    expect(canCreateDescription).toContain('operator/officer/admin');
+    expect(canCreateDescription).toContain('citizen');
     expect(canCreateDescription).toContain('false');
   });
 
-  it('limits opening tickets to operators with the Chat use checkbox', async () => {
-    const { body: document } = await request(app).get('/api/v1/openapi.json');
+  it('requires Chat ask permission for supported ticket-creation personas', async () => {
+    const document = await loadOpenApiDocument();
     const create = document.paths['/chat/tickets']?.post;
-    expect(create?.['x-poms-permissions']).toEqual(['chat:view', 'eligible_factories:view']);
+    expect(create?.['x-poms-permissions']).toEqual(['chat:view', 'chat:ask']);
     expect(create).not.toHaveProperty('x-allowed-user-types');
-    expect(create?.['x-poms-user-types']).toEqual(['operator']);
+    expect(create?.['x-poms-user-types']).toEqual(['operator', 'officer', 'admin']);
     expect(document.components.schemas.ChatOptions.properties.canCreate.description).toContain(
       'chat:view',
     );
   });
 
-  it('connects the editable Chat use checkbox to ticket actions without granting an admin role', async () => {
-    const { body: document } = await request(app).get('/api/v1/openapi.json');
+  it('connects scoped Chat checkboxes to their actions without changing the account role', async () => {
+    const document = await loadOpenApiDocument();
     for (const name of ['EditablePermissionGroups', 'EditablePermissionGroupsResponse']) {
       const chat = document.components.schemas[name].properties.chat;
       expect(chat.properties.view.description).toContain('chat:view');
-      expect(chat.properties.view.description).toContain('เปิด Ticket');
-      expect(chat.properties.view.description).toContain('userType=operator');
+      expect(chat.properties.view.description).toContain('เมื่อมีเพียงสิทธิ์นี้');
+      expect(chat.properties.ask.description).toContain('chat:ask');
+      expect(chat.properties.ask.description).toContain('operator/officer/admin');
       expect(chat.properties.edit.description).toContain('chat:answer');
       expect(chat.properties.edit.description).toContain('ไม่เปลี่ยน role');
-      expect(Object.keys(chat.properties)).toEqual(['view', 'edit']);
+      expect(chat.required).toContain('data');
+      expect(Object.keys(chat.properties)).toEqual([
+        'data',
+        'region',
+        'province',
+        'estateCode',
+        'estate',
+        'view',
+        'ask',
+        'edit',
+      ]);
     }
   });
 
   it('describes atomic ticket creation, strict inputs, point identity, and safe retries', async () => {
-    const { body: document } = await request(app).get('/api/v1/openapi.json');
+    const document = await loadOpenApiDocument();
     const operation = document.paths['/chat/tickets']?.post;
-    expect(operation?.['x-poms-permissions']).toEqual(['chat:view', 'eligible_factories:view']);
-    expect(operation?.['x-poms-user-types']).toEqual(['operator']);
+    expect(operation?.['x-poms-permissions']).toEqual(['chat:view', 'chat:ask']);
+    expect(operation?.['x-poms-user-types']).toEqual(['operator', 'officer', 'admin']);
     expect(operation?.responses['403']).toMatchObject({
-      description: expect.stringContaining('userType ไม่ใช่ operator'),
+      description: expect.stringContaining('ไม่มี chat:view หรือ chat:ask'),
       content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } },
     });
-    expect(operation?.responses['403'].description).toContain('officer/admin/citizen');
+    expect(operation?.responses['403'].description).toContain('citizen');
     expect(operation?.parameters).toContainEqual(
       expect.objectContaining({
         name: 'Idempotency-Key',
@@ -112,7 +137,7 @@ describe('Chat runtime OpenAPI', () => {
   });
 
   it('publishes scoped factory and typed point choices without requiring a connected factory', async () => {
-    const { body: document } = await request(app).get('/api/v1/openapi.json');
+    const document = await loadOpenApiDocument();
     expect(document.paths['/chat/factories']?.get.parameters).toContainEqual(
       expect.objectContaining({
         name: 'pageSize',
@@ -136,7 +161,7 @@ describe('Chat runtime OpenAPI', () => {
   });
 
   it('documents bounded ticket browsing and message continuation with current status', async () => {
-    const { body: document } = await request(app).get('/api/v1/openapi.json');
+    const document = await loadOpenApiDocument();
     expect(document.paths['/chat/tickets']?.get.parameters).toContainEqual(
       expect.objectContaining({
         name: 'sort',
@@ -165,15 +190,22 @@ describe('Chat runtime OpenAPI', () => {
     expect(document.components.schemas.ChatTicketDetail.required).toContain('events');
   });
 
-  it('preserves chat:view write permission, retries after close, and idempotent closure', async () => {
-    const { body: document } = await request(app).get('/api/v1/openapi.json');
+  it('publishes independent Chat scopes and requester/answer actions for writes', async () => {
+    const document = await loadOpenApiDocument();
     const send = document.paths['/chat/tickets/{id}/messages']?.post;
     const close = document.paths['/chat/tickets/{id}/close']?.post;
     for (const operation of [send, close]) {
-      expect(operation?.['x-poms-permissions']).toEqual(['chat:view', 'eligible_factories:view']);
-      expect(operation?.['x-poms-write-permissions']).toEqual({ anyOf: ['chat:view'] });
+      expect(operation?.['x-poms-permissions']).toEqual(['chat:view']);
+      expect(operation?.['x-poms-write-permissions']).toEqual({
+        allOf: ['chat:view'],
+        anyOf: ['chat:ask', 'chat:answer'],
+        requesterOnly: ['chat:ask'],
+      });
       expect(operation).not.toHaveProperty('x-poms-user-types');
-      expect(operation?.description).toContain('ไม่ต้องมี chat:ask หรือ chat:answer เพิ่ม');
+      expect(operation?.description).toContain('เป็นผู้เปิด Ticket เอง');
+      expect(operation?.description).toContain('ผู้มีเพียง chat:view อ่านได้อย่างเดียว');
+      expect(operation?.description).toContain('ไม่ใช้ eligible_factories:view');
+      expect(operation?.description).toContain('404 NOT_FOUND');
     }
     expect(send?.description).toContain('หลังปิด');
     expect(send?.responses).toEqual(
@@ -187,6 +219,20 @@ describe('Chat runtime OpenAPI', () => {
       $ref: '#/components/schemas/ChatCloseTicket',
     });
     expect(close?.responses['200']).toBeDefined();
+    for (const path of [
+      '/chat/options',
+      '/chat/factories',
+      '/chat/factories/{id}/measurement-points',
+      '/chat/tickets',
+      '/chat/tickets/{id}',
+      '/chat/tickets/{id}/messages',
+    ]) {
+      expect(document.paths[path].get['x-poms-permissions']).toEqual(['chat:view']);
+    }
+    expect(
+      document.components.schemas.ChatTicketSummary.properties.capabilities.properties.canReply
+        .description,
+    ).toContain('chat:ask scope');
     expect(document.components.schemas.ChatCloseTicket).toMatchObject({
       type: 'object',
       additionalProperties: false,
@@ -206,7 +252,7 @@ describe('Chat runtime OpenAPI', () => {
   });
 
   it('documents malformed JSON and the one-megabyte request-body limit', async () => {
-    const { body: document } = await request(app).get('/api/v1/openapi.json');
+    const document = await loadOpenApiDocument();
     for (const path of [
       '/chat/tickets',
       '/chat/tickets/{id}/messages',
@@ -231,7 +277,7 @@ describe('Chat runtime OpenAPI', () => {
     expect(limited.type).toBe('text/html');
     expect(limited.headers['retry-after']).toBeDefined();
     expect(limited.text).toBe('Too many requests, please try again later.');
-    const { body: document } = await request(app).get('/api/v1/openapi.json');
+    const document = await loadOpenApiDocument();
     expect(document.paths['/chat/options'].get.responses['429'].content).toHaveProperty(
       limited.type,
     );

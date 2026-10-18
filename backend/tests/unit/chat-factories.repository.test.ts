@@ -15,6 +15,8 @@ const operator: ChatAccess = {
   userType: 'operator',
   roles: ['factory_operator'],
   factoryScope: { scope: 'OWN_FACTORY' },
+  createScope: { scope: 'OWN_FACTORY' },
+  answerScope: undefined,
   regionalAccess: null,
   canCreateTicket: true,
   canWrite: true,
@@ -77,6 +79,15 @@ describe('chat factory and measurement-point repository', () => {
         )
       ).data,
     ).toEqual([]);
+  });
+
+  it('does not expose factories for an unknown explicit region', async () => {
+    const access: ChatAccess = {
+      ...allOfficer,
+      factoryScope: { scope: 'IN_REGION', region: 'not-a-region' },
+    };
+    expect((await listChatFactories(access, { page: 1, pageSize: 20 })).data).toEqual([]);
+    expect(await findChatFactory(access, 10)).toBeNull();
   });
 
   it('selects only factories in the assigned industrial estate and denies a missing assignment', async () => {

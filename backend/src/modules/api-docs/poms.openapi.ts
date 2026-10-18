@@ -539,14 +539,30 @@ function editablePermissionGroupSchema(module: string, complete: boolean): OpenA
   };
   if (module === 'chat') {
     properties.view.description =
-      'มีสิทธิ์ใช้งาน: map เป็น chat:view; เฉพาะ userType=operator เปิด Ticket ได้ ส่วนอ่าน ส่งข้อความ และปิดเรื่องใช้สิทธิ์นี้ภายในขอบเขต eligible_factories:view ปัจจุบัน โดยไม่ต้องเพิ่ม chat:ask หรือ chat:answer';
+      'มีสิทธิ์ใช้งาน: map เป็น chat:view; อ่านได้ตามขอบเขต Chat ของตนเอง เมื่อมีเพียงสิทธิ์นี้ไม่สามารถเปิดเรื่อง ตอบ หรือปิดเรื่องได้';
+    properties.ask.description =
+      'เปิดการสนทนา: map เป็น chat:ask; operator/officer/admin เปิด Ticket ได้ภายในทั้ง scope อ่านและ ask รวมติดตามหรือปิดเรื่องที่ตนเปิดเอง';
     properties.edit.description =
-      'ตอบคำถาม (Admin): map เป็น legacy chat:answer ตามเดิม ไม่เปลี่ยน role บัญชี และไม่ใช่เงื่อนไขเพิ่มสำหรับ Chat endpoints';
+      'ตอบคำถาม: map เป็น chat:answer; ตอบหรือปิดเรื่องในทั้ง scope อ่านและ answer โดยไม่เปลี่ยน role บัญชี';
   }
 
   return {
     type: 'object',
     additionalProperties: false,
+    ...(module === 'chat'
+      ? {
+          description:
+            'ขอบเขต Chat อิสระจาก eligible_factories; view=มีสิทธิ์ใช้งาน, ask=เปิดการสนทนา, edit=ตอบคำถาม (raw chat:answer). บังคับ data; IN_REGION ใช้ region และ IN_PROVINCE ใช้ province โดยพื้นที่รายเมนูมีผลก่อนโปรไฟล์. มีเพียง view อ่านได้อย่างเดียว; ask ใช้เปิดเรื่องสำหรับ operator/officer/admin และติดตามหรือปิดเรื่องที่ตนเปิด; edit ใช้ตอบหรือปิดเรื่องในขอบเขตที่มองเห็น. grouped request ไม่รับ answer alias',
+          example: {
+            data: 'IN_PROVINCE',
+            region: null,
+            province: 'ระยอง',
+            view: true,
+            ask: true,
+            edit: false,
+          },
+        }
+      : {}),
     ...(complete
       ? { required: [...(isLocationScoped ? ['data', 'region', 'province'] : []), ...actions] }
       : isLocationScoped
@@ -7380,9 +7396,9 @@ interface AuthorizationRequirement {
 
 function authorizationRequirementFor(path: string, method: string): AuthorizationRequirement {
   if (path.startsWith('/chat/')) {
-    if (path === '/chat/options') return { permissions: ['chat:view'], mode: 'all' };
     return {
-      permissions: ['chat:view', 'eligible_factories:view'],
+      permissions:
+        path === '/chat/tickets' && method === 'post' ? ['chat:view', 'chat:ask'] : ['chat:view'],
       mode: 'all',
     };
   }

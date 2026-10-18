@@ -78,11 +78,85 @@ describe('custom user permission snapshots', () => {
     repo.getUserPermissionOverrides.mockResolvedValue([]);
     repo.update.mockResolvedValue({ id: 44 } as never);
   });
+  it('saves scoped Chat independently and replaces the formerly hidden ask grant with an explicit deny', async () => {
+    repo.getRolePermissions.mockResolvedValue([
+      grant('chat:view', 'ALL'),
+      grant('chat:ask', 'ALL'),
+    ] as never);
+    repo.getRolePermissionsByRoleCodes.mockResolvedValue([
+      grant('chat:view', 'ALL'),
+      grant('chat:ask', 'ALL'),
+    ] as never);
+    repo.findProvinceByIdOrName.mockResolvedValue({ id: '21', name_th: 'ระยอง' } as never);
+    const input = updateManagedUserSchema.parse({
+      user: {
+        accountType: 'api',
+        fullName: 'Example',
+        username: 'example',
+        roles: 'diw_central',
+        isActive: true,
+      },
+      permissions: {
+        chat: { data: 'IN_PROVINCE', province: 'ระยอง', view: true, ask: false, edit: true },
+      },
+    });
+
+    await usersService.update(44, input, 7);
+
+    const saved = repo.update.mock.calls[0][1];
+    expect(saved.permissionMode).toBe('custom');
+    expect(saved.permissionOverrides).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'chat:view',
+          effect: 'allow',
+          scope: 'IN_PROVINCE',
+          province: '21',
+        }),
+        expect.objectContaining({ code: 'chat:ask', effect: 'deny' }),
+        expect.objectContaining({
+          code: 'chat:answer',
+          effect: 'allow',
+          scope: 'IN_PROVINCE',
+          province: '21',
+        }),
+      ]),
+    );
+    expect(
+      saved.permissionOverrides?.filter((permission) => permission.code === 'chat:ask'),
+    ).toHaveLength(1);
+    expect(
+      saved.permissionOverrides?.some(
+        (permission) => permission.code === 'eligible_factories:view',
+      ),
+    ).toBe(false);
+  });
+
+  it('does not preserve ask when it is omitted from the replacement Chat matrix', async () => {
+    repo.getRolePermissions.mockResolvedValue([grant('chat:ask', 'ALL')] as never);
+    const input = updateManagedUserSchema.parse({
+      user: {
+        accountType: 'api',
+        fullName: 'Example',
+        username: 'example',
+        roles: 'diw_central',
+        isActive: true,
+      },
+      permissions: { chat: { data: 'ALL', view: true } },
+    });
+    await usersService.update(44, input, 7);
+    expect(
+      repo.update.mock.calls[0][1].permissionOverrides?.some(
+        (permission) => permission.code === 'chat:ask',
+      ),
+    ).toBe(false);
+  });
+
   it('saves a permission absent from the role rather than the screenshot error', async () => {
     await expect(
       usersService.replacePermissions(
         44,
-        { permissions: [{ code: 'chat:answer', effect: 'allow', scope: null }] },
+        { permissions: [{ code: 'chat:answer', effect: 'allow', scope: 'ALL' }] },
         7,
       ),
     ).resolves.toBeDefined();
@@ -117,7 +191,7 @@ describe('custom user permission snapshots', () => {
     ] as never);
     await usersService.update(
       44,
-      { permissionOverrides: [{ code: 'chat:answer', effect: 'allow', scope: null }] },
+      { permissionOverrides: [{ code: 'chat:answer', effect: 'allow', scope: 'ALL' }] },
       7,
     );
     expect(repo.update).toHaveBeenCalledWith(
@@ -140,10 +214,10 @@ describe('custom user permission snapshots', () => {
     const user = await repo.findById(44);
     repo.findById.mockResolvedValue({ ...user, permissionMode: 'custom' } as never);
     repo.getUserPermissionOverrides.mockResolvedValue([
-      { ...grant('chat:answer', null), effect: 'allow' },
+      { ...grant('chat:answer', 'ALL'), effect: 'allow' },
     ] as never);
     const result = await usersService.getPermissions(44);
-    expect(result.effectiveScopes).toEqual({ 'chat:answer': null });
+    expect(result.effectiveScopes).toEqual({ 'chat:answer': 'ALL' });
     expect(result).toHaveProperty('permissionMode', 'custom');
   });
   it('resetting restores role mode through an explicit PATCH', async () => {
@@ -243,7 +317,7 @@ describe('custom user permission snapshots', () => {
     ] as never);
     await usersService.update(
       44,
-      { permissionOverrides: [{ code: 'chat:answer', effect: 'allow', scope: null }] },
+      { permissionOverrides: [{ code: 'chat:answer', effect: 'allow', scope: 'ALL' }] },
       7,
     );
     expect(repo.update.mock.calls[0][1].permissionOverrides).toEqual(
@@ -305,7 +379,7 @@ describe('custom user permission snapshots', () => {
         isActive: true,
         permissionMode: 'role_default',
       },
-      permissions: { chat: { view: true } },
+      permissions: { chat: { data: 'ALL', view: true } },
     });
     expect(input.permissionOverrides).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'chat:view', effect: 'allow' })]),
@@ -377,6 +451,42 @@ describe('custom user permission snapshots', () => {
     expect(repo.update.mock.calls[0][1].permissionOverrides).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'factories:view', estateCode: 'NEW' }),
+      ]),
+    );
+  });
+  it('does not widen a narrower Chat answer scope when the grouped form is saved unchanged', async () => {
+    const user = await repo.findById(44);
+    repo.findById.mockResolvedValue({ ...user, permissionMode: 'custom' } as never);
+    repo.getUserPermissionOverrides.mockResolvedValue([
+      { ...grant('chat:view', 'ALL'), effect: 'allow' },
+      { ...grant('chat:ask', 'IN_REGION'), region: 'ภาคตะวันออก', effect: 'allow' },
+      {
+        ...grant('chat:answer', 'IN_PROVINCE'),
+        provinceId: '21',
+        provinceName: 'ระยอง',
+        effect: 'allow',
+      },
+    ] as never);
+    repo.findProvinceByIdOrName.mockResolvedValue({ id: '21', name_th: 'ระยอง' } as never);
+    const edit = await usersService.getAuthDetailById(44);
+    const input = updateManagedUserSchema.parse({
+      user: {
+        accountType: 'api',
+        fullName: 'Example',
+        username: 'example',
+        roles: 'diw_central',
+        isActive: true,
+      },
+      permissions: edit.permissions,
+    });
+
+    await usersService.update(44, input, 7);
+
+    expect(repo.update.mock.calls[0][1].permissionOverrides).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'chat:view', scope: 'ALL' }),
+        expect.objectContaining({ code: 'chat:ask', scope: 'IN_REGION', region: 'ภาคตะวันออก' }),
+        expect.objectContaining({ code: 'chat:answer', scope: 'IN_PROVINCE', province: '21' }),
       ]),
     );
   });
