@@ -386,6 +386,107 @@ describe('Chat permission scope backfill', () => {
     }
   });
 
+  it.each([
+    { rawProvinceId: '21', expectedEffect: 'deny', expectedScope: null, expectedProvinceId: null },
+    {
+      rawProvinceId: '2100',
+      expectedEffect: 'allow',
+      expectedScope: 'IN_PROVINCE',
+      expectedProvinceId: '2100',
+    },
+  ])(
+    'resolves profile province $rawProvinceId against the existing master before planning writes',
+    async ({ rawProvinceId, expectedEffect, expectedScope, expectedProvinceId }) => {
+      const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+      const provinceIds = new Set(['2100']);
+      const profileJoins: unknown[][] = [];
+      let profileSelection: unknown[] = [];
+      const inserts: Array<Record<string, unknown>> = [];
+      const rows: Record<string, unknown[]> = {
+        role_permissions: [
+          role('chat:view', null),
+          role('eligible_factories:view', 'IN_PROVINCE', 9),
+        ],
+        user_roles: [membership()],
+        users: [user],
+        user_permissions: [],
+      };
+      const fakeKnex = Object.assign(
+        (table: string) => {
+          const query = {
+            join: (..._args: unknown[]) => query,
+            leftJoin: (...args: unknown[]) => {
+              if (table === 'officer_profiles') profileJoins.push(args);
+              return query;
+            },
+            whereIn: (..._args: unknown[]) => query,
+            where: (..._args: unknown[]) => query,
+            whereNull: (..._args: unknown[]) => query,
+            select: async (...columns: unknown[]) => {
+              if (table !== 'officer_profiles') return rows[table] ?? [];
+              profileSelection = columns;
+              const usesJoinedProvince =
+                profileJoins.some(
+                  ([tableName, masterId, profileId]) =>
+                    tableName === 'provinces as profile_province' &&
+                    masterId === 'profile_province.id' &&
+                    profileId === 'officer_profiles.province_id',
+                ) && columns.includes('profile_province.id as province_id');
+              // Model a LEFT JOIN, including an orphan profile value that must
+              // remain unresolved rather than being translated to another ID.
+              return [
+                {
+                  user_id: 1,
+                  province_id: usesJoinedProvince
+                    ? provinceIds.has(rawProvinceId)
+                      ? rawProvinceId
+                      : null
+                    : rawProvinceId,
+                },
+              ];
+            },
+            update: async (..._args: unknown[]) => undefined,
+            insert: async (values: Array<Record<string, unknown>>) => inserts.push(...values),
+          };
+          return query;
+        },
+        {
+          raw: (sql: string) =>
+            sql === buildChatPermissionBackupSql()
+              ? Promise.resolve([{ role_permissions_count: 2, user_permissions_count: 0 }])
+              : sql,
+        },
+      );
+      try {
+        await up(fakeKnex as unknown as Knex);
+
+        expect(profileSelection).toContain('profile_province.id as province_id');
+        expect(profileSelection).not.toContain('officer_profiles.province_id');
+        expect(profileJoins).toContainEqual([
+          'provinces as profile_province',
+          'profile_province.id',
+          'officer_profiles.province_id',
+        ]);
+        expect(inserts).toEqual([
+          expect.objectContaining({
+            user_id: 1,
+            permission_id: 1,
+            effect: expectedEffect,
+            scope: expectedScope,
+            province_id: expectedProvinceId,
+          }),
+        ]);
+        expect(
+          inserts.every(
+            (row) => row.province_id === null || provinceIds.has(String(row.province_id)),
+          ),
+        ).toBe(true);
+      } finally {
+        log.mockRestore();
+      }
+    },
+  );
+
   it('reads every legacy snapshot before applying user writes and then role updates', async () => {
     const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
     const events: Array<{ table: string; operation: string; values?: unknown }> = [];

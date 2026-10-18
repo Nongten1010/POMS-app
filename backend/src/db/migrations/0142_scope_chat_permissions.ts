@@ -409,6 +409,11 @@ export async function up(knex: Knex): Promise<void> {
     profiles.push(
       ...(await knex('officer_profiles')
         .join('users', 'users.id', 'officer_profiles.user_id')
+        .leftJoin(
+          'provinces as profile_province',
+          'profile_province.id',
+          'officer_profiles.province_id',
+        )
         .leftJoin('organizations as department_org', function joinDepartment() {
           this.on('department_org.external_id', '=', 'officer_profiles.department_id').andOnVal(
             'department_org.level',
@@ -420,7 +425,8 @@ export async function up(knex: Knex): Promise<void> {
         .whereIn('users.user_type', ['officer', 'admin'])
         .select(
           'officer_profiles.user_id',
-          'officer_profiles.province_id',
+          // Match legacy auth: an orphan profile province never identified an audience.
+          'profile_province.id as province_id',
           'officer_profiles.estate_code',
           'officer_profiles.regional_access_json',
           'officer_profiles.line_name_th',
