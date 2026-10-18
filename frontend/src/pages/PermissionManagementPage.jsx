@@ -277,7 +277,8 @@ const permissionSections = [
   {
     title: 'Chat',
     permissionKey: 'chat',
-    hideDataScope: true,
+    locationScope: true,
+    scopeUiOnly: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'เปิดการสนทนา', uiOnly: true },
@@ -403,7 +404,7 @@ function validatePermissionLocationFields(formData) {
   const errors = {}
 
   permissionSections.forEach((section) => {
-    if (!section.locationScope) {
+    if (!section.locationScope || section.scopeUiOnly) {
       return
     }
 
@@ -439,7 +440,7 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
       const currentPermission = currentPermissions?.[section.permissionKey] ?? {}
       const permission = {}
 
-      if (!section.hideDataScope) {
+      if (!section.hideDataScope && !section.scopeUiOnly) {
         const scopeInput = formData.get(`permission.${section.permissionKey}.data`)
         const dataScope =
           scopeInput === null
@@ -450,7 +451,7 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
         permission.data = dataScope
       }
 
-      if (section.locationScope) {
+      if (section.locationScope && !section.scopeUiOnly) {
         const dataScope = permission.data ?? currentPermission.data ?? 'ALL'
         const regionInput = formData.get(`permission.${section.permissionKey}.region`)
         const provinceInput = formData.get(`permission.${section.permissionKey}.province`)
