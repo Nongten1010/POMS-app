@@ -5,4 +5,5 @@ export interface MenuBadges {
   bod_cod_errors: boolean;
   eligible_factories: boolean;
   notifications: boolean;
+  chat: boolean;
 }

@@ -57,6 +57,7 @@
 ## Shared operations
 
 - [จุด Badge บน Sidebar ตามสิทธิ์และขอบเขตปัจจุบัน](./shared/menu-badges.tdd.md)
+- [Badge Chat ตามข้อความล่าสุดและสถานะเปิดการสนทนา](./chat/menu-badge-verification.md)
 
 - [ล้างข้อมูลทดสอบด้วย SQL](./shared/test-data-cleanup.tdd.md)
 - [Frontend monitoring contract 05082026](./shared/frontend-monitoring-contract-05082026.tdd.md)

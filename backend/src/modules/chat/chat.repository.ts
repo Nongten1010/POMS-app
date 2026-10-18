@@ -128,6 +128,36 @@ function ticketQuery(access: ChatAccess, executor: Executor): Knex.QueryBuilder 
   );
 }
 
+async function hasOpenTicketsAwaitingReply(access: ChatAccess): Promise<boolean> {
+  const senderLabels =
+    access.userType === 'operator'
+      ? [PERSONA_LABELS.officer, PERSONA_LABELS.admin]
+      : access.userType === 'officer' || access.userType === 'admin'
+        ? [PERSONA_LABELS.operator]
+        : [];
+  if (!senderLabels.length) return false;
+
+  const row = await ticketQuery(access, db)
+    .where('ct.status', 'open')
+    .whereExists(function latestMessageFromOtherSide() {
+      this.select(db.raw('1'))
+        .from('chat_messages as cm')
+        .whereRaw('?? = ??', ['cm.ticket_id', 'ct.id'])
+        // The sender label snapshots the persona at send time; role order and
+        // later account changes must not reclassify an existing message.
+        .whereIn('cm.sender_role_label', senderLabels)
+        // Message history uses IDs for ordering, including equal timestamps.
+        .where(
+          'cm.id',
+          db('chat_messages as latest')
+            .max('latest.id')
+            .whereRaw('?? = ??', ['latest.ticket_id', 'ct.id']),
+        );
+    })
+    .first('ct.id');
+  return Boolean(row);
+}
+
 // Reuse current factory access filters for action scopes as well as visibility.
 // A single query resolves capabilities for a whole page without trusting ticket snapshots.
 async function writableTicketIds(
@@ -537,6 +567,7 @@ export const chatRepository = {
   createTicket,
   getTicket,
   listTickets,
+  hasOpenTicketsAwaitingReply,
   getMessages,
   sendMessage,
   closeTicket,

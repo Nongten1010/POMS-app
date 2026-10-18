@@ -6,6 +6,9 @@ import { db } from '../../src/config/database';
 import { UnauthorizedError } from '../../src/shared/errors/AppError';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 import type { AuthenticatedUser } from '../../src/shared/types/express';
+import { chatRepository } from '../../src/modules/chat/chat.repository';
+import { getChatAccess } from '../../src/modules/chat/chat.access';
+import { createChatSqlFixture, type ChatSqlFixture } from '../helpers/chat-sql-fixture';
 
 jest.mock('../../src/config/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -18,7 +21,9 @@ const emptyBadges = {
   bod_cod_errors: false,
   eligible_factories: false,
   notifications: false,
+  chat: false,
 };
+let chatFixture: ChatSqlFixture | undefined;
 let current: AuthenticatedUser;
 let token: string;
 
@@ -35,11 +40,13 @@ beforeEach(() => {
     .mockImplementation(async () => structuredClone(current));
 });
 afterEach(() => {
+  chatFixture?.close();
+  chatFixture = undefined;
   jest.restoreAllMocks();
 });
 
 describe('GET /api/v1/me/menu-badges', () => {
-  it('returns exactly six boolean keys for the current account without menu access', async () => {
+  it('returns exactly seven boolean keys for the current account without menu access', async () => {
     const response = await request(createApp())
       .get('/api/v1/me/menu-badges')
       .auth(token, { type: 'bearer' });
@@ -47,6 +54,48 @@ describe('GET /api/v1/me/menu-badges', () => {
     expect(response.body).toEqual({ success: true, data: emptyBadges });
     expect(response.headers['cache-control']).toBe('private, no-store');
     expect(authService.getAuthorizationContext).toHaveBeenCalledWith(42, { userType: 'officer' });
+  });
+
+  it('reflects the latest Chat sender, ignores closed tickets and reloads Chat permissions', async () => {
+    chatFixture = await createChatSqlFixture(db);
+    const operator = getChatAccess({
+      id: 101,
+      userType: 'operator',
+      roles: ['factory_operator'],
+      scopes: { 'chat:view': 'OWN_FACTORY', 'chat:ask': 'OWN_FACTORY' },
+    });
+    current = {
+      id: 201,
+      userType: 'officer',
+      roles: ['diw_central'],
+      scopes: { 'chat:view': 'ALL', 'chat:answer': 'ALL' },
+    };
+    const officer = getChatAccess(current);
+    const { ticket } = await chatRepository.createTicket(
+      operator,
+      { eligibleFactoryId: 10, measurementPoint: null, topicCode: 'other', message: 'คำถาม' },
+      'badge-http-question',
+    );
+    const app = createApp();
+    const read = () => request(app).get('/api/v1/me/menu-badges').auth(token, { type: 'bearer' });
+    expect((await read()).body).toEqual({
+      success: true,
+      data: { ...emptyBadges, chat: true },
+    });
+    await chatRepository.sendMessage(officer, ticket.id, 'คำตอบ', 'badge-http-answer');
+    expect((await read()).body.data.chat).toBe(false);
+    current = {
+      id: 101,
+      userType: 'operator',
+      roles: ['factory_operator'],
+      scopes: { 'chat:view': 'OWN_FACTORY' },
+    };
+    expect((await read()).body.data.chat).toBe(true);
+    current.scopes = {};
+    expect((await read()).body.data.chat).toBe(false);
+    current.scopes = { 'chat:view': 'OWN_FACTORY' };
+    await chatRepository.closeTicket(officer, ticket.id);
+    expect((await read()).body.data.chat).toBe(false);
   });
 
   it.each([undefined, 'invalid.signature.token'])(

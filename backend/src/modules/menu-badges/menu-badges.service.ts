@@ -6,6 +6,8 @@ import { kwpFormReportsRepository } from '../kwp-form-reports/kwp-form-reports.r
 import { bodCodDeviationReportsRepository } from '../bod-cod-deviations/bod-cod-deviation-reports.repository';
 import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
 import { alertEventsRepository } from '../alert-events/alert-events.repository';
+import { chatRepository } from '../chat/chat.repository';
+import { getChatAccess } from '../chat/chat.access';
 import type { MenuBadges } from './menu-badges.types';
 
 const directors = new Set(['kpm_director', 'center_director', 'kwp_director']);
@@ -40,61 +42,73 @@ export const menuBadgesService = {
       regionalAccess: user.regionalAccess,
     });
 
-    const [factories, connection, kwp_forms, bod_cod_errors, eligible_factories, notifications] =
-      await Promise.all([
-        canSeeRequest('factories')
-          ? pomsFactoriesRepository.hasEditRequestsInStatuses(
-              operator ? ['REVISION_REQUESTED'] : ['PENDING_REVIEW', 'REVISED_PENDING_REVIEW'],
-              access('factories:view'),
-            )
-          : false,
-        canSeeRequest('connection')
-          ? connectionRequestsRepository.hasTableRequestsInStatuses(
-              operator
-                ? [
-                    'WAITING_FACTORY_REVISION',
-                    'WAITING_CONNECTION',
-                    'WAITING_FACTORY_DEVICE_CONFIG',
-                    'WAITING_FACTORY_DEVICE_CONFIGURATION',
-                    'WAITING_DEVICE_CONFIG',
-                  ]
-                : [
-                    'PENDING_DESIGN_REVIEW',
-                    'REVISED_PENDING_DESIGN_REVIEW',
-                    'CONNECTION_CONFIRMED',
-                  ],
-              access('cems_wpms_requests:view'),
-            )
-          : false,
-        canSeeRequest('kwp_forms')
-          ? kwpFormReportsRepository.hasRequestsInStatuses(
-              operator ? ['REVISION_REQUESTED'] : ['SUBMITTED', 'UNDER_REVIEW'],
-              access('kwp_forms:view'),
-            )
-          : false,
-        canSeeRequest('bod_cod_errors')
-          ? bodCodDeviationReportsRepository.hasReportsInStatuses(
-              operator
-                ? ['REVISION_REQUESTED']
-                : director
-                  ? ['WAITING_REVIEW', 'WAITING_APPROVAL']
-                  : ['SUBMITTED', 'REVISED_PENDING_REVIEW', 'WAITING_RESULT_NOTICE'],
-              access('bod_cod_errors:view'),
-            )
-          : false,
-        !operator &&
-        canView('eligible_factories') &&
-        permissions.eligible_factories?.approve === true
-          ? eligibleFactoriesRepository.hasPendingAddRequests(access('eligible_factories:view'))
-          : false,
-        canView('notifications')
-          ? alertEventsRepository.hasMenuBadgeEvents(
-              bangkokDate.format(new Date()),
-              access('notifications:view'),
-            )
-          : false,
-      ]);
+    const [
+      factories,
+      connection,
+      kwp_forms,
+      bod_cod_errors,
+      eligible_factories,
+      notifications,
+      chat,
+    ] = await Promise.all([
+      canSeeRequest('factories')
+        ? pomsFactoriesRepository.hasEditRequestsInStatuses(
+            operator ? ['REVISION_REQUESTED'] : ['PENDING_REVIEW', 'REVISED_PENDING_REVIEW'],
+            access('factories:view'),
+          )
+        : false,
+      canSeeRequest('connection')
+        ? connectionRequestsRepository.hasTableRequestsInStatuses(
+            operator
+              ? [
+                  'WAITING_FACTORY_REVISION',
+                  'WAITING_CONNECTION',
+                  'WAITING_FACTORY_DEVICE_CONFIG',
+                  'WAITING_FACTORY_DEVICE_CONFIGURATION',
+                  'WAITING_DEVICE_CONFIG',
+                ]
+              : ['PENDING_DESIGN_REVIEW', 'REVISED_PENDING_DESIGN_REVIEW', 'CONNECTION_CONFIRMED'],
+            access('cems_wpms_requests:view'),
+          )
+        : false,
+      canSeeRequest('kwp_forms')
+        ? kwpFormReportsRepository.hasRequestsInStatuses(
+            operator ? ['REVISION_REQUESTED'] : ['SUBMITTED', 'UNDER_REVIEW'],
+            access('kwp_forms:view'),
+          )
+        : false,
+      canSeeRequest('bod_cod_errors')
+        ? bodCodDeviationReportsRepository.hasReportsInStatuses(
+            operator
+              ? ['REVISION_REQUESTED']
+              : director
+                ? ['WAITING_REVIEW', 'WAITING_APPROVAL']
+                : ['SUBMITTED', 'REVISED_PENDING_REVIEW', 'WAITING_RESULT_NOTICE'],
+            access('bod_cod_errors:view'),
+          )
+        : false,
+      !operator && canView('eligible_factories') && permissions.eligible_factories?.approve === true
+        ? eligibleFactoriesRepository.hasPendingAddRequests(access('eligible_factories:view'))
+        : false,
+      canView('notifications')
+        ? alertEventsRepository.hasMenuBadgeEvents(
+            bangkokDate.format(new Date()),
+            access('notifications:view'),
+          )
+        : false,
+      canView('chat') && ['operator', 'officer', 'admin'].includes(user.userType)
+        ? chatRepository.hasOpenTicketsAwaitingReply(getChatAccess(user))
+        : false,
+    ]);
 
-    return { factories, connection, kwp_forms, bod_cod_errors, eligible_factories, notifications };
+    return {
+      factories,
+      connection,
+      kwp_forms,
+      bod_cod_errors,
+      eligible_factories,
+      notifications,
+      chat,
+    };
   },
 };
