@@ -111,7 +111,6 @@ const binaryPermissionSectionKeys = new Set([
   'feedback',
   'laws',
   'faq',
-  'chat',
 ])
 
 function getSectionScopeOptions(section) {
