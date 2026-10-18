@@ -115,13 +115,13 @@ export default function ChatConversation({ id, client, options, drafts, onDismis
   return <>
     <Dialog open onClose={busy ? undefined : onDismiss} fullWidth maxWidth="lg" aria-labelledby="ticket-dialog-title" slotProps={{ paper: { sx: { height: 'min(780px, calc(100dvh - 32px))', maxHeight: 'calc(100dvh - 32px)', m: 2, width: 'calc(100% - 32px)' } } }}>
       <DialogTitle component="div" sx={{ borderBottom: 1, borderColor: 'divider', p: 2 }}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(0, 1fr) minmax(0, 1.2fr) auto' }, gap: { xs: 1.5, md: 2 }, alignItems: 'start' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr)' }, gap: { xs: 1.5, md: 2 }, alignItems: 'start' }}>
           <Box sx={{ minWidth: 0 }}><Stack direction="row" sx={{ flexWrap: 'wrap', columnGap: 1.5, rowGap: 1, alignItems: 'center' }}><Typography id="ticket-dialog-title" variant="subtitle1" sx={{ fontWeight: 700 }}>{ticket?.ticketNo || 'การสนทนา'}</Typography>{ticket && <TicketStatus status={ticket.status} />}</Stack><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{ticket?.topic.label}</Typography></Box>
           <Box sx={{ minWidth: 0, gridColumn: { xs: '1 / -1', md: 2 }, gridRow: { xs: 2, md: 1 }, textAlign: { xs: 'left', md: 'center' }, overflowWrap: 'anywhere' }}>
             <Typography variant="body2" sx={{ fontWeight: 700 }}>{ticket?.factory.name}</Typography>
             {ticket && <><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{ticket.factory.registrationNo} · {ticket.factory.provinceName} · {ticket.factory.regionName || '-'}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>จุดตรวจวัด: {point ? [point.pointCode, point.pointName].filter(Boolean).join(' · ') : 'ทั้งหมด'}</Typography></>}
           </Box>
-          <Stack direction="row" sx={{ gap: 0.5, gridColumn: { xs: 2, md: 3 }, gridRow: 1, alignItems: 'center', '& .MuiIconButton-root': { p: { xs: 0.5, sm: 1 } } }}>
+          <Stack direction="row" sx={{ gap: 0.5, gridColumn: { xs: 2, md: 3 }, gridRow: 1, justifySelf: 'end', alignItems: 'center', '& .MuiIconButton-root': { p: { xs: 0.5, sm: 1 } } }}>
             <Tooltip title="รีเฟรชข้อความ"><span><IconButton disabled={loading || busy} aria-label="รีเฟรชข้อความ" onClick={() => load()}><RefreshIcon /></IconButton></span></Tooltip>
             {ticket?.status === 'open' && ticket.capabilities.canClose && <Tooltip title="ปิดการสนทนา"><Button disabled={busy || loading || pending} aria-label="ปิดการสนทนา" color="error" variant="outlined" sx={{ minWidth: { xs: 32, sm: 64 }, px: { xs: 0.5, sm: 1.5 } }} onClick={() => setConfirm(true)}><CheckIcon sx={{ display: { xs: 'block', sm: 'none' }, fontSize: 20 }} /><Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>ปิดการสนทนา</Box></Button></Tooltip>}
             <Tooltip title="ปิดหน้าต่าง"><span><IconButton disabled={busy} aria-label="ปิดหน้าต่าง" onClick={onDismiss}><CloseIcon /></IconButton></span></Tooltip>
