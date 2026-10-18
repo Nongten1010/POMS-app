@@ -31,8 +31,8 @@ const officerTypes = [
 ]
 
 const publicUserTypes = [
-  { label: 'ประชาชนทั่วไป', value: 'citizen' },
   { label: 'ผู้ประกอบการ', value: 'operator' },
+  { label: 'ประชาชนทั่วไป', value: 'citizen' },
 ]
 
 const loginUrl = import.meta.env.DEV
@@ -164,9 +164,9 @@ function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
               iconPosition="start"
               label={
                 <Box component="span" sx={{ textAlign: 'center' }}>
-                  ประชาชนทั่วไป
+                  ผู้ประกอบการ
                   <Box component="span" sx={{ display: 'block' }}>
-                    ผู้ประกอบการ
+                    ประชาชนทั่วไป
                   </Box>
                 </Box>
               }
