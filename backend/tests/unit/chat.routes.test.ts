@@ -215,7 +215,7 @@ describe('Chat ticket HTTP API', () => {
       .auth(operatorToken(), { type: 'bearer' });
     expect(response.status).toBe(200);
     expect(response.body.data.map((factory: { id: number }) => factory.id)).toEqual([10, 30]);
-    expect(response.body.pagination).toEqual({ page: 1, pageSize: 25, total: 2, totalPages: 1 });
+    expect(response.body.pagination).toEqual({ page: 1, pageSize: 2, total: 2, totalPages: 1 });
   });
   it('opens a factory-level ticket for an assigned eligible factory with no connected or eligible point', async () => {
     const app = createApp();
@@ -242,7 +242,7 @@ describe('Chat ticket HTTP API', () => {
       connected_point_id: null,
     });
   });
-  it('returns every assigned factory across the default 25-item pages without leaking unassigned factories', async () => {
+  it('returns all assigned eligible factories by default and paginates only when requested', async () => {
     for (let id = 100; id < 128; id += 1) {
       fixture.execute(
         'INSERT INTO factories (id, fid, code, juristic_id, name, province_id, is_active, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -258,8 +258,29 @@ describe('Chat ticket HTTP API', () => {
       );
     }
     const app = createApp();
+    const all = await request(app)
+      .get('/api/v1/chat/factories')
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(all.status).toBe(200);
+    expect(all.body.data).toHaveLength(30);
+    expect(all.body.pagination).toEqual({ page: 1, pageSize: 30, total: 30, totalPages: 1 });
+    const searched = await request(app)
+      .get('/api/v1/chat/factories')
+      .query({ q: 'REG-12' })
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(searched.status).toBe(200);
+    expect(searched.body.data).toHaveLength(8);
+    expect(searched.body.pagination).toEqual({ page: 1, pageSize: 8, total: 8, totalPages: 1 });
+    const bySize = await request(app)
+      .get('/api/v1/chat/factories')
+      .query({ pageSize: 50 })
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(bySize.status).toBe(200);
+    expect(bySize.body.data).toHaveLength(30);
+    expect(bySize.body.pagination).toEqual({ page: 1, pageSize: 50, total: 30, totalPages: 1 });
     const first = await request(app)
       .get('/api/v1/chat/factories')
+      .query({ page: 1, pageSize: 25 })
       .auth(operatorToken(), { type: 'bearer' });
     const second = await request(app)
       .get('/api/v1/chat/factories')
@@ -280,6 +301,7 @@ describe('Chat ticket HTTP API', () => {
       30,
       ...Array.from({ length: 28 }, (_, index) => index + 100),
     ]);
+    expect(all.body.data.map((factory: { id: number }) => factory.id)).toEqual(ids);
     fixture.execute(
       'UPDATE user_factory_access SET revoked_at = ? WHERE user_id = ? AND factory_id = ?',
       ['2026-10-18', 101, ids[25]],
@@ -292,20 +314,25 @@ describe('Chat ticket HTTP API', () => {
     expect(refreshed.body.pagination).toMatchObject({ total: 29, totalPages: 2 });
     expect(refreshed.body.data.map((factory: { id: number }) => factory.id)).not.toContain(ids[25]);
   });
-  it('returns typed point identities and hides points outside the operator factory', async () => {
+  it('returns an empty unpaginated factory list when no eligible factory is authorized', async () => {
+    fixture.execute('UPDATE user_factory_access SET revoked_at = ? WHERE user_id = ?', [
+      '2026-10-19',
+      101,
+    ]);
+    const response = await request(createApp())
+      .get('/api/v1/chat/factories')
+      .auth(operatorToken(), { type: 'bearer' });
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+    expect(response.body.pagination).toEqual({ page: 1, pageSize: 0, total: 0, totalPages: 0 });
+  });
+  it('returns connected point identities and hides eligible points and points outside the operator factory', async () => {
     const app = createApp();
     const response = await request(app)
       .get('/api/v1/chat/factories/10/measurement-points')
       .auth(operatorToken(), { type: 'bearer' });
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual([
-      {
-        kind: 'eligible',
-        id: 1000,
-        systemType: 'CEMS',
-        pointCode: 'E10',
-        pointName: 'จุดเข้าข่าย 10',
-      },
       {
         kind: 'connected',
         id: 2000,
@@ -1275,6 +1302,9 @@ describe('Chat ticket HTTP API', () => {
     expect(send.status).toBe(404);
   });
   it.each([
+    '/factories?page=0',
+    '/factories?pageSize=500',
+    '/factories?unknown=value',
     '/tickets?sort=body;DROP%20TABLE%20users',
     '/tickets?pageSize=500',
     '/tickets?from=2026-02-30T00:00:00Z',

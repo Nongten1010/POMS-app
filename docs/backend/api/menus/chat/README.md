@@ -9,7 +9,7 @@ Chat เป็นการเปิด Ticket พร้อมข้อควา�
 จุด Badge เมนู Chat ใช้ `data.chat` จาก [`GET /me/menu-badges`](../../shared/menu-badges/README.md#chat-ที่มีข้อความล่าสุดจากอีกฝ่าย) โดยนับเฉพาะห้องเปิดที่ข้อความล่าสุดมาจากอีกฝ่าย หลังส่งข้อความหรือปิด Ticket สำเร็จให้รีเฟรช Badge ตาม contract กลาง
 
 1. เรียก `GET /chat/options` เพื่อแสดงบัญชีปัจจุบัน หัวข้อ และสิทธิ์เปิดเรื่อง แสดงปุ่มเปิดเรื่องเฉพาะเมื่อ `canCreate=true`
-2. สำหรับผู้ที่เปิดเรื่องได้ เรียก `GET /chat/factories` แล้ว `GET /chat/factories/:id/measurement-points` เพื่อเลือกโรงงานและจุดตรวจวัด ถ้าไม่เลือกจุดให้ส่ง `measurementPoint: null` รายการโรงงานใช้ขอบเขตอ่าน การสร้างยังตรวจขอบเขตเปิดเรื่องเพิ่ม รายการมี pagination ต้องโหลดหน้าที่ต้องใช้ให้ครบหรือค้นหาผ่าน `q`
+2. สำหรับผู้ที่เปิดเรื่องได้ เรียก `GET /chat/factories` โดยไม่ส่ง `page`/`pageSize` เพื่อรับโรงงานเข้าข่ายทั้งหมดตามสิทธิ์ แล้ว `GET /chat/factories/:id/measurement-points` เพื่อเลือกเฉพาะจุดที่เชื่อมต่อในระบบ POMS ถ้าไม่เลือกจุดให้ส่ง `measurementPoint: null` รายการโรงงานใช้ขอบเขตอ่าน การสร้างยังตรวจขอบเขตเปิดเรื่องเพิ่ม ค้นหาผ่าน `q` ได้ และยังแบ่งหน้าได้เมื่อส่ง `page` หรือ `pageSize`
 3. เปิดเรื่องด้วย `POST /chat/tickets` พร้อมข้อความแรกและ `Idempotency-Key` ใหม่ เก็บ key เดิมไว้เมื่อจำเป็นต้องส่งคำขอเดิมซ้ำ
 4. เรียกรายการ `GET /chat/tickets` และรายละเอียด/ข้อความเมื่อเปิดสนทนา ใช้ `lastMessageSenderType` แสดงว่าข้อความล่าสุดเป็นของผู้ประกอบการ (`operator`) หรือเจ้าหน้าที่รวมผู้ดูแลระบบ (`officer`) และใช้ `capabilities` ตัดสินว่าจะแสดงปุ่มตอบและปิดหรือไม่
 5. หลังส่งข้อความหรือปิด Ticket ใช้ผลตอบกลับปรับสถานะทันที แล้วรีเฟรชรายการเมื่อจำเป็น
@@ -18,6 +18,12 @@ Chat เป็นการเปิด Ticket พร้อมข้อควา�
 
 ```bash
 curl "$BASE_URL/api/v1/chat/options" \
+  --header "Authorization: Bearer $ACCESS_TOKEN"
+
+curl "$BASE_URL/api/v1/chat/factories" \
+  --header "Authorization: Bearer $ACCESS_TOKEN"
+
+curl "$BASE_URL/api/v1/chat/factories/10/measurement-points" \
   --header "Authorization: Bearer $ACCESS_TOKEN"
 
 curl "$BASE_URL/api/v1/chat/tickets" \
@@ -103,7 +109,7 @@ Migration นี้ไม่มี automatic rollback: `down` จะหยุด
 | `ChatFactory.id` | integer | ไม่ | ID โรงงานที่เข้าข่าย |
 | `ChatFactory.name`, `registrationNo`, `provinceName` | string | ไม่ | ชื่อโรงงาน เลขทะเบียน และจังหวัด; ใน Ticket เป็น snapshot เมื่อเปิดเรื่อง |
 | `ChatFactory.regionName` | string | ได้ | ภาคของโรงงาน; ใน Ticket เป็น snapshot เมื่อเปิดเรื่อง |
-| `ChatMeasurementPoint.kind` | `eligible` / `connected` | ไม่ | ชนิดแหล่งอ้างอิง; ใช้ร่วมกับ `id` เสมอ |
+| `ChatMeasurementPoint.kind` | `eligible` / `connected` | ไม่ | ชนิดแหล่งอ้างอิงใน Ticket; ใช้ร่วมกับ `id` เสมอ; รายการตัวเลือกจุดคืนเฉพาะ `connected` |
 | `ChatMeasurementPoint.id` | integer | ไม่ | ID ของจุดในแหล่งที่ระบุ |
 | `ChatMeasurementPoint.systemType` | `CEMS` / `WPMS` | ไม่ | ระบบตรวจวัด |
 | `ChatMeasurementPoint.pointCode` | string | ได้ | รหัสแสดงผล; จุดเตรียมเชื่อมต่ออาจยังไม่มีรหัส |
@@ -117,6 +123,8 @@ Migration นี้ไม่มี automatic rollback: `down` จะหยุด
 | `ChatEvent.actor`, `createdAt` | `ChatActor`, string date-time | ไม่ | ผู้ดำเนินการและเวลา UTC |
 | `ChatPagination.page`, `pageSize` | integer | ไม่ | หน้าปัจจุบันและจำนวนต่อหน้า |
 | `ChatPagination.total`, `totalPages` | integer | ไม่ | จำนวนรายการและจำนวนหน้าตามสิทธิ์และตัวกรอง |
+
+รายการโรงงานใช้ `ChatFactoryPagination`: เมื่อไม่ส่งทั้ง `page` และ `pageSize` จะคืน `page=1`, `pageSize=total` และ `totalPages=1` ถ้ามีรายการ หรือ `pageSize=0`, `total=0`, `totalPages=0` ถ้าไม่มีรายการ ส่วนรายการ Ticket ยังคงใช้ `ChatPagination` โดยเริ่มต้นหน้า 1 จำนวน 25 รายการ
 
 โครงสร้าง Ticket ที่ใช้ร่วมกัน:
 
@@ -160,32 +168,34 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 ## `GET /chat/factories`
 
-คืนโรงงานในขอบเขตปัจจุบัน รวมโรงงานที่ยังไม่มีจุดตรวจวัด ใช้สิทธิ์อ่าน
+คืนโรงงานเข้าข่ายจาก active `eligible_factories` ในขอบเขตปัจจุบันของ `chat:view` รวมโรงงานที่ยังไม่เชื่อมต่อหรือไม่มีจุดตรวจวัด เมื่อไม่ส่งทั้ง `page` และ `pageSize` จะคืนทั้งหมดตามสิทธิ์และตัวกรอง `q` โดยไม่แบ่งหน้า
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
 | `q` | query | string | ไม่ | trim; 1–200 ตัวอักษร; ค้นชื่อโรงงาน/เลขทะเบียน |
-| `page` | query | integer 1–1,000,000 | ไม่ | ค่าเริ่มต้น `1` |
-| `pageSize` | query | `25` / `50` / `100` | ไม่ | ค่าเริ่มต้น `25` |
+| `page` | query | integer 1–1,000,000 | ไม่ | เปิดการแบ่งหน้าเมื่อส่ง; หากส่งเฉพาะ `pageSize` ใช้ `1` |
+| `pageSize` | query | `25` / `50` / `100` | ไม่ | เปิดการแบ่งหน้าเมื่อส่ง; หากส่งเฉพาะ `page` ใช้ `25` |
 
 ตัวอย่าง query ในรูป JSON (ส่งเป็น URL query ไม่ใช่ body):
 
 ```json
-{"page":1,"pageSize":25}
+{}
 ```
+
+ตัวอย่างนี้เรียก `GET /chat/factories` โดยไม่มี query และไม่มี request body ส่งเฉพาะ `q` ได้โดยยังคืนทุกผลการค้นหาตามสิทธิ์ หากต้องการพฤติกรรมแบ่งหน้าเดิมให้ส่ง `?page=1&pageSize=25` หรือระบุอย่างน้อยหนึ่งตัว การเปลี่ยนนี้ไม่กระทบ pagination ของ `GET /chat/tickets`
 
 | Response field | Type | Nullable | คำอธิบาย |
 | --- | --- | --- | --- |
 | `data` | `ChatFactory[]` | ไม่ | รายการโรงงานที่มีสิทธิ์ |
-| `pagination` | `ChatPagination` | ไม่ | จำนวนตามตัวกรองและสิทธิ์ |
+| `pagination` | `ChatFactoryPagination` | ไม่ | ไม่แบ่งหน้า: `page=1`, `pageSize=total`, `totalPages=1` เมื่อมีรายการ หรือ `0` เมื่อว่าง; แบ่งหน้า: จำนวนตามหน้าที่ระบุ ตัวกรองและสิทธิ์ |
 
 ```json
-{"success":true,"data":[{"id":10,"name":"โรงงานตัวอย่าง","registrationNo":"EXAMPLE-001","provinceName":"ระยอง","regionName":"ภาคตะวันออก"}],"pagination":{"page":1,"pageSize":25,"total":1,"totalPages":1}}
+{"success":true,"data":[{"id":10,"name":"โรงงานตัวอย่าง","registrationNo":"EXAMPLE-001","provinceName":"ระยอง","regionName":"ภาคตะวันออก"}],"pagination":{"page":1,"pageSize":1,"total":1,"totalPages":1}}
 ```
 
 ## `GET /chat/factories/:id/measurement-points`
 
-คืนตัวเลือกจุดที่ยังใช้งานสำหรับโรงงานนั้น ใช้สิทธิ์อ่าน ตรวจความเป็นเจ้าของจุดอีกครั้งเมื่อสร้าง Ticket ห้ามใช้ `pointCode` เป็นตัวระบุหรือรวมจุดที่ชื่อ/รหัสตรงกันเอง
+คืนเฉพาะจุด current/live ที่เชื่อมต่อใน POMS จาก active `cems_wpms_connected_measurement_points` ซึ่งผูก `eligible_factory_id` กับโรงงานเข้าข่ายนั้น ใช้สิทธิ์อ่านและขอบเขต `chat:view` เดิม ไม่รวมจุดจากแบบข้อมูลโรงงานเข้าข่าย ตรวจความเป็นเจ้าของจุดอีกครั้งเมื่อสร้าง Ticket ห้ามใช้ `pointCode` เป็นตัวระบุหรือรวมจุดที่ชื่อ/รหัสตรงกันเอง
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
@@ -195,13 +205,13 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 | Response field | Type | Nullable | คำอธิบาย |
 | --- | --- | --- | --- |
-| `data` | `ChatMeasurementPoint[]` | ไม่ | `[]` เมื่อไม่มีจุด; ผู้ใช้ยังเปิดเรื่องระดับโรงงานได้ |
+| `data` | `ChatConnectedMeasurementPoint[]` | ไม่ | ทุกแถวมี `kind=connected`; โครงสร้างอื่นเหมือน `ChatMeasurementPoint`; `[]` เมื่อไม่มีจุดเชื่อมต่อ โดยยังเปิดเรื่องระดับโรงงานได้ |
 
 ```json
-{"success":true,"data":[{"kind":"eligible","id":501,"systemType":"CEMS","pointCode":null,"pointName":"ปล่องตัวอย่าง"}]}
+{"success":true,"data":[{"kind":"connected","id":501,"systemType":"CEMS","pointCode":"C001","pointName":"ปล่องตัวอย่าง"}]}
 ```
 
-`kind=eligible` อ้างจุดในแบบข้อมูลโรงงานที่เข้าข่าย ส่วน `kind=connected` อ้างจุด current/live ที่เชื่อมต่อแล้ว ID คนละชนิดอาจมีเลขเท่ากันได้ จุด connected ที่สร้างใหม่หลังซิงก์หรือใช้รหัสเดิมจะไม่แทนที่อัตลักษณ์ที่ Ticket เดิมอ้างถึง
+รายการตัวเลือกนี้คืนเฉพาะ `kind=connected` ส่วน request เปิด Ticket และ snapshot ประวัติเดิมยังรองรับ `kind=eligible` เพื่อ compatibility โดยอ้างจุดในแบบข้อมูลโรงงานที่เข้าข่าย ID คนละชนิดอาจมีเลขเท่ากันได้ จุด connected ที่สร้างใหม่หลังซิงก์หรือใช้รหัสเดิมจะไม่แทนที่อัตลักษณ์ที่ Ticket เดิมอ้างถึง
 
 ## `GET /chat/tickets`
 
@@ -209,7 +219,7 @@ Request JSON: `{}` หมายถึงไม่มี body สำหรับ 
 
 | Request field | Location | Type | Required | คำอธิบาย |
 | --- | --- | --- | --- | --- |
-| `page`, `pageSize` | query | integer | ไม่ | เช่นเดียวกับรายการโรงงาน |
+| `page`, `pageSize` | query | integer | ไม่ | แบ่งหน้าเสมอ; `page` 1–1,000,000 เริ่มต้น `1`; `pageSize` `25` / `50` / `100` เริ่มต้น `25` |
 | `q` | query | string | ไม่ | trim; 1–200 ตัวอักษร; ค้นเลข Ticket หัวข้อ ชื่อ/เลขทะเบียนโรงงาน จังหวัด และภาคใน snapshot |
 | `status` | query | `open` / `closed` | ไม่ | กรองสถานะ |
 | `topicCode` | query | topic code | ไม่ | หนึ่งใน 6 หัวข้อจาก `/options` |

@@ -137,19 +137,12 @@ describe('chat factory and measurement-point repository', () => {
     );
   });
 
-  it('returns typed eligible and connected point choices without merging equal point codes', async () => {
+  it('returns only live connected point choices even when an eligible point has the same code', async () => {
     fixture.execute('UPDATE factory_monitoring_points SET point_code = ? WHERE id = ?', [
       'C10',
       1000,
     ]);
     expect(await listChatMeasurementPoints(operator, 10)).toEqual([
-      {
-        kind: 'eligible',
-        id: 1000,
-        systemType: 'CEMS',
-        pointCode: 'C10',
-        pointName: 'จุดเข้าข่าย 10',
-      },
       {
         kind: 'connected',
         id: 2000,
@@ -162,6 +155,12 @@ describe('chat factory and measurement-point repository', () => {
     await expect(listChatMeasurementPoints(operator, 20)).rejects.toMatchObject({
       statusCode: 404,
     });
+    expect(await listChatMeasurementPoints(allOfficer, 20)).toEqual([]);
+    fixture.execute(
+      'UPDATE cems_wpms_connected_measurement_points SET deleted_at = ? WHERE id = ?',
+      ['2026-10-19', 2000],
+    );
+    expect(await listChatMeasurementPoints(operator, 10)).toEqual([]);
   });
 
   it('validates point kind, active row and factory membership when resolving a ticket selection', async () => {
@@ -252,7 +251,7 @@ describe('chat factory and measurement-point repository', () => {
     fixture.execute('DELETE FROM factories WHERE id = ?', [10]);
     expect(await findChatFactory(allOfficer, 10)).toMatchObject({ id: 10 });
     expect(await findChatFactory(operator, 10)).toBeNull();
-    expect((await listChatMeasurementPoints(allOfficer, 10)).length).toBe(2);
+    expect((await listChatMeasurementPoints(allOfficer, 10)).length).toBe(1);
   });
 
   it('uses current canonical profile views for both factory scope and connected point labels', async () => {
@@ -277,6 +276,9 @@ describe('chat factory and measurement-point repository', () => {
     expect(
       await findChatMeasurementPoint(access, 10, { kind: 'connected', id: 2000 }),
     ).toMatchObject({ pointName: 'จุดข้อมูลปัจจุบัน' });
+    expect(await listChatMeasurementPoints(access, 10)).toEqual([
+      expect.objectContaining({ kind: 'connected', id: 2000, pointName: 'จุดข้อมูลปัจจุบัน' }),
+    ]);
   });
 
   it('removes retired factories from lookup and never substitutes another factory with the same registration', async () => {

@@ -8,18 +8,19 @@ export const chatIdempotencyKeySchema = z
   .uuid()
   .transform((value) => value.toLowerCase());
 const topic = z.enum(CHAT_TOPICS.map((item) => item.code));
+const page = z.coerce.number().int().min(1).max(1000000);
+const pageSize = z.coerce.number().pipe(z.union([z.literal(25), z.literal(50), z.literal(100)]));
 export const chatFactoryQuerySchema = z
   .object({
-    page: z.coerce.number().int().min(1).max(1000000).default(1),
-    pageSize: z.coerce
-      .number()
-      .pipe(z.union([z.literal(25), z.literal(50), z.literal(100)]))
-      .default(25),
+    page: page.optional(),
+    pageSize: pageSize.optional(),
     q: z.string().trim().min(1).max(200).optional(),
   })
   .strict();
 export const chatTicketQuerySchema = chatFactoryQuerySchema
   .extend({
+    page: page.default(1),
+    pageSize: pageSize.default(25),
     status: z.enum(['open', 'closed']).optional(),
     topicCode: topic.optional(),
     eligibleFactoryId: chatIdSchema.optional(),
