@@ -112,6 +112,8 @@ function summaryFrom(row: Row, canWrite: boolean): ChatTicketSummary {
     closedBy: row.closed_by == null ? null : actorFrom(row, 'closed_by', 'closed_by'),
     closedAt: row.closed_at == null ? null : iso(row.closed_at),
     lastMessageAt: iso(row.last_message_at),
+    lastMessageSenderType:
+      row.last_message_sender_role_label === PERSONA_LABELS.operator ? 'operator' : 'officer',
     capabilities: {
       canReply: status === 'open' && canWrite,
       canClose: status === 'open' && canWrite,
@@ -187,9 +189,10 @@ async function readTicket(
   id: number,
   executor: Executor,
 ): Promise<ChatTicketDetail | null> {
-  const row = (await ticketQuery(access, executor).where('ct.id', id).select('ct.*').first()) as
-    | Row
-    | undefined;
+  const row = (await ticketQuery(access, executor)
+    .where('ct.id', id)
+    .select('ct.*', { last_message_sender_role_label: latestMessageSenderLabel(executor) })
+    .first()) as Row | undefined;
   if (!row) return null;
   const writable =
     row.status === 'open' && (await writableTicketIds(access, [id], executor)).has(id);
@@ -248,7 +251,7 @@ async function listTickets(
     status: 'ct.status',
   };
   const rows = (await builder
-    .select('ct.*')
+    .select('ct.*', { last_message_sender_role_label: latestMessageSenderLabel(db) })
     .orderBy(sortColumns[query.sort], query.order)
     .orderBy('ct.id', query.order)
     .offset((query.page - 1) * query.pageSize)
@@ -267,6 +270,17 @@ async function listTickets(
       totalPages: Math.ceil(total / query.pageSize),
     },
   };
+}
+function latestMessageSenderLabel(executor: Executor): Knex.QueryBuilder {
+  // Match message-history ordering and use the persona snapshot, independent of current roles.
+  return executor('chat_messages as cm')
+    .select('cm.sender_role_label')
+    .where(
+      'cm.id',
+      executor('chat_messages as latest')
+        .max('latest.id')
+        .whereRaw('?? = ??', ['latest.ticket_id', 'ct.id']),
+    );
 }
 async function getTicket(access: ChatAccess, id: number): Promise<ChatTicketDetail | null> {
   return chatTransaction(async (trx) => {

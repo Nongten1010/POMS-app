@@ -69,6 +69,7 @@ export interface ChatTicketSummary {
   closedBy: ChatActor | null;
   closedAt: string | null;
   lastMessageAt: string;
+  lastMessageSenderType: 'operator' | 'officer';
   capabilities: { canReply: boolean; canClose: boolean };
 }
 export interface ChatTicketDetail extends ChatTicketSummary {

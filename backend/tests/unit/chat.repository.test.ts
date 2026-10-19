@@ -24,6 +24,50 @@ afterEach(() => {
 });
 
 describe('Chat persistence public interface', () => {
+  it('keeps the latest sender side per ticket across equal timestamps, account changes, retries and closure', async () => {
+    fixture = await createChatSqlFixture(db);
+    jest.useFakeTimers({ now: new Date('2026-10-19T03:00:00Z') });
+    const input = {
+      eligibleFactoryId: 10,
+      measurementPoint: null,
+      topicCode: 'other' as const,
+      message: 'คำถามแรก',
+    };
+    const first = await chatRepository.createTicket(operator, input, 'sender-first');
+    const second = await chatRepository.createTicket(operator, input, 'sender-second');
+    const staff: ChatAccess = {
+      ...operator,
+      actorUserId: 201,
+      userType: 'officer',
+      // Role ordering must not override the persona captured with a message.
+      roles: ['factory_operator', 'diw_central'],
+      factoryScope: { scope: 'ALL' },
+      answerScope: { scope: 'ALL' },
+    };
+    const reply = await chatRepository.sendMessage(staff, first.ticket.id, 'คำตอบ', 'sender-reply');
+    expect(reply.message.createdAt).toBe(first.firstMessage.createdAt);
+    expect(reply.ticket).toMatchObject({ lastMessageSenderType: 'officer' });
+    fixture.execute("UPDATE users SET user_type = 'operator' WHERE id = 201");
+    const page = await chatRepository.listTickets(operator, {
+      page: 1,
+      pageSize: 25,
+      sort: 'lastMessageAt',
+      order: 'desc',
+    });
+    expect(page.data).toMatchObject([
+      { id: second.ticket.id, lastMessageSenderType: 'operator' },
+      { id: first.ticket.id, lastMessageSenderType: 'officer' },
+    ]);
+    const closed = await chatRepository.closeTicket(operator, first.ticket.id);
+    expect(closed).toMatchObject({ status: 'closed', lastMessageSenderType: 'officer' });
+    const replayed = await chatRepository.createTicket(operator, input, 'sender-first');
+    expect(replayed).toMatchObject({
+      replayed: true,
+      ticket: { lastMessageSenderType: 'officer' },
+    });
+    const history = await chatRepository.getMessages(operator, first.ticket.id, { limit: 25 });
+    expect(history.ticket).toMatchObject({ lastMessageSenderType: 'officer' });
+  });
   it('treats equivalent creation payloads as the same retry regardless of property order', async () => {
     fixture = await createChatSqlFixture(db);
     const created = await chatRepository.createTicket(

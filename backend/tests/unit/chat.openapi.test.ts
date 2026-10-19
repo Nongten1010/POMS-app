@@ -17,6 +17,20 @@ async function loadOpenApiDocument() {
 }
 
 describe('Chat runtime OpenAPI', () => {
+  it('documents the latest sender side in ticket responses and examples', async () => {
+    const document = await loadOpenApiDocument();
+    for (const name of ['ChatTicketSummary', 'ChatTicketDetail']) {
+      const schema = document.components.schemas[name];
+      expect(schema.required).toContain('lastMessageSenderType');
+      expect(schema.properties.lastMessageSenderType).toMatchObject({
+        type: 'string',
+        enum: ['operator', 'officer'],
+      });
+      expect(schema.properties.lastMessageSenderType.description).toContain('ผู้ประกอบการ');
+      expect(schema.properties.lastMessageSenderType.description).toContain('ผู้ดูแลระบบ');
+      expect(schema.example.lastMessageSenderType).toBe('operator');
+    }
+  });
   it('lets clients discover authenticated chat options and the six supported topics', async () => {
     const response = await request(app)
       .get('/api/v1/openapi.json')

@@ -106,6 +106,12 @@ const ticketFields = {
   closedBy: { ...object(actorFields), nullable: true },
   closedAt: { ...timestamp, nullable: true },
   lastMessageAt: { ...timestamp, description: 'เวลาข้อความล่าสุด; การปิด Ticket ไม่เปลี่ยนค่านี้' },
+  lastMessageSenderType: {
+    type: 'string',
+    enum: ['operator', 'officer'],
+    description:
+      'ฝ่ายผู้ส่งข้อความล่าสุด: operator=ผู้ประกอบการ, officer=เจ้าหน้าที่หรือผู้ดูแลระบบ; ใช้ persona snapshot ของข้อความที่มี id สูงสุดใน Ticket ไม่ขึ้นกับบทบาทปัจจุบัน ผู้เปิดหรือผู้ปิดเรื่อง; ปิด Ticket ไม่เปลี่ยนค่านี้',
+  },
   capabilities: object({
     canReply: {
       type: 'boolean',
@@ -149,6 +155,7 @@ const exampleTicket = {
   closedBy: null,
   closedAt: null,
   lastMessageAt: '2026-10-17T03:00:00.000Z',
+  lastMessageSenderType: 'operator',
   capabilities: { canReply: true, canClose: true },
 };
 const exampleDetail = { ...exampleTicket, events: [exampleOpenedEvent] };

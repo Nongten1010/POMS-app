@@ -83,6 +83,53 @@ describe('Chat ticket HTTP API', () => {
       );
     }
   }
+  it.each([
+    { userId: 201, userType: 'officer' as const },
+    { userId: 204, userType: 'admin' as const },
+  ])(
+    'reports the latest message sender side for $userType replies',
+    async ({ userId, userType }) => {
+      const app = createApp();
+      const opened = await openTicket(app);
+      expect(opened.status).toBe(201);
+      const id = opened.body.data.ticket.id;
+      const list = () =>
+        request(app).get('/api/v1/chat/tickets').auth(operatorToken(), { type: 'bearer' });
+
+      const initial = await list();
+      expect(initial.status).toBe(200);
+      expect(initial.body.data).toEqual([
+        expect.objectContaining({ id, lastMessageSenderType: 'operator' }),
+      ]);
+
+      const reply = await request(app)
+        .post(`/api/v1/chat/tickets/${id}/messages`)
+        .auth(signAccessToken({ sub: String(userId), userType, roles: [], scopes: {} }), {
+          type: 'bearer',
+        })
+        .set('Idempotency-Key', randomUUID())
+        .send({ message: 'เจ้าหน้าที่ตอบกลับ' });
+      expect(reply.status).toBe(201);
+
+      const answered = await list();
+      expect(answered.status).toBe(200);
+      expect(answered.body.data).toEqual([
+        expect.objectContaining({ id, lastMessageSenderType: 'officer' }),
+      ]);
+
+      const followup = await request(app)
+        .post(`/api/v1/chat/tickets/${id}/messages`)
+        .auth(operatorToken(), { type: 'bearer' })
+        .set('Idempotency-Key', randomUUID())
+        .send({ message: 'ผู้ประกอบการสอบถามเพิ่มเติม' });
+      expect(followup.status).toBe(201);
+      const latest = await list();
+      expect(latest.status).toBe(200);
+      expect(latest.body.data).toEqual([
+        expect.objectContaining({ id, lastMessageSenderType: 'operator' }),
+      ]);
+    },
+  );
   it('requires authentication before exposing chat options', async () => {
     const response = await request(createApp()).get('/api/v1/chat/options');
     expect(response.status).toBe(401);
@@ -696,6 +743,7 @@ describe('Chat ticket HTTP API', () => {
         .send({ ...createInput, eligibleFactoryId: factoryId });
       expect(own.status).toBe(201);
       expect(own.body.data.ticket.openedBy.userId).toBe(userId);
+      expect(own.body.data.ticket.lastMessageSenderType).toBe('officer');
       expect(own.body.data.ticket.capabilities).toEqual({ canReply: true, canClose: true });
       const ownId = own.body.data.ticket.id;
 
