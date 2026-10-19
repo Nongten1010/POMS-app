@@ -86,11 +86,13 @@ export interface ChatPage<T> {
   pagination: ChatPagination;
 }
 export interface ChatFactoryQuery {
-  page: number;
-  pageSize: number;
+  page?: number;
+  pageSize?: number;
   q?: string;
 }
 export interface ChatTicketQuery extends ChatFactoryQuery {
+  page: number;
+  pageSize: number;
   status?: ChatStatus;
   topicCode?: ChatTopicCode;
   eligibleFactoryId?: number;
