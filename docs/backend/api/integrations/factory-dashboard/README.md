@@ -86,7 +86,14 @@ Request body: ไม่มี
 | `data[].measurementPoints[].data[].station_id` | string | No | station identifier ในแถวข้อมูล |
 | `data[].measurementPoints[].data[].cdate` | string | No | วันที่ข้อมูล `YYYY-MM-DD` |
 | `data[].measurementPoints[].data[].ctime` | string | No | เวลาของรอบข้อมูล |
+| `data[].measurementPoints[].latestMeasurement` | object | No | ชุดค่าล่าสุด รูปแบบเดียวกับหน้าหลัก |
+| `data[].measurementPoints[].latestMeasurement.date` | string | Yes | `cdate` จริง หรือ `null` เมื่อไม่มีข้อมูลรายชั่วโมง |
+| `data[].measurementPoints[].latestMeasurement.time` | string | Yes | `ctime` จริง หรือ `null` เมื่อไม่มีข้อมูลรายชั่วโมง |
+| `data[].measurementPoints[].latestMeasurement.freshness` | `current` \| `stale` \| `noData` | No | สถานะอายุของข้อมูล แยกจากสถานะมลพิษ |
+| `data[].measurementPoints[].latestMeasurement.values` | object | No | ชื่อพารามิเตอร์พร้อมหน่วยและ `value`, `displayValue`, `status` ตาม contract หน้าหลัก |
 | `meta.total` | `1` | No | จำนวนโรงงานใน response |
+
+การเลือกชั่วโมงใช้ [กติกาข้อมูลล่าสุดของหน้าหลัก](../../menus/home/README.md#latest-available-hour): คืนชั่วโมงล่าสุดที่มีและจบแล้วของแต่ละจุด พร้อมวันเวลาจริง ไม่ใช้รายนาทีแทนรายชั่วโมงที่ขาดหาย `hasLatestHourlyMeasurement: false` ไม่ได้หมายความว่าไม่มีค่าเก่า
 
 รายละเอียดการแปลงค่าติดลบ, operational status และเกณฑ์มาตรฐานใช้ contract เดียวกับ [หน้าหลัก](../../menus/home/README.md#get-apiv1operator-factory-dashboard)
 
@@ -157,7 +164,15 @@ Request body: ไม่มี
               "cdate": "2026-08-26",
               "ctime": "21:00:00"
             }
-          ]
+          ],
+          "latestMeasurement": {
+            "date": "2026-08-26",
+            "time": "21:00:00",
+            "freshness": "current",
+            "values": {
+              "CO (ppm)": { "value": 0.1, "displayValue": "0.10", "status": "normal" }
+            }
+          }
         }
       ]
     }
@@ -170,7 +185,7 @@ Request body: ไม่มี
 
 - ค้นด้วยเลขทะเบียนใหม่เท่านั้นและเปรียบเทียบแบบ exact match
 - คืนเฉพาะ active `eligible_factories` ที่มี active connected point ใน `cems_wpms_connected_measurement_points`
-- หากเวลาปัจจุบันตาม `Asia/Bangkok` เป็น `22:xx` ระบบเลือกข้อมูลรอบ `21:00`; ช่วง `00:xx` เลือกรอบ `23:00` ของวันก่อนหน้า
+- หากเวลาปัจจุบันตาม `Asia/Bangkok` เป็น `22:xx` เลือกชั่วโมงล่าสุดที่มีไม่เกิน `21:59`; ช่วง `00:xx` ใช้ไม่เกิน `23:59` ของวันก่อนหน้า หากข้อมูลเก่ากว่าชั่วโมงเป้าหมายคืน `freshness: stale` พร้อมเวลาจริง
 - `data` ไม่คืน `isFavorite` เพราะ API key ไม่ผูกกับผู้ใช้ที่ login
 - response ส่ง `Cache-Control: no-store`; client ไม่ควร cache response และห้าม log `X-API-Key`
 - key ใน `FACTORY_DASHBOARD_API_KEYS` แยกจาก integration endpoints อื่นโดยเด็ดขาด

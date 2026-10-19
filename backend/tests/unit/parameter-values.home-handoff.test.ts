@@ -53,6 +53,10 @@ describe('home handoff measurement calculations', () => {
     repository.tableExists.mockResolvedValue(true);
     repository.earliestMeasurementDate.mockResolvedValue(null);
     repository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    repository.latestRowsAtOrBeforeHour.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [],
+    });
   });
 
   afterEach(() => {
@@ -482,6 +486,75 @@ describe('home handoff measurement calculations', () => {
       { homeHour: true },
     );
     expect(result.data.map((row) => row.ctime)).toEqual(['09:20:00', '09:05:00']);
+  });
+
+  it('falls back across dates to all rows in the latest available completed hour', async () => {
+    const older = { ...hourRow(23), cdate: '2026-09-22', ctime: '23:40:00' };
+    repository.listRows
+      .mockResolvedValueOnce({ tableName: 'S1125_data_60m', rows: [hourRow(10)] })
+      .mockResolvedValueOnce({
+        tableName: 'S1125_data_60m',
+        rows: [
+          { ...older, ctime: '22:00:00' },
+          { ...older, ctime: '23:05:00', co_units: '%' },
+          older,
+        ],
+      });
+    repository.latestRowsAtOrBeforeHour.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [older],
+    });
+    const result = await parameterValuesService.latestHourly(
+      'S1125',
+      access,
+      { date: '2026-09-23', hour: 9 },
+      { homeHour: true },
+    );
+    expect(result.data.map((row) => row.ctime)).toEqual(['23:40:00', '23:05:00']);
+    expect(repository.latestRowsAtOrBeforeHour).toHaveBeenCalledWith(
+      { stationId: 'S1125', interval: '60m' },
+      { date: '2026-09-23', hour: 9 },
+    );
+  });
+
+  it('keeps explicit source noData instead of falling back to an older normal hour', async () => {
+    const row = { ...hourRow(9), co_value: null, co_status: 0 };
+    repository.listRows.mockResolvedValue({ tableName: 'S1125_data_60m', rows: [row] });
+    const result = await parameterValuesService.latestHourly(
+      'S1125',
+      access,
+      { date: '2026-09-23', hour: 9 },
+      { homeHour: true },
+    );
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].co_status).toBe(0);
+    expect(repository.latestRowsAtOrBeforeHour).not.toHaveBeenCalled();
+  });
+
+  it('uses an earlier completed hour on the same day and excludes unfinished hours', async () => {
+    repository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [hourRow(7), hourRow(10), { ...hourRow(8), ctime: '08:35:00' }],
+    });
+    const result = await parameterValuesService.latestHourly(
+      'S1125',
+      access,
+      { date: '2026-09-23', hour: 9 },
+      { homeHour: true },
+    );
+    expect(result.data.map((row) => row.ctime)).toEqual(['08:35:00']);
+    expect(repository.latestRowsAtOrBeforeHour).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty hourly snapshot when no completed history exists', async () => {
+    repository.listRows.mockResolvedValue({ tableName: 'S1125_data_60m', rows: [hourRow(10)] });
+    const result = await parameterValuesService.latestHourly(
+      'S1125',
+      access,
+      { date: '2026-09-23', hour: 9 },
+      { homeHour: true },
+    );
+    expect(result.data).toEqual([]);
   });
 
   it('keeps 191 of 240 parameter-hours below the 80 percent threshold before display rounding', async () => {

@@ -4992,6 +4992,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'parameters',
       'parameterStandards',
       'data',
+      'latestMeasurement',
     ],
     properties: {
       ...pomsManagedStatusProperties,
@@ -5012,10 +5013,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         items: schemaRef('FactoryDashboardParameterStandard'),
       },
+      latestMeasurement: schemaRef('HomeLatestMeasurement'),
       data: {
         type: 'array',
         description:
-          'ข้อมูลชั่วโมงที่คำนวณเสร็จล่าสุด; key ของค่าตรวจวัดเป็นชื่อพารามิเตอร์พร้อมหน่วย และ operational status อาจเป็น string',
+          'ข้อมูลชั่วโมงล่าสุดที่มีและจบแล้ว โดยคง cdate/ctime จริง อาจเป็นข้อมูลเก่า ใช้ latestMeasurement.freshness ตรวจ current/stale/noData; key ของค่าตรวจวัดเป็นชื่อพารามิเตอร์พร้อมหน่วย และ operational status อาจเป็น string',
         items: {
           type: 'object',
           additionalProperties: {
@@ -7087,7 +7089,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         summary: 'Get latest hourly dashboard for one connected factory',
         operationId: 'getIntegrationFactoryDashboard',
         description:
-          'คืนโรงงาน current/live หนึ่งแห่งและข้อมูลชั่วโมงที่คำนวณเสร็จล่าสุดตาม Asia/Bangkok; response ไม่คืน isFavorite และใช้ Cache-Control: no-store',
+          'คืนโรงงาน current/live หนึ่งแห่งและข้อมูลรายชั่วโมงล่าสุดที่มีและจบแล้วตาม Asia/Bangkok; cdate/ctime เป็นเวลาตรวจวัดจริง latestMeasurement.freshness แยก current/stale/noData ไม่มีตารางรายชั่วโมงไม่ใช้ค่ารายนาทีแทน; response ไม่คืน isFavorite และใช้ Cache-Control: no-store',
         parameters: [factoryRegistrationNoParameter],
         successSchema: schemaRef('IntegrationFactoryDashboardResponse'),
         extraResponses: {

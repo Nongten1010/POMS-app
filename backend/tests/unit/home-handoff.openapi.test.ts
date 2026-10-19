@@ -239,10 +239,20 @@ describe('home handoff OpenAPI contract', () => {
     expect(propertiesFor('HomePublicFactoryRow').isFavorite).toBeUndefined();
     expect(objectAt(schemas, 'HomeOperatorFactoryRow').required).toContain('isFavorite');
     expect(schemas.HomeFactoryMeasurementPoint).not.toBe(schemas.FactoryDashboardMeasurementPoint);
-    expect(propertiesFor('FactoryDashboardMeasurementPoint').latestMeasurement).toBeUndefined();
+    expect(propertiesFor('FactoryDashboardMeasurementPoint').latestMeasurement).toEqual({
+      $ref: '#/components/schemas/HomeLatestMeasurement',
+    });
   });
 
-  it('requires the completed-hour popup and filters empty home factories', () => {
+  it('documents real nullable timestamps and freshness for the latest available hourly snapshot', () => {
+    const required = objectAt(schemas, 'HomeFactoryMeasurementPoint').required;
+    if (!Array.isArray(required)) throw new Error('Expected required fields');
+    expect(required).toEqual([...new Set(required)]);
+    expect(propertiesFor('HomeLatestMeasurement').date).toMatchObject({ nullable: true });
+    expect(propertiesFor('HomeLatestMeasurement').time).toMatchObject({ nullable: true });
+    expect(propertiesFor('HomeLatestMeasurement').freshness).toMatchObject({
+      enum: ['current', 'stale', 'noData'],
+    });
     expect(objectAt(schemas, 'HomeFactoryMeasurementPoint').required).toContain(
       'latestMeasurement',
     );
@@ -263,8 +273,9 @@ describe('home handoff OpenAPI contract', () => {
     expect(points[0]).toMatchObject({
       data: [],
       latestMeasurement: {
-        date: '2026-09-23',
-        time: '09:00:00',
+        date: null,
+        time: null,
+        freshness: 'noData',
         values: { 'CO (ppm)': { value: null, status: 'noData' } },
       },
     });

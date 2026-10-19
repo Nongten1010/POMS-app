@@ -631,8 +631,9 @@ export interface OperatorFactoryMeasurementPointDTO extends Partial<PomsManagedS
   parameterStandards: OperatorFactoryParameterStandardDTO[];
   data: Record<string, unknown>[];
   latestMeasurement?: {
-    date: string;
-    time: string;
+    date: string | null;
+    time: string | null;
+    freshness: 'current' | 'stale' | 'noData';
     values: Record<string, MeasurementStatisticValueDTO>;
   };
 }
