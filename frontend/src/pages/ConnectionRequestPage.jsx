@@ -1507,7 +1507,15 @@ function buildContactPersons(formData) {
   })).filter((contact) => contact.name || contact.position || contact.phone || contact.email)
 }
 
-function formatApiErrorMessage(response, fallbackMessage) {
+function formatApiErrorMessage(response, fallbackMessage, httpStatus) {
+  if (httpStatus === 503) {
+    const detail = response?.error?.message || response?.message
+    return [
+      'ระบบยังไม่สามารถดำเนินการให้สำเร็จได้ (HTTP 503)',
+      typeof detail === 'string' ? detail : '',
+      'กรุณาตรวจสอบสถานะคำขอก่อนลองอีกครั้ง หากยังพบปัญหาให้ติดต่อผู้ดูแลระบบ',
+    ].filter(Boolean).join('\n')
+  }
   const issues = Array.isArray(response?.error?.issues) ? response.error.issues : []
   if (issues.length) {
     return issues
@@ -7442,7 +7450,7 @@ export function RequestFormBottomSheet({
       }
 
       if (!result.ok || response?.success === false) {
-        throw new Error(formatApiErrorMessage(response, `ส่งแบบฟอร์มไม่สำเร็จ (${result.status} ${result.statusText})`))
+        throw new Error(formatApiErrorMessage(response, `ส่งแบบฟอร์มไม่สำเร็จ (${result.status} ${result.statusText})`, result.status))
       }
 
       closeSubmitConfirm()
@@ -8684,7 +8692,7 @@ function ConnectionRequestPage({
         const payload = await result.json().catch(() => null)
 
         if (!result.ok) {
-          throw new Error(payload?.message || `อนุมัติคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
+          throw new Error(formatApiErrorMessage(payload, `อนุมัติคำขอไม่สำเร็จ (${result.status} ${result.statusText})`, result.status))
         }
 
         await loadRequestTableRows()
@@ -8733,7 +8741,7 @@ function ConnectionRequestPage({
         const payload = await result.json().catch(() => null)
 
         if (!result.ok) {
-          throw new Error(payload?.error?.message || payload?.message || `ยืนยันการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`)
+          throw new Error(formatApiErrorMessage(payload, `ยืนยันการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`, result.status))
         }
 
         await loadRequestTableRows()
@@ -9325,6 +9333,7 @@ function ConnectionRequestPage({
       >
         <DialogTitle>ยืนยันการอนุมัติ</DialogTitle>
         <DialogContent dividers>
+          {requestDocumentError && <Alert severity="error" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{requestDocumentError}</Alert>}
           {isAddParameterRequest(requestDocument) ? (
             <Typography>ยืนยันการอนุมัติคำขอเพิ่มพารามิเตอร์{requestDocument?.requestNo ? ` เลขที่ ${requestDocument.requestNo}` : ''} หรือไม่?</Typography>
           ) : (
@@ -9507,6 +9516,7 @@ function ConnectionRequestPage({
       <Dialog open={verifyConnectionConfirmOpen} onClose={closeVerifyConnectionConfirmDialog} fullWidth maxWidth="sm">
         <DialogTitle>ยืนยันการเชื่อมต่อ</DialogTitle>
         <DialogContent dividers>
+          {requestDocumentError && <Alert severity="error" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{requestDocumentError}</Alert>}
           <Typography>เมื่อยืนยันการเชื่อมต่อ จุดตรวจวัดนี้จะแสดงผลในระบบ D-POMS</Typography>
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'center' }}>

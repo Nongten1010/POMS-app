@@ -36,6 +36,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
           return `${code}\nexport { renderGeneralFactorySection, renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
         }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
+          code += '\nexport { formatApiErrorMessage };'
           return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapOperatorFactoryRow, mapRequestDetailRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
         }
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
@@ -52,6 +53,24 @@ test('add-parameter form and payload preserve live groups without affecting othe
       mapOperatorFactoryRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
       getAssignedRequestPointCodes,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('activation failures display 503 safely and retain existing API error details', async () => {
+      const { formatApiErrorMessage } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+      for (const payload of [null, '<html>Service unavailable</html>', { error: { message: 'Unable to confirm cleanup' } }]) {
+        const message = formatApiErrorMessage(payload, 'fallback', 503)
+        assert.match(message, /HTTP 503/)
+        assert.match(message, /ตรวจสอบสถานะคำขอ/)
+        assert.ok(!message.includes('<html>'))
+        if (payload?.error) assert.ok(message.includes(payload.error.message))
+      }
+      assert.equal(formatApiErrorMessage({ error: { message: 'denied' } }, 'fallback', 403), 'denied')
+      assert.equal(formatApiErrorMessage({ error: { issues: [{ pathString: 'field', message: 'invalid' }] } }, 'fallback', 400), 'field: invalid')
+      const source = await readFile(new URL('../pages/ConnectionRequestPage.jsx', import.meta.url), 'utf8')
+      for (const title of ['ยืนยันการอนุมัติ', 'ยืนยันการเชื่อมต่อ']) {
+        const content = source.slice(source.indexOf(`<DialogTitle>${title}</DialogTitle>`))
+        assert.match(content.slice(0, content.indexOf('</DialogContent>')), /requestDocumentError.*<Alert severity="error"/)
+      }
+    })
 
     await t.test('numeric commas are removed for connection and point-edit payloads without altering text or form inputs', async () => {
       const { buildMeasurementPointsPayload } = await server.ssrLoadModule('/src/pages/MasterDataPage.jsx')
