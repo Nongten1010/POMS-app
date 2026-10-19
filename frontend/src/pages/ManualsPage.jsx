@@ -15,7 +15,7 @@ import DownloadIcon from '@mui/icons-material/Download'
 const officerManualUrl = new URL('../manuals/คู่มือ สำหรับเจ้าหน้าที่.pdf', import.meta.url).href
 const operatorManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ประกอบการ-v3.1.pdf', import.meta.url).href
 const adminManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ดูแลระบบ.pdf', import.meta.url).href
-const dpomsClientUrl = new URL('../download/DPOMS_Client_v0.8.3b.zip', import.meta.url).href
+const dpomsClientUrl = new URL('../download/D-POMS_Client_v0.8.5b.zip', import.meta.url).href
 
 function getAvailableManuals(userType = '', roleCode = '') {
   const isOperator = userType === 'operator'
@@ -79,7 +79,7 @@ function ManualsPage({ userType = '', roleCode = '' }) {
               <Button
                 component="a"
                 href={dpomsClientUrl}
-                download="DPOMS_Client_v0.8.3b.zip"
+                download="D-POMS_Client_v0.8.5b.zip"
                 variant="contained"
                 startIcon={<DownloadIcon />}
               >

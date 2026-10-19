@@ -1958,12 +1958,16 @@ function compactDefinedObject(object = {}) {
   )
 }
 
+function stripNumericCommas(value) {
+  return typeof value === 'string' ? value.replaceAll(',', '') : value
+}
+
 function toPayloadNumberOrNull(value) {
   if (value === '' || value === null || value === undefined) {
     return null
   }
 
-  const numericValue = Number(value)
+  const numericValue = Number(stripNumericCommas(value))
   return Number.isNaN(numericValue) ? null : numericValue
 }
 
@@ -1974,7 +1978,7 @@ function normalizeCriteriaPayload(criteria) {
 
   return {
     enabled: Boolean(criteria.enabled),
-    standardValue: criteria.standardValue ?? '',
+    standardValue: stripNumericCommas(criteria.standardValue ?? ''),
     rows: (criteria.rows ?? []).map((row) => ({
       level: row.level,
       min: toPayloadNumberOrNull(row.min),
@@ -2151,6 +2155,23 @@ function buildMeasurementPointRequestBody(
   instrumentRows = [],
   options = {},
 ) {
+  // Normalize only numeric form fields; keep text and the original FormData intact.
+  if (formData) {
+    const normalized = new FormData()
+    const numericFields = new Set([
+      'latitude', 'longitude', 'productionCapacityValue',
+      'averageWastewaterDischarge', 'minWastewaterDischarge', 'maxWastewaterDischarge',
+      'maxTreatmentCapacity', 'instrumentLatitude', 'instrumentLongitude',
+      'dischargeLatitude', 'dischargeLongitude', 'stackDiameter', 'stackWidth',
+      'stackLength', 'stackHeight', 'monitoringHeight', 'averageFlowRate',
+      'minFlowRate', 'maxFlowRate', 'primaryFuelPercent', 'secondaryFuelPercent',
+      'stackLatitude', 'stackLongitude',
+    ])
+    for (const [key, value] of formData.entries()) {
+      normalized.append(key, numericFields.has(key) ? stripNumericCommas(value) : value)
+    }
+    formData = normalized
+  }
   const isWpms = monitoringPointType === 'WPMS'
   const systemType = isWpms ? 'WPMS' : 'CEMS'
   const contactPersons = buildContactPersons(formData)

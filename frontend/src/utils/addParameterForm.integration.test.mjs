@@ -38,6 +38,9 @@ test('add-parameter form and payload preserve live groups without affecting othe
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
           return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapOperatorFactoryRow, mapRequestDetailRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
         }
+        if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
+          return `${code.replace("window.location.hostname === 'localhost'", 'true')}\nexport { buildMeasurementPointsPayload };`
+        }
       },
     }],
   })
@@ -49,6 +52,48 @@ test('add-parameter form and payload preserve live groups without affecting othe
       mapOperatorFactoryRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
       getAssignedRequestPointCodes,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('numeric commas are removed for connection and point-edit payloads without altering text or form inputs', async () => {
+      const { buildMeasurementPointsPayload } = await server.ssrLoadModule('/src/pages/MasterDataPage.jsx')
+      for (const system of ['CEMS', 'WPMS']) {
+        for (const options of [{}, { addParameterConnectedParameters: [] }]) {
+          const form = new FormData()
+          const numeric = system === 'CEMS'
+            ? ['stackDiameter', 'stackWidth', 'stackLength', 'stackHeight', 'monitoringHeight', 'averageFlowRate', 'minFlowRate', 'maxFlowRate', 'primaryFuelPercent', 'secondaryFuelPercent', 'stackLatitude', 'stackLongitude']
+            : ['averageWastewaterDischarge', 'minWastewaterDischarge', 'maxWastewaterDischarge', 'maxTreatmentCapacity', 'instrumentLatitude', 'instrumentLongitude', 'dischargeLatitude', 'dischargeLongitude']
+          for (const key of [...numeric, 'latitude', 'longitude', 'productionCapacityValue']) form.set(key, '1,234.56')
+          form.set('pointName', 'Point, unchanged')
+          form.set('productionCapacityUnit', 'unit, unchanged')
+          form.set('requestedParameters', 'BOD (mg/l)')
+          const instrument = { parameter: 'BOD (mg/l)', brand: 'Brand, unchanged', standardCriteria: { enabled: true, standardValue: '2,000.5', rows: [{ level: 'normal', min: '-1,000.5', max: '2,000.5' }] } }
+          const body = buildMeasurementPointRequestBody({}, system, form, [], [instrument], options)
+          const point = body.measurementPoints[0]
+          for (const key of numeric) assert.equal(point.details[key], 1234.56, key)
+          assert.equal(body.latitude, 1234.56)
+          assert.equal(body.longitude, 1234.56)
+          assert.equal(point.pointName, 'Point, unchanged')
+          assert.equal(form.get(numeric[0]), '1,234.56')
+          if (system === 'CEMS') {
+            assert.equal(point.details.productionCapacityValue, '1234.56')
+            assert.equal(point.details.productionCapacityUnit, 'unit, unchanged')
+          }
+          const parameter = point.measurementInstruments.parameters[0]
+          assert.equal(parameter.brand, 'Brand, unchanged')
+          assert.equal(parameter.standardCriteria.standardValue, '2000.5')
+          assert.equal(parameter.standardCriteria.rows[0].min, -1000.5)
+          assert.equal(parameter.standardCriteria.rows[0].max, 2000.5)
+          assert.equal(instrument.standardCriteria.standardValue, '2,000.5')
+          const edit = buildMeasurementPointsPayload({ ...body, latitude: 13.75, longitude: 100.5 }, { measurementPoints: [{ connectedPointId: 1 }] })
+          assert.deepEqual(edit.measurementPoints[0].details, point.details)
+          assert.deepEqual(edit.measurementPoints[0].measurementInstruments, point.measurementInstruments)
+        }
+      }
+      for (const [value, expected] of [['', null], ['0', 0], ['12.5', 12.5], ['-12.5', -12.5], ['invalid', null]]) {
+        const form = new FormData()
+        form.set('averageFlowRate', value)
+        assert.equal(buildMeasurementPointRequestBody({}, 'CEMS', form).measurementPoints[0].details.averageFlowRate, expected)
+      }
+    })
 
     await t.test('industrial-estate mapper, snapshot and PDF keep one authoritative source', async () => {
       const current = mapOperatorFactoryRow({
