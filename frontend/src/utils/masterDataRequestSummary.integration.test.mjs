@@ -43,6 +43,30 @@ test('master-data request summaries keep target identities separate from full de
     }
     const map = (overrides = {}) => mapEditRequestRows([{ ...summary, ...overrides }])[0]
 
+    await t.test('process action requires approval permission for officers and admins and an actionable status', () => {
+      for (const isAdmin of [false, true]) {
+        for (const canReviewRequest of [false, true]) {
+          const columns = getPageRequestColumns(undefined, undefined, undefined, isAdmin, { isOfficer: true, canReviewRequest })
+          const actions = columns.find((column) => column.field === 'actions')
+          for (const [status, statusCode, enabled] of [
+            ['รอพิจารณา', 'PENDING_REVIEW', true],
+            ['แก้ไขแล้ว/รอพิจารณา', 'RESUBMITTED', true],
+            ['รอโรงงานแก้ไข', 'REVISION_REQUESTED', false],
+            ['รอพิจารณา', 'APPROVED', false],
+            ['รอพิจารณา', 'REJECTED', false],
+            ['รอพิจารณา', 'CANCELLED', false],
+          ]) {
+            const html = renderToStaticMarkup(actions.renderCell({ row: { status, statusCode } }))
+            const button = html.match(/<button\b[^>]*>ดำเนินการ<\/button>/)?.[0]
+            assert.equal(Boolean(button), canReviewRequest)
+            if (button) assert.equal(button.includes('disabled=""'), !enabled)
+          }
+        }
+      }
+      const columns = getPageRequestColumns(undefined, undefined, undefined, false, { canReviewRequest: true })
+      assert.ok(!renderToStaticMarkup(columns.find((column) => column.field === 'actions').renderCell({ row: map() })).includes('ดำเนินการ'))
+    })
+
     await t.test('request 48 shows the selected CEMS point regardless of snapshot order', () => {
       for (const points of [[wpms, cems], [cems, wpms]]) {
         const row = map({ currentMeasurementPoints: points, proposedMeasurementPoints: points })

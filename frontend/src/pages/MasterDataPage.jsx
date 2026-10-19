@@ -778,6 +778,7 @@ function canSubmitMasterDataForm(factory, { isAdmin, isOperator, canEditRevision
 function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, isAdmin = false, {
   isOfficer = false,
   canEditRequest = false,
+  canReviewRequest = false,
   onEditRevisionRequest,
 } = {}) {
   return [
@@ -819,14 +820,14 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, is
           </Button>
           {isAdmin || isOfficer ? (
             <>
-              <Button
+              {canReviewRequest && <Button
                 size="small"
                 variant="contained"
-                disabled={!isAdmin || isTerminalProcessRequest(params.row) || !actionableRequestStatuses.includes(params.row.status)}
+                disabled={isTerminalProcessRequest(params.row) || !actionableRequestStatuses.includes(params.row.status)}
                 onClick={() => onEditRequest?.(params.row)}
               >
                 ดำเนินการ
-              </Button>
+              </Button>}
               <Button
                 size="small"
                 variant="outlined"
@@ -2342,6 +2343,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     ? countPendingFactoryEditRequests(requestRows, { isOperator, isOfficer, isAdmin })
     : 0
   const canEditRevision = (isAdmin || isOfficer) && permissions?.factories?.edit === true
+  const canReviewRequest = (isAdmin || isOfficer) && permissions?.factories?.approve === true
   const canSubmitMeasurementRequest = canSubmitMasterDataForm(editingFactory, { isAdmin, isOperator, canEditRevision })
   const canSubmitGeneralRequest = canSubmitMasterDataForm(editingGeneralFactory, { isAdmin, isOperator, canEditRevision })
   const visibleSubMenus = useMemo(
@@ -2661,6 +2663,9 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     setActionLoading(true)
     setTableError('')
     try {
+      if (review && !canReviewRequest) {
+        throw new Error('ไม่มีสิทธิ์พิจารณาคำขอ')
+      }
       if (review && isTerminalProcessRequest(request)) {
         throw new Error('ไม่สามารถดำเนินการคำขอที่สิ้นสุดแล้วได้')
       }
@@ -2678,7 +2683,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     } finally {
       setActionLoading(false)
     }
-  }, [loadRequestDetail])
+  }, [loadRequestDetail, canReviewRequest])
 
   const columns = useMemo(
     () => getFactoryColumns(handleOpenFactory, handleEditGeneralFactory, handleManageFactoryStatus, isAdmin),
@@ -2687,12 +2692,12 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   const pageRequestColumns = useMemo(
     () => getPageRequestColumns(
       (request) => handleOpenRequest(request, false),
-      isAdmin ? (request) => handleOpenRequest(request, true) : handleEditRequest,
+      isAdmin || isOfficer ? (request) => handleOpenRequest(request, true) : handleEditRequest,
       setCancelRequestTarget,
       isAdmin,
-      { isOfficer, canEditRequest: canEditRevision, onEditRevisionRequest: handleEditRequest },
+      { isOfficer, canEditRequest: canEditRevision, canReviewRequest, onEditRevisionRequest: handleEditRequest },
     ),
-    [handleEditRequest, handleOpenRequest, isAdmin, isOfficer, canEditRevision],
+    [handleEditRequest, handleOpenRequest, isAdmin, isOfficer, canEditRevision, canReviewRequest],
   )
 
   const submitFactoryEditRequest = useCallback(async (factory, body) => {
@@ -2839,6 +2844,12 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   }
 
   const reviewEditRequest = useCallback(async (decision, reason = '') => {
+    if (!canReviewRequest) {
+      const message = 'ไม่มีสิทธิ์พิจารณาคำขอ'
+      if (decision === 'REQUEST_REVISION') setRevisionDialogError(message)
+      else setReviewConfirmError(message)
+      return
+    }
     const requestId = reviewingRequest?.requestId ?? reviewingRequest?.id
     if (!accessToken || !requestId) {
       const message = 'ไม่พบรหัสคำขอสำหรับพิจารณา'
@@ -2895,7 +2906,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
     } finally {
       setActionLoading(false)
     }
-  }, [accessToken, loadFactories, loadRequests, reviewingRequest])
+  }, [accessToken, loadFactories, loadRequests, reviewingRequest, canReviewRequest])
 
   return (
     <>
