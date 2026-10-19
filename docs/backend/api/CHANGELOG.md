@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="connection-test-latest-minute-rows"></a>
+
+## 2026-10-19 — ทดสอบการเชื่อมต่อด้วยข้อมูลรายนาทีล่าสุด 10 แถว
+
+- **Affected canonical docs:** [Parameter values: connection-test](./menus/connection-requests/parameter-values.md#get-apiv1parameter-valuesconnection-test)
+- **Impact:** `GET /parameter-values/connection-test?stationId=...` เปลี่ยน source เป็น `<stationId>_data_1m` และคืนสูงสุด 10 แถวล่าสุด เรียง `cdate DESC, ctime DESC`; `meta.interval` เป็น `1m` และ `meta.tableName` เป็นตารางรายนาที
+- **Migration:** client รองรับ `meta.interval=1m` และรายการได้ถึง 10 แถว; คงใช้วันเวลาจาก `data[].timestamp` และ `values`/`statuses` ตามชื่อพารามิเตอร์พร้อมหน่วย ไม่มี migration ฐานข้อมูล; ถ้าไม่มีตารางรายนาทีตอบ `404 NOT_FOUND` ให้ตรวจแหล่งข้อมูลรายนาที ไม่อ่านตาราง `test` แทน หลัง deploy ตรวจ `/api/v1/openapi.json` และผล API ให้ตรงกับ contract นี้
+- **Old contract:** อ่าน `<stationId>_data_test` สูงสุด 5 แถว และ `meta.interval=test`
+- **New contract:** อ่าน `<stationId>_data_1m` สูงสุด 10 แถวล่าสุดที่มี แม้ข้อมูลเก่า; ถ้ามีน้อยกว่า 10 แถวคืนเท่าที่มี ตารางว่างคืน `[]` และ `count=0`; URL, query, auth, scope และการจัดรูปแบบค่า/สถานะคงเดิม
+- **Breaking change:** yes — เปลี่ยนแหล่งข้อมูล จำนวนแถวสูงสุด และค่า metadata ของ endpoint เดิม
+
 <a id="home-latest-available-hour"></a>
 
 ## 2026-10-19 — หน้าหลักคืนข้อมูลรายชั่วโมงล่าสุดที่มีพร้อมอายุข้อมูล

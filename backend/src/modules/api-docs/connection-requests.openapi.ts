@@ -2422,6 +2422,70 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     ],
   },
+  ParameterConnectionTestResponse: {
+    type: 'object',
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'array',
+        maxItems: 10,
+        description:
+          'สูงสุด 10 แถวล่าสุดจาก <stationId>_data_1m เรียง cdate DESC, ctime DESC; คืน [] เมื่อตารางไม่มีแถว',
+        items: {
+          type: 'object',
+          required: ['timestamp', 'values', 'statuses'],
+          properties: {
+            timestamp: {
+              type: 'string',
+              nullable: true,
+              description:
+                'วันเวลาจริงจาก source row; ใช้ cdate/ctime หรือ udate/utime เมื่อไม่มี cdate',
+              example: '2026-10-19 10:15:00',
+            },
+            values: {
+              type: 'object',
+              additionalProperties: {},
+              description:
+                'key เป็นชื่อพารามิเตอร์พร้อมหน่วยจาก registeredParameters; คืนค่าตรวจวัดเมื่อ status เป็น 1, Ok หรือ Normal; สถานะอื่นคืนชื่อสถานะแทน และรองรับค่าเดิมของ source รุ่นเก่าที่ไม่มีหรือไม่รู้จัก status; null เมื่อไม่มีคอลัมน์พารามิเตอร์',
+              example: { 'CO (ppm)': '12.5', 'NOx (ppm)': 'Shut Down' },
+            },
+            statuses: {
+              type: 'object',
+              additionalProperties: {},
+              description:
+                'key เป็นชื่อพารามิเตอร์พร้อมหน่วย; StatusCode 0–9 แปลงเป็น NoData, Ok, Calibration, Defective, Maintenance, Start up, Shut Down, Turnaround, Etc., No Discharge ตามลำดับ; status เดิมที่ไม่รู้จักคงค่าเดิม และคืน null เมื่อไม่มี',
+              example: { 'CO (ppm)': 'Ok', 'NOx (ppm)': 'Shut Down' },
+            },
+          },
+        },
+      },
+      meta: {
+        type: 'object',
+        required: [
+          'stationId',
+          'interval',
+          'schemaName',
+          'tableName',
+          'count',
+          'registeredParameters',
+        ],
+        properties: {
+          stationId: { type: 'string', example: 'S2003' },
+          interval: { type: 'string', enum: ['1m'] },
+          schemaName: { type: 'string', example: 'ingest' },
+          tableName: { type: 'string', example: 'S2003_data_1m' },
+          count: { type: 'integer', minimum: 0, maximum: 10 },
+          registeredParameters: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'ชื่อพารามิเตอร์พร้อมหน่วยที่ลงทะเบียนและผู้เรียกมีสิทธิ์',
+            example: ['CO (ppm)', 'NOx (ppm)'],
+          },
+        },
+      },
+    },
+  },
   DeviceConnectionTestResponse: {
     type: 'object',
     additionalProperties: false,
@@ -3347,11 +3411,35 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
   '/parameter-values/connection-test': {
     get: securedOperation({
       tag: 'ทดสอบข้อมูล',
-      summary: 'อ่านข้อมูลทดสอบล่าสุด',
+      summary: 'อ่านข้อมูลรายนาทีล่าสุดไม่เกิน 10 แถวเพื่อทดสอบการเชื่อมต่อ',
       operationId: 'getParameterConnectionTest',
       description:
-        'Permission: cems_wpms_requests:view. คืนล่าสุดไม่เกิน 5 rows และ map values/statuses ด้วยชื่อพารามิเตอร์พร้อมหน่วย',
+        'Permission: cems_wpms_requests:view. อ่าน <stationId>_data_1m ล่าสุดไม่เกิน 10 แถว เรียง cdate DESC, ctime DESC และ map values/statuses ด้วยชื่อพารามิเตอร์พร้อมหน่วย. ใช้ได้กับ current connected point หรือจุดในคำขอ WAITING_CONNECTION ที่ผู้เรียกมีสิทธิ์. ไม่มีตารางรายนาทีตอบ 404; ไม่อ่านตาราง test แทน',
       parameters: [parameterValueStationIdQuery],
+      successSchema: schemaRef('ParameterConnectionTestResponse'),
+      successExamples: {
+        latestMinuteRows: {
+          summary: 'ตัวอย่างเมื่อมีข้อมูลรายนาที 1 แถว',
+          value: {
+            success: true,
+            data: [
+              {
+                timestamp: '2026-10-19 10:15:00',
+                values: { 'CO (ppm)': '12.5', 'NOx (ppm)': 'Shut Down' },
+                statuses: { 'CO (ppm)': 'Ok', 'NOx (ppm)': 'Shut Down' },
+              },
+            ],
+            meta: {
+              stationId: 'S2003',
+              interval: '1m',
+              schemaName: 'ingest',
+              tableName: 'S2003_data_1m',
+              count: 1,
+              registeredParameters: ['CO (ppm)', 'NOx (ppm)'],
+            },
+          },
+        },
+      },
     }),
   },
   '/parameter-values/latest': {
