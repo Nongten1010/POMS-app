@@ -36,7 +36,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
           return `${code}\nexport { renderGeneralFactorySection, renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
         }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          code += '\nexport { formatApiErrorMessage };'
+          code += '\nexport { formatApiErrorMessage, canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows };'
           return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapOperatorFactoryRow, mapRequestDetailRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
         }
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
@@ -53,6 +53,22 @@ test('add-parameter form and payload preserve live groups without affecting othe
       mapOperatorFactoryRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
       getAssignedRequestPointCodes,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('staff test data is limited to waiting connection and uses device test mapping', async () => {
+      const { canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+      assert.equal(canShowRequestConnectionTest({ statusCode: 'CONNECTION_CONFIRMED' }, true), true)
+      assert.equal(canShowRequestConnectionTest({ status: 'รอเชื่อมต่อ' }, true), true)
+      assert.equal(canShowRequestConnectionTest({ statusCode: 'CONNECTION_CONFIRMED' }, false), false)
+      for (const statusCode of ['PENDING_DESIGN_REVIEW', 'WAITING_CONNECTION', 'CONNECTED', 'REJECTED', 'CANCELLED', 'WAITING_FACTORY_DEVICE_CONFIG']) {
+        assert.equal(canShowRequestConnectionTest({ statusCode, status: 'รอเชื่อมต่อ' }, true), false)
+      }
+      assert.equal(canShowRequestConnectionTest(null, true), false)
+      assert.ok(getConnectionTestApiUrl('S0001').endsWith('/connection-test?stationId=S0001'))
+      const [row] = mapTestResultRows([{ values: { 'BOD (mg/l)': 4 }, statuses: { 'BOD (mg/l)': 'Normal' }, timestamp: '2026-10-19 10:00:00' }])
+      assert.equal(row.values['BOD (mg/l)'], 4)
+      assert.equal(row.statuses['BOD (mg/l)'], 'Normal')
+      assert.equal(row.timestamp, '2026-10-19 10:00:00')
+    })
 
     await t.test('activation failures display 503 safely and retain existing API error details', async () => {
       const { formatApiErrorMessage } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')

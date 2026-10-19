@@ -44,6 +44,7 @@ import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import DescriptionIcon from '@mui/icons-material/Description'
 import HistoryIcon from '@mui/icons-material/History'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import LinkIcon from '@mui/icons-material/Link'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
@@ -3340,6 +3341,7 @@ export function RequestDocumentDialog({
   onRequestRevision,
   onClose,
   contentHeader,
+  contentAfterPdf,
   footerContent,
   footerActions,
   pdfPreviewUrl,
@@ -3535,7 +3537,7 @@ export function RequestDocumentDialog({
           ...(hasPdfPreviewContent
             ? {
                 minHeight: { xs: '70vh', md: '78vh' },
-                overflow: 'hidden',
+                overflow: contentAfterPdf ? 'auto' : 'hidden',
               }
             : {}),
         }}
@@ -3598,6 +3600,7 @@ export function RequestDocumentDialog({
             }}
           />
         ) : null}
+        {contentAfterPdf}
       </DialogContent>
       {footerContent || footerActions ? (
         <DialogActions sx={{ display: 'block', px: 3, py: 2 }}>
@@ -4391,6 +4394,86 @@ function mapTestResultRows(testResults = []) {
     statuses: result.statuses ?? result.parameterStatuses ?? result.statusByParameter ?? {},
     timestamp: result.timestamp ?? result.createdAt ?? result.testedAt ?? '',
   }))
+}
+
+function canShowRequestConnectionTest(request, isStaff) {
+  return Boolean(isStaff) && getRequestActionStatuses(request).some((status) => (
+    ['CONNECTION_CONFIRMED', 'รอเชื่อมต่อ'].includes(status)
+  ))
+}
+
+function RequestConnectionTestPanel({ request, accessToken }) {
+  const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
+  const [selectedCode, setSelectedCode] = useState('')
+  const stationId = points.some((point) => getMonitoringPointCode(point) === selectedCode)
+    ? selectedCode : getMonitoringPointCode(points[0])
+  const [refresh, setRefresh] = useState(0)
+  const [result, setResult] = useState({ loading: true, rows: [], parameters: [], error: '' })
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let active = true
+    async function load() {
+      setResult({ loading: true, rows: [], parameters: [], error: '' })
+      try {
+        if (!stationId) throw new Error('ไม่พบรหัสจุดตรวจวัดสำหรับแสดงข้อมูลทดสอบ')
+        if (!accessToken) throw new Error('กรุณาเข้าสู่ระบบเพื่อดูข้อมูลทดสอบ')
+        const response = await fetch(getConnectionTestApiUrl(stationId), {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        })
+        const payload = await response.json().catch(() => null)
+        if (!response.ok || payload?.success === false) {
+          throw new Error(formatApiErrorMessage(payload, `โหลดข้อมูลทดสอบไม่สำเร็จ (${response.status})`))
+        }
+        const rows = mapTestResultRows(Array.isArray(payload?.data) ? payload.data : [])
+        const registered = payload?.meta?.registeredParameters
+        const parameters = Array.isArray(registered) && registered.length
+          ? registered : [...new Set(rows.flatMap((row) => Object.keys(row.values)))]
+        if (active) setResult({ loading: false, rows, parameters, error: '' })
+      } catch (error) {
+        if (active) setResult({ loading: false, rows: [], parameters: [], error: error.message })
+      }
+    }
+    load()
+    return () => { active = false; controller.abort() }
+  }, [stationId, accessToken, refresh])
+
+  return (
+    <Box component="details" open sx={{ mt: 2, bgcolor: 'background.paper', p: 2 }}>
+      <Typography component="summary" sx={{ fontWeight: 700, cursor: 'pointer' }}>ข้อมูลทดสอบการส่งข้อมูล</Typography>
+      <Stack spacing={2} sx={{ mt: 2 }}>
+        <Stack direction="row" sx={{ gap: 2, alignItems: 'center' }}>
+          <TextField select label="จุดตรวจวัด" size="small" fullWidth value={stationId || ''} onChange={(event) => setSelectedCode(event.target.value)} disabled={!points.length}>
+            {points.filter((point) => getMonitoringPointCode(point)).map((point) => (
+              <MenuItem key={getMonitoringPointCode(point)} value={getMonitoringPointCode(point)}>
+                {getMonitoringPointCode(point)}{point.pointName ? ` - ${point.pointName}` : ''}
+              </MenuItem>
+            ))}
+          </TextField>
+          <IconButton aria-label="รีเฟรชข้อมูลทดสอบ" title="รีเฟรชข้อมูลทดสอบ" disabled={result.loading} onClick={() => setRefresh((value) => value + 1)}><RefreshIcon /></IconButton>
+        </Stack>
+        {result.error ? <Alert severity="error">{result.error}</Alert> : result.loading ? (
+          <Typography role="status">กำลังโหลดข้อมูลทดสอบ...</Typography>
+        ) : (
+          <TableContainer sx={{ border: 1, borderColor: 'divider', maxHeight: 320 }}>
+            <Table size="small" stickyHeader sx={{ minWidth: Math.max(720, getTestResultColumnCount(result.parameters) * 120), ...borderedTableSx }}>
+              <TableHead><TableRow>
+                {result.parameters.map((parameter) => <Fragment key={parameter}><TableCell sx={{ fontWeight: 700 }}>{parameter}</TableCell><TableCell sx={{ fontWeight: 700 }}>Status</TableCell></Fragment>)}
+                <TableCell sx={{ fontWeight: 700 }}>Timestamp</TableCell>
+              </TableRow></TableHead>
+              <TableBody>
+                {result.rows.length ? result.rows.map((row) => <TableRow key={row.id}>
+                  {result.parameters.map((parameter) => <Fragment key={parameter}><TableCell>{row.values[parameter]}</TableCell><TableCell>{getTestResultParameterStatus(row, parameter)}</TableCell></Fragment>)}
+                  <TableCell>{row.timestamp}</TableCell>
+                </TableRow>) : <TableRow><TableCell colSpan={getTestResultColumnCount(result.parameters)} align="center">ยังไม่พบข้อมูลทดสอบการส่งข้อมูล</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Stack>
+    </Box>
+  )
 }
 
 function getRawDeviceConfig(data) {
@@ -9319,6 +9402,9 @@ function ConnectionRequestPage({
         pdfPreviewLoading={requestDocumentPdfLoading}
         pdfPreviewError={requestDocumentPdfError}
         onExited={handleRequestDocumentExited}
+        contentAfterPdf={requestDocumentOpen && !requestDocumentLoading && canShowRequestConnectionTest(requestDocument, isAdmin || userType === 'officer') ? (
+          <RequestConnectionTestPanel key={requestDocument?.id} request={requestDocument} accessToken={accessToken} />
+        ) : null}
         approving={requestDocumentApproving}
         onApprove={openApproveConfirmDialog}
         onReject={() => setRejectConfirmOpen(true)}
