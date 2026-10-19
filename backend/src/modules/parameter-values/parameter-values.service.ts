@@ -187,7 +187,7 @@ export const parameterValuesService = {
   ): Promise<ConnectionTestResultDTO> {
     await ensureConnectionTestStationAccess(query.stationId, access);
 
-    const interval = 'test';
+    const interval = '1m';
     const tableName = parameterValuesRepository.tableName(query.stationId, interval);
     const exists = await parameterValuesRepository.tableExists(tableName);
     if (!exists) {
@@ -201,7 +201,7 @@ export const parameterValuesService = {
         stationId: query.stationId,
         interval,
       },
-      5,
+      10,
     );
     const registeredParameters =
       await parameterValuesRepository.listRegisteredParametersForConnectionTest(

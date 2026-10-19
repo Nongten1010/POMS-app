@@ -994,7 +994,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 
 ### `GET /api/v1/parameter-values/connection-test`
 
-ใช้ดูข้อมูลทดสอบล่าสุดของ `stationId` หลังตั้งค่าอุปกรณ์แล้ว หน้า canonical อยู่ที่ [Parameter values](./parameter-values.md)
+ใช้ดูข้อมูลรายนาทีล่าสุดไม่เกิน 10 แถวของ `stationId` หลังตั้งค่าอุปกรณ์แล้ว หน้า canonical อยู่ที่ [Parameter values](./parameter-values.md)
 
 สิ่งที่ควรรู้
 

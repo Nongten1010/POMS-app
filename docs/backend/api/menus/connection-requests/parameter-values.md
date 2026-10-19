@@ -187,7 +187,7 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 
 ## `GET /api/v1/parameter-values/connection-test`
 
-อ่านข้อมูลทดสอบล่าสุดไม่เกิน 5 rows และจัดกลุ่มเป็น `values` กับ `statuses` ตามชื่อพารามิเตอร์พร้อมหน่วย
+อ่านข้อมูลรายนาทีจาก `<stationId>_data_1m` ล่าสุดไม่เกิน 10 แถว เรียง `cdate DESC, ctime DESC` และจัดกลุ่มเป็น `values` กับ `statuses` ตามชื่อพารามิเตอร์พร้อมหน่วย
 
 ### Authentication And Permission
 
@@ -208,6 +208,11 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 | `data[].timestamp` | string | Yes | วันที่และเวลาของ source row |
 | `data[].values` | object | No | map จากชื่อพารามิเตอร์พร้อมหน่วยไปยังค่าตรวจวัดเมื่อ status เป็น `1`, `Ok` หรือ `Normal`; status อื่นใช้ชื่อสถานะแทน |
 | `data[].statuses` | object | No | map สถานะของพารามิเตอร์; numeric StatusCode ถูกแปลงเป็นชื่อสถานะ |
+| `meta.stationId` | string | No | รหัสจุดตรวจวัดที่ขอ |
+| `meta.interval` | string | No | `1m` เสมอ |
+| `meta.schemaName` | string | No | schema ของ source table ตามการตั้งค่าระบบ เช่น `ingest` |
+| `meta.tableName` | string | No | `<stationId>_data_1m` |
+| `meta.count` | integer | No | จำนวนแถวที่คืนจริง ระหว่าง `0` ถึง `10` |
 | `meta.registeredParameters` | string[] | No | ชื่อพารามิเตอร์พร้อมหน่วยที่ลงทะเบียน |
 
 ### Success Response Example
@@ -232,9 +237,9 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
   ],
   "meta": {
     "stationId": "S2001",
-    "interval": "test",
+    "interval": "1m",
     "schemaName": "ingest",
-    "tableName": "S2001_data_test",
+    "tableName": "S2001_data_1m",
     "count": 1,
     "registeredParameters": ["CO (ppm)", "NOx (ppm)", "Flow Rate (m3/hr)"]
   }
@@ -243,6 +248,10 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 
 ### Validation And Business Rules
 
+- อ่านสูงสุด 10 แถวล่าสุดที่มีในตารางรายนาที ไม่จำกัดว่าต้องเป็นข้อมูล 10 นาทีที่ผ่านมา; วันเวลาเป็นของ source row จริง.
+- หากมีน้อยกว่า 10 แถว ให้คืนเท่าที่มี; ตารางว่างคืน `data: []` และ `meta.count: 0`.
+- หากไม่มีตารางรายนาที ตอบ `404 NOT_FOUND`; ไม่ย้อนอ่านตาราง `test`.
+- client ที่ตรวจ `meta.interval` ต้องรองรับ `1m` แทน `test` และรายการได้ถึง 10 แถว ดู [ผลกระทบและการปรับ client](../../CHANGELOG.md#connection-test-latest-minute-rows).
 - ชื่อ key ใน `values` และ `statuses` ต้องเป็นชื่อพารามิเตอร์พร้อมหน่วยจาก `registeredParameters`.
 - StatusCode ที่รองรับคือ `0` ถึง `9`; `9` แสดงเป็น `No Discharge`.
 - Status ที่ไม่มีหรือไม่รู้จักยังใช้ค่าเดิมเพื่อรองรับ source rows รุ่นเก่าที่ไม่มี StatusCode.
@@ -263,6 +272,9 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 - Route: [`parameter-values.routes.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.routes.ts)
 - Validator: [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts)
 - Service: [`parameter-values.service.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.service.ts)
+- Repository และลำดับแถว: [`parameter-values.repository.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.repository.ts)
 - Status mapping: [`parameter-status.ts`](../../../../../backend/src/modules/parameter-values/parameter-status.ts)
 - Types: [`parameter-values.types.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.types.ts)
 - Tests: [`parameter-values.service.test.ts`](../../../../../backend/tests/unit/parameter-values.service.test.ts)
+- Runtime OpenAPI: [`connection-requests.openapi.ts`](../../../../../backend/src/modules/api-docs/connection-requests.openapi.ts)
+- OpenAPI tests: [`parameter-values.connection-test.openapi.test.ts`](../../../../../backend/tests/unit/parameter-values.connection-test.openapi.test.ts)

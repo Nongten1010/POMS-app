@@ -291,7 +291,7 @@ describe('parameterValuesService', () => {
     expect(result.data[0]).toMatchObject({ cdate: '2026-08-08', ctime: '20:00:00' });
   });
 
-  it('returns formatted connection test values from the latest five station test rows', async () => {
+  it('returns formatted connection test values from the latest ten one-minute station rows', async () => {
     mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
       'CO2 (%)',
       'CO2 (ppm)',
@@ -299,7 +299,7 @@ describe('parameterValuesService', () => {
     ]);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.latestRows.mockResolvedValue({
-      tableName: 'S0001_data_test',
+      tableName: 'S0001_data_1m',
       rows: [
         {
           station_id: 'S0001',
@@ -336,13 +336,13 @@ describe('parameterValuesService', () => {
       'S0001',
       operatorAccess,
     );
-    expect(mockedRepository.tableExists).toHaveBeenCalledWith('S0001_data_test');
+    expect(mockedRepository.tableExists).toHaveBeenCalledWith('S0001_data_1m');
     expect(mockedRepository.latestRows).toHaveBeenCalledWith(
       {
         stationId: 'S0001',
-        interval: 'test',
+        interval: '1m',
       },
-      5,
+      10,
     );
     expect(result).toMatchObject({
       data: [
@@ -375,9 +375,9 @@ describe('parameterValuesService', () => {
       ],
       meta: {
         stationId: 'S0001',
-        interval: 'test',
+        interval: '1m',
         schemaName: 'ingest',
-        tableName: 'S0001_data_test',
+        tableName: 'S0001_data_1m',
         count: 2,
         registeredParameters: ['CO2 (%)', 'CO2 (ppm)', 'NOx (ppm)'],
       },
@@ -388,6 +388,41 @@ describe('parameterValuesService', () => {
     expect(result.meta).not.toHaveProperty('returnedColumns');
   });
 
+  it('returns all ten available one-minute rows with their source timestamps', async () => {
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.latestRows.mockResolvedValue({
+      tableName: 'S0001_data_1m',
+      rows: Array.from({ length: 10 }, (_, index) => ({
+        cdate: '2026-06-07',
+        ctime: `10:${String(15 - index).padStart(2, '0')}:00`,
+        co2_value: 100 + index,
+        co2_status: 'Normal',
+      })),
+    });
+
+    const result = await parameterValuesService.connectionTest(
+      { stationId: 'S0001' },
+      operatorAccess,
+    );
+
+    expect(result.data).toHaveLength(10);
+    expect(result.meta).toMatchObject({ interval: '1m', count: 10 });
+    expect(result.data[0]?.timestamp).toBe('2026-06-07 10:15:00');
+    expect(result.data[9]?.timestamp).toBe('2026-06-07 10:06:00');
+  });
+
+  it('returns not found when the one-minute table is missing without reading the test table', async () => {
+    mockedRepository.tableExists.mockResolvedValue(false);
+
+    await expect(
+      parameterValuesService.connectionTest({ stationId: 'S0001' }, operatorAccess),
+    ).rejects.toMatchObject({ statusCode: 404 });
+
+    expect(mockedRepository.tableExists).toHaveBeenCalledTimes(1);
+    expect(mockedRepository.tableExists).toHaveBeenCalledWith('S0001_data_1m');
+    expect(mockedRepository.latestRows).not.toHaveBeenCalled();
+  });
+
   it('uses the measurement value only for Ok status codes in connection-test responses', async () => {
     mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
       'CO (ppm)',
@@ -395,7 +430,7 @@ describe('parameterValuesService', () => {
     ]);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.latestRows.mockResolvedValue({
-      tableName: 'S0001_data_test',
+      tableName: 'S0001_data_1m',
       rows: [
         {
           station_id: 'S0001',
@@ -440,7 +475,7 @@ describe('parameterValuesService', () => {
     ]);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.latestRows.mockResolvedValue({
-      tableName: 'S0001_data_test',
+      tableName: 'S0001_data_1m',
       rows: [
         {
           so2_value: 10,
@@ -488,7 +523,7 @@ describe('parameterValuesService', () => {
     mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue(['NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.latestRows.mockResolvedValue({
-      tableName: 'S0001_data_test',
+      tableName: 'S0001_data_1m',
       rows: [
         {
           station_id: 'S0001',
@@ -518,10 +553,10 @@ describe('parameterValuesService', () => {
     expect(result.data[0]?.values).toEqual({ 'NOx (ppm)': '8.5' });
   });
 
-  it('returns empty connection test data when no test row exists', async () => {
+  it('returns empty connection test data when no one-minute row exists', async () => {
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.latestRows.mockResolvedValue({
-      tableName: 'S0001_data_test',
+      tableName: 'S0001_data_1m',
       rows: [],
     });
 
@@ -531,8 +566,8 @@ describe('parameterValuesService', () => {
       data: [],
       meta: {
         stationId: 'S0001',
-        interval: 'test',
-        tableName: 'S0001_data_test',
+        interval: '1m',
+        tableName: 'S0001_data_1m',
         count: 0,
         registeredParameters: ['CO2'],
       },
