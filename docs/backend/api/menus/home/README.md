@@ -41,7 +41,7 @@ curl --request GET \
 
 กติกาส่วนนี้ใช้กับ `GET /api/v1/operator-factory-dashboard`, `GET /api/v1/public/factory-map-points` และ [สถิติ/ปฏิทินของหน้าหลัก](../../shared/connected-measurement-points/README.md#home-measurement-rules) รวม annual path aliases ของสถิติเท่านั้น `operator-factories`, CSV export, ข้อมูลสำหรับคำขอเชื่อมต่อ และเมนูอื่นใช้ contract ของตนเอง
 
-- ใช้ `Asia/Bangkok` และข้อมูลของชั่วโมงที่จบแล้วล่าสุด: เวลา `10:30` อ่านช่วง `09:00–09:59`; เวลา `00:30` อ่านช่วง `23:00–23:59` ของวันก่อนหน้า ใช้กฎเดียวกันสำหรับตารางและ popup แผนที่
+- รายการ dashboard และ popup แผนที่ใช้ `Asia/Bangkok` เลือกชั่วโมงล่าสุดที่มีข้อมูลและจบแล้วของแต่ละจุด โดยไม่เกินชั่วโมงก่อนหน้า: เวลา `10:30` ใช้ไม่เกิน `09:59`; เวลา `00:30` ใช้ไม่เกิน `23:59` ของวันก่อนหน้า ถ้าชั่วโมงเป้าหมายไม่มีแถวให้ย้อนใช้ชั่วโมงล่าสุดที่มี พร้อมเวลาจริงและ `freshness: "stale"` ตาม [กติกาข้อมูลล่าสุด](#latest-available-hour) ส่วนตารางสถิติและปฏิทินยังคงแสดงข้อมูลตรงวัน/ชั่วโมงของช่องนั้น
 - `cdate`/`ctime` เป็นเวลาตรวจวัดหน้าเครื่องและกำหนดวัน/ชั่วโมงที่ข้อมูลเป็นของ ส่วน `udate`/`utime` เป็นเวลาที่เครื่องส่งข้อมูล ใช้เทียบกับสิ้นสุดชั่วโมงตรวจวัด ทั้งสองชุดเป็นเวลา `Asia/Bangkok` ที่ต้นทางปรับ timezone แล้ว Backend เปรียบเทียบค่าที่เก็บโดยตรงโดยไม่ชดเชย timezone ซ้ำ ข้อมูลที่ส่งช้าแสดงย้อนหลังในชั่วโมงเดิมได้ เปอร์เซ็นต์การส่งข้อมูลวันนี้นับเฉพาะส่งตรงเวลาในชั่วโมงที่จบแล้ว เฉพาะสถานะต้นทาง `Normal`/`Ok` และ `SHTDWN` ที่มีค่าตัวเลขตรงหน่วย สถานะอื่นไม่นับแม้มีตัวเลข 0: ส่งตรงเวลา 12/22 ชั่วโมงได้ 54.55%; SHTDWN ส่งช้าถือเป็นย้อนหลัง เช่นส่งตรงเวลา 21/22 ชั่วโมงได้ 95.45%; ปฏิทินและ low-data ใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกัน โดยจำนวนวัน `lowDataDays` และรายละเอียด `lowData` นับเฉพาะวันที่จบแล้วตาม `Asia/Bangkok` ถึงวันเลือกหรือเมื่อวานเมื่อเลือกวันนี้ และไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง ข้อความสถานะเครื่องที่ส่งช้าเช่น `Shut Down` คืน `status: "lateData"` พร้อมข้อความเดิมและ `value: null` ตารางซ่อนค่าชั่วโมงที่ยังไม่จบ ส่วนวันย้อนหลังนับเฉพาะส่งตรงเวลาจาก `Normal`/`Ok` และ `SHTDWN` ใช้ฐาน 24 ชั่วโมง ตาม [กติกาสถิติและปฏิทิน](../../shared/connected-measurement-points/README.md#home-measurement-rules)
 - กรองการแสดงผลตามลำดับโรงงาน → จุดตรวจวัด → พารามิเตอร์ ก่อนสร้างรายการ ค่าตรวจวัด สถานะ จำนวนจุด และผลสรุป รายการที่ซ่อนไม่เป็นทั้งตัวตั้งและตัวหารของเปอร์เซ็นต์
 - จุด CEMS/WPMS ที่ `monitoringPointStatus` เป็น `ได้รับการยกเว้นทั้งหมด` ไม่ปรากฏในรายการจุด ผลตรวจวัด และแผนที่ และไม่รวมในจำนวนจุดหรือผลสรุป
@@ -49,6 +49,37 @@ curl --request GET \
 - `industrialAreaType`, `industrialAreaTypeLabel`, `industrialEstateCode` และ `industrialEstateName` ต้องอธิบายพื้นที่เดียวกัน เมื่อมีรหัส ชื่อ หรือประเภทพื้นที่ที่ยืนยันว่าอยู่ในนิคม ให้เป็น `INDUSTRIAL_ESTATE` และจับคู่รหัส/ชื่อกับ master เมื่อทำได้ รหัสนิคมว่างเพียงอย่างเดียวไม่ใช่หลักฐานว่าโรงงานอยู่นอกนิคม หากไม่มีทั้งรหัส ชื่อ และประเภทที่ยืนยันว่าอยู่ในนิคม คง fallback เดิมเป็น `OUTSIDE_INDUSTRIAL_ESTATE`
 
 การแสดง `lateData`, สูตรปฏิทิน และการนับวันใช้ [สัญญาสถิติของหน้าหลัก](../../shared/connected-measurement-points/README.md#home-measurement-rules) เป็นจุดอ้างอิงเดียว
+
+<a id="latest-available-hour"></a>
+
+### ข้อมูลล่าสุดที่มีและสถานะข้อมูลเก่า
+
+ใช้กับ `GET /api/v1/operator-factory-dashboard`, `GET /api/v1/public/factory-map-points` และ [Integration dashboard](../../integrations/factory-dashboard/README.md) ส่วน `operator-factories`, สถิติ ปฏิทิน และ CSV ใช้ contract เดิมของตน
+
+| `latestMeasurement.freshness` | ความหมาย | วันเวลา |
+| --- | --- | --- |
+| `current` | มีแถวของชั่วโมงก่อนหน้าตาม `Asia/Bangkok` | `date`/`time` เป็น `cdate`/`ctime` จริงของแถวล่าสุดในชั่วโมงนั้น |
+| `stale` | ชั่วโมงก่อนหน้าไม่มีแถว จึงเลือกชั่วโมงเก่าล่าสุดที่มี | เก็บวันเวลาจริงของข้อมูลเก่า ไม่แทนด้วยเวลาปัจจุบัน |
+| `noData` | ไม่มีแถวรายชั่วโมงที่จบแล้ว หรือไม่มีตารางรายชั่วโมง | `date: null`, `time: null`, `data: []`; values ทุกพารามิเตอร์เป็น `noData` |
+
+เลือกชั่วโมงเดียวต่อจุดและเก็บทุกแถวพารามิเตอร์/หน่วยในชั่วโมงนั้น ไม่ข้ามแถวที่ต้นทางแจ้ง `NoData` เพื่อหาค่าปกติเก่า และไม่ใช้ข้อมูลรายนาทีแทนข้อมูลรายชั่วโมง `freshness` บอกอายุของชุดข้อมูล ส่วน `values.<label>.status` คงการประเมินมลพิษ/คุณภาพ/ส่งล่าช้าเดิม เช่นข้อมูลเก่ายังมี `status: "exceeded"` ได้
+
+Frontend แสดงค่าจาก `latestMeasurement.values` พร้อมวันเวลาจริงและป้าย “ข้อมูลเก่า” เมื่อ `freshness: "stale"` ต้องไม่ซ่อนค่าด้วย `hasLatestHourlyMeasurement: false` เพราะ flag นี้บอกว่าทุกจุดมีแถวของชั่วโมงก่อนหน้าหรือไม่เท่านั้น ไม่เปลี่ยน `noData` ในตารางสถิติหรือคำนวณเปอร์เซ็นต์ใหม่ด้วยค่าเก่า
+
+ตัวอย่างจุดที่ข้อมูลล่าสุดเป็นวันที่ 14 ตุลาคม ขณะเรียกวันที่ 19 ตุลาคม:
+
+```json
+{
+  "date": "2026-10-14",
+  "time": "04:00:00",
+  "freshness": "stale",
+  "values": {
+    "CO (ppm)": { "value": 21.99, "displayValue": "21.99", "status": "normal" }
+  }
+}
+```
+
+หลักฐาน: [ทดสอบข้อมูลล่าสุดและตรวจต้นทาง P0389/S1105](../../../evidence/home/latest-available-hour-and-source-diagnostics.md) และ [ผลกระทบต่อ client](../../CHANGELOG.md#home-latest-available-hour)
 
 ### `GET /api/v1/operator-factories`
 
@@ -201,7 +232,7 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].isEligible`                                                | `true`                   | ทุก row บนหน้าหลักเป็นโรงงานเข้าข่ายที่มี active connected point                                                                                                                                                                                          |
 | `data[].eligibilityStatus`                                         | `เข้าข่าย`               | label สำหรับ UI ซึ่งสอดคล้องกับ `isEligible: true`                                                                                                                                                                                                        |
 | `data[].isFavorite`                                                | boolean                  | favorite ของผู้ใช้ปัจจุบัน                                                                                                                                                                                                                                |
-| `data[].hasLatestHourlyMeasurement`                                | boolean                  | `true` เมื่อทุกจุดที่ผ่าน visibility/exemption มี `measurementPoints[].data` ของชั่วโมงก่อนหน้าตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลของชั่วโมงเป้าหมายเป็น `false` ไม่ใช้ flag นี้แทนเปอร์เซ็นต์ส่งทันเวลา |
+| `data[].hasLatestHourlyMeasurement`                                | boolean                  | `true` เมื่อทุกจุดที่ผ่าน visibility/exemption มี `measurementPoints[].data` ของชั่วโมงก่อนหน้าตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลของชั่วโมงเป้าหมายเป็น `false` ไม่ใช้ flag นี้แทนเปอร์เซ็นต์ส่งทันเวลา และไม่ใช้ซ่อนค่าล่าสุดที่เป็นข้อมูลเก่า |
 | `data[].monitoringPointCountBySystem`                              | array                    | จำนวนจุดที่ผ่าน visibility/exemption แยก `CEMS` และ `WPMS` |
 | `data[].measurementPoints`                                         | array                    | connected points ที่อ่านได้ตาม scope และผ่าน visibility/exemption; มีอย่างน้อยหนึ่งจุดต่อ factory row |
 | `data[].measurementPoints[].parameters`                            | string[]                 | ชื่อพารามิเตอร์พร้อมหน่วย; `Flow` หน่วย `m3/hr` ใช้ชื่อมาตรฐาน `Flow Rate (m3/hr)` เพียงชื่อเดียว                                                                                                                                                         |
@@ -211,9 +242,10 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].measurementPoints[].parameterStandards[].standardCriteria` | object \| null           | เกณฑ์ตามประกาศ อก. จาก connected-point instrument snapshot                                                                                                                                                                                                |
 | `data[].measurementPoints[].parameterStandards[].eiaCriteria`      | object \| null           | เกณฑ์ตาม EIA จาก connected-point instrument snapshot                                                                                                                                                                                                      |
 | `data[].measurementPoints[].data[].<parameter label>`              | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; ค่าตรวจวัดที่เป็นตัวเลขติดลบ (รวม numeric string) คืน `"ERROR"`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` และมีลำดับความสำคัญเหนือการตรวจค่าติดลบ                                         |
-| `data[].measurementPoints[].latestMeasurement`                     | object | ค่าของชั่วโมงล่าสุดที่จบแล้วสำหรับ popup; มี field นี้เสมอใน dashboard/map |
-| `data[].measurementPoints[].latestMeasurement.date`                | `YYYY-MM-DD` | วันที่ของชั่วโมงเป้าหมายตาม `Asia/Bangkok` |
-| `data[].measurementPoints[].latestMeasurement.time`                | `HH:00:00` | ชั่วโมงเป้าหมายเดียวกับตาราง |
+| `data[].measurementPoints[].latestMeasurement`                     | object | ค่าจากชั่วโมงล่าสุดที่มีและจบแล้วของจุดนั้น; มี field นี้เสมอใน dashboard/map |
+| `data[].measurementPoints[].latestMeasurement.date`                | string \| null | `cdate` จริงของข้อมูลที่เลือกตาม `Asia/Bangkok`; ไม่มีข้อมูลคืน `null` |
+| `data[].measurementPoints[].latestMeasurement.time`                | string \| null | `ctime` จริงของแถวล่าสุดในชั่วโมงที่เลือก; ไม่มีข้อมูลคืน `null` |
+| `data[].measurementPoints[].latestMeasurement.freshness` | enum | `current`, `stale` หรือ `noData` ตาม [กติกาข้อมูลล่าสุด](#latest-available-hour); แยกจากสถานะรายพารามิเตอร์ |
 | `data[].measurementPoints[].latestMeasurement.values`              | object | key เป็นชื่อพารามิเตอร์พร้อมหน่วย มีทุกพารามิเตอร์ที่แสดงผลของจุด |
 | `data[].measurementPoints[].latestMeasurement.values.<label>.value` | number \| null | ค่าตรวจวัดที่ใช้ประเมินได้; `null` เมื่อไม่มีข้อมูลหรือแสดงเป็นสถานะ |
 | `data[].measurementPoints[].latestMeasurement.values.<label>.displayValue` | string | ค่าที่ format แล้ว ชื่อ operational status หรือ `-` เมื่อไม่มีค่าที่ใช้แสดง |
@@ -280,6 +312,7 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
           "latestMeasurement": {
             "date": "2026-08-08",
             "time": "21:00:00",
+            "freshness": "current",
             "values": {
               "CO (ppm)": {
                 "value": 0.1,
@@ -321,9 +354,9 @@ Query fields:
 
 Request body: ไม่มี
 
-Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` และ `measurementPoints` รูปแบบเดียวกับ dashboard รวมถึง `measurementPoints[].data` สำหรับข้อมูลล่าสุดรายชั่วโมงของแต่ละจุดวัด และคืน `hasLatestHourlyMeasurement` ตามกติกาเดียวกับ authenticated dashboard. Public API ไม่คืน field เฉพาะผู้ใช้คือ `isFavorite`. `data` เป็น array ว่างได้เมื่อยังไม่มีข้อมูลรายชั่วโมงล่าสุด.
+Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` และ `measurementPoints` รูปแบบเดียวกับ dashboard รวมถึง `measurementPoints[].data` สำหรับข้อมูลล่าสุดรายชั่วโมงของแต่ละจุดวัด และคืน `hasLatestHourlyMeasurement` ตามกติกาเดียวกับ authenticated dashboard. Public API ไม่คืน field เฉพาะผู้ใช้คือ `isFavorite`. `measurementPoints[].data` เป็น array ว่างเมื่อไม่มีประวัติรายชั่วโมงที่จบแล้วหรือตารางรายชั่วโมงของจุดนั้น.
 
-Popup อ่าน `measurementPoints[].latestMeasurement` ซึ่งแสดงทุกพารามิเตอร์ที่ผ่าน visibility ของจุด ใช้เฉพาะชั่วโมงล่าสุดที่จบแล้วเดียวกับตาราง พารามิเตอร์ที่ไม่มีข้อมูลในชั่วโมงนั้นคืน `{ "value": null, "displayValue": "-", "status": "noData" }`; ไม่ fallback ไปค่าชั่วโมงเก่าและไม่คืนประวัติหลายชั่วโมงสำหรับ popup ส่วน `measurementPoints[].data` คงรูปแบบเดิมแต่มีเฉพาะข้อมูลของชั่วโมงเป้าหมายเช่นกัน
+Popup อ่าน `measurementPoints[].latestMeasurement` และ `measurementPoints[].data` จากชั่วโมงล่าสุดที่มีและจบแล้วของแต่ละจุด ตาม [กติกาข้อมูลล่าสุด](#latest-available-hour) พารามิเตอร์ที่ไม่มีค่าในชั่วโมงที่เลือกคืน `{ "value": null, "displayValue": "-", "status": "noData" }` โดยไม่ปะค่ารายพารามิเตอร์จากชั่วโมงอื่น
 
 ตัวอย่างต่อไปนี้สมมติว่าเรียก API วันที่ `2026-08-07` ในช่วงเวลา `22:00-22:59` ตาม `Asia/Bangkok` และได้ข้อมูลรอบ `21:00` ซึ่งคำนวณเสร็จแล้ว จึงได้ `hasLatestHourlyMeasurement: true`.
 
@@ -380,6 +413,7 @@ Popup อ่าน `measurementPoints[].latestMeasurement` ซึ่งแสด
           "latestMeasurement": {
             "date": "2026-08-07",
             "time": "21:00:00",
+            "freshness": "current",
             "values": {
               "CO (ppm)": {
                 "value": null,

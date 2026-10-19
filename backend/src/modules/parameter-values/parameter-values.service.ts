@@ -153,22 +153,7 @@ export const parameterValuesService = {
     const query = { stationId, interval } as const;
     const result =
       cutoff && options?.homeHour
-        ? await parameterValuesRepository
-            .listRows({
-              stationId,
-              interval,
-              startDate: cutoff.date,
-              endDate: cutoff.date,
-            })
-            .then((result) => ({
-              ...result,
-              rows: result.rows
-                .filter(
-                  (row) =>
-                    stringValue(row.cdate) === cutoff.date && parseHour(row.ctime) === cutoff.hour,
-                )
-                .sort(compareHomeMeasurementRows),
-            }))
+        ? await latestAvailableHomeHour(query, cutoff)
         : cutoff
           ? await parameterValuesRepository.latestRowsAtOrBeforeHour(query, cutoff)
           : await parameterValuesRepository.latestRowsAtLatestTimestamp(query);
@@ -517,6 +502,49 @@ export const parameterValuesService = {
     });
   },
 };
+
+async function latestAvailableHomeHour(
+  query: LatestParameterValueQuery,
+  cutoff: HourlyMeasurementCutoff,
+): Promise<{ tableName: string; rows: Record<string, unknown>[] }> {
+  const currentDay = await parameterValuesRepository.listRows({
+    ...query,
+    startDate: cutoff.date,
+    endDate: cutoff.date,
+  });
+  const completedRows = currentDay.rows
+    .filter((row) => {
+      const hour = parseHour(row.ctime);
+      return stringValue(row.cdate) === cutoff.date && hour !== null && hour <= cutoff.hour;
+    })
+    .sort(compareHomeMeasurementRows);
+  if (completedRows.length > 0) {
+    const latestHour = parseHour(completedRows[0].ctime);
+    return {
+      ...currentDay,
+      rows: completedRows.filter((row) => parseHour(row.ctime) === latestHour),
+    };
+  }
+
+  const latest = await parameterValuesRepository.latestRowsAtOrBeforeHour(query, cutoff);
+  if (latest.rows.length === 0) return latest;
+  const sourceDate = stringValue(latest.rows[0].cdate);
+  const sourceHour = parseHour(latest.rows[0].ctime);
+  if (!sourceDate || sourceHour === null) return { ...latest, rows: [] };
+  const sourceDay = await parameterValuesRepository.listRows({
+    ...query,
+    startDate: sourceDate,
+    endDate: sourceDate,
+  });
+  // Keep every parameter/unit row in the chosen hour, just as for a current hour.
+  const rows = sourceDay.rows.filter(
+    (row) => stringValue(row.cdate) === sourceDate && parseHour(row.ctime) === sourceHour,
+  );
+  return {
+    ...latest,
+    rows: (rows.length > 0 ? rows : latest.rows).sort(compareHomeMeasurementRows),
+  };
+}
 
 const DEFAULT_NORMAL_MAX = 180;
 const DEFAULT_WARNING_MAX = 190;

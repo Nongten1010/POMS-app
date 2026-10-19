@@ -3379,13 +3379,17 @@ function hasMeasurementsForHour(
 }
 
 function isMeasurementRowInHour(row: Record<string, unknown>, currentHour: DateHour): boolean {
-  if (typeof row.cdate !== 'string' || row.cdate.trim() !== currentHour.date) return false;
-  if (typeof row.ctime !== 'string') return false;
+  const sourceHour = measurementRowDateHour(row);
+  return sourceHour?.date === currentHour.date && sourceHour.hour === currentHour.hour;
+}
 
-  const hourMatch = row.ctime.trim().match(/^(\d{1,2})(?::|\.)/);
-  if (!hourMatch) return false;
-
-  return Number(hourMatch[1]) === currentHour.hour;
+function measurementRowDateHour(row: Record<string, unknown>): DateHour | null {
+  if (typeof row.cdate !== 'string' || typeof row.ctime !== 'string') return null;
+  const date = row.cdate.trim();
+  const hour = Number(row.ctime.trim().match(/^(\d{1,2})(?::|\.)/)?.[1]);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(hour) || hour < 0 || hour > 23)
+    return null;
+  return { date, hour };
 }
 
 async function listFactoryMainTypeLabelsForDashboard(
@@ -3419,9 +3423,34 @@ async function loadLatestHourlyMeasurementData(
   strictParameters = false,
   parameterStandards: OperatorFactoryParameterStandardDTO[] = [],
 ): Promise<Pick<OperatorFactoryMeasurementPointDTO, 'data' | 'latestMeasurement'>> {
-  const project = (rows: Record<string, unknown>[]) => {
+  const project = (
+    rows: Record<string, unknown>[],
+  ): Pick<OperatorFactoryMeasurementPointDTO, 'data' | 'latestMeasurement'> => {
+    const completedRows =
+      strictParameters && cutoff
+        ? rows
+            .filter((row) => {
+              const source = measurementRowDateHour(row);
+              return (
+                source !== null &&
+                (source.date < cutoff.date ||
+                  (source.date === cutoff.date && source.hour <= cutoff.hour))
+              );
+            })
+            .sort((left, right) =>
+              `${right.cdate} ${right.ctime}`.localeCompare(
+                `${left.cdate} ${left.ctime}`,
+                undefined,
+                { numeric: true },
+              ),
+            )
+        : rows;
+    const latestRow = completedRows[0];
+    const latestHour = latestRow ? measurementRowDateHour(latestRow) : null;
     const selectedRows =
-      strictParameters && cutoff ? rows.filter((row) => isMeasurementRowInHour(row, cutoff)) : rows;
+      strictParameters && latestHour
+        ? completedRows.filter((row) => isMeasurementRowInHour(row, latestHour))
+        : completedRows;
     const data = selectedRows.map((row) =>
       toDashboardMeasurementRow(row, parameterDisplayNames, strictParameters),
     );
@@ -3434,8 +3463,13 @@ async function loadLatestHourlyMeasurementData(
     return {
       data,
       latestMeasurement: {
-        date: cutoff.date,
-        time: `${String(cutoff.hour).padStart(2, '0')}:00:00`,
+        date: latestRow ? String(latestRow.cdate) : null,
+        time: latestRow ? String(latestRow.ctime) : null,
+        freshness: !latestRow
+          ? 'noData'
+          : isMeasurementRowInHour(latestRow, cutoff)
+            ? 'current'
+            : 'stale',
         values,
       },
     };

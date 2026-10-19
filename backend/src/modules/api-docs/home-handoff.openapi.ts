@@ -81,18 +81,33 @@ export const homeHandoffSchemas: Record<string, Schema> = {
   }),
   HomeLatestMeasurement: {
     ...object({
-      date,
-      time: { type: 'string', pattern: '^(?:[01]\\d|2[0-3]):00:00$' },
+      date: {
+        ...date,
+        nullable: true,
+        description: 'cdate จริงของข้อมูลที่เลือก; null เมื่อไม่มีข้อมูลรายชั่วโมง',
+      },
+      time: {
+        type: 'string',
+        nullable: true,
+        description: 'ctime จริงของแถวล่าสุดในชั่วโมงที่เลือก; null เมื่อไม่มีข้อมูลรายชั่วโมง',
+      },
+      freshness: {
+        type: 'string',
+        enum: ['current', 'stale', 'noData'],
+        description:
+          'current = มีแถวของชั่วโมงก่อนหน้าตาม Asia/Bangkok; stale = แถวรายชั่วโมงล่าสุดเก่ากว่านั้น; noData = ไม่มีแถวหรือตารางรายชั่วโมง ไม่ใช่สถานะมลพิษหรือสถานะเครื่องของแต่ละค่า',
+      },
       values: {
         type: 'object',
         description:
-          'ทุกพารามิเตอร์ที่แสดงใช้ key เป็นชื่อพร้อมหน่วย หากชั่วโมงเป้าหมายไม่มีค่าคืน value:null, status:noData; ไม่ย้อนใช้ชั่วโมงที่เก่ากว่า',
+          'ทุกพารามิเตอร์ที่แสดงใช้ key เป็นชื่อพร้อมหน่วย เลือกชั่วโมงล่าสุดที่มีและจบแล้วทั้งจุด; พารามิเตอร์ที่ไม่มีค่าในชั่วโมงที่เลือกคืน value:null, status:noData ไม่ปะค่าจากชั่วโมงอื่นและไม่ข้าม source NoData ไปหาค่าปกติที่เก่ากว่า',
         additionalProperties: ref('HomeMeasurementValue'),
       },
     }),
     example: {
       date: '2026-09-23',
       time: '09:00:00',
+      freshness: 'current',
       values: {
         'CO (ppm)': { value: 10, displayValue: '10.00', status: 'lateData' },
         'CO2 (ppm)': { value: null, displayValue: '-', status: 'noData' },
@@ -271,7 +286,7 @@ export const homeHandoffSchemas: Record<string, Schema> = {
   ),
 };
 
-/** Copy home schemas so additions never change the external integration contract. */
+/** Keep home-only factory fields separate while sharing the hourly snapshot contract. */
 export function buildHomeFactorySchemas(existing: Record<string, Schema>): Record<string, Schema> {
   const basePoint = existing.FactoryDashboardMeasurementPoint;
   const baseFactory = existing.IntegrationFactoryDashboardRow;
@@ -279,7 +294,7 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
   const pointProperties = basePoint.properties as Record<string, Schema>;
   const point = {
     ...basePoint,
-    required: [...(basePoint.required as string[]), 'latestMeasurement'],
+    required: [...(basePoint.required as string[])],
     description:
       'เฉพาะจุดที่แสดงและไม่ได้รับการยกเว้นทั้งหมด กรองพารามิเตอร์ที่ซ่อนก่อนคำนวณค่า/สถานะ/จำนวน',
     properties: {
@@ -288,7 +303,7 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
       data: {
         ...pointProperties.data,
         description:
-          'รูปแบบเดิมเฉพาะชั่วโมงปฏิทินก่อนหน้าเท่านั้น; ไม่มี row ในชั่วโมงนั้นคืน [] ไม่ดึงข้อมูลเก่ามาแทน ใช้ latestMeasurement สำหรับค่า/หน่วย/สถานะของ popup',
+          'รูปแบบเดิมจากชั่วโมงล่าสุดที่มีและจบแล้วของจุดนั้น อาจเก่ากว่าชั่วโมงก่อนหน้า; เก็บ cdate/ctime จริง ใช้ latestMeasurement.freshness แยก current/stale/noData; ไม่มีแถวหรือตารางรายชั่วโมงคืน [] โดยไม่ใช้ข้อมูลรายนาทีแทน',
       },
     },
   };
@@ -302,6 +317,11 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
           'ใช้ประเภทพื้นที่ต้นทางหรือชื่อ/รหัสที่จับคู่ได้แน่นอน; รหัสนิคมว่างไม่ได้แปลว่าอยู่นอกนิคม และไม่เดารหัสจากชื่อที่ไม่ชัดเจน',
       },
       isEligible: { type: 'boolean' },
+      hasLatestHourlyMeasurement: {
+        type: 'boolean',
+        description:
+          'true เมื่อทุกจุดมีข้อมูลของชั่วโมงก่อนหน้าตาม Asia/Bangkok; stale/noData ทำให้เป็น false แต่ห้ามใช้ซ่อนค่าล่าสุดที่ยังอยู่ใน data/latestMeasurement',
+      },
       eligibilityStatus: { type: 'string', enum: ['เข้าข่าย', 'ไม่เข้าข่าย'] },
       measurementPoints: {
         ...array(ref('HomeFactoryMeasurementPoint')),
@@ -327,7 +347,7 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
 }
 
 const timestampRules =
-  'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง รวมกรณีข้ามวัน/ปี ข้อมูลส่งช้าแสดงค่าได้; เปอร์เซ็นต์หลักรวมถึงเปอร์เซ็นต์แถวสถิติ ปฏิทิน lowData/lowDataDays/lowData details นับเฉพาะส่งตรงเวลาจาก Normal/Ok (code 1) และ Shut Down (code 6) ที่มีค่าตัวเลขตรงหน่วย สถานะอื่นไม่นับแม้มีค่า 0; วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์ วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้ว เช่น 22:15 ใช้ถึง 21:59; lowDataDays และ lowData details นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok ย้อนจากวันสิ้นสุดหรือเมื่อวานเมื่อเลือกวันนี้ ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง; ตารางคง 24 แถว แต่ชั่วโมง 22–23 คืน value: null, displayValue: -, status: noData; lateDataPercent แยกจากเปอร์เซ็นต์หลักทุกวัน บวกกับเปอร์เซ็นต์ส่งตรงเวลาได้ยอดรับรวม; สถานะ Normal ส่งตรงเวลา 12/22 ชั่วโมงได้ 54.55% และ lateDataPercent 45.45%; Shut Down ส่งตรงเวลา 21/22 ชั่วโมงและส่งช้า 1 ชั่วโมงได้ 95.45% และ lateDataPercent 4.55%; ข้อความสถานะเครื่องที่ส่งช้าเช่น Shut Down คืน value:null, displayValue:Shut Down, status:lateData; source NoData คง noData และ warning/exceeded คงระดับมลพิษ; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup ใช้ชั่วโมงล่าสุด 23 ของวันก่อนหน้า กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ตัดจุดที่ยกเว้นทั้งหมด และถ้าไม่เหลือจุดไม่คืนโรงงาน';
+  'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ส่งก่อนเริ่มชั่วโมงถัดไปถือว่าทันกำหนด ตั้งแต่ชั่วโมงถัดไปถือว่าส่งย้อนหลัง รวมกรณีข้ามวัน/ปี ข้อมูลส่งช้าแสดงค่าได้; เปอร์เซ็นต์หลักรวมถึงเปอร์เซ็นต์แถวสถิติ ปฏิทิน lowData/lowDataDays/lowData details นับเฉพาะส่งตรงเวลาจาก Normal/Ok (code 1) และ Shut Down (code 6) ที่มีค่าตัวเลขตรงหน่วย สถานะอื่นไม่นับแม้มีค่า 0; วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์ วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้ว เช่น 22:15 ใช้ถึง 21:59; lowDataDays และ lowData details นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok ย้อนจากวันสิ้นสุดหรือเมื่อวานเมื่อเลือกวันนี้ ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง; ตารางคง 24 แถว แต่ชั่วโมง 22–23 คืน value: null, displayValue: -, status: noData; lateDataPercent แยกจากเปอร์เซ็นต์หลักทุกวัน บวกกับเปอร์เซ็นต์ส่งตรงเวลาได้ยอดรับรวม; สถานะ Normal ส่งตรงเวลา 12/22 ชั่วโมงได้ 54.55% และ lateDataPercent 45.45%; Shut Down ส่งตรงเวลา 21/22 ชั่วโมงและส่งช้า 1 ชั่วโมงได้ 95.45% และ lateDataPercent 4.55%; ข้อความสถานะเครื่องที่ส่งช้าเช่น Shut Down คืน value:null, displayValue:Shut Down, status:lateData; source NoData คง noData และ warning/exceeded คงระดับมลพิษ; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup เลือกชั่วโมงล่าสุดที่มีและจบแล้วไม่เกิน 23 ของวันก่อนหน้า โดยคืน cdate/ctime จริงและ freshness=current/stale/noData กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ตัดจุดที่ยกเว้นทั้งหมด และถ้าไม่เหลือจุดไม่คืนโรงงาน';
 
 export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<string, Schema> {
   const result = { ...paths };
@@ -535,8 +555,9 @@ const publicFactoryExample: PublicFactoryMapPointDTO = {
       parameterStandards: [],
       data: [],
       latestMeasurement: {
-        date: '2026-09-23',
-        time: '09:00:00',
+        date: null,
+        time: null,
+        freshness: 'noData',
         values: {
           'CO (ppm)': { value: null, displayValue: '-', status: 'noData' },
         },

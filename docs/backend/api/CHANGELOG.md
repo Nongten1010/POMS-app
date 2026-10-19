@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="home-latest-available-hour"></a>
+
+## 2026-10-19 — หน้าหลักคืนข้อมูลรายชั่วโมงล่าสุดที่มีพร้อมอายุข้อมูล
+
+- **Affected canonical docs:** [หน้าหลัก](./menus/home/README.md#latest-available-hour), [Integration dashboard](./integrations/factory-dashboard/README.md)
+- **Impact:** dashboard/map และ integration dashboard คืนข้อมูลจากชั่วโมงล่าสุดที่มีและจบแล้ว แม้ชั่วโมงก่อนหน้าไม่มีแถว เพิ่ม `latestMeasurement.freshness` (`current`, `stale`, `noData`) และคืนวันเวลาจริง; เมื่อไม่มีแถวหรือตารางรายชั่วโมง `date`/`time` เป็น `null`
+- **Migration:** client ใช้ `latestMeasurement.values` และวันเวลาจริง แสดงป้ายข้อมูลเก่าเมื่อ `freshness=stale` รองรับ `date/time=null` เมื่อ `noData` และห้ามใช้ `hasLatestHourlyMeasurement=false` ซ่อนค่าล่าสุด `hasLatestHourlyMeasurement` คงความหมายว่าทุกจุดมีแถวของชั่วโมงก่อนหน้า ไม่ต้อง migrate ฐานข้อมูล หลัง deploy ตรวจ `/api/v1/openapi.json` และ API ทั้งสองกลุ่มก่อนปิด release
+- **Old contract:** อ่านเฉพาะชั่วโมงก่อนหน้า ไม่ย้อนใช้ค่าเก่า และ `latestMeasurement.date/time` แสดงชั่วโมงเป้าหมายแม้ไม่มีแถว
+- **New contract:** เลือกชั่วโมงเดียวล่าสุดที่มีต่อจุด คงเวลาจริงและสถานะมลพิษ/คุณภาพเดิม ไม่ปะค่าข้ามชั่วโมง ไม่แทนรายชั่วโมงด้วยรายนาที สถิติ ปฏิทิน CSV และ `operator-factories` คง contract เดิม
+- **Breaking change:** yes — `data` อาจมีข้อมูลเก่า และ `latestMeasurement.date/time` เป็นเวลาจริงหรือ `null` แทนชั่วโมงเป้าหมาย
+
 <a id="chat-scoped-actions"></a>
 
 ## 2026-10-18 — แยกสิทธิ์และขอบเขต Chat พร้อมให้เจ้าหน้าที่เปิดเรื่อง

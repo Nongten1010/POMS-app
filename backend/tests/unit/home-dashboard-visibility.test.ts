@@ -120,6 +120,84 @@ afterEach(() => {
 
 describe('home dashboard visibility projection', () => {
   it.each(['dashboard', 'map'] as const)(
+    'preserves the real timestamp and pollution status of stale data in %s',
+    async (surface) => {
+      const read = jest.mocked(parameterValuesService.latestHourly);
+      read.mockResolvedValue({
+        data: [
+          {
+            station_id: 'S0001',
+            cdate: '2026-09-22',
+            ctime: '23:20:00',
+            co_value: 150,
+            co_units: 'ppm',
+            co_status: 'Normal',
+            nox_value: 10,
+            nox_units: 'ppm',
+            nox_status: 'Normal',
+          },
+        ],
+        meta: {
+          stationId: 'S0001',
+          interval: '60m',
+          schemaName: 'ingest',
+          tableName: 'S0001_data_60m',
+          count: 1,
+          registeredParameters: ['CO (ppm)', 'NOx (ppm)'],
+          returnedColumns: [],
+        },
+      });
+      const result =
+        surface === 'dashboard'
+          ? await connectionRequestsService.listOperatorFactoryDashboard(42, 'ALL')
+          : await connectionRequestsService.listPublicFactoryMapPoints();
+      const factoryRow = result.data[0];
+      const measurement = factoryRow.measurementPoints[0];
+      expect(measurement.data).toHaveLength(1);
+      expect(measurement.latestMeasurement).toMatchObject({
+        date: '2026-09-22',
+        time: '23:20:00',
+        freshness: 'stale',
+        values: { 'CO (ppm)': { value: 150, status: 'exceeded' } },
+      });
+      expect(factoryRow.hasLatestHourlyMeasurement).toBe(false);
+    },
+  );
+
+  it('reports current freshness only for the latest completed Bangkok hour', async () => {
+    const result = await connectionRequestsService.listPublicFactoryMapPoints();
+    expect(result.data[0].measurementPoints[0].latestMeasurement).toMatchObject({
+      date: '2026-09-23',
+      time: '09:00:00',
+      freshness: 'current',
+    });
+    expect(result.data[0].hasLatestHourlyMeasurement).toBe(true);
+  });
+
+  it('does not fabricate a measurement timestamp when there are no hourly rows', async () => {
+    jest.mocked(parameterValuesService.latestHourly).mockResolvedValue({
+      data: [],
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        count: 0,
+        registeredParameters: ['CO (ppm)', 'NOx (ppm)'],
+        returnedColumns: [],
+      },
+    });
+    const result = await connectionRequestsService.listPublicFactoryMapPoints();
+    expect(result.data[0].measurementPoints[0].latestMeasurement).toMatchObject({
+      date: null,
+      time: null,
+      freshness: 'noData',
+      values: { 'CO (ppm)': { value: null, status: 'noData' } },
+    });
+    expect(result.data[0].hasLatestHourlyMeasurement).toBe(false);
+  });
+
+  it.each(['dashboard', 'map'] as const)(
     'does not allow visible children to override a hidden factory in %s',
     async (surface) => {
       pointRows = [
@@ -334,7 +412,7 @@ describe('home dashboard visibility projection', () => {
     });
   });
 
-  it('returns noData for all popup parameters instead of falling back to an older hour', async () => {
+  it('returns stale values from the latest available hour without filling absent parameters', async () => {
     jest.mocked(parameterValuesService.latestHourly).mockResolvedValue({
       data: [
         {
@@ -356,12 +434,13 @@ describe('home dashboard visibility projection', () => {
       },
     });
     const result = await connectionRequestsService.listPublicFactoryMapPoints();
-    expect(result.data[0].measurementPoints[0].data).toEqual([]);
+    expect(result.data[0].measurementPoints[0].data).toHaveLength(1);
     expect(result.data[0].measurementPoints[0].latestMeasurement).toEqual({
       date: '2026-09-23',
-      time: '09:00:00',
+      time: '08:00:00',
+      freshness: 'stale',
       values: {
-        'CO (ppm)': { value: null, displayValue: '-', status: 'noData' },
+        'CO (ppm)': { value: 5, displayValue: '5.00', status: 'normal' },
         'NOx (ppm)': { value: null, displayValue: '-', status: 'noData' },
       },
     });
