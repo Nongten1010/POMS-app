@@ -129,18 +129,19 @@ export async function listChatFactories(
   }
   const count = await base.clone().count<{ total: number | string }>('ef.id as total').first();
   const total = Number(count?.total ?? 0);
-  const rows = await selectFactory(base)
-    .orderBy('ef.factory_name', 'asc')
-    .orderBy('ef.id', 'asc')
-    .offset((query.page - 1) * query.pageSize)
-    .limit(query.pageSize);
+  const paginated = query.page !== undefined || query.pageSize !== undefined;
+  const page = query.page ?? 1;
+  const pageSize = query.pageSize ?? 25;
+  const rowsQuery = selectFactory(base).orderBy('ef.factory_name', 'asc').orderBy('ef.id', 'asc');
+  if (paginated) rowsQuery.offset((page - 1) * pageSize).limit(pageSize);
+  const rows = await rowsQuery;
   return {
     data: rows.map((row) => ({ ...row, id: Number(row.id) })),
     pagination: {
-      page: query.page,
-      pageSize: query.pageSize,
+      page,
+      pageSize: paginated ? pageSize : total,
       total,
-      totalPages: Math.ceil(total / query.pageSize),
+      totalPages: paginated ? Math.ceil(total / pageSize) : total > 0 ? 1 : 0,
     },
   };
 }
@@ -208,15 +209,11 @@ export async function listChatMeasurementPoints(
 ): Promise<ChatMeasurementPoint[]> {
   if (!(await findChatFactory(access, factoryId, executor)))
     throw new NotFoundError('Factory not found');
-  const result: ChatMeasurementPoint[] = [];
-  for (const kind of ['eligible', 'connected'] as const) {
-    const rows = await pointQuery(access, factoryId, kind, executor).orderBy(
-      'chat_point.id',
-      'asc',
-    );
-    result.push(...rows.map((row) => ({ ...row, kind, id: Number(row.id) })));
-  }
-  return result;
+  const rows = await pointQuery(access, factoryId, 'connected', executor).orderBy(
+    'chat_point.id',
+    'asc',
+  );
+  return rows.map((row) => ({ ...row, kind: 'connected', id: Number(row.id) }));
 }
 
 export async function findChatMeasurementPoint(

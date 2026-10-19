@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="chat-all-eligible-factories-connected-points"></a>
+
+## 2026-10-19 — โรงงาน Chat ไม่แบ่งหน้าเมื่อไม่ส่ง query และเลือกเฉพาะจุดเชื่อมต่อ POMS
+
+- **Affected canonical docs:** [รายการโรงงาน Chat](./menus/chat/README.md#get-chatfactories), [ตัวเลือกจุดตรวจวัด Chat](./menus/chat/README.md#get-chatfactoriesidmeasurement-points)
+- **Impact:** `GET /chat/factories` เมื่อไม่ส่งทั้ง `page` และ `pageSize` คืนโรงงานเข้าข่ายทั้งหมดจาก active `eligible_factories` ตามสิทธิ์ `chat:view` และ `q` รวมโรงงานที่ยังไม่เชื่อมต่อหรือไม่มีจุด; `GET /chat/factories/:id/measurement-points` คืนเฉพาะ active connected POMS points ที่ผูกกับโรงงานนั้น โดยทุกแถวมี `kind=connected`
+- **Migration:** client ที่ต้องการแบ่งหน้าเดิมให้ส่งอย่างน้อย `page` หรือ `pageSize`; ตัวที่ไม่ส่งใช้ `page=1` หรือ `pageSize=25` เมื่อเปิดแบ่งหน้าแล้ว หากโหลดโรงงานทั้งหมดให้ไม่ส่งทั้งคู่และไม่ต้องวนโหลดหน้า `pagination` ยังคงอยู่; โหมดไม่แบ่งหน้าใช้ `page=1`, `pageSize=total`, `totalPages=1` เมื่อมีข้อมูล หรือ `0` เมื่อว่าง ห้ามสมมติว่า `pageSize` ของรายการโรงงานมีเฉพาะ 25/50/100 ใช้ `kind` และ `id` จากรายการจุด ห้ามแปลง ID จุดเข้าข่ายเป็น ID จุดเชื่อมต่อ ไม่ต้อง migrate ฐานข้อมูล; หลัง deploy ตรวจ runtime OpenAPI เทียบ contract นี้
+- **Old contract:** ไม่ส่ง query โรงงานได้หน้า 1 จำนวน 25 รายการ; ตัวเลือกจุดรวม `eligible` และ `connected`
+- **New contract:** ไม่ส่ง query โรงงานได้ครบตามสิทธิ์และตัวกรอง; ตัวเลือกจุดมีเฉพาะ `connected` และคืน `[]` เมื่อไม่มีจุดเชื่อมต่อ; ยังเปิดเรื่องระดับโรงงานได้ Pagination ของ `GET /chat/tickets` และการรองรับ `eligible` ใน request เปิด Ticket/ประวัติเดิมคงเดิม
+- **Breaking change:** yes — เปลี่ยนพฤติกรรมเริ่มต้นและช่วงค่า `pagination.pageSize` ของรายการโรงงาน พร้อมลดชนิดจุดในรายการตัวเลือก โดยคง URL, response envelope และสิทธิ์เดิม
+
 <a id="chat-scoped-actions"></a>
 
 ## 2026-10-18 — แยกสิทธิ์และขอบเขต Chat พร้อมให้เจ้าหน้าที่เปิดเรื่อง

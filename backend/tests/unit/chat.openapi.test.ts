@@ -150,13 +150,13 @@ describe('Chat runtime OpenAPI', () => {
     expect(schemas.ChatCreateResult.required).toEqual(['ticket', 'firstMessage', 'replayed']);
   });
 
-  it('publishes scoped factory and typed point choices without requiring a connected factory', async () => {
+  it('publishes unpaginated eligible factories and connected-only choices without changing ticket paging', async () => {
     const document = await loadOpenApiDocument();
     expect(document.paths['/chat/factories']?.get.parameters).toContainEqual(
       expect.objectContaining({
         name: 'pageSize',
         in: 'query',
-        schema: { type: 'integer', enum: [25, 50, 100], default: 25 },
+        schema: { type: 'integer', enum: [25, 50, 100] },
       }),
     );
     expect(document.paths['/chat/factories/{id}/measurement-points']?.get).toMatchObject({
@@ -168,6 +168,38 @@ describe('Chat runtime OpenAPI', () => {
       'data',
       'pagination',
     ]);
+    expect(document.paths['/chat/factories'].get.description).toContain('ไม่แบ่งหน้า');
+    expect(document.components.schemas.ChatFactoryPage.properties.pagination).toEqual({
+      $ref: '#/components/schemas/ChatFactoryPagination',
+    });
+    expect(document.components.schemas.ChatFactoryPagination.properties.pageSize).toEqual({
+      type: 'integer',
+      minimum: 0,
+      description: expect.any(String),
+    });
+    expect(document.components.schemas.ChatFactoryPage.example.pagination).toEqual({
+      page: 1,
+      pageSize: 1,
+      total: 1,
+      totalPages: 1,
+    });
+    expect(document.paths['/chat/tickets'].get.parameters).toContainEqual(
+      expect.objectContaining({
+        name: 'pageSize',
+        schema: { type: 'integer', enum: [25, 50, 100], default: 25 },
+      }),
+    );
+    expect(document.components.schemas.ChatMeasurementPointsResponse.properties.data.items).toEqual(
+      {
+        $ref: '#/components/schemas/ChatConnectedMeasurementPoint',
+      },
+    );
+    expect(document.components.schemas.ChatConnectedMeasurementPoint.properties.kind.enum).toEqual([
+      'connected',
+    ]);
+    expect(document.components.schemas.ChatMeasurementPointsResponse.example.data[0].kind).toBe(
+      'connected',
+    );
     expect(document.components.schemas.ChatMeasurementPoint.properties).toMatchObject({
       kind: { enum: ['eligible', 'connected'] },
       pointCode: { nullable: true },

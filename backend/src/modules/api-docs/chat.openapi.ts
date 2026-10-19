@@ -56,6 +56,19 @@ const pageParameters = [
   query('pageSize', { type: 'integer', enum: [25, 50, 100], default: 25 }, 'จำนวนรายการต่อหน้า'),
   query('q', { type: 'string', minLength: 1, maxLength: 200 }, 'ข้อความค้นหา; trim ก่อนใช้'),
 ];
+const factoryPageParameters = [
+  query(
+    'page',
+    { type: 'integer', minimum: 1, maximum: 1000000 },
+    'หน้ารายการ; เมื่อส่ง page หรือ pageSize จะเปิดการแบ่งหน้า โดย page ที่ไม่ส่งใช้ 1',
+  ),
+  query(
+    'pageSize',
+    { type: 'integer', enum: [25, 50, 100] },
+    'จำนวนรายการต่อหน้า; เมื่อส่ง page อย่างเดียวใช้ 25; ไม่ส่งทั้งคู่จะคืนทั้งหมดตามสิทธิ์และ q',
+  ),
+  query('q', { type: 'string', minLength: 1, maxLength: 200 }, 'ข้อความค้นหา; trim ก่อนใช้'),
+];
 const idempotencyKey = {
   name: 'Idempotency-Key',
   in: 'header',
@@ -256,6 +269,10 @@ export const chatSchemas: Record<string, OpenApiObject> = {
   },
   ChatPointReference: object(pointReferenceFields),
   ChatMeasurementPoint: object(pointFields),
+  ChatConnectedMeasurementPoint: object({
+    ...pointFields,
+    kind: { type: 'string', enum: ['connected'] },
+  }),
   ChatMessage: {
     ...object({
       id: positiveId,
@@ -309,24 +326,42 @@ export const chatSchemas: Record<string, OpenApiObject> = {
     total: { type: 'integer', minimum: 0 },
     totalPages: { type: 'integer', minimum: 0 },
   }),
+  ChatFactoryPagination: object({
+    page: { type: 'integer', minimum: 1, description: 'ไม่แบ่งหน้าใช้ 1' },
+    pageSize: {
+      type: 'integer',
+      minimum: 0,
+      description: 'ไม่แบ่งหน้าเท่ากับ total รวม 0 เมื่อไม่มีรายการ; แบ่งหน้าใช้ 25, 50 หรือ 100',
+    },
+    total: { type: 'integer', minimum: 0 },
+    totalPages: {
+      type: 'integer',
+      minimum: 0,
+      description: 'ไม่แบ่งหน้าใช้ 1 เมื่อมีรายการ หรือ 0 เมื่อไม่มีรายการ',
+    },
+  }),
   ChatFactoryPage: {
     ...object({
       success: { type: 'boolean', enum: [true] },
       data: { type: 'array', items: ref('ChatFactory') },
-      pagination: ref('ChatPagination'),
+      pagination: ref('ChatFactoryPagination'),
     }),
-    example: { success: true, data: [exampleFactory], pagination: examplePagination },
+    example: {
+      success: true,
+      data: [exampleFactory],
+      pagination: { page: 1, pageSize: 1, total: 1, totalPages: 1 },
+    },
   },
   ChatMeasurementPointsResponse: {
-    ...envelope({ type: 'array', items: ref('ChatMeasurementPoint') }),
+    ...envelope({ type: 'array', items: ref('ChatConnectedMeasurementPoint') }),
     example: {
       success: true,
       data: [
         {
-          kind: 'eligible',
+          kind: 'connected',
           id: 501,
           systemType: 'CEMS',
-          pointCode: null,
+          pointCode: 'C001',
           pointName: 'ปล่องตัวอย่าง',
         },
       ],
@@ -497,9 +532,9 @@ export const chatPaths: Record<string, OpenApiObject> = {
       tags: ['Chat'],
       operationId: 'listChatFactories',
       summary: 'โรงงานที่ผู้ใช้มีสิทธิ์เลือกเปิดเรื่อง',
-      description: `${accessDescription}\n\nค้นชื่อโรงงาน/เลขทะเบียน; รวมโรงงานที่เข้าข่ายที่ยังไม่เชื่อมต่อหรือไม่มีจุดตรวจวัดเมื่อมีสิทธิ์ ไม่สร้างสิทธิ์จากการกรอกเลขทะเบียนเอง`,
+      description: `${accessDescription}\n\nโรงงานมาจาก active eligible_factories ตามสิทธิ์; ค้นชื่อโรงงาน/เลขทะเบียนด้วย q; รวมโรงงานที่เข้าข่ายที่ยังไม่เชื่อมต่อหรือไม่มีจุดตรวจวัดเมื่อมีสิทธิ์ ไม่สร้างสิทธิ์จากการกรอกเลขทะเบียนเอง\n\nไม่ส่งทั้ง page และ pageSize จะคืนโรงงานทั้งหมดตามสิทธิ์และ q โดยไม่แบ่งหน้า; pagination คงอยู่ โดย page=1, pageSize=total และ totalPages=1 เมื่อมีรายการ หรือ 0 เมื่อว่าง; ส่งอย่างน้อยหนึ่งตัวจะเปิดการแบ่งหน้าและใช้ค่าอีกตัวเป็น page=1 หรือ pageSize=25; ไม่เปลี่ยน pagination ของ GET /chat/tickets`,
       security,
-      parameters: pageParameters,
+      parameters: factoryPageParameters,
       responses: {
         ...errors,
         '200': response('รายการโรงงานและ pagination ที่ระดับบนสุด', ref('ChatFactoryPage')),
@@ -511,7 +546,7 @@ export const chatPaths: Record<string, OpenApiObject> = {
       tags: ['Chat'],
       operationId: 'listChatFactoryMeasurementPoints',
       summary: 'จุดตรวจวัดที่เลือกได้ของโรงงาน',
-      description: `${accessDescription}\n\nใช้ kind+id ระบุตัวตนจุด; eligible เป็นจุดในแบบโรงงานที่เข้าข่าย, connected เป็นจุด current/live ที่เชื่อมต่อแล้ว ไม่รวมจุดด้วยชื่อหรือ pointCode ที่ตรงกัน ไม่พบจุดคืน [] และยังเปิดเรื่องระดับโรงงานได้\n\nตรวจ active membership ซ้ำตอนสร้าง Ticket; หลังสร้างเก็บ snapshot จุดและไม่โยงไปจุดใหม่ที่ใช้รหัสเดิม`,
+      description: `${accessDescription}\n\nคืนเฉพาะ kind=connected จาก active cems_wpms_connected_measurement_points ของโรงงานที่เข้าข่ายนั้น ไม่รวมจุดในแบบข้อมูลเข้าข่าย; ใช้ kind+id ระบุตัวตนจุด ไม่รวมจุดด้วยชื่อหรือ pointCode ที่ตรงกัน ไม่พบจุดเชื่อมต่อคืน [] และยังเปิดเรื่องระดับโรงงานได้\n\nตรวจ active membership ซ้ำตอนสร้าง Ticket; หลังสร้างเก็บ snapshot จุดและไม่โยงไปจุดใหม่ที่ใช้รหัสเดิม; ชนิด eligible ใน request เปิด Ticket และ snapshot ประวัติเดิมยังรองรับเพื่อ compatibility แต่ไม่อยู่ในรายการตัวเลือกนี้`,
       security,
       parameters: [idParameter],
       responses: {
