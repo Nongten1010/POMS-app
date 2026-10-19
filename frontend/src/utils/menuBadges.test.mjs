@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { fetchMenuBadges, menuBadgeKeys } from './menuBadges.mjs'
 
 const data = Object.fromEntries(menuBadgeKeys.map((key) => [key, key === 'connection']))
-test('loads all six booleans with authenticated no-store request', async () => {
+test('loads all seven booleans with authenticated no-store request', async () => {
   const controller = new AbortController()
   const actual = await fetchMenuBadges({ url: '/api/v1/me/menu-badges', accessToken: 'test-token', signal: controller.signal,
     fetchImpl: async (url, options) => {
@@ -15,6 +15,14 @@ test('loads all six booleans with authenticated no-store request', async () => {
       return Response.json({ success: true, data })
     } })
   assert.deepEqual(actual, data)
+})
+
+test('preserves Chat badge true and false without changing other menu badges', async () => {
+  for (const chat of [true, false]) {
+    const responseData = { factories: false, connection: true, kwp_forms: true, bod_cod_errors: false, eligible_factories: true, notifications: false, chat }
+    const actual = await fetchMenuBadges({ url: '/', accessToken: 'test-token', fetchImpl: async () => Response.json({ success: true, data: responseData }) })
+    assert.deepEqual(actual, responseData)
+  }
 })
 
 test('rejects missing or nonboolean data instead of treating failures as no work', async () => {

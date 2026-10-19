@@ -1,4 +1,4 @@
-export const menuBadgeKeys = ['factories', 'connection', 'kwp_forms', 'bod_cod_errors', 'eligible_factories', 'notifications']
+export const menuBadgeKeys = ['factories', 'connection', 'kwp_forms', 'bod_cod_errors', 'eligible_factories', 'notifications', 'chat']
 
 export async function fetchMenuBadges({ url, accessToken, signal, fetchImpl = fetch }) {
   const result = await fetchImpl(url, {
