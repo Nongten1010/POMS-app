@@ -4403,10 +4403,8 @@ function canShowRequestConnectionTest(request, isStaff) {
 }
 
 function RequestConnectionTestPanel({ request, accessToken }) {
-  const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
-  const [selectedCode, setSelectedCode] = useState('')
-  const stationId = points.some((point) => getMonitoringPointCode(point) === selectedCode)
-    ? selectedCode : getMonitoringPointCode(points[0])
+  const point = request?.measurementPoints?.[0]
+  const stationId = getMonitoringPointCode(point)
   const [refresh, setRefresh] = useState(0)
   const [result, setResult] = useState({ loading: true, rows: [], parameters: [], error: '' })
 
@@ -4444,13 +4442,9 @@ function RequestConnectionTestPanel({ request, accessToken }) {
       <Typography component="summary" sx={{ fontWeight: 700, cursor: 'pointer' }}>ข้อมูลทดสอบการส่งข้อมูล</Typography>
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Stack direction="row" sx={{ gap: 2, alignItems: 'center' }}>
-          <TextField select label="จุดตรวจวัด" size="small" fullWidth value={stationId || ''} onChange={(event) => setSelectedCode(event.target.value)} disabled={!points.length}>
-            {points.filter((point) => getMonitoringPointCode(point)).map((point) => (
-              <MenuItem key={getMonitoringPointCode(point)} value={getMonitoringPointCode(point)}>
-                {getMonitoringPointCode(point)}{point.pointName ? ` - ${point.pointName}` : ''}
-              </MenuItem>
-            ))}
-          </TextField>
+          <Typography variant="body2" sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+            จุดตรวจวัด: {stationId || '-'}{point?.pointName ? ` - ${point.pointName}` : ''}
+          </Typography>
           <IconButton aria-label="รีเฟรชข้อมูลทดสอบ" title="รีเฟรชข้อมูลทดสอบ" disabled={result.loading} onClick={() => setRefresh((value) => value + 1)}><RefreshIcon /></IconButton>
         </Stack>
         {result.error ? <Alert severity="error">{result.error}</Alert> : result.loading ? (
