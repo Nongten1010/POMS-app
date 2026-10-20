@@ -5880,7 +5880,9 @@ function CemsMonitoringPointDetails({
             label="รหัสจุดตรวจวัด"
             size="small"
             defaultValue={pointCodeValue}
+            placeholder={isOperator ? 'อัตโนมัติ' : undefined}
             slotProps={{
+              inputLabel: isOperator ? { shrink: true } : undefined,
               input: {
                 readOnly: isOperator || pointCodeReadOnly,
               },
@@ -6752,7 +6754,9 @@ function WpmsMonitoringPointDetails({
             label="รหัสจุดตรวจวัด"
             size="small"
             defaultValue={pointCodeValue}
+            placeholder={isOperator ? 'อัตโนมัติ' : undefined}
             slotProps={{
+              inputLabel: isOperator ? { shrink: true } : undefined,
               input: {
                 readOnly: isOperator || pointCodeReadOnly,
               },
