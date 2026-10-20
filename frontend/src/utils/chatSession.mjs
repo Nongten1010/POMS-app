@@ -16,3 +16,16 @@ export function getChatViewerId(auth) {
 }
 
 export const CHAT_MESSAGE_MAX_LENGTH = 2000
+
+export function isChatMessageOnRight(sender, viewer) {
+  if (viewer?.userType === 'officer' || viewer?.userType === 'admin') {
+    // The API snapshots the sending persona in roleLabel, not roleCode order.
+    return ['เจ้าหน้าที่', 'ผู้ดูแลระบบ'].includes(sender?.roleLabel)
+  }
+  return sender?.userId != null && viewer?.userId != null && sender.userId === viewer.userId
+}
+
+export function hasChatReplyBadge(userType, lastMessageSenderType) {
+  return (userType === 'operator' && lastMessageSenderType === 'officer')
+    || (userType === 'officer' && lastMessageSenderType === 'operator')
+}

@@ -6,6 +6,7 @@ import SendIcon from '@mui/icons-material/Send'
 import CheckIcon from '@mui/icons-material/Check'
 import { errorText, formatChatDate, mergeMessages, readNewMessages } from '../utils/chatApi.mjs'
 import { TicketStatus } from './chatPresentation'
+import { isChatMessageOnRight } from '../utils/chatSession.mjs'
 
 export default function ChatConversation({ id, client, options, drafts, onDismiss, onChanged, onError }) {
   const [ticket, setTicket] = useState(null)
@@ -136,7 +137,7 @@ export default function ChatConversation({ id, client, options, drafts, onDismis
         {refreshNote && <Typography variant="caption" display="block" textAlign="center" color="text.secondary">{refreshNote}</Typography>}
         {timeline.map(({ kind, value: item }) => {
           if (kind === 'event') return <Typography key={`event:${item.id}`} variant="caption" display="block" textAlign="center" color="text.secondary" sx={{ my: 2 }}>{item.actor.name} {item.type === 'opened' ? 'เปิดการสนทนา' : 'ปิดการสนทนา'} · {formatChatDate(item.createdAt)}</Typography>
-          const own = item.sender.userId === options.viewer.userId
+          const own = isChatMessageOnRight(item.sender, options.viewer)
           return <Box key={`message:${item.id}`} sx={{ display: 'flex', flexDirection: 'column', alignItems: own ? 'flex-end' : 'flex-start', my: 2 }}>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, overflowWrap: 'anywhere' }}>{item.sender.name} · {item.sender.roleLabel}</Typography>
             <Box sx={{ px: 2, py: 1.25, maxWidth: { xs: '92%', sm: '76%' }, bgcolor: own ? '#e6efff' : '#fff', color: own ? '#1a3c70' : 'text.primary', border: 1, borderColor: own ? '#d2e1fd' : '#e0e6ee', borderRadius: 2, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.8 }}>{item.text}</Box>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Box, Button, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material'
+import { Alert, Badge, Box, Button, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material'
 import { DataGrid, getGridDateOperators, getGridSingleSelectOperators, getGridStringOperators } from '@mui/x-data-grid'
 import AddIcon from '@mui/icons-material/Add'
 import ChatIcon from '@mui/icons-material/Chat'
@@ -10,7 +10,7 @@ import useChatResource from './useChatResource'
 import { TicketStatus } from './chatPresentation'
 import { createChatClient, errorText, formatChatDate } from '../utils/chatApi.mjs'
 import chatTopics from '../option/chatTopicOptions.json'
-import { CHAT_MESSAGE_MAX_LENGTH } from '../utils/chatSession.mjs'
+import { CHAT_MESSAGE_MAX_LENGTH, hasChatReplyBadge } from '../utils/chatSession.mjs'
 
 export default function ChatWorkspace({ accessToken, viewerId, userType, onAccessError }) {
   const client = useMemo(() => createChatClient(accessToken, { userType }), [accessToken, userType])
@@ -39,7 +39,7 @@ export default function ChatWorkspace({ accessToken, viewerId, userType, onAcces
     if (!revision) return
     refreshList()
   }, [revision, refreshList])
-  const data = { viewer: { userId: viewerId }, limits: { messageMaxLength: CHAT_MESSAGE_MAX_LENGTH } }
+  const data = { viewer: { userId: viewerId, userType }, limits: { messageMaxLength: CHAT_MESSAGE_MAX_LENGTH } }
   const canCreate = userType === 'operator' && !accessError
   const rows = (list.response?.data || []).map((ticket) => ({ ...ticket, topic: ticket.topic.code, topicLabel: ticket.topic.label, factoryName: ticket.factory.name, registration: ticket.factory.registrationNo, region: ticket.factory.regionName || '-', province: ticket.factory.provinceName, latest: new Date(ticket.lastMessageAt) }))
   const columns = [
@@ -51,7 +51,13 @@ export default function ChatWorkspace({ accessToken, viewerId, userType, onAcces
     { field: 'province', headerName: 'จังหวัด', width: 115, filterOperators: getGridStringOperators().filter((operator) => operator.value === 'equals') },
     { field: 'status', headerName: 'สถานะ', width: 120, type: 'singleSelect', valueOptions: [{ value: 'open', label: 'เปิดการสนทนา' }, { value: 'closed', label: 'ปิดการสนทนา' }], filterOperators: getGridSingleSelectOperators().filter((operator) => operator.value === 'is'), renderCell: ({ value }) => <TicketStatus status={value} /> },
     { field: 'latest', headerName: 'ข้อความล่าสุด', type: 'dateTime', width: 140, filterOperators: getGridDateOperators(true).filter((operator) => ['onOrAfter', 'onOrBefore'].includes(operator.value)), valueFormatter: (value) => formatChatDate(value) },
-    { field: 'actions', headerName: 'จัดการ', width: 145, sortable: false, filterable: false, disableColumnMenu: true, disableExport: true, renderCell: ({ row }) => <Button size="small" variant={row.status === 'open' ? 'contained' : 'outlined'} startIcon={<ChatIcon />} onClick={() => setSelectedId(row.id)}>{row.status === 'open' ? 'สนทนา' : 'ดูประวัติ'}</Button> },
+    { field: 'actions', headerName: 'จัดการ', width: 145, sortable: false, filterable: false, disableColumnMenu: true, disableExport: true, renderCell: ({ row }) => {
+      const showBadge = hasChatReplyBadge(userType, row.lastMessageSenderType)
+      const label = row.status === 'open' ? 'สนทนา' : 'ดูประวัติ'
+      return <Badge color="error" variant="dot" invisible={!showBadge}>
+        <Button size="small" variant={row.status === 'open' ? 'contained' : 'outlined'} startIcon={<ChatIcon />} aria-label={showBadge ? `${label}: มีข้อความล่าสุดจาก${userType === 'operator' ? 'เจ้าหน้าที่' : 'ผู้ประกอบการ'}` : label} onClick={() => setSelectedId(row.id)}>{label}</Button>
+      </Badge>
+    } },
   ]
   return <Stack spacing={2} sx={{ height: '100%', minHeight: 0 }}>
     <Paper elevation={0} sx={{ px: { xs: 1.5, md: 2 }, py: 1.5, border: 1, borderColor: 'divider' }}><Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', lg: 'center' } }}>
