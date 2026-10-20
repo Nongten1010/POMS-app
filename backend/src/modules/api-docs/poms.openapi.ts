@@ -7531,6 +7531,12 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
       ? { permissions: ['cems_wpms_requests:view'], mode: 'any' }
       : { permissions: ['cems_wpms_requests:edit'], mode: 'any' };
   }
+  if (path === '/parameter-values/connection-test') {
+    return {
+      permissions: ['cems_wpms_requests:view', 'cems_wpms_requests:approve'],
+      mode: 'any',
+    };
+  }
   if (path.startsWith('/parameter-values')) {
     return { permissions: ['cems_wpms_requests:view'], mode: 'any' };
   }

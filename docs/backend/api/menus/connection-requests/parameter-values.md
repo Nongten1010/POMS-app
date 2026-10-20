@@ -12,6 +12,8 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
+ผู้ประกอบการใช้ `cems_wpms_requests:view` ตามขอบเขตเดิม ส่วนเจ้าหน้าที่ (`officer`/`admin`) ใช้ `cems_wpms_requests:approve` พร้อมขอบเขตของสิทธิ์อนุมัติ โดยไม่ต้องมี `view` เพิ่มสำหรับ endpoint นี้ อ่าน [กติกาสิทธิ์และสถานะคำขอ](#get-apiv1parameter-valuesconnection-test) ก่อนแสดงปุ่มตรวจข้อมูลให้เจ้าหน้าที่
+
 ## StatusCode Contract
 
 กติกานี้ใช้กับค่าที่จัดรูปสำหรับแสดงผลใน connection test, dashboard, public map และ measurement statistics:
@@ -192,8 +194,21 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 ### Authentication And Permission
 
 - Authentication: required
-- Permission: `cems_wpms_requests:view`
-- Data scope: current connected point หรือจุดในคำขอสถานะ `WAITING_CONNECTION` ที่ผู้เรียกมีสิทธิ์
+- Permission: แยกตาม `userType` ในตารางด้านล่าง; `citizen` และประเภทบัญชีอื่นเข้าไม่ได้แม้มี permission
+- Data scope: ตรวจทั้งสิทธิ์ของผู้เรียกและจุดตรวจวัด โดยใช้ scope ของ permission ในเส้นทางนั้นเสมอ
+
+| ผู้เรียก | Permission | จุดที่อ่านได้ |
+| --- | --- | --- |
+| `operator` | `cems_wpms_requests:view` | current connected point หรือจุดในคำขอ `WAITING_CONNECTION` ตามขอบเขตเดิมและสิทธิ์โรงงาน |
+| `officer` / `admin` | `cems_wpms_requests:approve` | current connected point ในขอบเขตอนุมัติ หรือจุดในคำขอ `WAITING_CONNECTION` / `CONNECTION_CONFIRMED` ที่อยู่ในขอบเขตอนุมัติ |
+
+- เจ้าหน้าที่ที่มีแค่ `view` ตอบ `403 FORBIDDEN`; เจ้าหน้าที่ที่มี `approve` โดยไม่มี `view` ใช้ endpoint นี้ได้เมื่อจุดอยู่ในขอบเขต
+- ขอบเขตเจ้าหน้าที่ใช้ `approve` เท่านั้น ไม่ fallback ไปหา scope ของ `view` แม้ `view` จะกว้างกว่า เช่น `view: ALL` และ `approve: IN_PROVINCE` อ่านได้เฉพาะจังหวัดของ `approve`
+- scope อนุมัติรองรับ `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE` และ `FACTORY_TYPE_88`; scope ที่ขาด ไม่รองรับ หรือขาดค่าพื้นที่ที่จำเป็นไม่ให้สิทธิ์อ่าน
+- จุดระหว่างคำขอใช้ข้อมูลพื้นที่/ประเภทโรงงานจาก request factory snapshot ที่ยังไม่ถูกลบ ตามขอบเขตเดียวกับการอนุมัติคำขอ ส่วน current connected point ใช้ข้อมูลจุดเชื่อมต่อ POMS ปัจจุบัน
+- จุดระหว่างคำขอรองรับชื่อหรือรหัสพื้นที่ตามที่มีใน snapshot; สำหรับ current connected point ขอบเขต `IN_REGION` ต้องตรงกับค่าภาคในข้อมูลปัจจุบัน ไม่มีการแปลงรหัสภาคจาก snapshot ให้อัตโนมัติ หากรหัสเทียบกับค่าปัจจุบันไม่ได้ ตอบ `403 FORBIDDEN`
+- สิทธิ์นี้เพิ่มเฉพาะการอ่านข้อมูลทดสอบ ไม่ให้สิทธิ์แก้ config, ทดสอบ config หรืออ่าน `/parameter-values`, `/parameter-values/latest`, `/parameter-values/tables` เพิ่ม
+- client เดิมของเจ้าหน้าที่ต้องปรับสิทธิ์และการแสดงปุ่มตาม [ผลกระทบและการเปลี่ยนผ่าน](../../CHANGELOG.md#connection-test-approval-access)
 
 ### Request Fields
 
@@ -249,6 +264,7 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 ### Validation And Business Rules
 
 - อ่านสูงสุด 10 แถวล่าสุดที่มีในตารางรายนาที ไม่จำกัดว่าต้องเป็นข้อมูล 10 นาทีที่ผ่านมา; วันเวลาเป็นของ source row จริง.
+- ก่อนอ่านตารางค่าต้องผ่านการตรวจสิทธิ์ของ station และอ่านรายการพารามิเตอร์ด้วยขอบเขตเดียวกัน จุดหรือคำขอที่ถูกลบไม่เปิดให้อ่านผ่านเส้นทางคำขอ; สถานะอื่นที่ไม่มี current connected point ที่เข้าถึงได้ตอบ `403 FORBIDDEN`.
 - หากมีน้อยกว่า 10 แถว ให้คืนเท่าที่มี; ตารางว่างคืน `data: []` และ `meta.count: 0`.
 - หากไม่มีตารางรายนาที ตอบ `404 NOT_FOUND`; ไม่ย้อนอ่านตาราง `test`.
 - client ที่ตรวจ `meta.interval` ต้องรองรับ `1m` แทน `test` และรายการได้ถึง 10 แถว ดู [ผลกระทบและการปรับ client](../../CHANGELOG.md#connection-test-latest-minute-rows).
@@ -264,7 +280,7 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | query ไม่ผ่าน validation | แก้ `stationId`, interval หรือวันที่ |
 | `401` | `UNAUTHORIZED` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
-| `403` | `FORBIDDEN` | station อยู่นอก data scope | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ |
+| `403` | `FORBIDDEN` | ขาด permission, ประเภทบัญชีไม่รองรับ, station อยู่นอก data scope หรือสถานะคำขอไม่เปิดให้อ่าน | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ; สำหรับเจ้าหน้าที่ตรวจ `approve` และขอบเขตของสิทธิ์นั้น |
 | `404` | `NOT_FOUND` | ไม่พบ source table | ตรวจ station และ interval |
 
 ## Backend Maintainer Links

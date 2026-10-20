@@ -1,8 +1,12 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { getScopeDetails } from '../../shared/middlewares/authorize';
+import { ForbiddenError } from '../../shared/errors/AppError';
 import { parameterValuesService } from './parameter-values.service';
-import { type ParameterValueAccessContext } from './parameter-values.types';
+import {
+  type ConnectionTestAccessContext,
+  type ParameterValueAccessContext,
+} from './parameter-values.types';
 import {
   connectionTestQuerySchema,
   latestParameterValueQuerySchema,
@@ -42,13 +46,41 @@ export const parameterValuesController = {
   async connectionTest(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const query = connectionTestQuerySchema.parse(req.query);
-      const result = await parameterValuesService.connectionTest(query, requireAccess(req));
+      const result = await parameterValuesService.connectionTest(
+        query,
+        requireConnectionTestAccess(req),
+      );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
       next(err);
     }
   },
 };
+
+function requireConnectionTestAccess(req: Request): ConnectionTestAccessContext {
+  const user = req.user;
+  if (!user) throw new Error('Authenticated user missing from request');
+  if (!['operator', 'officer', 'admin'].includes(user.userType)) {
+    throw new ForbiddenError(
+      'Connection test is available to operators and approving officers only',
+    );
+  }
+
+  const permission =
+    user.userType === 'operator' ? 'cems_wpms_requests:view' : 'cems_wpms_requests:approve';
+  if (!(permission in user.scopes)) {
+    throw new ForbiddenError(`Missing required permission: ${permission}`);
+  }
+  const scope = getScopeDetails(req, permission);
+  if (!scope) throw new ForbiddenError(`Missing required permission: ${permission}`);
+
+  return {
+    actorUserId: user.id,
+    scope,
+    regionalAccess: user.regionalAccess ?? null,
+    permission,
+  };
+}
 
 function requireAccess(req: Request): ParameterValueAccessContext {
   const actorUserId = req.user?.id;

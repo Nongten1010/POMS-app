@@ -145,6 +145,29 @@ export const parameterValuesRepository = {
     return Boolean(row);
   },
 
+  async canAccessStationForConnectionReview(
+    stationId: string,
+    access: ParameterValueAccessContext,
+  ): Promise<boolean> {
+    if (!hasConnectionReviewScope(access)) return false;
+    const connected = await matchConnectionReviewStation(
+      buildConnectedStationReviewAccessQuery(access),
+      stationId,
+    )
+      .select('p.id')
+      .first();
+    if (connected) return true;
+
+    const row = await matchConnectionReviewStation(
+      buildConnectionReviewStationAccessQuery(access),
+      stationId,
+    )
+      .select('p.id')
+      .first();
+
+    return Boolean(row);
+  },
+
   async listRegisteredParameters(
     stationId: string,
     access: ParameterValueAccessContext,
@@ -176,6 +199,26 @@ export const parameterValuesRepository = {
 
     return uniqueRegisteredParameters(
       [...connectedRows, ...waitingRows].flatMap((row) => parseRegisteredParametersFromRow(row)),
+    );
+  },
+
+  async listRegisteredParametersForConnectionReview(
+    stationId: string,
+    access: ParameterValueAccessContext,
+  ): Promise<string[]> {
+    if (!hasConnectionReviewScope(access)) return [];
+
+    const connectedRows = await matchConnectionReviewStation(
+      buildConnectedStationReviewAccessQuery(access),
+      stationId,
+    ).select<RegisteredParameterRow[]>('p.parameters_json', 'p.instruments_json');
+    const reviewRows = await matchConnectionReviewStation(
+      buildConnectionReviewStationAccessQuery(access),
+      stationId,
+    ).select<RegisteredParameterRow[]>('p.parameters_json', 'p.instruments_json');
+
+    return uniqueRegisteredParameters(
+      [...connectedRows, ...reviewRows].flatMap((row) => parseRegisteredParametersFromRow(row)),
     );
   },
 
@@ -371,7 +414,7 @@ function uniqueRegisteredParameters(parameters: string[]): string[] {
   return result;
 }
 
-function buildStationAccessQuery(access: ParameterValueAccessContext) {
+function buildStationAccessQuery(access: ParameterValueAccessContext): Knex.QueryBuilder {
   const query = db(
     factoryProfileReadTable('cems_wpms_connected_measurement_points', 'p'),
   ).whereNull('p.deleted_at');
@@ -379,7 +422,13 @@ function buildStationAccessQuery(access: ParameterValueAccessContext) {
   const scopeValue = getAccessScopeValue(access.scope);
   if (scopeValue === 'ALL') return query;
 
-  const scopedQuery = query
+  const scopedQuery = joinStationLocation(query);
+  applyStationAccessFilter(scopedQuery, access, 'p');
+  return scopedQuery;
+}
+
+function joinStationLocation(query: Knex.QueryBuilder) {
+  return query
     .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'p.eligible_factory_id').andOnNull('ef.deleted_at');
     })
@@ -413,9 +462,6 @@ function buildStationAccessQuery(access: ParameterValueAccessContext) {
         this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
       }
     });
-
-  applyStationAccessFilter(scopedQuery, access, 'p');
-  return scopedQuery;
 }
 
 function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessContext) {
@@ -444,6 +490,112 @@ function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessCo
   return scopedQuery;
 }
 
+function hasConnectionReviewScope(access: ParameterValueAccessContext): boolean {
+  return ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(
+    getAccessScopeValue(access.scope) ?? '',
+  );
+}
+
+function matchConnectionReviewStation(query: Knex.QueryBuilder, stationId: string) {
+  return query.where((builder) => {
+    builder.where('p.point_code', stationId).orWhere((legacy) => {
+      legacy.whereNull('p.point_code').where('p.point_name', stationId);
+    });
+  });
+}
+
+function buildConnectedStationReviewAccessQuery(access: ParameterValueAccessContext) {
+  const scope = toScopeDetails(access.scope);
+  if (scope.scope !== 'IN_PROVINCE' && scope.scope !== 'IN_ESTATE') {
+    // Live profiles retain region names; do not infer codes from historical requests.
+    return buildStationAccessQuery(access);
+  }
+
+  const query = joinStationLocation(
+    db(factoryProfileReadTable('cems_wpms_connected_measurement_points', 'p')).whereNull(
+      'p.deleted_at',
+    ),
+  );
+  if (scope.scope === 'IN_PROVINCE') {
+    const province = normalizeLocationValue(scope.province);
+    if (!province) return query.whereRaw('1 = 0');
+    return query.where((builder) => {
+      builder
+        .where('pr.name_th', province)
+        .orWhereRaw('CAST(pr.id AS varchar(32)) = ?', [province]);
+    });
+  }
+
+  const estate = connectionReviewEstateCode(scope);
+  if (!estate) return query.whereRaw('1 = 0');
+  return query.where((builder) => {
+    builder.where('ie.code', estate).orWhere('ie.name_th', estate);
+  });
+}
+
+// Approval follows the request snapshot, just like connection-request approval.
+// Keep this separate from the helper used to authorize device-setting writes.
+function buildConnectionReviewStationAccessQuery(access: ParameterValueAccessContext) {
+  const query = db('cems_wpms_measurement_points as p')
+    .join('cems_wpms_connection_requests as r', 'r.id', 'p.request_id')
+    .whereNull('p.deleted_at')
+    .whereNull('r.deleted_at')
+    .whereIn('r.status', ['WAITING_CONNECTION', 'CONNECTION_CONFIRMED']);
+  const scope = toScopeDetails(access.scope);
+  if (scope.scope === 'ALL') return query;
+
+  query.join('cems_wpms_request_factory_snapshots as fs', function joinFactorySnapshot() {
+    this.on('fs.request_id', '=', 'r.id').andOnNull('fs.deleted_at');
+  });
+  switch (scope.scope) {
+    case 'IN_REGION': {
+      const regions = resolveAssignedRegions(scope.region, access.regionalAccess);
+      if (regions.length === 0) return query.whereRaw('1 = 0');
+      return query.where((builder) => {
+        builder.whereIn('fs.region_name', regions).orWhereIn('fs.region_code', regions);
+      });
+    }
+    case 'IN_PROVINCE': {
+      const province = normalizeLocationValue(scope.province);
+      if (!province) return query.whereRaw('1 = 0');
+      return query.where((builder) => {
+        builder.where('fs.province_name', province).orWhere('fs.province_code', province);
+      });
+    }
+    case 'IN_ESTATE': {
+      const estate = connectionReviewEstateCode(scope);
+      return estate ? query.where('fs.industrial_estate_code', estate) : query.whereRaw('1 = 0');
+    }
+    case 'FACTORY_TYPE_88':
+      applyFactoryType88Filter(query, 'fs.factory_main_type_code');
+      return query;
+    default:
+      return query.whereRaw('1 = 0');
+  }
+}
+
+function connectionReviewEstateCode(scope: PermissionScopeDetails): string | null {
+  // Match the legacy qualifiers accepted by the approval flow.
+  for (const key of [
+    'estateCode',
+    'industrialEstateCode',
+    'estate',
+    'estateId',
+    'industrialEstateId',
+  ]) {
+    const value = Reflect.get(scope, key);
+    if (typeof value === 'string') return normalizeLocationValue(value);
+    if (
+      (key === 'estateId' || key === 'industrialEstateId') &&
+      typeof value === 'number' &&
+      Number.isFinite(value)
+    ) {
+      return String(value);
+    }
+  }
+  return null;
+}
+
 export function buildStationAccessQueryForTests(access: ParameterValueAccessContext) {
   return buildStationAccessQuery(access);
 }
@@ -452,6 +604,12 @@ export function buildWaitingConnectionStationAccessQueryForTests(
   access: ParameterValueAccessContext,
 ) {
   return buildWaitingConnectionStationAccessQuery(access);
+}
+
+export function buildConnectionReviewStationAccessQueryForTests(
+  access: ParameterValueAccessContext,
+) {
+  return buildConnectionReviewStationAccessQuery(access);
 }
 
 export function parseRegisteredParametersFromRowForTests(row: RegisteredParameterRow): string[] {

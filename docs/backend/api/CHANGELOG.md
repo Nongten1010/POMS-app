@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="connection-test-approval-access"></a>
+
+## 2026-10-20 — เจ้าหน้าที่อ่านข้อมูลทดสอบด้วยสิทธิ์อนุมัติและขอบเขตคำขอ
+
+- **Affected canonical docs:** [ข้อมูลทดสอบเชื่อมต่อ](./menus/connection-requests/parameter-values.md#get-apiv1parameter-valuesconnection-test), [เมนูขอเชื่อมต่อ](./menus/connection-requests/README.md), [รายการ endpoints](./ENDPOINTS.md)
+- **Impact:** `GET /parameter-values/connection-test` สำหรับ `officer`/`admin` ต้องมี `cems_wpms_requests:approve` และใช้ขอบเขตของ `approve` เท่านั้น ไม่ fallback ไปใช้ `view` ที่กว้างกว่า; รองรับบัญชีมี `approve` โดยไม่มี `view` สำหรับ endpoint นี้ เพิ่มการอ่านจุดในคำขอ `CONNECTION_CONFIRMED` ก่อนเจ้าหน้าที่ยืนยันเชื่อมต่อ
+- **Migration:** ผู้ดูแลตรวจและให้ `cems_wpms_requests:approve` พร้อมขอบเขตพื้นที่/ประเภทโรงงานตรงงานแก่เจ้าหน้าที่ที่จะตรวจข้อมูล Client ใช้สิทธิ์อนุมัติเพื่อแสดง action ตรวจข้อมูลสำหรับเจ้าหน้าที่ และรองรับ `403 FORBIDDEN` เมื่อขาดสิทธิ์หรืออยู่นอก scope; URL, query, response และค่าตรวจวัดรายนาทีสูงสุด 10 แถวคงเดิม ไม่ต้อง migrate ฐานข้อมูล หลัง deploy ตรวจ `https://d-poms.diw.go.th/api/v1/openapi.json` ให้ตรงกับ contract นี้ และตรวจทั้งเจ้าหน้าที่ใน/นอกขอบเขตกับผู้ประกอบการก่อนปิด release
+- **Old contract:** ทุกผู้เรียกใช้ `cems_wpms_requests:view` และ scope ของ `view`; อ่าน current connected point หรือจุดในคำขอ `WAITING_CONNECTION` ที่เข้าถึงได้
+- **New contract:** `operator` คง `view` และขอบเขตเดิม; `officer`/`admin` ใช้ `approve` อ่าน current connected point ในขอบเขตอนุมัติ หรือจุดในคำขอ `WAITING_CONNECTION` / `CONNECTION_CONFIRMED` ด้วยขอบเขตจาก request factory snapshot ตามการอนุมัติคำขอ; `citizen` และประเภทบัญชีอื่นเข้าไม่ได้ สิทธิ์แก้/ทดสอบ config และ raw/latest/tables endpoints คงเดิม
+- **Breaking change:** yes — เจ้าหน้าที่ที่เคยมีแค่ `view` หรือใช้ scope ของ `view` กว้างกว่า `approve` อาจอ่านข้อมูลทดสอบไม่ได้จนกว่าจะจัดสิทธิ์ให้ตรงขอบเขตงาน
+
 <a id="connection-test-latest-minute-rows"></a>
 
 ## 2026-10-19 — ทดสอบการเชื่อมต่อด้วยข้อมูลรายนาทีล่าสุด 10 แถว

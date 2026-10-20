@@ -79,6 +79,10 @@ export interface ParameterValueAccessContext {
   regionalAccess?: RegionalAccessDTO | null;
 }
 
+export interface ConnectionTestAccessContext extends ParameterValueAccessContext {
+  permission?: 'cems_wpms_requests:view' | 'cems_wpms_requests:approve';
+}
+
 export interface ParameterValuesTableDTO {
   schemaName: string;
   tableName: string;

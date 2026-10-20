@@ -2,15 +2,29 @@ import { describe, expect, it } from '@jest/globals';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
 
 describe('connection-test OpenAPI contract', () => {
-  it('publishes the one-minute source, ten-row limit and existing access requirements', () => {
+  it('publishes the one-minute source, ten-row limit and persona-specific access requirements', () => {
     const document = pomsOpenApiDocument as any;
     const operation = document.paths['/parameter-values/connection-test'].get;
     const response = operation.responses['200'].content['application/json'];
     const schema = document.components.schemas.ParameterConnectionTestResponse;
 
     expect(operation.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation['x-poms-permissions']).toEqual([
+      'cems_wpms_requests:view',
+      'cems_wpms_requests:approve',
+    ]);
+    expect(operation['x-poms-permission-mode']).toBe('any');
     expect(operation.description).toContain('cems_wpms_requests:view');
+    expect(operation.description).toContain('cems_wpms_requests:approve');
+    expect(operation.description).toContain('officer/admin');
+    expect(operation.description).toContain('ไม่ fallback');
+    expect(operation.description).toContain('ไม่ต้องมี view เพิ่ม');
+    expect(operation.description).toContain('citizen');
     expect(operation.description).toContain('WAITING_CONNECTION');
+    expect(operation.description).toContain('CONNECTION_CONFIRMED');
+    expect(operation.description).toContain('request factory snapshot');
+    expect(operation.description).toContain('403 FORBIDDEN');
+    expect(operation.description).toContain('registered parameters ด้วย scope เดียวกัน');
     expect(operation.parameters).toEqual([
       expect.objectContaining({ name: 'stationId', in: 'query', required: true }),
     ]);
@@ -29,4 +43,17 @@ describe('connection-test OpenAPI contract', () => {
       meta: { stationId: 'S2003', interval: '1m', tableName: 'S2003_data_1m', count: 1 },
     });
   });
+
+  it.each(['/parameter-values', '/parameter-values/latest', '/parameter-values/tables'])(
+    'keeps the view permission on %s',
+    (path) => {
+      const document = pomsOpenApiDocument as any;
+      const operation = document.paths[path].get;
+
+      expect(operation.security).toEqual([{ bearerAuth: [] }]);
+      expect(operation['x-poms-permissions']).toEqual(['cems_wpms_requests:view']);
+      expect(operation.description).toContain('cems_wpms_requests:view');
+      expect(operation.description).not.toContain('cems_wpms_requests:approve');
+    },
+  );
 });

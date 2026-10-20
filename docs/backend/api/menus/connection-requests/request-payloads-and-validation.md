@@ -998,10 +998,10 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 
 สิ่งที่ควรรู้
 
-- permission คือ `cems_wpms_requests:view`
+- permission และขอบเขตแยกตามผู้เรียก ดู [สิทธิ์ข้อมูลทดสอบสำหรับผู้ประกอบการและเจ้าหน้าที่](./parameter-values.md#get-apiv1parameter-valuesconnection-test)
 - query หลักคือ `stationId`
 - response จัด `values` และ `statuses` ตามชื่อพารามิเตอร์พร้อมหน่วย
-- ใช้ได้ทั้งจุดที่ `CONNECTED` และบางกรณีจุดในคำขอสถานะ `WAITING_CONNECTION` ที่ผู้เรียกมีสิทธิ์
+- สถานะคำขอที่อ่านได้และเงื่อนไขสิทธิ์อนุมัติให้ยึด [canonical contract](./parameter-values.md#get-apiv1parameter-valuesconnection-test)
 
 ### `POST /api/v1/device-connections/test-connection`
 

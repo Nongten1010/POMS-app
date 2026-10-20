@@ -5,6 +5,7 @@ jest.mock('../../src/modules/parameter-values/parameter-values.repository', () =
     canAccessStation: jest.fn(),
     earliestMeasurementDate: jest.fn(),
     canAccessStationForConnectionTest: jest.fn(),
+    canAccessStationForConnectionReview: jest.fn(),
     latestRow: jest.fn(),
     latestRowsAtOrBeforeHour: jest.fn(),
     latestRowsAtLatestTimestamp: jest.fn(),
@@ -12,6 +13,7 @@ jest.mock('../../src/modules/parameter-values/parameter-values.repository', () =
     listAccessibleStationIds: jest.fn(),
     listRegisteredParameters: jest.fn(),
     listRegisteredParametersForConnectionTest: jest.fn(),
+    listRegisteredParametersForConnectionReview: jest.fn(),
     listRows: jest.fn(),
     listTables: jest.fn(),
     tableExists: jest.fn(),
@@ -572,6 +574,95 @@ describe('parameterValuesService', () => {
         registeredParameters: ['CO2'],
       },
     });
+  });
+
+  it('uses the same approval scope for station access and registered parameters', async () => {
+    const access = {
+      actorUserId: 42,
+      permission: 'cems_wpms_requests:approve' as const,
+      scope: { scope: 'IN_PROVINCE' as const, province: 'ฉะเชิงเทรา' },
+      regionalAccess: null,
+    };
+    mockedRepository.canAccessStationForConnectionReview.mockResolvedValueOnce(true);
+    mockedRepository.listRegisteredParametersForConnectionReview.mockResolvedValueOnce([
+      'NOx (ppm)',
+    ]);
+    mockedRepository.tableExists.mockResolvedValueOnce(true);
+    mockedRepository.latestRows.mockResolvedValueOnce({
+      tableName: 'S2007_data_1m',
+      rows: [
+        {
+          cdate: '2026-10-20',
+          ctime: '08:30:00',
+          nox_value: '8.5',
+          nox_units: 'ppm',
+          nox_status: 'Normal',
+          co_value: '9.1',
+          co_units: 'ppm',
+          co_status: 'Normal',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.connectionTest({ stationId: 'S2007' }, access);
+
+    expect(mockedRepository.canAccessStationForConnectionReview).toHaveBeenCalledWith(
+      'S2007',
+      access,
+    );
+    expect(mockedRepository.listRegisteredParametersForConnectionReview).toHaveBeenCalledWith(
+      'S2007',
+      access,
+    );
+    expect(mockedRepository.canAccessStationForConnectionTest).not.toHaveBeenCalled();
+    expect(mockedRepository.listRegisteredParametersForConnectionTest).not.toHaveBeenCalled();
+    expect(mockedRepository.latestRows).toHaveBeenCalledWith(
+      { stationId: 'S2007', interval: '1m' },
+      10,
+    );
+    expect(result).toMatchObject({
+      data: [
+        {
+          timestamp: '2026-10-20 08:30:00',
+          values: { 'NOx (ppm)': '8.5' },
+          statuses: { 'NOx (ppm)': 'Normal' },
+        },
+      ],
+      meta: { stationId: 'S2007', interval: '1m', count: 1, registeredParameters: ['NOx (ppm)'] },
+    });
+    expect(result.data[0]?.values).not.toHaveProperty('CO (ppm)');
+  });
+
+  it('rejects an approval station outside scope without falling back to the legacy view path', async () => {
+    mockedRepository.canAccessStationForConnectionReview.mockResolvedValueOnce(false);
+
+    await expect(
+      parameterValuesService.connectionTest(
+        { stationId: 'S2007' },
+        {
+          actorUserId: 42,
+          permission: 'cems_wpms_requests:approve',
+          scope: { scope: 'IN_PROVINCE', province: 'ฉะเชิงเทรา' },
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(mockedRepository.canAccessStationForConnectionTest).not.toHaveBeenCalled();
+    expect(mockedRepository.tableExists).not.toHaveBeenCalled();
+    expect(mockedRepository.latestRows).not.toHaveBeenCalled();
+    expect(mockedRepository.listRegisteredParametersForConnectionReview).not.toHaveBeenCalled();
+  });
+
+  it('rejects an operator station outside the existing factory access', async () => {
+    mockedRepository.canAccessStationForConnectionTest.mockResolvedValueOnce(false);
+
+    await expect(
+      parameterValuesService.connectionTest({ stationId: 'S2007' }, operatorAccess),
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(mockedRepository.canAccessStationForConnectionReview).not.toHaveBeenCalled();
+    expect(mockedRepository.tableExists).not.toHaveBeenCalled();
+    expect(mockedRepository.latestRows).not.toHaveBeenCalled();
   });
 
   it('returns only base columns when the station has no registered parameters', async () => {

@@ -24,6 +24,7 @@ import {
   type CalendarStatusResultDTO,
   type ConnectionTestQuery,
   type ConnectionTestResultDTO,
+  type ConnectionTestAccessContext,
   type HourlyMeasurementCutoff,
   type HomeMeasurementSummaryDTO,
   type LatestHourlyParameterValuesResultDTO,
@@ -183,7 +184,7 @@ export const parameterValuesService = {
 
   async connectionTest(
     query: ConnectionTestQuery,
-    access: ParameterValueAccessContext,
+    access: ConnectionTestAccessContext,
   ): Promise<ConnectionTestResultDTO> {
     await ensureConnectionTestStationAccess(query.stationId, access);
 
@@ -204,10 +205,15 @@ export const parameterValuesService = {
       10,
     );
     const registeredParameters =
-      await parameterValuesRepository.listRegisteredParametersForConnectionTest(
-        query.stationId,
-        access,
-      );
+      access.permission === 'cems_wpms_requests:approve'
+        ? await parameterValuesRepository.listRegisteredParametersForConnectionReview(
+            query.stationId,
+            access,
+          )
+        : await parameterValuesRepository.listRegisteredParametersForConnectionTest(
+            query.stationId,
+            access,
+          );
     const filtered = filterRowsByRegisteredParameters(result.rows, registeredParameters);
 
     return {
@@ -1986,12 +1992,12 @@ async function ensureStationExportAccess(
 
 async function ensureConnectionTestStationAccess(
   stationId: string,
-  access: ParameterValueAccessContext,
+  access: ConnectionTestAccessContext,
 ): Promise<void> {
-  const hasAccess = await parameterValuesRepository.canAccessStationForConnectionTest(
-    stationId,
-    access,
-  );
+  const hasAccess =
+    access.permission === 'cems_wpms_requests:approve'
+      ? await parameterValuesRepository.canAccessStationForConnectionReview(stationId, access)
+      : await parameterValuesRepository.canAccessStationForConnectionTest(stationId, access);
   if (!hasAccess) {
     throw new ForbiddenError(`Station ${stationId} is not available for this user`);
   }
