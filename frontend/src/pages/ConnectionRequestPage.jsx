@@ -45,6 +45,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import DescriptionIcon from '@mui/icons-material/Description'
 import HistoryIcon from '@mui/icons-material/History'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import { fetchSubmissionText, getSubmissionErrorMessage } from '../utils/connectionSubmissionErrors.mjs'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import LinkIcon from '@mui/icons-material/Link'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
@@ -2125,14 +2126,13 @@ async function uploadDocumentImages(formData, accessToken, uploadUrl = getDocume
 
       uploadFormData.append('file', file)
 
-      const result = await fetch(uploadUrl, {
+      const { result, rawText } = await fetchSubmissionText(uploadUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
         body: uploadFormData,
       })
-      const rawText = await result.text()
       const response = (() => {
         try {
           return rawText ? JSON.parse(rawText) : null
@@ -7509,7 +7509,7 @@ export function RequestFormBottomSheet({
             ? getDirectConnectionsApiUrl()
           : getMeasurementPointsRequestApiUrl()
 
-      const result = await fetch(submitApiUrl, {
+      const { result, rawText } = await fetchSubmissionText(submitApiUrl, {
         method: isEditMode ? 'PUT' : 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -7517,7 +7517,6 @@ export function RequestFormBottomSheet({
         },
         body: JSON.stringify(requestBody),
       })
-      const rawText = await result.text()
       let response = rawText
 
       try {
@@ -7537,11 +7536,7 @@ export function RequestFormBottomSheet({
       })
       return
     } catch (error) {
-      const message = error instanceof TypeError
-        ? 'ส่งแบบฟอร์มไม่สำเร็จ: browser ไม่สามารถเชื่อมต่อ API ได้ กรุณาเปิดผ่าน Vite dev server หรือ domain d-poms.diw.go.th และตรวจ CORS/HTTPS ของ API'
-        : error instanceof Error
-          ? error.message
-          : 'ส่งแบบฟอร์มไม่สำเร็จ'
+      const message = getSubmissionErrorMessage(error)
       setSubmitError(message)
       if (factoryProfilePatchMode) {
         setSubmitValidationSnackbarOpen(true)
