@@ -14,6 +14,8 @@ curl --request GET \
 
 ผู้ประกอบการใช้ `cems_wpms_requests:view` ตามขอบเขตเดิม ส่วนเจ้าหน้าที่ (`officer`/`admin`) ใช้ `cems_wpms_requests:approve` พร้อมขอบเขตของสิทธิ์อนุมัติ โดยไม่ต้องมี `view` เพิ่มสำหรับ endpoint นี้ อ่าน [กติกาสิทธิ์และสถานะคำขอ](#get-apiv1parameter-valuesconnection-test) ก่อนแสดงปุ่มตรวจข้อมูลให้เจ้าหน้าที่
 
+Backend เลือก source จาก config ที่บันทึกและผู้เรียกเข้าถึงได้: `MODBUS_RTU`, `MODBUS_TCP`, `DCON_ASCII` (`DCON`) ใช้ realtime (`meta.interval: "real"`) ส่วนอุปกรณ์อื่นหรือไม่มี config ใช้รายนาที (`"1m"`) คืนล่าสุดไม่เกิน 10 แถวโดยใช้ URL เดิม ไม่ต้องส่ง query เลือก interval ดู [กติกาเลือกตาราง](#validation-and-business-rules) และ [การปรับ client](../../CHANGELOG.md#connection-test-protocol-source)
+
 ## StatusCode Contract
 
 กติกานี้ใช้กับค่าที่จัดรูปสำหรับแสดงผลใน connection test, dashboard, public map และ measurement statistics:
@@ -189,7 +191,7 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 
 ## `GET /api/v1/parameter-values/connection-test`
 
-อ่านข้อมูลรายนาทีจาก `<stationId>_data_1m` ล่าสุดไม่เกิน 10 แถว เรียง `cdate DESC, ctime DESC` และจัดกลุ่มเป็น `values` กับ `statuses` ตามชื่อพารามิเตอร์พร้อมหน่วย
+อ่านข้อมูลล่าสุดไม่เกิน 10 แถวจาก `<stationId>_data_real` หรือ `<stationId>_data_1m` ตาม protocol ของ config ที่บันทึกและผู้เรียกเข้าถึงได้ เรียง `cdate DESC, ctime DESC` และจัดกลุ่มเป็น `values` กับ `statuses` ตามชื่อพารามิเตอร์พร้อมหน่วย
 
 ### Authentication And Permission
 
@@ -224,13 +226,15 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 | `data[].values` | object | No | map จากชื่อพารามิเตอร์พร้อมหน่วยไปยังค่าตรวจวัดเมื่อ status เป็น `1`, `Ok` หรือ `Normal`; status อื่นใช้ชื่อสถานะแทน |
 | `data[].statuses` | object | No | map สถานะของพารามิเตอร์; numeric StatusCode ถูกแปลงเป็นชื่อสถานะ |
 | `meta.stationId` | string | No | รหัสจุดตรวจวัดที่ขอ |
-| `meta.interval` | string | No | `1m` เสมอ |
+| `meta.interval` | string | No | `real` สำหรับ `MODBUS_RTU`, `MODBUS_TCP`, `DCON_ASCII` (`DCON`); `1m` สำหรับ protocol อื่นหรือไม่มี config |
 | `meta.schemaName` | string | No | schema ของ source table ตามการตั้งค่าระบบ เช่น `ingest` |
-| `meta.tableName` | string | No | `<stationId>_data_1m` |
+| `meta.tableName` | string | No | `<stationId>_data_real` หรือ `<stationId>_data_1m` ตาม `meta.interval` |
 | `meta.count` | integer | No | จำนวนแถวที่คืนจริง ระหว่าง `0` ถึง `10` |
 | `meta.registeredParameters` | string[] | No | ชื่อพารามิเตอร์พร้อมหน่วยที่ลงทะเบียน |
 
 ### Success Response Example
+
+ตัวอย่างจุดที่ใช้ `MODBUS_RTU`, `MODBUS_TCP` หรือ `DCON_ASCII` (`DCON`):
 
 ```json
 {
@@ -252,22 +256,28 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
   ],
   "meta": {
     "stationId": "S2001",
-    "interval": "1m",
+    "interval": "real",
     "schemaName": "ingest",
-    "tableName": "S2001_data_1m",
+    "tableName": "S2001_data_real",
     "count": 1,
     "registeredParameters": ["CO (ppm)", "NOx (ppm)", "Flow Rate (m3/hr)"]
   }
 }
 ```
 
+สำหรับ `POMS_BOX`, `MSSQL`, `MYSQL` หรือจุดที่ไม่มี config รูปแบบ `data` เดิม แต่ `meta.interval` เป็น `"1m"` และ `meta.tableName` เป็น `"S2001_data_1m"`
+
 ### Validation And Business Rules
 
-- อ่านสูงสุด 10 แถวล่าสุดที่มีในตารางรายนาที ไม่จำกัดว่าต้องเป็นข้อมูล 10 นาทีที่ผ่านมา; วันเวลาเป็นของ source row จริง.
+- เลือกตารางจาก saved active `device_connection_configs` ของจุดที่ผู้เรียกเข้าถึงได้ โดย config ของ current connected point ต้องมี `request_id IS NULL`; config ระหว่างคำขอต้องอยู่ใน request snapshot ที่ยังเข้าถึงได้ตามสิทธิ์และสถานะคำขอด้านบน ไม่ใช้ config ของคำขออื่นที่ถูกลบหรืออยู่นอกขอบเขต.
+- จับคู่ `config.station_id` ด้วย `point_code`; ใช้ `point_name` เฉพาะข้อมูลเก่าที่ `point_code` เป็น `null` เพื่อไม่ให้ชื่อจุดที่ชนกับรหัส station อื่นเลือก config ผิด.
+- `MODBUS_RTU`, `MODBUS_TCP` และ `DCON_ASCII` (`DCON`) เลือก `<stationId>_data_real` และ `meta.interval: "real"`; protocol อื่น เช่น `POMS_BOX`, `MSSQL`, `MYSQL` หรือไม่มี config เลือก `<stationId>_data_1m` และ `meta.interval: "1m"`.
+- หากจุดมีหลาย protocol และอย่างน้อยหนึ่ง config ที่เข้าถึงได้ใช้ realtime ให้เลือกตาราง realtime ของจุดนั้น; endpoint รับเฉพาะ `stationId` และไม่มี query เพิ่มให้เลือก protocol หรือ interval.
+- อ่านสูงสุด 10 แถวล่าสุดที่มีในตารางที่เลือก ไม่จำกัดว่าต้องเป็นข้อมูล 10 นาทีที่ผ่านมา; วันเวลาเป็นของ source row จริง.
 - ก่อนอ่านตารางค่าต้องผ่านการตรวจสิทธิ์ของ station และอ่านรายการพารามิเตอร์ด้วยขอบเขตเดียวกัน จุดหรือคำขอที่ถูกลบไม่เปิดให้อ่านผ่านเส้นทางคำขอ; สถานะอื่นที่ไม่มี current connected point ที่เข้าถึงได้ตอบ `403 FORBIDDEN`.
 - หากมีน้อยกว่า 10 แถว ให้คืนเท่าที่มี; ตารางว่างคืน `data: []` และ `meta.count: 0`.
-- หากไม่มีตารางรายนาที ตอบ `404 NOT_FOUND`; ไม่ย้อนอ่านตาราง `test`.
-- client ที่ตรวจ `meta.interval` ต้องรองรับ `1m` แทน `test` และรายการได้ถึง 10 แถว ดู [ผลกระทบและการปรับ client](../../CHANGELOG.md#connection-test-latest-minute-rows).
+- หากไม่มีตารางที่เลือก ตอบ `404 NOT_FOUND`; ไม่ fallback ไปอ่านตาราง interval อื่น.
+- client ที่ตรวจ `meta.interval` ต้องรองรับทั้ง `real` และ `1m` และรายการได้ถึง 10 แถว ดู [ผลกระทบและการปรับ client](../../CHANGELOG.md#connection-test-protocol-source).
 - ชื่อ key ใน `values` และ `statuses` ต้องเป็นชื่อพารามิเตอร์พร้อมหน่วยจาก `registeredParameters`.
 - StatusCode ที่รองรับคือ `0` ถึง `9`; `9` แสดงเป็น `No Discharge`.
 - Status ที่ไม่มีหรือไม่รู้จักยังใช้ค่าเดิมเพื่อรองรับ source rows รุ่นเก่าที่ไม่มี StatusCode.
@@ -292,5 +302,6 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 - Status mapping: [`parameter-status.ts`](../../../../../backend/src/modules/parameter-values/parameter-status.ts)
 - Types: [`parameter-values.types.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.types.ts)
 - Tests: [`parameter-values.service.test.ts`](../../../../../backend/tests/unit/parameter-values.service.test.ts)
+- Tests การเลือกตารางและขอบเขต config: [`parameter-values.connection-test-source.repository.test.ts`](../../../../../backend/tests/unit/parameter-values.connection-test-source.repository.test.ts)
 - Runtime OpenAPI: [`connection-requests.openapi.ts`](../../../../../backend/src/modules/api-docs/connection-requests.openapi.ts)
 - OpenAPI tests: [`parameter-values.connection-test.openapi.test.ts`](../../../../../backend/tests/unit/parameter-values.connection-test.openapi.test.ts)

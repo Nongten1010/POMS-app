@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="connection-test-protocol-source"></a>
+
+## 2026-10-21 — ข้อมูลทดสอบเลือก realtime หรือรายนาทีตาม protocol
+
+- **Affected canonical docs:** [ข้อมูลทดสอบเชื่อมต่อ](./menus/connection-requests/parameter-values.md#get-apiv1parameter-valuesconnection-test)
+- **Impact:** `GET /parameter-values/connection-test?stationId=...` เปลี่ยนจากอ่าน `<stationId>_data_1m` เสมอ เป็นเลือกตาม saved active `device_connection_configs` ที่ผู้เรียกเข้าถึงได้: `MODBUS_RTU`, `MODBUS_TCP`, `DCON_ASCII` (`DCON`) อ่าน `<stationId>_data_real` และ `meta.interval=real`; protocol อื่นหรือไม่มี config อ่าน `<stationId>_data_1m` และ `meta.interval=1m` หากมีหลาย protocol และมี config ใช้ realtime ให้เลือก `real`
+- **Migration:** client รองรับ `meta.interval` ทั้ง `real` และ `1m` รวมถึง `meta.tableName` ที่ตรงกัน; ใช้ URL, query `stationId`, auth และ scope เดิม ไม่มี query เลือก interval เพิ่มและไม่ต้อง migrate ฐานข้อมูล หากตารางที่เลือกไม่มีตอบ `404 NOT_FOUND` ให้ตรวจ source ของ protocol นั้น ไม่มี fallback ไปตารางอื่น หลัง deploy ตรวจ `https://d-poms.diw.go.th/api/v1/openapi.json` และผล API ให้ตรงกับ contract นี้
+- **Old contract:** อ่าน `<stationId>_data_1m` และ `meta.interval=1m` ทุก protocol
+- **New contract:** อ่านตารางตาม protocol ของ config ที่ active และอยู่ใน current connected point (`request_id IS NULL`) หรือ request snapshot ที่เข้าถึงได้; คงสูงสุด 10 แถวล่าสุด เรียง `cdate DESC, ctime DESC` ตารางว่างคืน `[]` และ `count=0` พร้อมการจัดรูปแบบค่า/สถานะเดิม
+- **Breaking change:** yes — แหล่งข้อมูลและค่า metadata ของ endpoint เดิมเปลี่ยนสำหรับอุปกรณ์ realtime
+
 <a id="connection-test-approval-access"></a>
 
 ## 2026-10-20 — เจ้าหน้าที่อ่านข้อมูลทดสอบด้วยสิทธิ์อนุมัติและขอบเขตคำขอ

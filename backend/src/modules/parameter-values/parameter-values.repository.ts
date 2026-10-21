@@ -11,6 +11,7 @@ import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import {
+  type ConnectionTestAccessContext,
   type HourlyMeasurementCutoff,
   type LatestParameterValueQuery,
   type ListParameterValuesQuery,
@@ -166,6 +167,56 @@ export const parameterValuesRepository = {
       .first();
 
     return Boolean(row);
+  },
+
+  async connectionTestInterval(
+    stationId: string,
+    access: ConnectionTestAccessContext,
+  ): Promise<'real' | '1m'> {
+    const review = access.permission === 'cems_wpms_requests:approve';
+    if (review && !hasConnectionReviewScope(access)) return '1m';
+
+    const sources = [
+      {
+        query: review
+          ? buildConnectedStationReviewAccessQuery(access)
+          : buildStationAccessQuery(access),
+        requestSnapshot: false,
+      },
+      {
+        query: review
+          ? buildConnectionReviewStationAccessQuery(access)
+          : buildWaitingConnectionStationAccessQuery(access),
+        requestSnapshot: true,
+      },
+    ];
+
+    for (const { query, requestSnapshot } of sources) {
+      if (review) {
+        matchConnectionReviewStation(query, stationId);
+      } else {
+        query.where((builder) => {
+          builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
+        });
+      }
+      const config = await query
+        .join('device_connection_configs as dc', function joinStationConfig() {
+          this.on(function stationAlias() {
+            this.on('dc.station_id', '=', 'p.point_code').orOn(function legacyStationName() {
+              this.onNull('p.point_code').andOn('dc.station_id', '=', 'p.point_name');
+            });
+          });
+          if (requestSnapshot) this.andOn('dc.request_id', '=', 'p.request_id');
+          else this.andOnNull('dc.request_id');
+        })
+        .whereNull('dc.deleted_at')
+        .whereIn('dc.protocol', ['MODBUS_RTU', 'MODBUS_TCP', 'DCON_ASCII'])
+        .select('dc.protocol')
+        .first();
+      if (config) return 'real';
+    }
+
+    return '1m';
   },
 
   async listRegisteredParameters(

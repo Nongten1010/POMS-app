@@ -1303,14 +1303,16 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'string',
         maxLength: 2048,
         nullable: true,
-        description: 'ข้อความว่างหรือ whitespace แปลงเป็น null; หากช่องนี้ว่าง ต้องมีค่าในอีกช่อง; รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
+        description:
+          'ข้อความว่างหรือ whitespace แปลงเป็น null; หากช่องนี้ว่าง ต้องมีค่าในอีกช่อง; รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
       },
       fileName: { type: 'string', maxLength: 255, nullable: true },
       fileUrl: {
         type: 'string',
         maxLength: 2048,
         nullable: true,
-        description: 'ข้อความว่างหรือ whitespace แปลงเป็น null; หากช่องนี้ว่าง ต้องมีค่าในอีกช่อง; รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
+        description:
+          'ข้อความว่างหรือ whitespace แปลงเป็น null; หากช่องนี้ว่าง ต้องมีค่าในอีกช่อง; รับข้อความหลัง trim โดยไม่ตรวจรูปแบบ URL หรือบังคับ http/https; เจ้าหน้าที่ตรวจสอบลิงก์และตีกลับเพื่อแก้ไขได้',
       },
       fileType: { type: 'string', maxLength: 128, nullable: true },
       fileSize: {
@@ -2431,7 +2433,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'array',
         maxItems: 10,
         description:
-          'สูงสุด 10 แถวล่าสุดจาก <stationId>_data_1m เรียง cdate DESC, ctime DESC; คืน [] เมื่อตารางไม่มีแถว',
+          'สูงสุด 10 แถวล่าสุดจากตารางที่เลือกตาม protocol ของ saved active device_connection_configs ที่ผู้เรียกเข้าถึงได้: MODBUS_RTU, MODBUS_TCP หรือ DCON_ASCII ใช้ <stationId>_data_real; protocol อื่นหรือไม่มี config ใช้ <stationId>_data_1m. เรียง cdate DESC, ctime DESC; คืน [] เมื่อตารางไม่มีแถว',
         items: {
           type: 'object',
           required: ['timestamp', 'values', 'statuses'],
@@ -2472,9 +2474,18 @@ const componentSchemas: Record<string, OpenApiObject> = {
         ],
         properties: {
           stationId: { type: 'string', example: 'S2003' },
-          interval: { type: 'string', enum: ['1m'] },
+          interval: {
+            type: 'string',
+            enum: ['real', '1m'],
+            description:
+              'real เมื่อมี config ที่เข้าถึงได้เป็น MODBUS_RTU, MODBUS_TCP หรือ DCON_ASCII (DCON); นอกนั้นเป็น 1m',
+          },
           schemaName: { type: 'string', example: 'ingest' },
-          tableName: { type: 'string', example: 'S2003_data_1m' },
+          tableName: {
+            type: 'string',
+            description: '<stationId>_data_real หรือ <stationId>_data_1m ตาม meta.interval',
+            example: 'S2003_data_1m',
+          },
           count: { type: 'integer', minimum: 0, maximum: 10 },
           registeredParameters: {
             type: 'array',
@@ -3411,15 +3422,36 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
   '/parameter-values/connection-test': {
     get: securedOperation({
       tag: 'ทดสอบข้อมูล',
-      summary: 'อ่านข้อมูลรายนาทีล่าสุดไม่เกิน 10 แถวเพื่อทดสอบการเชื่อมต่อ',
+      summary: 'อ่านข้อมูลล่าสุดไม่เกิน 10 แถวตาม protocol เพื่อทดสอบการเชื่อมต่อ',
       operationId: 'getParameterConnectionTest',
       description:
-        'Permission: operator ใช้ cems_wpms_requests:view ตามขอบเขตเดิม; officer/admin ต้องมี cems_wpms_requests:approve และใช้ scope ของ approve เท่านั้น ไม่ fallback ไปหา scope ของ view แม้ view จะกว้างกว่า และไม่ต้องมี view เพิ่มสำหรับ endpoint นี้. citizen/ประเภทบัญชีอื่นหรือเจ้าหน้าที่มีแค่ view ตอบ 403 FORBIDDEN. เจ้าหน้าที่อ่าน current connected point ในขอบเขตอนุมัติ หรือจุดในคำขอ WAITING_CONNECTION / CONNECTION_CONFIRMED ที่ยังไม่ถูกลบและอยู่ในขอบเขตอนุมัติ; ผู้ประกอบการคง current connected point / WAITING_CONNECTION เดิม. scope อนุมัติรองรับ ALL, IN_REGION, IN_PROVINCE, IN_ESTATE, FACTORY_TYPE_88; ขาด scope หรือค่าพื้นที่ที่จำเป็นไม่ให้สิทธิ์. จุดระหว่างคำขอใช้ request factory snapshot ตามขอบเขตเดียวกับการอนุมัติ ทั้งตรวจ station และอ่าน registered parameters ด้วย scope เดียวกัน. จุดระหว่างคำขอรองรับชื่อหรือรหัสพื้นที่ตาม snapshot; current connected point สำหรับ IN_REGION ต้องใช้ค่า region ที่ตรงกับข้อมูลภาคปัจจุบัน ไม่มีการแปลงรหัสภาคจาก snapshot อัตโนมัติ และรหัสที่เทียบไม่ได้ตอบ 403 FORBIDDEN. อ่าน <stationId>_data_1m ล่าสุดไม่เกิน 10 แถว เรียง cdate DESC, ctime DESC และ map values/statuses ด้วยชื่อพารามิเตอร์พร้อมหน่วย. ไม่มีตารางรายนาทีตอบ 404; ไม่อ่านตาราง test แทน. สิทธิ์นี้ไม่ขยายไปยังการแก้/ทดสอบ config หรือ raw/latest/tables endpoints',
+        'Permission: operator ใช้ cems_wpms_requests:view ตามขอบเขตเดิม; officer/admin ต้องมี cems_wpms_requests:approve และใช้ scope ของ approve เท่านั้น ไม่ fallback ไปหา scope ของ view แม้ view จะกว้างกว่า และไม่ต้องมี view เพิ่มสำหรับ endpoint นี้. citizen/ประเภทบัญชีอื่นหรือเจ้าหน้าที่มีแค่ view ตอบ 403 FORBIDDEN. เจ้าหน้าที่อ่าน current connected point ในขอบเขตอนุมัติ หรือจุดในคำขอ WAITING_CONNECTION / CONNECTION_CONFIRMED ที่ยังไม่ถูกลบและอยู่ในขอบเขตอนุมัติ; ผู้ประกอบการคง current connected point / WAITING_CONNECTION เดิม. scope อนุมัติรองรับ ALL, IN_REGION, IN_PROVINCE, IN_ESTATE, FACTORY_TYPE_88; ขาด scope หรือค่าพื้นที่ที่จำเป็นไม่ให้สิทธิ์. จุดระหว่างคำขอใช้ request factory snapshot ตามขอบเขตเดียวกับการอนุมัติ ทั้งตรวจ station อ่าน registered parameters และเลือก saved active device_connection_configs ด้วย scope เดียวกัน. จุดระหว่างคำขอรองรับชื่อหรือรหัสพื้นที่ตาม snapshot; current connected point สำหรับ IN_REGION ต้องใช้ค่า region ที่ตรงกับข้อมูลภาคปัจจุบัน ไม่มีการแปลงรหัสภาคจาก snapshot อัตโนมัติ และรหัสที่เทียบไม่ได้ตอบ 403 FORBIDDEN. config ของ current connected point ต้องมี request_id เป็น null; config ของคำขอต้องอ้างอิง snapshot ที่เข้าถึงได้. MODBUS_RTU, MODBUS_TCP หรือ DCON_ASCII (DCON) อ่าน <stationId>_data_real และ meta.interval=real; protocol อื่น (POMS_BOX, MSSQL, MYSQL) หรือไม่มี config ใช้ <stationId>_data_1m และ meta.interval=1m. ถ้ามีหลาย protocol และอย่างน้อยหนึ่ง config ใช้ realtime ให้เลือก real. อ่านล่าสุดไม่เกิน 10 แถว เรียง cdate DESC, ctime DESC และ map values/statuses ด้วยชื่อพารามิเตอร์พร้อมหน่วย. ไม่มีตารางที่เลือกตอบ 404 โดยไม่ fallback ไปอ่าน interval อื่น; ตารางว่างคืน [] และ count=0. ไม่มี query เพิ่มให้เลือก interval. สิทธิ์นี้ไม่ขยายไปยังการแก้/ทดสอบ config หรือ raw/latest/tables endpoints',
       parameters: [parameterValueStationIdQuery],
       successSchema: schemaRef('ParameterConnectionTestResponse'),
       successExamples: {
+        latestRealtimeRows: {
+          summary: 'ตัวอย่าง MODBUS_RTU, MODBUS_TCP หรือ DCON_ASCII มีข้อมูล realtime 1 แถว',
+          value: {
+            success: true,
+            data: [
+              {
+                timestamp: '2026-10-21 10:15:00',
+                values: { 'CO (ppm)': '12.5', 'NOx (ppm)': 'Shut Down' },
+                statuses: { 'CO (ppm)': 'Ok', 'NOx (ppm)': 'Shut Down' },
+              },
+            ],
+            meta: {
+              stationId: 'S2003',
+              interval: 'real',
+              schemaName: 'ingest',
+              tableName: 'S2003_data_real',
+              count: 1,
+              registeredParameters: ['CO (ppm)', 'NOx (ppm)'],
+            },
+          },
+        },
         latestMinuteRows: {
-          summary: 'ตัวอย่างเมื่อมีข้อมูลรายนาที 1 แถว',
+          summary: 'ตัวอย่าง protocol อื่นหรือไม่มี config มีข้อมูลรายนาที 1 แถว',
           value: {
             success: true,
             data: [

@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
 
 describe('connection-test OpenAPI contract', () => {
-  it('publishes the one-minute source, ten-row limit and persona-specific access requirements', () => {
+  it('publishes protocol-specific sources, the ten-row limit and persona-specific access requirements', () => {
     const document = pomsOpenApiDocument as any;
     const operation = document.paths['/parameter-values/connection-test'].get;
     const response = operation.responses['200'].content['application/json'];
@@ -24,7 +24,13 @@ describe('connection-test OpenAPI contract', () => {
     expect(operation.description).toContain('CONNECTION_CONFIRMED');
     expect(operation.description).toContain('request factory snapshot');
     expect(operation.description).toContain('403 FORBIDDEN');
-    expect(operation.description).toContain('registered parameters ด้วย scope เดียวกัน');
+    expect(operation.description).toContain('registered parameters');
+    expect(operation.description).toContain('device_connection_configs ด้วย scope เดียวกัน');
+    expect(operation.description).toContain('MODBUS_RTU');
+    expect(operation.description).toContain('MODBUS_TCP');
+    expect(operation.description).toContain('DCON_ASCII');
+    expect(operation.description).toContain('<stationId>_data_real');
+    expect(operation.description).toContain('<stationId>_data_1m');
     expect(operation.parameters).toEqual([
       expect.objectContaining({ name: 'stationId', in: 'query', required: true }),
     ]);
@@ -33,7 +39,7 @@ describe('connection-test OpenAPI contract', () => {
     });
     expect(schema.properties.data).toMatchObject({ type: 'array', maxItems: 10 });
     expect(schema.properties.meta.properties).toMatchObject({
-      interval: { enum: ['1m'] },
+      interval: { enum: ['real', '1m'] },
       tableName: { example: 'S2003_data_1m' },
       count: { minimum: 0, maximum: 10 },
     });
@@ -41,6 +47,11 @@ describe('connection-test OpenAPI contract', () => {
       success: true,
       data: [expect.objectContaining({ timestamp: '2026-10-19 10:15:00' })],
       meta: { stationId: 'S2003', interval: '1m', tableName: 'S2003_data_1m', count: 1 },
+    });
+    expect(response.examples.latestRealtimeRows.value).toMatchObject({
+      success: true,
+      data: [expect.objectContaining({ timestamp: expect.any(String) })],
+      meta: { interval: 'real', tableName: 'S2003_data_real' },
     });
   });
 

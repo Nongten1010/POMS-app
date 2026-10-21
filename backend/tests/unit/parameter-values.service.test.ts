@@ -6,6 +6,7 @@ jest.mock('../../src/modules/parameter-values/parameter-values.repository', () =
     earliestMeasurementDate: jest.fn(),
     canAccessStationForConnectionTest: jest.fn(),
     canAccessStationForConnectionReview: jest.fn(),
+    connectionTestInterval: jest.fn(),
     latestRow: jest.fn(),
     latestRowsAtOrBeforeHour: jest.fn(),
     latestRowsAtLatestTimestamp: jest.fn(),
@@ -34,6 +35,7 @@ describe('parameterValuesService', () => {
     mockedRepository.canAccessStation.mockResolvedValue(true);
     mockedRepository.earliestMeasurementDate.mockResolvedValue(null);
     mockedRepository.canAccessStationForConnectionTest.mockResolvedValue(true);
+    mockedRepository.connectionTestInterval.mockResolvedValue('1m');
     mockedRepository.listAccessibleStationIds.mockResolvedValue(['S0001']);
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2']);
     mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue(['CO2']);
@@ -390,40 +392,58 @@ describe('parameterValuesService', () => {
     expect(result.meta).not.toHaveProperty('returnedColumns');
   });
 
-  it('returns all ten available one-minute rows with their source timestamps', async () => {
-    mockedRepository.tableExists.mockResolvedValue(true);
-    mockedRepository.latestRows.mockResolvedValue({
-      tableName: 'S0001_data_1m',
-      rows: Array.from({ length: 10 }, (_, index) => ({
-        cdate: '2026-06-07',
-        ctime: `10:${String(15 - index).padStart(2, '0')}:00`,
-        co2_value: 100 + index,
-        co2_status: 'Normal',
-      })),
-    });
+  it.each(['real', '1m'] as const)(
+    'returns all ten available %s rows with their source timestamps',
+    async (interval) => {
+      mockedRepository.connectionTestInterval.mockResolvedValue(interval);
+      mockedRepository.tableExists.mockResolvedValue(true);
+      mockedRepository.latestRows.mockResolvedValue({
+        tableName: `S0001_data_${interval}`,
+        rows: Array.from({ length: 10 }, (_, index) => ({
+          cdate: '2026-06-07',
+          ctime: `10:${String(15 - index).padStart(2, '0')}:00`,
+          co2_value: 100 + index,
+          co2_status: 'Normal',
+        })),
+      });
 
-    const result = await parameterValuesService.connectionTest(
-      { stationId: 'S0001' },
-      operatorAccess,
-    );
+      const result = await parameterValuesService.connectionTest(
+        { stationId: 'S0001' },
+        operatorAccess,
+      );
 
-    expect(result.data).toHaveLength(10);
-    expect(result.meta).toMatchObject({ interval: '1m', count: 10 });
-    expect(result.data[0]?.timestamp).toBe('2026-06-07 10:15:00');
-    expect(result.data[9]?.timestamp).toBe('2026-06-07 10:06:00');
-  });
+      expect(mockedRepository.connectionTestInterval).toHaveBeenCalledWith('S0001', operatorAccess);
+      expect(mockedRepository.tableExists).toHaveBeenCalledWith(`S0001_data_${interval}`);
+      expect(mockedRepository.latestRows).toHaveBeenCalledWith(
+        { stationId: 'S0001', interval },
+        10,
+      );
+      expect(result.data).toHaveLength(10);
+      expect(result.meta).toMatchObject({
+        interval,
+        tableName: `S0001_data_${interval}`,
+        count: 10,
+      });
+      expect(result.data[0]?.timestamp).toBe('2026-06-07 10:15:00');
+      expect(result.data[9]?.timestamp).toBe('2026-06-07 10:06:00');
+    },
+  );
 
-  it('returns not found when the one-minute table is missing without reading the test table', async () => {
-    mockedRepository.tableExists.mockResolvedValue(false);
+  it.each(['real', '1m'] as const)(
+    'returns not found when the %s source is missing without falling back to another table',
+    async (interval) => {
+      mockedRepository.connectionTestInterval.mockResolvedValue(interval);
+      mockedRepository.tableExists.mockResolvedValue(false);
 
-    await expect(
-      parameterValuesService.connectionTest({ stationId: 'S0001' }, operatorAccess),
-    ).rejects.toMatchObject({ statusCode: 404 });
+      await expect(
+        parameterValuesService.connectionTest({ stationId: 'S0001' }, operatorAccess),
+      ).rejects.toMatchObject({ statusCode: 404 });
 
-    expect(mockedRepository.tableExists).toHaveBeenCalledTimes(1);
-    expect(mockedRepository.tableExists).toHaveBeenCalledWith('S0001_data_1m');
-    expect(mockedRepository.latestRows).not.toHaveBeenCalled();
-  });
+      expect(mockedRepository.tableExists).toHaveBeenCalledTimes(1);
+      expect(mockedRepository.tableExists).toHaveBeenCalledWith(`S0001_data_${interval}`);
+      expect(mockedRepository.latestRows).not.toHaveBeenCalled();
+    },
+  );
 
   it('uses the measurement value only for Ok status codes in connection-test responses', async () => {
     mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
@@ -610,6 +630,7 @@ describe('parameterValuesService', () => {
       'S2007',
       access,
     );
+    expect(mockedRepository.connectionTestInterval).toHaveBeenCalledWith('S2007', access);
     expect(mockedRepository.listRegisteredParametersForConnectionReview).toHaveBeenCalledWith(
       'S2007',
       access,
@@ -648,6 +669,7 @@ describe('parameterValuesService', () => {
     ).rejects.toMatchObject({ statusCode: 403 });
 
     expect(mockedRepository.canAccessStationForConnectionTest).not.toHaveBeenCalled();
+    expect(mockedRepository.connectionTestInterval).not.toHaveBeenCalled();
     expect(mockedRepository.tableExists).not.toHaveBeenCalled();
     expect(mockedRepository.latestRows).not.toHaveBeenCalled();
     expect(mockedRepository.listRegisteredParametersForConnectionReview).not.toHaveBeenCalled();
@@ -661,6 +683,7 @@ describe('parameterValuesService', () => {
     ).rejects.toMatchObject({ statusCode: 403 });
 
     expect(mockedRepository.canAccessStationForConnectionReview).not.toHaveBeenCalled();
+    expect(mockedRepository.connectionTestInterval).not.toHaveBeenCalled();
     expect(mockedRepository.tableExists).not.toHaveBeenCalled();
     expect(mockedRepository.latestRows).not.toHaveBeenCalled();
   });

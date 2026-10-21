@@ -141,7 +141,7 @@ export interface ConnectionTestResultDTO {
   data: ConnectionTestRowDTO[];
   meta: {
     stationId: string;
-    interval: '1m';
+    interval: 'real' | '1m';
     schemaName: string;
     tableName: string;
     count: number;
