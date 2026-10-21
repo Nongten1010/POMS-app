@@ -134,10 +134,31 @@ test('add-parameter form and payload preserve live groups without affecting othe
           assert.deepEqual(edit.measurementPoints[0].measurementInstruments, point.measurementInstruments)
         }
       }
-      for (const [value, expected] of [['', null], ['0', 0], ['12.5', 12.5], ['-12.5', -12.5], ['invalid', null]]) {
+      for (const [value, expected] of [['', null], ['0', 0], ['12.5', 12.5], ['-12.5', -12.5]]) {
         const form = new FormData()
         form.set('averageFlowRate', value)
         assert.equal(buildMeasurementPointRequestBody({}, 'CEMS', form).measurementPoints[0].details.averageFlowRate, expected)
+      }
+    })
+
+    await t.test('optional flow fields accept decimals and reject nonnumeric input before payload conversion', () => {
+      for (const [system, fields] of [
+        ['CEMS', ['averageFlowRate', 'minFlowRate', 'maxFlowRate']],
+        ['WPMS', ['averageWastewaterDischarge', 'minWastewaterDischarge', 'maxWastewaterDischarge']],
+      ]) {
+        for (const field of fields) {
+          for (const [value, expected] of [['', null], ['   ', null], ['0', 0], ['100', 100], ['1,000.50', 1000.5], ['-12.5', -12.5], ['.5', 0.5]]) {
+            const form = new FormData()
+            form.set(field, value)
+            assert.equal(buildMeasurementPointRequestBody({}, system, form).measurementPoints[0].details[field], expected)
+            assert.equal(form.get(field), value)
+          }
+          for (const value of ['abc', '100 m3/hr', '12.3.4', ',', 'Infinity', 'NaN', '0x10']) {
+            const form = new FormData()
+            form.set(field, value)
+            assert.throws(() => buildMeasurementPointRequestBody({}, system, form), /ต้องเป็นตัวเลข สามารถมีทศนิยมได้/)
+          }
+        }
       }
     })
 

@@ -2166,6 +2166,16 @@ function buildMeasurementPointRequestBody(
 ) {
   // Normalize only numeric form fields; keep text and the original FormData intact.
   if (formData) {
+    const flowFields = monitoringPointType === 'WPMS'
+      ? { averageWastewaterDischarge: 'อัตราการระบายน้ำทิ้งเฉลี่ย', minWastewaterDischarge: 'อัตราการระบายน้ำทิ้งต่ำสุด', maxWastewaterDischarge: 'อัตราการระบายน้ำทิ้งสูงสุด' }
+      : { averageFlowRate: 'อัตราการระบายอากาศเฉลี่ย', minFlowRate: 'อัตราการระบายอากาศต่ำสุด', maxFlowRate: 'อัตราการระบายอากาศสูงสุด' }
+    const flowErrors = Object.entries(flowFields).flatMap(([field, label]) => {
+      const raw = getFormValue(formData, field).trim()
+      const value = stripNumericCommas(raw)
+      return raw && (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value) || !Number.isFinite(Number(value)))
+        ? [`${label}ต้องเป็นตัวเลข สามารถมีทศนิยมได้`] : []
+    })
+    if (flowErrors.length) throw new Error(flowErrors.join('\n'))
     const normalized = new FormData()
     const numericFields = new Set([
       'latitude', 'longitude', 'productionCapacityValue',
@@ -2177,7 +2187,8 @@ function buildMeasurementPointRequestBody(
       'stackLatitude', 'stackLongitude',
     ])
     for (const [key, value] of formData.entries()) {
-      normalized.append(key, numericFields.has(key) ? stripNumericCommas(value) : value)
+      const numericValue = Object.hasOwn(flowFields, key) ? String(value).trim() : value
+      normalized.append(key, numericFields.has(key) ? stripNumericCommas(numericValue) : value)
     }
     formData = normalized
   }
