@@ -36,7 +36,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
           return `${code}\nexport { renderGeneralFactorySection, renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
         }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          code += '\nexport { formatApiErrorMessage, canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows };'
+          code += '\nexport { formatApiErrorMessage, canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows, formatDeviceConnectionTestError };'
           return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapOperatorFactoryRow, mapRequestDetailRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
         }
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
@@ -53,6 +53,17 @@ test('add-parameter form and payload preserve live groups without affecting othe
       mapOperatorFactoryRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
       getAssignedRequestPointCodes,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('device test translates missing tables without hiding other errors', async () => {
+      const { formatDeviceConnectionTestError } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+      for (const table of ['ingest.S0747_data_1m', 'ingest.P2001_data_1m']) {
+        const message = `Parameter value table ${table} not found`
+        assert.equal(formatDeviceConnectionTestError({ error: { message } }, 'fallback'), 'ไม่พบข้อมูลทดสอบ')
+        assert.equal(formatDeviceConnectionTestError({ message }, 'fallback'), 'ไม่พบข้อมูลทดสอบ')
+      }
+      assert.equal(formatDeviceConnectionTestError({ error: { message: 'Permission denied' } }, 'fallback'), 'Permission denied')
+      assert.equal(formatDeviceConnectionTestError(null, 'fallback'), 'fallback')
+    })
 
     await t.test('staff test data is limited to waiting connection and uses device test mapping', async () => {
       const { canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')

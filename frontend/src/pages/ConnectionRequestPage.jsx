@@ -4386,6 +4386,13 @@ function mapConnectionForms(forms = []) {
   })
 }
 
+function formatDeviceConnectionTestError(payload, fallbackMessage) {
+  const message = payload?.error?.message || payload?.message || fallbackMessage
+  return typeof message === 'string' && /^Parameter value table \S+ not found$/.test(message.trim())
+    ? 'ไม่พบข้อมูลทดสอบ'
+    : message
+}
+
 function mapTestResultRows(testResults = []) {
   return testResults.map((result, index) => ({
     id: result.id ?? index,
@@ -5030,7 +5037,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
         const payload = await result.json().catch(() => null)
 
         if (!result.ok) {
-          throw new Error(payload?.error?.message || payload?.message || `ทดสอบการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`)
+          throw new Error(formatDeviceConnectionTestError(payload, `ทดสอบการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`))
         }
 
         const rows = Array.isArray(payload?.data) ? payload.data : []
