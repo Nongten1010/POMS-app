@@ -201,6 +201,7 @@ export const parameterValuesRepository = {
       }
       const config = await query
         .join('device_connection_configs as dc', function joinStationConfig() {
+          // Display names may match another station code; use them only for legacy points.
           this.on(function stationAlias() {
             this.on('dc.station_id', '=', 'p.point_code').orOn(function legacyStationName() {
               this.onNull('p.point_code').andOn('dc.station_id', '=', 'p.point_name');
