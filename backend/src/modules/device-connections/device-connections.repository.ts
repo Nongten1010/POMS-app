@@ -439,12 +439,12 @@ async function softDeleteRequestConfigByDeviceKey(
   const rows = await trx<DeviceConnectionConfigRow>('device_connection_configs')
     .where('request_id', requestId)
     .where('station_id', input.stationId)
-    .where('protocol', input.protocol)
     .modify((builder) => {
       if (input.deviceCode) {
+        // A named device keeps its identity when its connection protocol changes.
         builder.where('device_code', input.deviceCode);
       } else {
-        builder.whereNull('device_code');
+        builder.whereNull('device_code').where('protocol', input.protocol);
       }
     })
     .whereNull('deleted_at')
@@ -477,12 +477,12 @@ async function softDeleteActiveConfigByDeviceKey(
   const rows = await trx<DeviceConnectionConfigRow>('device_connection_configs')
     .whereNull('request_id')
     .where('station_id', input.stationId)
-    .where('protocol', input.protocol)
     .modify((builder) => {
       if (input.deviceCode) {
         builder.where('device_code', input.deviceCode);
       } else {
-        builder.whereNull('device_code');
+        // Legacy unnamed configs still use the protocol to distinguish devices.
+        builder.whereNull('device_code').where('protocol', input.protocol);
       }
     })
     .whereNull('deleted_at')

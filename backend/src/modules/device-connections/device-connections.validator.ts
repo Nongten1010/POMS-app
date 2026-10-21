@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parameterKey } from '../poms-factories/poms-measurement-point-parameters';
 import {
   DEVICE_CONNECTION_PARAMETER_STATUSES,
   DEVICE_CONNECTION_PROTOCOL,
@@ -107,7 +108,25 @@ const configChannelSchema = z
 
 const configChannelsSchema = z.preprocess(
   (value) => (value === null || value === undefined ? [] : value),
-  z.array(configChannelSchema).max(200),
+  z
+    .array(configChannelSchema)
+    .max(200)
+    .superRefine((channels, ctx) => {
+      const seen = new Map<string, number>();
+      channels.forEach((channel, index) => {
+        const key = parameterKey(channel.dataType);
+        const firstIndex = seen.get(key);
+        if (firstIndex !== undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [index, 'dataType'],
+            message: `Duplicate parameter; already present in channels[${firstIndex}] for this device`,
+          });
+        } else {
+          seen.set(key, index);
+        }
+      });
+    }),
 );
 
 const statusDateTimeSchema = z.preprocess(

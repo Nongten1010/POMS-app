@@ -23,6 +23,8 @@
 
 ## Connection requests
 
+- [ล้างค่าทดสอบก่อนจุดตรวจวัดใหม่เชื่อมต่อสำเร็จ](./connection-requests/measurement-cleanup.tdd.md)
+
 - [ชื่อจุดตรวจวัดในหน้าขอเชื่อมต่อหลังอนุมัติแก้ไข](./connection-requests/current-point-name-after-approval.tdd.md)
 
 - [เลขที่คำขอใช้ลำดับ 4 หลักและปี พ.ศ. เต็ม](./connection-requests/request-number-full-year-format.tdd.md)

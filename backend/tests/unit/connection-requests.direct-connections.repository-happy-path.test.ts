@@ -10,12 +10,16 @@ jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository
   syncAlertParameterActivations: jest.fn(async () => undefined),
   retireAlertParameterActivations: jest.fn(async () => undefined),
 }));
+jest.mock('../../src/modules/connection-requests/connection-measurement-cleanup', () => ({
+  clearNewConnectionMeasurements: jest.fn(async () => undefined),
+}));
 
 import { db } from '../../src/config/database';
 import { env } from '../../src/config/env';
 import { factoryProfileReadTable } from '../../src/modules/factory-profiles/factory-profile-mode';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { syncAlertParameterActivations } from '../../src/modules/alert-emails/alert-parameter-activations.repository';
+import { clearNewConnectionMeasurements } from '../../src/modules/connection-requests/connection-measurement-cleanup';
 
 const originalMode = env.FACTORY_PROFILE_MODE;
 const mockedDb = db as unknown as jest.Mock<(...args: unknown[]) => unknown> & {
@@ -185,6 +189,20 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       );
 
       expect(mockedDb.transaction).toHaveBeenCalledTimes(1);
+      expect(jest.mocked(clearNewConnectionMeasurements).mock.calls).toEqual([
+        [
+          trx,
+          {
+            requestId: 101,
+            requestType: 'ADD_MEASUREMENT_POINT',
+            measurementPoints: [{ pointCode: 'free form / จุด-01' }],
+            actorUserId: 42,
+          },
+        ],
+      ]);
+      expect(jest.mocked(clearNewConnectionMeasurements).mock.invocationCallOrder[0]).toBeLessThan(
+        connectedPointInsert.mock.invocationCallOrder[0],
+      );
       expect(jest.mocked(syncAlertParameterActivations).mock.calls).toEqual([
         [trx, ['free form / จุด-01']],
       ]);

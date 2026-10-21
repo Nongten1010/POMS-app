@@ -139,7 +139,7 @@ GET ทั้งสอง endpoint คืน `connectionForms[].type: "DCON"`, `
 | --- | --- | --- | --- | --- |
 | `deviceCode` | string | Conditional | Yes | ใช้ใน form payload เพื่อจับคู่ channel กับอุปกรณ์; ละได้เมื่อมีอุปกรณ์เดียว |
 | `addressId` | number | No | Yes | Address ID; backend ไม่บังคับค่าต่ำสุดและไม่ตรวจค่าซ้ำใน config เดียวกัน |
-| `dataType` | string | Yes, when row exists | No | ชื่อพารามิเตอร์พร้อมหน่วย เช่น `CO (ppm)` |
+| `dataType` | string | Yes, when row exists | No | ชื่อพารามิเตอร์พร้อมหน่วย เช่น `CO (ppm)`; ห้ามซ้ำในอุปกรณ์เดียวกันหลัง normalize หน่วยและเปรียบเทียบแบบ Unicode NFKC/trim/ยุบช่องว่างต่อเนื่อง/ไม่แยกตัวพิมพ์ |
 | `unit` | string | No | Yes | รองรับ legacy payload; backend ต่อหน่วยท้าย `dataType` เมื่อชื่อยังไม่มีหน่วย |
 | `valueRange` | object | No | Yes | ช่วงค่าของ channel |
 | `valueRange.min` | number | No | Yes | ค่าต่ำสุด |
@@ -181,7 +181,22 @@ Client ไม่ส่ง primary key/foreign key ของตารางโด
 | channel `id` | primary key | backend สร้าง |
 | channel `configId` | foreign key ไปยัง config | backend กำหนดหลังสร้าง config |
 
-ชุด `(stationId, protocol, deviceCode)` ยังเป็น identity ของอุปกรณ์และต้องไม่ซ้ำกันใน batch เดียวกัน ส่วน `addressId` ไม่ใช่ primary key/foreign key และสามารถเป็น `null` หรือซ้ำกันได้
+เมื่อมี `deviceCode` ใช้ `(stationId, deviceCode)` เป็น identity ของอุปกรณ์ภายในคำขอหรือชุดปัจจุบันเดียวกัน โดย `protocol` เป็นค่าที่เปลี่ยนได้ การบันทึกอุปกรณ์เดิมด้วย protocol ใหม่จะแทนที่ config และ channels เก่าของอุปกรณ์นั้นด้วย soft delete ไม่สร้างอุปกรณ์ซ้อนอีกชุด เมื่อ `deviceCode` เป็น `null` ยังคงใช้ `(stationId, protocol, null)` เพื่อรักษาอุปกรณ์ legacy ที่แยกตาม protocol
+
+ใน batch เดียวกันห้ามส่ง identity ซ้ำ แม้เลือกคนละ protocol สำหรับ `deviceCode` เดียวกัน หากเป็นอุปกรณ์คนละตัว ให้ใช้ `deviceCode` ต่างกัน ส่วน `addressId` ไม่ใช่ primary key/foreign key และยังเป็น `null` หรือซ้ำกันได้
+
+### การป้องกันพารามิเตอร์ซ้ำ
+
+แต่ละอุปกรณ์ส่ง channel ได้เพียงหนึ่งแถวต่อ `dataType` พร้อมหน่วย โดย backend ต่อ legacy `unit` ให้ชื่อก่อน แล้วเปรียบเทียบหลัง Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก เช่น `CO (ppm)` กับ ` co (PPM) ` ถือว่าซ้ำและตอบ `400 VALIDATION_ERROR` ส่วน `CO (ppm)` กับ `CO (%)` หรือ `CO (ppm)` จากคนละอุปกรณ์ยังเป็นคนละ mapping กติกานี้ใช้กับ config เดี่ยว, `configs[]` และ form wrapper หลังจับคู่ channel กับอุปกรณ์แล้ว
+
+สำหรับข้อมูลเก่าที่ซ้ำ ฟอร์ม GET ของคำขอและจุดปัจจุบันใช้กติกาเดียวกันก่อนสร้าง `connectionForms`, `deviceCodeOptions`, `parameterMappings` และ `rawConfigs`:
+
+- สำหรับคำขอที่มี `measurementInstruments.parameters` ให้กรอง channel ด้วยชื่อพารามิเตอร์พร้อมหน่วยในรายชื่อนั้น โดยเปรียบเทียบหลัง Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก แล้วคืน label ตามรายชื่อก่อนตัดข้อมูลซ้ำ จึงรักษา Address เดิมที่ต่างกันเพียงตัวพิมพ์หรือช่องว่างขอบข้อความได้; ชื่อที่ระบุคนละหน่วยยังเป็นคนละพารามิเตอร์
+- เลือก config ที่ `updatedAt` ล่าสุดต่อ identity ภายใน station และ request เดียวกัน หากเวลาเท่ากันใช้ `id` มากที่สุด; `deviceCode: null` ยังคงแยก protocol
+- ใน config ที่เลือก หากชื่อพารามิเตอร์พร้อมหน่วยซ้ำ ให้เลือกแถวที่มี `addressId` ก่อน ตามด้วยแถวที่มีค่าตั้งค่ามากกว่า แล้วใช้แถวแรกที่บันทึกเมื่อเท่ากัน โดยเก็บค่าทั้งแถว ไม่ผสมค่าจากหลายแถว
+- การอ่านไม่แก้ฐานข้อมูลและไม่ลบประวัติ การอ่าน config เดียวด้วย `:configId` ยังคงใช้ ID ที่ระบุและตัดเฉพาะ channel ซ้ำใน config นั้น
+
+การปรับข้อมูลซ้ำนี้ใช้กับ response ของฟอร์ม ส่วน integration ที่อ่าน raw config ยังคงอ่านข้อมูลที่เก็บจริงจนกว่าจะบันทึกชุดใหม่ ไม่ต้องรัน migration สำหรับการแก้นี้ Client ควรโหลดฟอร์มใหม่และส่งกลับหนึ่ง config ต่ออุปกรณ์และหนึ่ง channel ต่อพารามิเตอร์พร้อมหน่วย เพื่อไม่ส่ง payload ซ้ำที่ค้างอยู่ในหน้าจอ
 
 ## `GET /api/v1/cems-wpms-requests/:id/device-configs`
 
@@ -313,6 +328,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 
 - `stationId` ใน query ควรเป็น `pointCode` หรือ `pointName` ของจุดใน request; frontend ต้องส่งค่าเมื่อ dialog เปิดจากจุดที่ผู้ใช้เลือก
 - API นี้ยังตรวจ authentication, permission และ data scope ตาม request
+- ข้อมูลเก่าที่ซ้ำใช้ [กติกาป้องกันพารามิเตอร์ซ้ำ](#การป้องกันพารามิเตอร์ซ้ำ) กับทุกส่วนของฟอร์มรวมถึง `rawConfigs`
 
 ### Errors
 
@@ -432,6 +448,8 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 - `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ของ measurement point ใน request
 - ผู้เรียกต้องผ่าน `cems_wpms_requests:edit` ตาม scope/assignment ของโรงงานและ `regionalAccess` และ request ต้องอยู่สถานะ `WAITING_CONNECTION`
 - เมื่อ `settings.dbPass` เป็น `********` backend จะใช้รหัสจริงของ active config ที่มี `stationId + protocol + deviceCode` เดียวกัน; หากไม่มีรหัสจริงให้รักษา ต้องตอบ `400 BAD_REQUEST` และ client ต้องให้ผู้ใช้กรอกรหัสใหม่
+- เมื่อเปลี่ยน protocol รหัสผ่านเดิมจะใช้ต่อได้เฉพาะเมื่อมี active config ของ protocol ใหม่นั้นตรงกันอยู่แล้ว มิฉะนั้นต้องกรอกรหัสจริงใหม่
+- ห้ามส่ง identity อุปกรณ์ซ้ำใน batch และห้ามส่งพารามิเตอร์พร้อมหน่วยซ้ำในอุปกรณ์เดียวกันตาม [กติกาด้านบน](#การป้องกันพารามิเตอร์ซ้ำ)
 - backend ไม่ตรวจ required, format, IP, port range, Address ID range, min/max order, alert order, encoding/value-format enum หรือ Address ID ซ้ำของ connection/channel fields
 - status-management ตรวจ enum, local datetime รูปแบบ `YYYY-MM-DD HH:mm:ss`, ลำดับเวลา, จำนวนรายการ, parameter ของจุดตรวจวัด และช่วงทับกันที่ backend
 - backend ยังตรวจโครงสร้าง JSON, `stationId`, `protocol`, ความสัมพันธ์ request-station และขนาด batch/channel เพื่อป้องกัน payload ผิดรูปแบบหรือใหญ่เกินกำหนด
@@ -443,6 +461,8 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 | HTTP status | Code | Condition | Client action |
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol`, status/time ผิดรูปแบบ, เกิน 100 ช่วง หรือช่วงทับกัน | แก้ payload ตาม field issues |
+| `400` | `VALIDATION_ERROR` | `channels[].dataType` พร้อมหน่วยซ้ำในอุปกรณ์เดียวกันหลัง normalize | โหลดฟอร์มใหม่และส่งเพียงหนึ่งแถวต่อพารามิเตอร์/อุปกรณ์ |
+| `400` | `BAD_REQUEST` | identity อุปกรณ์ซ้ำใน batch แม้เลือกต่าง protocol | ส่งหนึ่ง config ต่ออุปกรณ์; ใช้ `deviceCode` ต่างกันสำหรับคนละอุปกรณ์ |
 | `400` | `BAD_REQUEST` | station ไม่อยู่ใน request, parameter ไม่อยู่ในจุด หรือ request ไม่ได้อยู่สถานะ `WAITING_CONNECTION` | refresh request และเลือก station/parameter ใหม่ |
 | `400` | `BAD_REQUEST` | ส่ง `settings.dbPass = "********"` แต่ไม่มีรหัสจริงเดิมให้รักษา | ให้ผู้ใช้กรอกรหัสฐานข้อมูลจริงใหม่ |
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
@@ -526,6 +546,7 @@ Response ใช้ schema เดียวกับ [GET ของ request](#succ
 
 - backend ค้นหา connected request ล่าสุดของ `stationId` ภายใน data scope ก่อนอ่าน config
 - ค่า `stationId` ยังคงเป็น routing/identity field และไม่เป็น optional
+- ข้อมูลเก่าที่ซ้ำใช้ [กติกาป้องกันพารามิเตอร์ซ้ำ](#การป้องกันพารามิเตอร์ซ้ำ) ก่อนสร้างทุกส่วนของฟอร์ม
 
 ### Errors
 
@@ -671,7 +692,8 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - `stationId` ใน body ทุก config ต้องตรงกับ `:stationId` ใน path
 - backend ตรวจว่ามี connected request ล่าสุดของจุดและผู้เรียกมี edit scope
 - endpoint นี้ใช้ replace semantics: config ปัจจุบันของ station ถูกแทนที่ด้วยชุดที่ส่งมา
-- เมื่อ `settings.dbPass` เป็น `********` backend จะรักษารหัสจริงของ config เดิมที่มี device key เดียวกัน; หากข้อมูลเดิมเป็น placeholder หรือไม่มีรหัสจริง ต้องกรอกรหัสใหม่
+- เมื่อ `settings.dbPass` เป็น `********` backend จะรักษารหัสจริงของ config เดิมที่มี `stationId + protocol + deviceCode` เดียวกัน; หากข้อมูลเดิมเป็น placeholder หรือไม่มีรหัสจริง รวมถึงเมื่อเปลี่ยน protocol แล้วไม่มี config ที่ตรงกัน ต้องกรอกรหัสใหม่
+- ห้ามส่ง identity อุปกรณ์ซ้ำใน batch และห้ามส่งพารามิเตอร์พร้อมหน่วยซ้ำในอุปกรณ์เดียวกันตาม [กติกาด้านบน](#การป้องกันพารามิเตอร์ซ้ำ)
 - connection/channel fields ใช้ validation แบบเดียวกับ POST ของ request ส่วน status-management ตรวจทั้ง enum, เวลา, parameter และช่วงทับกันที่ backend
 - primary key และ foreign key เช่น config ID, channel ID, request/config relation เป็น server-managed และ client ไม่ต้องส่ง
 
@@ -682,6 +704,8 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 | HTTP status | Code | Condition | Client action |
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol`, status/time ผิดรูปแบบ, เกิน 100 ช่วง หรือช่วงทับกัน | แก้ payload ตาม field issues |
+| `400` | `VALIDATION_ERROR` | `channels[].dataType` พร้อมหน่วยซ้ำในอุปกรณ์เดียวกันหลัง normalize | โหลดฟอร์มใหม่และส่งเพียงหนึ่งแถวต่อพารามิเตอร์/อุปกรณ์ |
+| `400` | `BAD_REQUEST` | identity อุปกรณ์ซ้ำใน batch แม้เลือกต่าง protocol | ส่งหนึ่ง config ต่ออุปกรณ์; ใช้ `deviceCode` ต่างกันสำหรับคนละอุปกรณ์ |
 | `400` | `BAD_REQUEST` | `stationId` ใน body ไม่ตรงกับ path หรือ parameter ไม่อยู่ในจุด | ใช้ station และ parameter ของจุดที่เลือก |
 | `400` | `BAD_REQUEST` | ส่ง `settings.dbPass = "********"` แต่ไม่มีรหัสจริงเดิมให้รักษา | ให้ผู้ใช้กรอกรหัสฐานข้อมูลจริงใหม่ |
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
@@ -695,8 +719,10 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - Controller and form mapper: [`connection-requests.controller.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.controller.ts), [`connection-requests.service.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts)
 - Device validator and types: [`device-connections.validator.ts`](../../../../../backend/src/modules/device-connections/device-connections.validator.ts), [`device-connections.types.ts`](../../../../../backend/src/modules/device-connections/device-connections.types.ts)
 - Persistence: [`device-connections.service.ts`](../../../../../backend/src/modules/device-connections/device-connections.service.ts), [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts)
+- Device identity and form normalization: [`device-connection-identity.ts`](../../../../../backend/src/modules/device-connections/device-connection-identity.ts), [`normalize-device-config-form.ts`](../../../../../backend/src/modules/device-connections/normalize-device-config-form.ts)
 - Migrations: [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts), [`0087_allow_poms_box_device_protocol.ts`](../../../../../backend/src/db/migrations/0087_allow_poms_box_device_protocol.ts)
 - Validator/service tests: [`device-connections.validator.test.ts`](../../../../../backend/tests/unit/device-connections.validator.test.ts), [`device-connections.service.test.ts`](../../../../../backend/tests/unit/device-connections.service.test.ts), [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts)
+- Duplicate-parameter regression tests: [`device-config-s2014-roundtrip.test.ts`](../../../../../backend/tests/unit/device-config-s2014-roundtrip.test.ts), [`device-config-form-duplicates.test.ts`](../../../../../backend/tests/unit/device-config-form-duplicates.test.ts), [`device-config-duplicate-parameters.validator.test.ts`](../../../../../backend/tests/unit/device-config-duplicate-parameters.validator.test.ts), [`device-config-duplicates.openapi.test.ts`](../../../../../backend/tests/unit/device-config-duplicates.openapi.test.ts)
 - Migration test: [`device-connection-protocol-migration.test.ts`](../../../../../backend/tests/unit/device-connection-protocol-migration.test.ts)
 - Route tests: [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`connection-requests.create.route.test.ts`](../../../../../backend/tests/unit/connection-requests.create.route.test.ts)
 

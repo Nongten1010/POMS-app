@@ -1,5 +1,27 @@
 # API Breaking Changes
 
+<a id="device-config-duplicate-parameters"></a>
+
+## 2026-10-21 — ป้องกันพารามิเตอร์และอุปกรณ์ซ้ำในหน้าตั้งค่า
+
+- **Affected canonical docs:** [ตั้งค่าอุปกรณ์: ป้องกันพารามิเตอร์ซ้ำ](./menus/connection-requests/device-configs.md#การป้องกันพารามิเตอร์ซ้ำ)
+- **Impact:** config ที่มี `deviceCode` ใช้ `(stationId, deviceCode)` เป็น identity ภายในคำขอหรือชุดปัจจุบันเดียวกัน การเปลี่ยน protocol จะแทนที่ config เก่าของอุปกรณ์นั้น ไม่เก็บซ้อนกัน; batch ที่ส่ง identity ซ้ำตอบ `400 BAD_REQUEST` และ channel ที่ชื่อพร้อมหน่วยซ้ำในอุปกรณ์เดียวกันหลัง normalize ตอบ `400 VALIDATION_ERROR` การอ่านฟอร์มตัดข้อมูลเก่าที่ซ้ำอย่างสอดคล้องกันใน `connectionForms`, `deviceCodeOptions`, `parameterMappings` และ `rawConfigs`
+- **Migration:** Client โหลดฟอร์มใหม่ก่อนบันทึก ส่งหนึ่ง config ต่ออุปกรณ์และหนึ่ง channel ต่อพารามิเตอร์พร้อมหน่วย หากเป็นคนละอุปกรณ์ให้ใช้ `deviceCode` ต่างกัน เมื่อเปลี่ยน protocol ต้องกรอกรหัสผ่านจริงหากไม่มี active config ของ protocol ใหม่ที่ตรงกันให้รักษารหัสเดิม ไม่ต้องรัน database migration; GET ไม่แก้ข้อมูลจริง และ integration raw config คงข้อมูลที่เก็บจนกว่าจะบันทึกใหม่ หลัง deploy ตรวจ `/api/v1/openapi.json` และฟอร์ม request/current ให้ตรงกับ contract
+- **Old contract:** identity รวม `protocol` แม้ `deviceCode` เดิม; ยอมรับ channel ซ้ำและคืน mapping ทั้งหมดที่เก็บไว้
+- **New contract:** `deviceCode` ที่ระบุไม่แยก identity ตาม protocol; `deviceCode: null` ยังคงแยกตาม protocol เพื่อรองรับ legacy และพารามิเตอร์ต่างหน่วย/ต่างอุปกรณ์ยังเป็นคนละ mapping ตาม [กติกาเลือกข้อมูลเดิม](./menus/connection-requests/device-configs.md#การป้องกันพารามิเตอร์ซ้ำ)
+- **Breaking change:** yes — เปลี่ยน identity ของอุปกรณ์ที่มีรหัส เพิ่ม validation ปฏิเสธ payload ซ้ำ และเปลี่ยนจำนวนรายการในฟอร์มเมื่อข้อมูลเดิมซ้ำ
+
+<a id="new-point-measurement-cleanup"></a>
+
+## 2026-10-21 — ล้างค่าทดสอบก่อนจุดใหม่เชื่อมต่อสำเร็จ
+
+- **Affected canonical docs:** [ล้างค่าทดสอบ](./menus/connection-requests/measurement-cleanup.md), [เมนูขอเชื่อมต่อ](./menus/connection-requests/README.md), [ค่าตรวจวัด](./menus/connection-requests/parameter-values.md)
+- **Impact:** `NEW_CONNECTION` และ `ADD_MEASUREMENT_POINT` ทุกช่องทางที่ activate จุดใหม่ ล้างแถวที่มีอยู่ ณ จังหวะจับล็อกในทั้ง 6 ตารางของรหัสจุดนั้นก่อนยืนยัน `CONNECTED`; ไม่ล้าง `ADD_PARAMETER` หรือจุดที่เคยเชื่อมต่อแล้ว ไม่ย้อนล้างจุดเดิม
+- **Migration:** รัน migration `0143_create_connection_measurement_cleanup_receipts` เพื่อสร้าง receipt ในฐานค่าก่อนเริ่ม application ให้ runtime มีสิทธิ์ metadata/read/delete ของตารางค่า และ read/insert ของ receipt ตาม [คู่มือใน contract](./menus/connection-requests/measurement-cleanup.md#ข้อมูลสำหรับ-backend-และผู้ดูแล). Client รองรับ `503 MEASUREMENT_CLEANUP_FAILED`, คงขั้นตอนเดิม และตรวจสถานะก่อนลองใหม่ หลังสำเร็จรองรับตารางค่าที่ว่างจนมีข้อมูลใหม่ หลัง deploy ตรวจ `/api/v1/openapi.json` กับ endpoint ที่เกี่ยวข้องก่อนปิด release
+- **Old contract:** ข้อมูลทดสอบก่อนเชื่อมต่อยังอยู่หลังยืนยันสำเร็จ
+- **New contract:** ล้างข้อมูลทดสอบพร้อม receipt ป้องกันล้างซ้ำ เก็บแถวที่เข้ามาภายหลังรวมข้อมูลย้อนหลัง หากล้างไม่สำเร็จยังไม่ยืนยันสำเร็จ หากล้าง commit แล้วแต่ฐานหลักล้มเหลว retry จะไม่ล้างใหม่
+- **Breaking change:** yes — เปลี่ยนอายุข้อมูลทดสอบและเพิ่มเงื่อนไขก่อนยืนยัน `CONNECTED`
+
 <a id="connection-test-protocol-source"></a>
 
 ## 2026-10-21 — ข้อมูลทดสอบเลือก realtime หรือรายนาทีตาม protocol

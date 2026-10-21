@@ -11,6 +11,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
 
 import { createApp } from '../../src/app';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
+import { AppError } from '../../src/shared/errors/AppError';
 
 const mockedRepository = connectionRequestsRepository as unknown as {
   findDirectConnectionFactory: jest.Mock<(...args: unknown[]) => Promise<unknown>>;
@@ -94,6 +95,30 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections integration', () =>
       },
     });
     expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('returns the retryable cleanup failure without reporting a successful connection', async () => {
+    mockedRepository.createDirectConnection.mockRejectedValueOnce(
+      new AppError(
+        'Unable to clear test measurements; connection was not completed',
+        503,
+        'MEASUREMENT_CLEANUP_FAILED',
+        { retryable: true },
+      ),
+    );
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send(validPayload());
+    expect(response.status).toBe(503);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        code: 'MEASUREMENT_CLEANUP_FAILED',
+        details: { retryable: true },
+      },
+    });
+    expect(response.body).not.toHaveProperty('data');
   });
 });
 

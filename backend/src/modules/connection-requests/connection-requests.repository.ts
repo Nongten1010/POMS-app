@@ -13,6 +13,7 @@ import {
 import { normalizeAlertActivationStationIdentity } from '../alert-emails/alert-parameter-activations';
 import { db } from '../../config/database';
 import { reclaimCanceledPointCode } from './reclaim-canceled-point-code';
+import { clearNewConnectionMeasurements } from './connection-measurement-cleanup';
 import { env } from '../../config/env';
 import {
   factoryProfileReadTable,
@@ -1247,6 +1248,12 @@ export const connectionRequestsRepository = {
             actorUserId,
             requestId,
           );
+          await clearNewConnectionMeasurements(trx, {
+            requestId,
+            requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+            measurementPoints: [{ pointCode }],
+            actorUserId,
+          });
           await trx('cems_wpms_connected_measurement_points').insert({
             source_request_id: requestId,
             source_measurement_point_id: pointId,
@@ -1642,6 +1649,7 @@ export const connectionRequestsRepository = {
           updated,
           actorUserId,
           activeEligibleFactory,
+          status === CONNECTION_REQUEST_STATUS.CONNECTED,
         );
       }
       return updated;
@@ -1717,6 +1725,7 @@ export const connectionRequestsRepository = {
         connected,
         actorUserId,
         activeEligibleFactory,
+        true,
       );
       return connected;
     });
@@ -1835,6 +1844,7 @@ async function syncConnectedMeasurementPointsInTransaction(
   request: ConnectionRequestDTO,
   actorUserId: number,
   activeEligibleFactory: EligibleFactoryProfileRow,
+  clearNewMeasurements = false,
 ): Promise<void> {
   // Check every target before changing either the factory profile or any live point.
   const owners = await lockAddParameterPointOwners(trx, request);
@@ -1846,6 +1856,14 @@ async function syncConnectedMeasurementPointsInTransaction(
     actorUserId,
     request.id,
   );
+  if (clearNewMeasurements) {
+    await clearNewConnectionMeasurements(trx, {
+      requestId: request.id,
+      requestType: request.requestType,
+      measurementPoints: request.measurementPoints,
+      actorUserId,
+    });
+  }
   for (const [index, point] of request.measurementPoints.entries()) {
     const owner = owners[index];
     const existing = isAddParameter

@@ -10,6 +10,10 @@ jest.mock('../../src/config/database', () => ({
   }),
 }));
 
+jest.mock('../../src/modules/connection-requests/connection-measurement-cleanup', () => ({
+  clearNewConnectionMeasurements: jest.fn(async () => undefined),
+}));
+
 import { db } from '../../src/config/database';
 import { connectionRequestsRoutes } from '../../src/modules/connection-requests/connection-requests.routes';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';

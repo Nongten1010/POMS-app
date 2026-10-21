@@ -5,6 +5,7 @@ import {
   getMockDeviceConnectionConfigs,
 } from './device-connections.mock-source';
 import { deviceConnectionsRepository } from './device-connections.repository';
+import { deviceConnectionIdentity } from './device-connection-identity';
 import {
   DEVICE_CONNECTION_PROTOCOL,
   type DeviceConnectionAccessContext,
@@ -237,7 +238,7 @@ function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInpu
 
   for (const input of inputs) {
     const deviceCode = input.deviceCode ?? null;
-    const key = `${input.stationId}\u0000${input.protocol}\u0000${deviceCode ?? ''}`;
+    const key = deviceConnectionIdentity(input);
     if (seen.has(key)) {
       duplicates.push({
         stationId: input.stationId,
@@ -250,7 +251,7 @@ function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInpu
 
   if (duplicates.length > 0) {
     throw new BadRequestError(
-      'Device connection configs in the same request must have unique stationId, protocol, and deviceCode',
+      'Device connection configs in the same request must have unique device identities',
       { duplicates },
     );
   }

@@ -10,11 +10,16 @@ jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository
   retireAlertParameterActivations: jest.fn(async () => undefined),
 }));
 
+jest.mock('../../src/modules/connection-requests/connection-measurement-cleanup', () => ({
+  clearNewConnectionMeasurements: jest.fn(async () => undefined),
+}));
+
 import { db } from '../../src/config/database';
 import { env } from '../../src/config/env';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import type { MeasurementPointInput } from '../../src/modules/connection-requests/connection-requests.types';
 import { syncAlertParameterActivations } from '../../src/modules/alert-emails/alert-parameter-activations.repository';
+import { clearNewConnectionMeasurements } from '../../src/modules/connection-requests/connection-measurement-cleanup';
 
 type Row = Record<string, unknown>;
 const mockedDb = db as unknown as { transaction: jest.Mock };
@@ -591,6 +596,115 @@ function canceledCodeFixture() {
     );
   return { ...fixture, approve };
 }
+
+describe('measurement cleanup at point activation', () => {
+  beforeEach(() => {
+    jest.mocked(clearNewConnectionMeasurements).mockReset().mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    env.FACTORY_PROFILE_MODE = previousMode;
+  });
+
+  async function pendingRequest(requestType = 'NEW_CONNECTION') {
+    const fixture = fixtureDatabase([], true);
+    const created = await connectionRequestsRepository.create(
+      {
+        ...oldRequest(requestType),
+        contactName: 'ผู้ประสานงาน',
+        contactPhone: '0812345678',
+      } as never,
+      7,
+      'CONNECTION_CONFIRMED',
+    );
+    const point = fixture.tables[POINTS].find((row) => row.request_id === created.id);
+    if (!point) throw new Error('Missing fixture measurement point');
+    point.point_code = 'P2010';
+    return { ...fixture, requestId: created.id };
+  }
+
+  it.each(['verify', 'fully-exempt'] as const)(
+    'cleans before activating a new point via %s',
+    async (flow) => {
+      const requestType = flow === 'fully-exempt' ? 'ADD_MEASUREMENT_POINT' : 'NEW_CONNECTION';
+      const fixture = await pendingRequest(requestType);
+      const update = { verifiedAt: '2026-10-19T08:00:00Z' };
+      jest.mocked(clearNewConnectionMeasurements).mockImplementationOnce(async () => {
+        expect(fixture.tables[CONNECTED]).toEqual([]);
+      });
+      if (flow === 'verify') {
+        await connectionRequestsRepository.connect(fixture.requestId, 7, update);
+      } else {
+        await connectionRequestsRepository.updateStatus(fixture.requestId, 'CONNECTED', 7, update, {
+          activateFullyExemptedPoints: true,
+        });
+      }
+      expect(jest.mocked(clearNewConnectionMeasurements).mock.calls).toEqual([
+        [
+          fixture.trx,
+          expect.objectContaining({
+            requestId: fixture.requestId,
+            requestType,
+            actorUserId: 7,
+            measurementPoints: [expect.objectContaining({ pointCode: 'P2010' })],
+          }),
+        ],
+      ]);
+      expect(fixture.tables[CONNECTED]).toHaveLength(1);
+    },
+  );
+
+  it.each(['verify', 'fully-exempt'] as const)(
+    'preserves the previous status and live points when cleanup fails via %s',
+    async (flow) => {
+      const fixture = await pendingRequest(
+        flow === 'fully-exempt' ? 'ADD_MEASUREMENT_POINT' : 'NEW_CONNECTION',
+      );
+      const before = structuredClone(fixture.tables);
+      jest
+        .mocked(clearNewConnectionMeasurements)
+        .mockRejectedValueOnce(new Error('cleanup failed'));
+      const result =
+        flow === 'verify'
+          ? connectionRequestsRepository.connect(fixture.requestId, 7, {})
+          : connectionRequestsRepository.updateStatus(
+              fixture.requestId,
+              'CONNECTED',
+              7,
+              {},
+              { activateFullyExemptedPoints: true },
+            );
+      await expect(result).rejects.toThrow('cleanup failed');
+      expect(fixture.tables).toEqual(before);
+    },
+  );
+
+  it('rolls back a direct CONNECT creation when cleanup fails', async () => {
+    const fixture = fixtureDatabase([], true);
+    const before = structuredClone(fixture.tables);
+    jest.mocked(clearNewConnectionMeasurements).mockRejectedValueOnce(new Error('cleanup failed'));
+    await expect(
+      connectionRequestsRepository.createDirectConnection(
+        {
+          ...oldRequest('ADD_MEASUREMENT_POINT'),
+          status: 'CONNECTED',
+          contactName: 'ผู้ประสานงาน',
+          contactPhone: '0812345678',
+        } as never,
+        7,
+      ),
+    ).rejects.toThrow('cleanup failed');
+    expect(fixture.tables).toEqual(before);
+  });
+
+  it('does not clean during maintenance sync of a previously connected request', async () => {
+    fixtureDatabase([currentPoint()]);
+    await connectionRequestsRepository.syncConnectedMeasurementPoints(
+      oldRequest('NEW_CONNECTION') as never,
+      7,
+    );
+    expect(clearNewConnectionMeasurements).not.toHaveBeenCalled();
+  });
+});
 
 describe('connection profile persistence with a stale submitted factory', () => {
   beforeEach(() => {

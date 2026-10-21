@@ -34,6 +34,59 @@ interface OperationOptions {
   focus?: boolean;
 }
 const schemaRef = (name: string): OpenApiObject => ({ $ref: `#/components/schemas/${name}` });
+const deviceConfigIdentityDescription =
+  'เมื่อมี deviceCode ใช้ (stationId, deviceCode) เป็น identity ภายในคำขอหรือชุดปัจจุบันเดียวกัน; protocol เปลี่ยนได้และการบันทึกจะแทนที่ config กับ channels เก่าของอุปกรณ์นั้นแม้ต่าง protocol. เมื่อ deviceCode เป็น null ยังคงแยกตาม (stationId, protocol, null). ห้ามส่ง identity ซ้ำใน batch เดียวกัน: 400 BAD_REQUEST';
+const deviceChannelUniquenessDescription =
+  'dataType รวมหน่วยต้องไม่ซ้ำภายในอุปกรณ์เดียวกัน โดยเปรียบเทียบหลัง normalize unit, Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก; ซ้ำตอบ 400 VALIDATION_ERROR. พารามิเตอร์ต่างหน่วยหรือคนละอุปกรณ์ยังแยกกัน และ addressId ซ้ำหรือ null ได้';
+const deviceConfigFormNormalizationDescription =
+  'ฟอร์มตัดข้อมูลเก่าที่ซ้ำก่อนสร้าง connectionForms, deviceCodeOptions, parameterMappings และ rawConfigs: คำขอที่มี measurementInstruments.parameters ใช้รายชื่อนั้นกรอง channel โดยเปรียบเทียบชื่อพร้อมหน่วยหลัง Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก แล้วคืน label ตามรายชื่อก่อนตัดข้อมูลซ้ำ; หน่วยต่างกันยังเป็นคนละพารามิเตอร์. ภายใน station/request/device เดียวกันเลือก config ที่ updatedAt ล่าสุด แล้วใช้ id มากสุดเมื่อเวลาเท่ากัน; deviceCode null ยังคงแยก protocol. Channel ที่ชื่อพร้อมหน่วยซ้ำเลือกแถวที่มี addressId ก่อน ตามด้วยแถวที่มีค่าตั้งค่ามากกว่า และแถวแรกที่บันทึกเมื่อเท่ากัน โดยใช้ทั้งแถว ไม่ผสมค่า. GET ไม่แก้ฐานข้อมูล';
+const deviceConfigWriteDescription = `${deviceConfigIdentityDescription}. ${deviceChannelUniquenessDescription}. settings.dbPass = ******** รักษารหัสจริงได้เฉพาะ active config ที่ stationId + protocol + deviceCode ตรงกัน; เมื่อเปลี่ยน protocol แล้วไม่มีรหัสที่ตรงกัน ต้องกรอกรหัสจริงใหม่ มิฉะนั้นตอบ 400 BAD_REQUEST`;
+const deviceConfigBadRequestResponse: OpenApiObject = {
+  description:
+    '400 VALIDATION_ERROR เมื่อพารามิเตอร์ซ้ำภายในอุปกรณ์หรือโครงสร้าง payload ไม่ถูกต้อง; 400 BAD_REQUEST เมื่อ identity อุปกรณ์ซ้ำใน batch, station/parameter ไม่อยู่ในขอบเขตคำขอ หรือไม่มีรหัสฐานข้อมูลจริงให้รักษา',
+  content: {
+    'application/json': {
+      schema: schemaRef('ErrorEnvelope'),
+      examples: {
+        duplicateParameter: {
+          summary: 'พารามิเตอร์พร้อมหน่วยซ้ำในอุปกรณ์เดียวกัน',
+          value: {
+            success: false,
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'Request validation failed',
+              details: {
+                channels: ['Duplicate parameter; already present in channels[0] for this device'],
+              },
+              issues: [
+                {
+                  code: 'custom',
+                  path: ['channels', 1, 'dataType'],
+                  pathString: 'channels.1.dataType',
+                  message: 'Duplicate parameter; already present in channels[0] for this device',
+                },
+              ],
+            },
+          },
+        },
+        duplicateDevice: {
+          summary: 'deviceCode เดียวกันใน station เดียวกัน แม้ต่าง protocol',
+          value: {
+            success: false,
+            error: {
+              code: 'BAD_REQUEST',
+              message:
+                'Device connection configs in the same request must have unique device identities',
+              details: {
+                duplicates: [{ stationId: 'S2014', protocol: 'MSSQL', deviceCode: 'S2014/01' }],
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
 const currentDeviceConfigFormSchema: OpenApiObject = {
   type: 'object',
   required: ['success', 'data'],
@@ -44,6 +97,7 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
       properties: {
         connectionForms: {
           type: 'array',
+          description: deviceConfigFormNormalizationDescription,
           items: {
             type: 'object',
             properties: {
@@ -63,7 +117,7 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
           type: 'object',
           additionalProperties: true,
           description:
-            'config ที่บันทึกจริง; DCON คง protocol DCON_ASCII และ settings.slaveId รวมถึงค่า null และ 0',
+            'config ที่บันทึกจริงหลังตัดข้อมูลซ้ำสำหรับฟอร์ม; DCON คง protocol DCON_ASCII และ settings.slaveId รวมถึงค่า null และ 0',
         },
         parameterOptions: {
           type: 'array',
@@ -72,6 +126,8 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
         },
         parameterMappings: {
           type: 'array',
+          description:
+            'หนึ่ง mapping ต่อพารามิเตอร์พร้อมหน่วยของแต่ละอุปกรณ์; พารามิเตอร์เดียวกันจากคนละอุปกรณ์ยังคงอยู่',
           items: {
             type: 'object',
             properties: {
@@ -103,6 +159,48 @@ const currentParameterFormDescription =
   currentParameterFormAssetsDescription;
 const connectionProfileWriteDescription =
   'การเชื่อมต่อครั้งแรกปรับเฉพาะข้อมูลทั่วไปที่อนุญาต โดย canonical mode ตรวจ source revision ที่ backend เก็บเมื่อยื่น/ส่งกลับก่อนบันทึก; ถ้า revision หายหรือเปลี่ยนและคำขอมีข้อมูลทั่วไป ให้ส่งคำขอกลับมาใหม่. เมื่อมีจุดเชื่อมต่ออยู่แล้วใช้ข้อมูลโรงงานปัจจุบัน รวม null โดยไม่นำ snapshot เก่ามาเขียนทับ. Backend เก็บ revision ภายใน ผู้เรียกไม่ต้องส่ง field เพิ่ม';
+const measurementCleanupDescription =
+  'ก่อนยืนยัน CONNECTED ของ NEW_CONNECTION หรือ ADD_MEASUREMENT_POINT ล้างค่าทดสอบเฉพาะรหัสจุดใหม่ในตาราง <stationId>_data_real, _data_1m, _data_5m, _data_60m, _data_1day, _data_test; ข้ามตารางที่ไม่มี. ไม่ล้าง ADD_PARAMETER หรือรหัสที่เคยมี connected point แม้เลิกใช้งานแล้ว รวมชื่อจุด legacy ที่ใช้แทนรหัส และไม่ย้อนล้างจุดเดิม. ล้างแถวที่มีอยู่เมื่อจับล็อกตารางครบ เก็บค่าที่เข้ามาภายหลังรวมข้อมูลย้อนหลัง โดยไม่ใช้ verifiedAt หรือเวลาจากเครื่องเป็นเกณฑ์. เก็บประวัติการล้างและป้องกันล้างซ้ำแม้การยืนยันสถานะภายหลังล้มเหลว; ล้างไม่สำเร็จตอบ 503 MEASUREMENT_CLEANUP_FAILED และยังไม่เชื่อมต่อสำเร็จ';
+const measurementCleanupFailureResponse: OpenApiObject = {
+  description:
+    'ล้างค่าทดสอบหรือยืนยันผลการล้างไม่ได้: คำขอเดิมคงสถานะก่อนหน้า; direct CONNECT ไม่สร้างจุดสำเร็จ. error.details.retryable=true ให้โหลดสถานะล่าสุดก่อนลองใหม่. หากการล้าง commit แล้วแต่การบันทึกสถานะล้มเหลว ผลการล้างยังอยู่และ retry จะไม่ล้างซ้ำ',
+  content: {
+    'application/json': {
+      schema: {
+        allOf: [
+          schemaRef('ErrorEnvelope'),
+          {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', enum: [false] },
+              error: {
+                type: 'object',
+                required: ['code', 'message', 'details'],
+                properties: {
+                  code: { type: 'string', enum: ['MEASUREMENT_CLEANUP_FAILED'] },
+                  message: { type: 'string' },
+                  details: {
+                    type: 'object',
+                    required: ['retryable'],
+                    properties: { retryable: { type: 'boolean', enum: [true] } },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      example: {
+        success: false,
+        error: {
+          code: 'MEASUREMENT_CLEANUP_FAILED',
+          message: 'Unable to clear test measurements; connection was not completed',
+          details: { retryable: true },
+        },
+      },
+    },
+  },
+};
 const connectionProfileConflictResponse: OpenApiObject = {
   description:
     '409 CONFLICT: legacy สำเนาข้อมูลโรงงานปัจจุบันขัดกัน ใช้ error.details.reason = FACTORY_PROFILE_CONFLICT; canonical การเชื่อมต่อครั้งแรกมีข้อมูลทั่วไปแต่ source revision หายหรือเก่า ใช้ error.details.reason = FACTORY_PROFILE_CHANGED ให้ reload และ resubmit. canonical profile ยังไม่พร้อม หรือ eligible factory ไม่ active ก็ตอบ CONFLICT; ไม่มี partial update',
@@ -148,7 +246,8 @@ const requestEditAccessDescription =
 const resubmitPointReplacementDescription =
   'เมื่อส่งแบบแก้ไข จุด active ที่มีรหัสและยังอยู่ในฟอร์มคง ID เดิม, pointCode เดิม, assignment metadata และเจ้าของการจองเดิม; แก้เฉพาะรายละเอียดจุด. จับคู่ด้วย pointCode เดิมโดย trim และไม่แยกตัวพิมพ์ หรือชื่อเดิมเมื่อไม่ส่งรหัส; หากคำขอและ payload มีจุดเดียวสามารถเปลี่ยนชื่อโดยไม่ส่งรหัสได้. ไม่จับคู่ตามลำดับ array. เมื่อส่งรหัสเดิมเพื่อระบุแต่ละจุด สามารถสลับหรือวนชื่อ pointName ระหว่างจุดได้หากชื่อสุดท้ายไม่ซ้ำกัน โดยบันทึกทั้งชุดใน transaction เดียว. เมื่อคำขอมีจุดที่ได้รับรหัสแล้ว รหัสที่ส่งต้องเป็นรหัสเดิมของจุดในคำขอเท่านั้น; รหัสอื่นหรืออ้างจุดเดิมซ้ำตอบ 400 BAD_REQUEST พร้อม reason POINT_CODE_READ_ONLY และ path measurementPoints.i.pointCode. หากหลายจุดจับคู่ไม่ได้และยังมีจุดเดิมที่มีรหัสเหลืออยู่ ตอบ POINT_CODE_IDENTITY_REQUIRED ที่ path measurementPoints ให้ส่งรหัสเดิมเพื่อระบุจุด. หากทะเบียนของจุดที่จะเก็บหายหรือเจ้าของ/assignment mode ไม่ตรง ตอบ 409 CONFLICT พร้อม reason POINT_CODE_RESERVATION_MISMATCH, path measurementPoints.i.pointCode, requestId, measurementPointId และ pointCode. จุดใหม่ต้องไม่กำหนดรหัสเอง; คำขอที่ยังไม่มีจุดได้รับรหัสจะล้าง client pointCode ตามเดิม. จุดที่มีรหัสซึ่งตัดออกจริงหรือแถว soft-delete เก่าจะถูกลบถาวรและคืนการจองหลังตรวจการอ้างอิง; จุดเดิมที่มีรหัสและยังอยู่ไม่ถูกลบหรือคืนรหัส. snapshot ของจุดที่ยังไม่มีรหัสยังถูกลบแล้วสร้างใหม่และได้รับ ID ใหม่ตาม flow เดิม แม้ยังอยู่ในฟอร์ม. ไม่เก็บแถวจุดที่ลบเป็นประวัติ แต่ยังเก็บตัวคำขอและ statusHistory. ADD_PARAMETER ยังคงแทนที่ snapshot ในคำขอและได้รับ ID ใหม่ แต่คง pointCode เดิมและไม่คืนการจองของจุดต้นทาง. จุดที่สร้างใหม่มี ID ใหม่ ให้ใช้ response ล่าสุดในการอนุมัติและส่ง pointCodeAssignments เฉพาะจุดที่ยังไม่มีรหัส; จุดที่มีรหัสแล้วไม่ต้องกำหนดซ้ำ. หากจุดเดิมในคำขอมีข้อมูลเชื่อมต่ออ้างอิงอยู่ รวมรายการที่เลิกใช้งานแล้วและจุดที่ต้องการเก็บไว้ ตอบ REQUEST_POINTS_ALREADY_CONNECTED; หากรหัสที่จะคืนยังมีผู้ใช้อื่นหรือคืนอย่างปลอดภัยไม่ได้ ตอบ POINT_CODE_RELEASE_BLOCKED. สองเหตุผลหลังเป็น 409 CONFLICT และมี details.path = measurementPoints และ requestId; POINT_CODE_RELEASE_BLOCKED อาจมี pointCode. ไม่มี partial update';
 const currentDeviceConfigDescription =
-  'อ่านพารามิเตอร์จาก active connected point หลังตรวจสิทธิ์; คง mapping เดิมที่ยังอยู่, ซ่อนช่องที่ถอดออก, เพิ่ม mapping ว่างสำหรับพารามิเตอร์ใหม่. rawConfigs แสดงเฉพาะค่าที่บันทึกจริง; request-specific device-configs ยังคง snapshot เดิม';
+  'อ่านพารามิเตอร์จาก active connected point หลังตรวจสิทธิ์; คง mapping เดิมที่ยังอยู่, ซ่อนช่องที่ถอดออก, เพิ่ม mapping ว่างสำหรับพารามิเตอร์ใหม่. rawConfigs แสดงเฉพาะค่าที่บันทึกจริง; request-specific device-configs ยังคง snapshot เดิม. ' +
+  deviceConfigFormNormalizationDescription;
 
 const nullableRef = (name: string): OpenApiObject => ({
   allOf: [schemaRef(name)],
@@ -2202,7 +2301,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       dataType: {
         type: 'string',
         example: 'CO (ppm)',
-        description: 'Required เมื่อมี channel row; ใช้ชื่อพารามิเตอร์พร้อมหน่วย',
+        description: `Required เมื่อมี channel row; ใช้ชื่อพารามิเตอร์พร้อมหน่วย. ${deviceChannelUniquenessDescription}`,
       },
       unit: { type: 'string', nullable: true },
       valueRange: nullableRef('DeviceConnectionRange'),
@@ -2308,6 +2407,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
   },
   DeviceConnectionConfig: {
     type: 'object',
+    description: deviceConfigIdentityDescription,
     additionalProperties: false,
     required: ['stationId', 'protocol'],
     discriminator: { propertyName: 'protocol' },
@@ -2335,6 +2435,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         nullable: true,
         default: [],
         items: schemaRef('DeviceChannel'),
+        description: deviceChannelUniquenessDescription,
       },
       statusManagement: nullableRef('StatusManagement'),
     },
@@ -2342,6 +2443,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
   },
   StructuredDeviceConnectionDevice: {
     type: 'object',
+    description: deviceConfigIdentityDescription,
     additionalProperties: true,
     required: ['protocol'],
     properties: {
@@ -2386,20 +2488,22 @@ const componentSchemas: Record<string, OpenApiObject> = {
         minItems: 1,
         maxItems: 50,
         items: schemaRef('StructuredDeviceConnectionDevice'),
+        description: deviceConfigIdentityDescription,
       },
       channels: {
         type: 'array',
         nullable: true,
         default: [],
         items: schemaRef('StructuredDeviceConnectionChannel'),
-        description: 'หลังจับคู่แล้ว แต่ละ device รับได้ไม่เกิน 200 channels',
+        description: `หลังจับคู่แล้ว แต่ละ device รับได้ไม่เกิน 200 channels. ${deviceChannelUniquenessDescription}`,
       },
       statusManagement: nullableRef('StatusManagement'),
     },
   },
   DeviceConnectionConfigRequest: {
     description:
-      'DCON แสดง label device address แต่ส่ง settings.slaveId; protocol ต้องเป็น DCON_ASCII และใช้ settings เช่นเดียวกับ MODBUS_RTU',
+      'DCON แสดง label device address แต่ส่ง settings.slaveId; protocol ต้องเป็น DCON_ASCII และใช้ settings เช่นเดียวกับ MODBUS_RTU. ' +
+      deviceConfigWriteDescription,
     oneOf: [
       schemaRef('DeviceConnectionConfig'),
       {
@@ -2412,6 +2516,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
             minItems: 1,
             maxItems: 50,
             items: schemaRef('DeviceConnectionConfig'),
+            description: deviceConfigIdentityDescription,
           },
         },
       },
@@ -2670,12 +2775,15 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ขอเพิ่มจุดตรวจวัด',
       operationId: 'createMeasurementPointRequest',
       description:
-        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. default เป็น PENDING_DESIGN_REVIEW; ผู้มี effective permission ที่เกี่ยวข้องส่ง submissionAction=REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission เพิ่ม',
+        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. default เป็น PENDING_DESIGN_REVIEW; ผู้มี effective permission ที่เกี่ยวข้องส่ง submissionAction=REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission เพิ่ม' +
+        ' ' +
+        measurementCleanupDescription,
       requestBody: jsonRequestBody(schemaRef('AddMeasurementPointRequest'), officerAddPointExample),
       successStatus: '201',
       successDescription: 'สร้างคำขอเพิ่มจุดตรวจวัดแล้ว',
       successSchema: schemaRef('ConnectionRequestResponse'),
       focus: true,
+      extraResponses: { '503': measurementCleanupFailureResponse },
     }),
   },
   '/cems-wpms-requests/direct-connections': {
@@ -2685,13 +2793,16 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'createDirectConnection',
       description:
         'Permission: cems_wpms_requests:direct_connect. ใช้ effective permission และ data scope ล่าสุดโดยไม่จำกัด role หรือ userType หรือภาคตาม role; active eligible factory ต้องอยู่ใน scope; submissionAction=REQUEST_FACTORY_REVISION สร้างสถานะ WAITING_FACTORY_REVISION และ CONNECT สร้างสถานะ CONNECTED. หากไม่ส่ง action/status จะใช้ CONNECTED. เมื่อ CONNECT และ point มี pendingParameters จริง ต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า มิฉะนั้นตอบ 400 VALIDATION_ERROR' +
-        ` ${connectionProfileWriteDescription}`,
+        ` ${connectionProfileWriteDescription}` +
+        ' ' +
+        measurementCleanupDescription,
       requestBody: jsonRequestBody(schemaRef('DirectConnectionRequest'), directConnectionExample),
       successStatus: '201',
       successDescription: 'เพิ่มจุดตรวจวัดและบันทึกสถานะที่เลือกแล้ว',
       successSchema: schemaRef('ConnectionRequestResponse'),
       extraResponses: {
         '409': connectionProfileConflictResponse,
+        '503': measurementCleanupFailureResponse,
       },
       focus: true,
     }),
@@ -2799,7 +2910,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านแบบตั้งค่าอุปกรณ์ในคำขอ',
       operationId: 'getConnectionRequestDeviceConfigs',
       description:
-        'Permission: cems_wpms_requests:view. ถ้าไม่ส่ง stationId backend ใช้จุดแรกในคำขอ; DCON คืน connectionForms[].type = DCON, protocol = DCON_ASCII, values.slaveId และ rawConfigs.device[].settings เดิม',
+        'Permission: cems_wpms_requests:view. ถ้าไม่ส่ง stationId backend ใช้จุดแรกในคำขอ; DCON คืน connectionForms[].type = DCON, protocol = DCON_ASCII, values.slaveId และ rawConfigs.device[].settings เดิม. ' +
+        deviceConfigFormNormalizationDescription,
       parameters: [
         idPathParameter,
         stringQuery('stationId', 'เลือกจุดตรวจวัด; optional และยาวไม่เกิน 64', false, 64),
@@ -2811,13 +2923,15 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'saveConnectionRequestDeviceConfigs',
       description:
         requestEditAccessDescription +
-        'รับ config เดี่ยว, batch 1-50 หรือ structured form wrapper; คำขอต้องอยู่ WAITING_CONNECTION',
+        'รับ config เดี่ยว, batch 1-50 หรือ structured form wrapper; คำขอต้องอยู่ WAITING_CONNECTION. ' +
+        deviceConfigWriteDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
         dconConnectionExample,
       ),
       successStatus: '201',
+      extraResponses: { '400': deviceConfigBadRequestResponse },
       successDescription: 'บันทึก config แล้ว',
     }),
   },
@@ -2826,7 +2940,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'อ่าน config เดียวในคำขอ',
       operationId: 'getSingleConnectionRequestDeviceConfig',
-      description: 'Permission: cems_wpms_requests:view',
+      description:
+        'Permission: cems_wpms_requests:view. อ่าน configId ที่ระบุในคำขอนี้และตัด channel ซ้ำด้วยกติกาเดียวกับฟอร์มรวม; ไม่เปลี่ยนไปเลือก configId อื่น',
       parameters: [idPathParameter, configIdPathParameter],
     }),
   },
@@ -3001,7 +3116,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         'Permission: cems_wpms_requests:approve พร้อม data scope. decision REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ล็อกคำขอและตรวจ approve scope ซ้ำก่อนบันทึก; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. คำสั่งอื่นคงข้อจำกัดสถานะเดิม; คำสั่งที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
         addParameterOwnershipDescription +
         ' ' +
-        requestApprovalAccessDescription,
+        requestApprovalAccessDescription +
+        ' ' +
+        measurementCleanupDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -3066,6 +3183,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       ),
       extraResponses: {
         '409': addParameterOwnershipConflictResponse,
+        '503': measurementCleanupFailureResponse,
       },
     }),
   },
@@ -3082,7 +3200,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นผู้มีสิทธิ์ edit ตาม scope/assignment ของโรงงาน resubmit เพื่อเก็บ revision ใหม่ ทั้ง OPERATOR_FORM และ OFFICER_DIRECT_API โดยคง createdBy เดิม. กรณีอื่นคงข้อจำกัด transition เดิม. ' +
         addParameterOwnershipDescription +
         ' ' +
-        requestApprovalAccessDescription,
+        requestApprovalAccessDescription +
+        ' ' +
+        measurementCleanupDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -3153,6 +3273,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       ),
       extraResponses: {
         '409': addParameterOwnershipConflictResponse,
+        '503': measurementCleanupFailureResponse,
       },
     }),
   },
@@ -3278,8 +3399,13 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         'Permission: cems_wpms_requests:approve' +
         ` ${connectionProfileWriteDescription} ${addParameterOwnershipDescription}` +
         ' ' +
-        requestApprovalAccessDescription,
-      extraResponses: { '409': connectionProfileAndParameterConflictResponse },
+        requestApprovalAccessDescription +
+        ' ' +
+        measurementCleanupDescription,
+      extraResponses: {
+        '409': connectionProfileAndParameterConflictResponse,
+        '503': measurementCleanupFailureResponse,
+      },
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
         {
@@ -3346,7 +3472,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'saveCurrentConnectedPointDeviceConfigs',
       description:
         requestEditAccessDescription +
-        'stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก',
+        'stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก. ' +
+        deviceConfigWriteDescription,
       parameters: [stationIdPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
@@ -3354,6 +3481,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       ),
       successStatus: '201',
       extraResponses: {
+        '400': deviceConfigBadRequestResponse,
         '409': {
           description: 'พารามิเตอร์จุดตรวจวัดเปลี่ยนก่อนบันทึก config; refresh และตั้งค่าใหม่',
         },
@@ -3396,7 +3524,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'saveAnnualConnectedPointDeviceConfigs',
       description:
         requestEditAccessDescription +
-        'Middleware ประกอบ stationId/buddhistYear กลับเป็น annual point code ก่อนตรวจ body. stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก',
+        'Middleware ประกอบ stationId/buddhistYear กลับเป็น annual point code ก่อนตรวจ body. stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก. ' +
+        deviceConfigWriteDescription,
       parameters: [annualStationIdPathParameter, buddhistYearPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
@@ -3404,6 +3533,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       ),
       successStatus: '201',
       extraResponses: {
+        '400': deviceConfigBadRequestResponse,
         '409': {
           description: 'พารามิเตอร์จุดตรวจวัดเปลี่ยนก่อนบันทึก config; refresh และตั้งค่าใหม่',
         },

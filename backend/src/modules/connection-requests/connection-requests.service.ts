@@ -16,6 +16,7 @@ import { isFactoryType88 } from '../../shared/utils/factory-type-scope';
 import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
 import { toCanonicalStatusDateTime } from '../device-connections/device-connection-status-datetime';
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
+import { normalizeDeviceConfigsForForm } from '../device-connections/normalize-device-config-form';
 import type {
   CreateDeviceConnectionConfigInput,
   CreateDeviceConnectionConfigsInput,
@@ -2205,28 +2206,29 @@ function toDeviceConfigFormDetail(
     ? (monitoringPoint?.parameters ?? [])
     : getDeviceConfigParameterOptions(monitoringPoint);
   const allowedParameterOptions = useLiveParameters
-    ? new Set(monitoringPointParameterOptions)
+    ? monitoringPointParameterOptions
     : instrumentParameterOptions.length > 0
-      ? new Set(instrumentParameterOptions)
+      ? instrumentParameterOptions
       : null;
-  const stationConfigs = configs
-    .filter((config) => stationAliases.has(config.stationId))
-    .map((config) =>
-      allowedParameterOptions
-        ? {
-            ...config,
-            channels: useLiveParameters
-              ? config.channels.flatMap((channel) => {
-                  const parameter = approvedParameterLabel(
-                    channel.dataType,
-                    monitoringPointParameterOptions,
-                  );
-                  return parameter === undefined ? [] : [{ ...channel, dataType: parameter }];
-                })
-              : config.channels.filter((channel) => allowedParameterOptions.has(channel.dataType)),
-          }
-        : config,
-    );
+  const stationConfigs = normalizeDeviceConfigsForForm(
+    configs
+      .filter((config) => stationAliases.has(config.stationId))
+      .map((config) =>
+        allowedParameterOptions
+          ? {
+              ...config,
+              channels: config.channels.flatMap((channel) => {
+                const parameter = useLiveParameters
+                  ? approvedParameterLabel(channel.dataType, monitoringPointParameterOptions)
+                  : allowedParameterOptions.find(
+                      (label) => parameterKey(label) === parameterKey(channel.dataType),
+                    );
+                return parameter === undefined ? [] : [{ ...channel, dataType: parameter }];
+              }),
+            }
+          : config,
+      ),
+  );
   const responseMonitoringPoint = monitoringPoint
     ? { ...monitoringPoint, parameters: monitoringPointParameterOptions }
     : null;
