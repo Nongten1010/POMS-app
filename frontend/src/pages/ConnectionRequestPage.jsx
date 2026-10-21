@@ -6521,7 +6521,7 @@ function InstrumentDataDialog({ open, value, onClose, onSave, isWpms = false }) 
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <StandardCriteriaSection
-                label="พารามิเตอร์ไม่มีค่ามาตรฐาน IEE / EIA / HEIA"
+                label="พารามิเตอร์ไม่มีค่ามาตรฐาน IEE / EIA / EHIA"
                 value={form.eiaCriteria}
                 onChange={(nextValue) => updateForm('eiaCriteria', nextValue)}
               />
