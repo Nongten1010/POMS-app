@@ -5394,7 +5394,12 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
           </Stack>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'center' }}>
+      <DialogActions sx={{ display: 'block', px: 3, py: 2 }}>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>โปรดบันทึกข้อมูลก่อนทดสอบการเชื่อมต่อ</Typography>
+          ทุกครั้งที่มีการแก้ไขข้อมูลการตั้งค่าอุปกรณ์ กรุณากดปุ่ม “บันทึก” เพื่อให้ระบบบันทึกข้อมูลล่าสุด ก่อนกดปุ่ม “ทดสอบ”
+        </Alert>
+        <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 1 }}>
         <Button variant="contained" disabled={deviceConfigTesting || deviceConfigSaving || deviceConfigConfirming} onClick={handleTestConnection}>
           {deviceConfigTesting ? 'กำลังทดสอบ' : 'ทดสอบ'}
         </Button>
@@ -5406,6 +5411,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
             {deviceConfigConfirming ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
           </Button>
         ) : null}
+        </Box>
       </DialogActions>
     </Dialog>
     <Dialog open={Boolean(deleteConnectionFormTarget)} onClose={closeDeleteConnectionFormConfirm} fullWidth maxWidth="xs">
