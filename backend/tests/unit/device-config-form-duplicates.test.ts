@@ -47,6 +47,21 @@ async function form(
 }
 
 describe('duplicate device config form recovery', () => {
+  it('does not prefer a conflicting duplicate because it has a retired test flag', async () => {
+    const result = await form([
+      config({
+        channels: [
+          { dataType: 'CO (ppm)', addressId: 3, offset: 0, status: 'Normal' },
+          { dataType: 'CO (ppm)', addressId: 3, offset: 0, status: 'Calibration', testMode: true },
+        ],
+      }),
+    ]);
+
+    expect(result.parameterMappings).toEqual([
+      expect.objectContaining({ parameter: 'CO (ppm)', status: 'Normal', testMode: false }),
+    ]);
+  });
+
   it('keeps a populated case variant when request instrument parameters constrain the form', async () => {
     const result = await form(
       [
@@ -150,7 +165,7 @@ describe('duplicate device config form recovery', () => {
           configId: 274,
           parameter: 'CO (ppm)',
           addressId: '3',
-          testMode: true,
+          testMode: false,
           status: 'Calibration',
         }),
       ]);
@@ -160,7 +175,7 @@ describe('duplicate device config form recovery', () => {
           dataType: 'CO (ppm)',
           addressId: 3,
           offset: 0,
-          testMode: true,
+          testMode: false,
         }),
       ]);
       expect(JSON.stringify(configs)).toBe(original);

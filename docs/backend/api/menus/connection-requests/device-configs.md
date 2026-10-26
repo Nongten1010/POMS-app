@@ -13,6 +13,12 @@
 | อ่านค่าอุปกรณ์ปัจจุบันของจุดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points/:stationId/device-configs` | `cems_wpms_requests:view` |
 | แทนที่ค่าอุปกรณ์ปัจจุบันของจุดที่เชื่อมต่อแล้ว | `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | `cems_wpms_requests:edit` |
 
+## เลิกใช้ Test mode
+
+คงฟิลด์ `testMode` ใน payload และตำแหน่ง response เดิมทั้งหมด โดย response คืน `false` เสมอทั้ง `channels[]`, `parameterMappings[]`, `rawConfigs.channels[]` และ config ที่ฝังในรายละเอียดคำขอ/รายการจุด แม้ข้อมูลเก่าเก็บ `true`. Payload เดิมที่ส่ง `true` ยังผ่าน validation แต่บันทึกและใช้งานเป็น `false`; `status` เช่น `Normal` หรือ `Maintenance` เป็นอีก field และยังทำงานตามเดิม
+
+ข้อกำหนดนี้ใช้กับ generic `/device-connections`, device-configs ระหว่างคำขอ, device-configs ของจุดปัจจุบัน รวม annual path และ [Integration API สำหรับ Worker](../../integrations/device-configs/README.md). การกดตรวจข้อมูลใช้ [ค่าตรวจวัดตาม protocol](./parameter-values.md#get-apiv1parameter-valuesconnection-test) โดยไม่อ่าน `_data_test`. ดู [การเปลี่ยนผ่านสำหรับ client/Worker](../../CHANGELOG.md#test-mode-retired)
+
 ## Shared Request Contract
 
 POST ทั้งสอง endpoint รับ body ได้สามรูปแบบ:
@@ -146,7 +152,7 @@ GET ทั้งสอง endpoint คืน `connectionForms[].type: "DCON"`, `
 | `valueRange.max` | number | No | Yes | ค่าสูงสุด |
 | `alertLow` | number | No | Yes | ค่าแจ้งเตือนต่ำ |
 | `alertHigh` | number | No | Yes | ค่าแจ้งเตือนสูง |
-| `testMode` | boolean | No | Yes | ระบุว่า channel อยู่ในโหมดทดสอบ; รับ JSON boolean `true`/`false`; เมื่อไม่ส่งหรือส่ง `null` backend normalize เป็น `false` และ response คืน boolean เสมอ |
+| `testMode` | boolean | No | Yes | คง field เพื่อรองรับ client เดิม; รับ `true`/`false`/`null` หรือไม่ส่งตามเดิม แต่ backend normalize ค่าที่ใช้งานและบันทึกใหม่เป็น `false` เสมอ เพราะเลิกใช้ Test mode |
 | `valueFormat` | string | No | Yes | รูปแบบค่า เช่น `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE`; backend ไม่ตรวจ enum เชิง business |
 | `offset` | number | No | Yes | offset ของค่าที่อ่าน |
 | `encoding` | string | No | Yes | รูปแบบ encoding; backend ไม่ตรวจ enum เชิง business |
@@ -238,10 +244,10 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 | `data.connectionForms` | object[] | No | ค่า prefill ของแต่ละอุปกรณ์ |
 | `data.connectionForms[].values` | object | No | ค่า `settings` ในรูปแบบ string สำหรับ form; ค่า `null` แสดงเป็น `""` |
 | `data.parameterMappings` | object[] | No | ค่า prefill ของ channel; ค่า nullable แสดงเป็น `""` |
-| `data.parameterMappings[].testMode` | boolean | No | สถานะโหมดทดสอบของ channel; คืน `false` สำหรับ config เดิมหรือ request ที่ไม่ได้ส่ง field |
+| `data.parameterMappings[].testMode` | boolean | No | คืน `false` เสมอ รวม config เก่าที่เคยเก็บ `true` |
 | `data.statusManagement` | object | No | ค่า prefill สถานะ; ใช้ default `Normal` เมื่อไม่มีค่าที่บันทึก |
 | `data.rawConfigs` | object | No | config รูปแบบ machine-readable ซึ่งรักษา `null` ไว้ |
-| `data.rawConfigs.channels[].testMode` | boolean | No | สถานะโหมดทดสอบของ channel ใน machine-readable config |
+| `data.rawConfigs.channels[].testMode` | boolean | No | คืน `false` เสมอใน machine-readable config |
 | `data.testResults` | unknown[] | No | ผลทดสอบการเชื่อมต่อ; ปัจจุบันคืน array |
 
 ### Success Response Example
@@ -669,7 +675,7 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
         },
         "alertLow": null,
         "alertHigh": null,
-        "testMode": true,
+        "testMode": false,
         "valueFormat": null,
         "offset": null,
         "encoding": null,

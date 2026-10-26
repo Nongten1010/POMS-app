@@ -188,7 +188,7 @@ describe('integrationDeviceConfigsService', () => {
           valueRange: { min: 0, max: 200 },
           alertLow: 50,
           alertHigh: 180,
-          testMode: true,
+          testMode: false,
           valueFormat: 'MEASUREMENT_VALUE',
           offset: 0,
           encoding: 'UNSIGNED16_BIG_ENDIAN',

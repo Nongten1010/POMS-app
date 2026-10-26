@@ -43,8 +43,7 @@ export async function loadAlertEmailParameters(
     { code: string; name: string; unit: string; label: string; activatedAt: string }
   >();
   for (const parameter of parameterConfigs) {
-    if (parameter.testMode || !parameter.parameterUnit?.trim() || !parameter.parameterName?.trim())
-      continue;
+    if (!parameter.parameterUnit?.trim() || !parameter.parameterName?.trim()) continue;
     const name = parameter.parameterName.trim();
     const unit = parameter.parameterUnit.trim();
     const registered = parseRegisteredAlertParameter(parameter.parameter);

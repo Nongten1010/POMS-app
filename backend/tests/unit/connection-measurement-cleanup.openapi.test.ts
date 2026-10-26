@@ -24,7 +24,7 @@ describe('new point cleanup runtime API contract', () => {
     const operation = document.paths[path].post;
     expect(operation.description).toContain('NEW_CONNECTION');
     expect(operation.description).toContain('ADD_MEASUREMENT_POINT');
-    expect(operation.description).toContain('ไม่ล้าง ADD_PARAMETER');
+    expect(operation.description).toContain('การล้างทั้งตารางนี้ไม่ใช้กับ ADD_PARAMETER');
     expect(operation.description).toContain('_data_1day');
     expect(operation.description).toContain('ไม่ใช้ verifiedAt');
     expect(operation.responses['503']).toMatchObject({

@@ -177,7 +177,7 @@ function toParameterConfig(
     valueRange: channel.valueRange ?? null,
     alertLow: channel.alertLow ?? null,
     alertHigh: channel.alertHigh ?? null,
-    testMode: channel.testMode ?? false,
+    testMode: false,
     valueFormat: channel.valueFormat ?? null,
     offset: channel.offset,
     encoding: channel.encoding ?? null,

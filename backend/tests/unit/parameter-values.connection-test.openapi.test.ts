@@ -2,6 +2,87 @@ import { describe, expect, it } from '@jest/globals';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
 
 describe('connection-test OpenAPI contract', () => {
+  it('documents measured values separately from operational statuses in both protocol examples', () => {
+    const document = pomsOpenApiDocument as any;
+    const response =
+      document.paths['/parameter-values/connection-test'].get.responses['200'].content[
+        'application/json'
+      ];
+    for (const exampleName of ['latestMinuteRows', 'latestRealtimeRows']) {
+      expect(response.examples[exampleName].value.data[0]).toMatchObject({
+        values: { 'NOx (ppm)': '88.2' },
+        statuses: { 'NOx (ppm)': 'Shut Down' },
+      });
+    }
+    const values =
+      document.components.schemas.ParameterConnectionTestResponse.properties.data.items.properties
+        .values;
+    expect(values.description).toContain('ค่าตรวจวัดตามต้นทางเสมอ');
+    expect(values.description).toContain('null');
+  });
+
+  it('shows unit-specific values and statuses from the same family with safe generic fallback', () => {
+    const document = pomsOpenApiDocument as any;
+    const response =
+      document.paths['/parameter-values/connection-test'].get.responses['200'].content[
+        'application/json'
+      ];
+    expect(response.examples.mixedParameterFamilies.value).toMatchObject({
+      data: [
+        {
+          values: {
+            'CO2 (ppm)': null,
+            'CO2 (%)': '0.04',
+            'PM2.5 (µg/m3)': 0,
+            pH: '7.2',
+          },
+          statuses: {
+            'CO2 (ppm)': 'Maintenance',
+            'CO2 (%)': 'Normal',
+            'PM2.5 (µg/m3)': 'Calibration',
+            pH: 'Normal',
+          },
+        },
+        {
+          values: { 'CO2 (ppm)': '420.0', 'CO2 (%)': null },
+          statuses: { 'CO2 (ppm)': 'Normal', 'CO2 (%)': null },
+        },
+      ],
+      meta: { interval: 'real', count: 2 },
+    });
+    expect(
+      document.components.schemas.ParameterConnectionTestResponse.properties.data.items.properties
+        .values.description,
+    ).toContain('family เดียวกัน');
+  });
+
+  it('documents parameter-only cleanup on final verification of add-parameter requests', () => {
+    const document = pomsOpenApiDocument as any;
+    const operation = document.paths['/cems-wpms-requests/{id}/verify-connection'].post;
+    expect(operation.description).toContain('ADD_PARAMETER');
+    expect(operation.description).toContain('*_value');
+    expect(operation.description).toContain('*_status');
+    expect(operation.description).toContain('ห้ามลบแถว');
+    expect(operation.description).toContain('1day');
+    expect(operation.responses['503'].content['application/json'].example.error).toMatchObject({
+      code: 'MEASUREMENT_CLEANUP_FAILED',
+      message: 'Unable to clear added parameter measurements; connection was not completed',
+      details: { retryable: true },
+    });
+    expect(operation.responses['409'].description).toContain(
+      'ADD_PARAMETER_POINT_OWNERSHIP_INVALID',
+    );
+  });
+
+  it('documents all matching source families and the explicit dimensionless pH exception', () => {
+    const document = pomsOpenApiDocument as any;
+    const operation = document.paths['/cems-wpms-requests/{id}/verify-connection'].post;
+    expect(operation.description).toContain('ทุก family');
+    expect(operation.description).toContain('co2_ppm');
+    expect(operation.description).toContain('pH');
+    expect(operation.description).toContain('receipt');
+  });
+
   it('publishes protocol-specific sources, the ten-row limit and persona-specific access requirements', () => {
     const document = pomsOpenApiDocument as any;
     const operation = document.paths['/parameter-values/connection-test'].get;

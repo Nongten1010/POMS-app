@@ -282,13 +282,13 @@ describe('startAlertEmailWorker', () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it('keeps a completed-hour event eligible after its device configuration is edited', async () => {
+  it('keeps a completed-hour event eligible after its device configuration is edited even with a legacy test flag', async () => {
     startAlertEmailWorker(settings);
     await workerDependencies().dispatch();
     registryConfigs.mockResolvedValue([
       {
         updatedAt: '2026-10-05T06:00:00Z',
-        channels: [{ dataType: 'CO₂ (ppm)', testMode: false }],
+        channels: [{ dataType: 'CO₂ (ppm)', testMode: true }],
       } as never,
     ]);
     await dispatchDependencies().isRecipientEligible(job);
@@ -395,11 +395,10 @@ describe('startAlertEmailWorker', () => {
       testMode: false,
     },
     { updatedAt: 'bad-dateZ', activatedAt: 'bad-dateZ', dataType: 'CO₂ (ppm)', testMode: false },
-    { updatedAt: '2026-10-01T00:00:00Z', dataType: 'CO₂ (ppm)', testMode: true },
     { updatedAt: '2026-10-01T00:00:00Z', dataType: 'CO₂', testMode: false },
     { updatedAt: '2026-10-01T00:00:00Z', dataType: 'NOx (ppm)', testMode: false },
     { updatedAt: '2026-10-01T00:00:00Z', dataType: 'ภาษาไทย (ppm)', testMode: false },
-  ])('rejects a new, ambiguous, missing-unit, or test registration: %j', async (registration) => {
+  ])('rejects a new, ambiguous, or missing-unit registration: %j', async (registration) => {
     startAlertEmailWorker(settings);
     await workerDependencies().dispatch();
     registryConfigs.mockResolvedValue([

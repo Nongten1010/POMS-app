@@ -66,6 +66,5 @@ function populatedFields(channel: DeviceMeasurementChannelInput): number {
     channel.offset,
     channel.encoding,
     channel.status,
-    channel.testMode === true ? true : null,
   ].filter((value) => value != null && (typeof value !== 'string' || value.trim() !== '')).length;
 }

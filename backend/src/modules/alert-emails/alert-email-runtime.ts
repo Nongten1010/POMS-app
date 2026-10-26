@@ -191,7 +191,6 @@ async function checkCurrentEligibility(
       const candidates = await configurations;
       return candidates.some((config) => {
         return config.channels.some((channel) => {
-          if (channel.testMode) return false;
           const parameter = parseRegisteredAlertParameter(channel.dataType);
           return parameter !== null && parameter.key === requested.key;
         });

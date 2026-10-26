@@ -53,6 +53,8 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/factories/factory-001/previous-request
 
 ### Main Flow
 
+เมื่อจุดใหม่เชื่อมต่อสำเร็จ Backend [ล้างค่าระหว่างทดสอบทั้ง 6 ตารางของจุดนั้น](./measurement-cleanup.md) ก่อนยืนยัน `CONNECTED`; สำหรับ `ADD_PARAMETER` ล้างเฉพาะค่ากับสถานะของพารามิเตอร์ที่เพิ่มใหม่ โดยเก็บทุกแถวและพารามิเตอร์เดิมไว้
+
 1. ผู้ประกอบการสร้างคำขอปกติ; client ไม่กำหนด `pointCode` สำหรับจุดใหม่.
 2. เจ้าหน้าที่อนุมัติแบบด้วย `APPROVE_DESIGN`.
 3. Backend เปลี่ยนสถานะเป็น `WAITING_CONNECTION` และออกรหัสเรียงตามลำดับจุดในคำขอ.

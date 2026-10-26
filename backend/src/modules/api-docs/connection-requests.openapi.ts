@@ -34,13 +34,21 @@ interface OperationOptions {
   focus?: boolean;
 }
 const schemaRef = (name: string): OpenApiObject => ({ $ref: `#/components/schemas/${name}` });
+const retiredTestModeDescription =
+  'เลิกใช้ Test mode แต่คง field testMode เพื่อรองรับ client เดิม; payload รับ boolean true/false หรือ null ตามเดิมและ normalize ค่าที่ใช้งาน/บันทึกใหม่เป็น false; ทุก response คืน false เสมอ รวม config เก่าที่เก็บ true';
+const testModeResponseField: OpenApiObject = {
+  type: 'boolean',
+  enum: [false],
+  default: false,
+  description: retiredTestModeDescription,
+};
 const deviceConfigIdentityDescription =
   'เมื่อมี deviceCode ใช้ (stationId, deviceCode) เป็น identity ภายในคำขอหรือชุดปัจจุบันเดียวกัน; protocol เปลี่ยนได้และการบันทึกจะแทนที่ config กับ channels เก่าของอุปกรณ์นั้นแม้ต่าง protocol. เมื่อ deviceCode เป็น null ยังคงแยกตาม (stationId, protocol, null). ห้ามส่ง identity ซ้ำใน batch เดียวกัน: 400 BAD_REQUEST';
 const deviceChannelUniquenessDescription =
   'dataType รวมหน่วยต้องไม่ซ้ำภายในอุปกรณ์เดียวกัน โดยเปรียบเทียบหลัง normalize unit, Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก; ซ้ำตอบ 400 VALIDATION_ERROR. พารามิเตอร์ต่างหน่วยหรือคนละอุปกรณ์ยังแยกกัน และ addressId ซ้ำหรือ null ได้';
 const deviceConfigFormNormalizationDescription =
   'ฟอร์มตัดข้อมูลเก่าที่ซ้ำก่อนสร้าง connectionForms, deviceCodeOptions, parameterMappings และ rawConfigs: คำขอที่มี measurementInstruments.parameters ใช้รายชื่อนั้นกรอง channel โดยเปรียบเทียบชื่อพร้อมหน่วยหลัง Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก แล้วคืน label ตามรายชื่อก่อนตัดข้อมูลซ้ำ; หน่วยต่างกันยังเป็นคนละพารามิเตอร์. ภายใน station/request/device เดียวกันเลือก config ที่ updatedAt ล่าสุด แล้วใช้ id มากสุดเมื่อเวลาเท่ากัน; deviceCode null ยังคงแยก protocol. Channel ที่ชื่อพร้อมหน่วยซ้ำเลือกแถวที่มี addressId ก่อน ตามด้วยแถวที่มีค่าตั้งค่ามากกว่า และแถวแรกที่บันทึกเมื่อเท่ากัน โดยใช้ทั้งแถว ไม่ผสมค่า. GET ไม่แก้ฐานข้อมูล';
-const deviceConfigWriteDescription = `${deviceConfigIdentityDescription}. ${deviceChannelUniquenessDescription}. settings.dbPass = ******** รักษารหัสจริงได้เฉพาะ active config ที่ stationId + protocol + deviceCode ตรงกัน; เมื่อเปลี่ยน protocol แล้วไม่มีรหัสที่ตรงกัน ต้องกรอกรหัสจริงใหม่ มิฉะนั้นตอบ 400 BAD_REQUEST`;
+const deviceConfigWriteDescription = `${deviceConfigIdentityDescription}. ${deviceChannelUniquenessDescription}. ${retiredTestModeDescription}. settings.dbPass = ******** รักษารหัสจริงได้เฉพาะ active config ที่ stationId + protocol + deviceCode ตรงกัน; เมื่อเปลี่ยน protocol แล้วไม่มีรหัสที่ตรงกัน ต้องกรอกรหัสจริงใหม่ มิฉะนั้นตอบ 400 BAD_REQUEST`;
 const deviceConfigBadRequestResponse: OpenApiObject = {
   description:
     '400 VALIDATION_ERROR เมื่อพารามิเตอร์ซ้ำภายในอุปกรณ์หรือโครงสร้าง payload ไม่ถูกต้อง; 400 BAD_REQUEST เมื่อ identity อุปกรณ์ซ้ำใน batch, station/parameter ไม่อยู่ในขอบเขตคำขอ หรือไม่มีรหัสฐานข้อมูลจริงให้รักษา',
@@ -114,10 +122,9 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
           },
         },
         rawConfigs: {
-          type: 'object',
-          additionalProperties: true,
+          ...schemaRef('DeviceConfigPayload'),
           description:
-            'config ที่บันทึกจริงหลังตัดข้อมูลซ้ำสำหรับฟอร์ม; DCON คง protocol DCON_ASCII และ settings.slaveId รวมถึงค่า null และ 0',
+            'config ที่บันทึกจริงหลังตัดข้อมูลซ้ำสำหรับฟอร์ม; DCON คง protocol DCON_ASCII และ settings.slaveId รวมถึงค่า null และ 0; channels[].testMode คืน false เสมอ',
         },
         parameterOptions: {
           type: 'array',
@@ -130,6 +137,7 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
             'หนึ่ง mapping ต่อพารามิเตอร์พร้อมหน่วยของแต่ละอุปกรณ์; พารามิเตอร์เดียวกันจากคนละอุปกรณ์ยังคงอยู่',
           items: {
             type: 'object',
+            required: ['testMode'],
             properties: {
               configId: {
                 type: 'integer',
@@ -138,6 +146,7 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
               },
               deviceCode: { type: 'string' },
               parameter: { type: 'string' },
+              testMode: testModeResponseField,
               addressId: {
                 type: 'string',
                 description:
@@ -160,7 +169,9 @@ const currentParameterFormDescription =
 const connectionProfileWriteDescription =
   'การเชื่อมต่อครั้งแรกปรับเฉพาะข้อมูลทั่วไปที่อนุญาต โดย canonical mode ตรวจ source revision ที่ backend เก็บเมื่อยื่น/ส่งกลับก่อนบันทึก; ถ้า revision หายหรือเปลี่ยนและคำขอมีข้อมูลทั่วไป ให้ส่งคำขอกลับมาใหม่. เมื่อมีจุดเชื่อมต่ออยู่แล้วใช้ข้อมูลโรงงานปัจจุบัน รวม null โดยไม่นำ snapshot เก่ามาเขียนทับ. Backend เก็บ revision ภายใน ผู้เรียกไม่ต้องส่ง field เพิ่ม';
 const measurementCleanupDescription =
-  'ก่อนยืนยัน CONNECTED ของ NEW_CONNECTION หรือ ADD_MEASUREMENT_POINT ล้างค่าทดสอบเฉพาะรหัสจุดใหม่ในตาราง <stationId>_data_real, _data_1m, _data_5m, _data_60m, _data_1day, _data_test; ข้ามตารางที่ไม่มี. ไม่ล้าง ADD_PARAMETER หรือรหัสที่เคยมี connected point แม้เลิกใช้งานแล้ว รวมชื่อจุด legacy ที่ใช้แทนรหัส และไม่ย้อนล้างจุดเดิม. ล้างแถวที่มีอยู่เมื่อจับล็อกตารางครบ เก็บค่าที่เข้ามาภายหลังรวมข้อมูลย้อนหลัง โดยไม่ใช้ verifiedAt หรือเวลาจากเครื่องเป็นเกณฑ์. เก็บประวัติการล้างและป้องกันล้างซ้ำแม้การยืนยันสถานะภายหลังล้มเหลว; ล้างไม่สำเร็จตอบ 503 MEASUREMENT_CLEANUP_FAILED และยังไม่เชื่อมต่อสำเร็จ';
+  'ก่อนยืนยัน CONNECTED ของ NEW_CONNECTION หรือ ADD_MEASUREMENT_POINT ล้างค่าทดสอบเฉพาะรหัสจุดใหม่ในตาราง <stationId>_data_real, _data_1m, _data_5m, _data_60m, _data_1day, _data_test; ข้ามตารางที่ไม่มี. การล้างทั้งตารางนี้ไม่ใช้กับ ADD_PARAMETER หรือรหัสที่เคยมี connected point แม้เลิกใช้งานแล้ว รวมชื่อจุด legacy ที่ใช้แทนรหัส และไม่ย้อนล้างจุดเดิม. ล้างแถวที่มีอยู่เมื่อจับล็อกตารางครบ เก็บค่าที่เข้ามาภายหลังรวมข้อมูลย้อนหลัง โดยไม่ใช้ verifiedAt หรือเวลาจากเครื่องเป็นเกณฑ์. เก็บประวัติการล้างและป้องกันล้างซ้ำแม้การยืนยันสถานะภายหลังล้มเหลว; ล้างไม่สำเร็จตอบ 503 MEASUREMENT_CLEANUP_FAILED และยังไม่เชื่อมต่อสำเร็จ';
+const addedParameterCleanupDescription =
+  'สำหรับ ADD_PARAMETER ล้างเฉพาะพารามิเตอร์ที่เพิ่มใหม่เมื่อ verify-connection จาก CONNECTION_CONFIRMED เป็น CONNECTED เท่านั้น ไม่ล้างตอนอนุมัติแบบผ่าน review/status. เทียบพารามิเตอร์กับ current connected point ด้วยชื่อพร้อมหน่วย รวม alias Flow Rate/Flow แล้วตั้งเฉพาะ *_value และ *_status เป็น null ใน real, 1m, 5m, 60m, 1day และ test ที่มีอยู่ โดยเก็บ *_units วันเวลา พารามิเตอร์อื่น และทุกแถวไว้ ห้ามลบแถวหรือทั้งตาราง. ล้างทุก family ที่ยืนยันว่าตรงพารามิเตอร์และหน่วย รวมทั้ง co2_ppm และ co2 generic ที่มีหน่วย ppm โดยคง co2_percent/%; รักษา underscore ของ PM2.5 เช่น pm2_5. หน่วยว่าง/null ใช้ได้เฉพาะ pH ที่ระบุเป็นพารามิเตอร์ไร้มิติชัดเจน; หน่วยหายของพารามิเตอร์อื่น metadata/baseline/คอลัมน์กำกวมหรือ parameters_json ผิดรูปแบบให้หยุด. ตรวจผลทุก family ก่อนบันทึก receipt โดยคง identity hash เดิมและไม่ล้างซ้ำเมื่อลองใหม่ ข้อมูลที่เข้าหลังการล้างคงอยู่; ไม่ลบ receipt เก่าหรือย้อนล้างคำขอ CONNECTED อัตโนมัติ. ล้างหรือยืนยันผลไม่ได้ตอบ 503 MEASUREMENT_CLEANUP_FAILED และยังไม่ยืนยัน CONNECTED';
 const measurementCleanupFailureResponse: OpenApiObject = {
   description:
     'ล้างค่าทดสอบหรือยืนยันผลการล้างไม่ได้: คำขอเดิมคงสถานะก่อนหน้า; direct CONNECT ไม่สร้างจุดสำเร็จ. error.details.retryable=true ให้โหลดสถานะล่าสุดก่อนลองใหม่. หากการล้าง commit แล้วแต่การบันทึกสถานะล้มเหลว ผลการล้างยังอยู่และ retry จะไม่ล้างซ้ำ',
@@ -195,6 +206,24 @@ const measurementCleanupFailureResponse: OpenApiObject = {
         error: {
           code: 'MEASUREMENT_CLEANUP_FAILED',
           message: 'Unable to clear test measurements; connection was not completed',
+          details: { retryable: true },
+        },
+      },
+    },
+  },
+};
+const parameterMeasurementCleanupFailureResponse: OpenApiObject = {
+  ...measurementCleanupFailureResponse,
+  content: {
+    'application/json': {
+      ...(measurementCleanupFailureResponse.content as Record<string, OpenApiObject>)[
+        'application/json'
+      ],
+      example: {
+        success: false,
+        error: {
+          code: 'MEASUREMENT_CLEANUP_FAILED',
+          message: 'Unable to clear added parameter measurements; connection was not completed',
           details: { retryable: true },
         },
       },
@@ -1224,6 +1253,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
         required: ['id', 'requestType', 'status'],
         properties: {
           id: { type: 'integer', minimum: 1, example: 101 },
+          deviceConfigs: {
+            type: 'array',
+            items: schemaRef('DeviceConfigPayload'),
+            description: 'มีใน response รายละเอียดที่แนบ config; testMode คืน false เสมอ',
+          },
           requestNo: {
             type: 'string',
             description:
@@ -2312,7 +2346,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         nullable: true,
         default: false,
         description:
-          'ระบุว่า channel อยู่ในโหมดทดสอบ; เมื่อไม่ส่งหรือส่ง null ระบบ normalize เป็น false',
+          'คง field เพื่อรองรับ client เดิม; รับ boolean true/false หรือ null และ normalize ค่าที่ใช้งานและบันทึกใหม่เป็น false เสมอ เพราะเลิกใช้ Test mode',
       },
       valueFormat: { type: 'string', nullable: true },
       offset: { type: 'number', nullable: true },
@@ -2403,6 +2437,105 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: schemaRef('StatusSchedule'),
         description: 'ช่วงของพารามิเตอร์เดียวกันห้ามทับกัน',
       },
+    },
+  },
+  DeviceChannelResponse: {
+    type: 'object',
+    additionalProperties: true,
+    required: ['dataType', 'testMode'],
+    properties: {
+      deviceCode: { type: 'string' },
+      addressId: { type: 'number', nullable: true },
+      dataType: { type: 'string', description: 'ชื่อพารามิเตอร์พร้อมหน่วย' },
+      testMode: testModeResponseField,
+      valueRange: nullableRef('DeviceConnectionRange'),
+      alertLow: { type: 'number', nullable: true },
+      alertHigh: { type: 'number', nullable: true },
+      valueFormat: { type: 'string', nullable: true },
+      offset: { type: 'number', nullable: true },
+      encoding: { type: 'string', nullable: true },
+      status: { type: 'string', nullable: true },
+    },
+  },
+  DeviceConnectionConfigData: {
+    type: 'object',
+    additionalProperties: true,
+    required: ['id', 'stationId', 'protocol', 'channels'],
+    properties: {
+      id: { type: 'integer' },
+      requestId: { type: 'integer', nullable: true },
+      stationId: { type: 'string' },
+      deviceCode: { type: 'string', nullable: true },
+      protocol: {
+        type: 'string',
+        enum: ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
+      },
+      settings: { type: 'object', additionalProperties: true },
+      channels: { type: 'array', items: schemaRef('DeviceChannelResponse') },
+      statusManagement: { type: 'object', nullable: true, additionalProperties: true },
+    },
+  },
+  DeviceConnectionConfigResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('DeviceConnectionConfigData'),
+    },
+  },
+  DeviceConnectionConfigListResponse: {
+    type: 'object',
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: { type: 'array', items: schemaRef('DeviceConnectionConfigData') },
+      meta: {
+        type: 'object',
+        required: ['total'],
+        properties: { total: { type: 'integer', minimum: 0 } },
+      },
+    },
+  },
+  DeviceConfigPayload: {
+    type: 'object',
+    required: ['stationId', 'device', 'channels', 'statusManagement'],
+    properties: {
+      stationId: { type: 'string' },
+      device: { type: 'array', items: schemaRef('StructuredDeviceConnectionDevice') },
+      channels: { type: 'array', items: schemaRef('DeviceChannelResponse') },
+      statusManagement: { type: 'object', additionalProperties: true },
+    },
+  },
+  DeviceConfigPayloadResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        oneOf: [
+          schemaRef('DeviceConfigPayload'),
+          { type: 'array', items: schemaRef('DeviceConfigPayload') },
+        ],
+      },
+    },
+  },
+  DeviceConfigFormDetailResponse: currentDeviceConfigFormSchema,
+  DeviceConfigEmbeddedListResponse: {
+    type: 'object',
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            deviceConfigs: { type: 'array', items: schemaRef('DeviceConfigPayload') },
+          },
+        },
+      },
+      meta: { type: 'object', additionalProperties: true },
     },
   },
   DeviceConnectionConfig: {
@@ -2554,14 +2687,14 @@ const componentSchemas: Record<string, OpenApiObject> = {
               type: 'object',
               additionalProperties: {},
               description:
-                'key เป็นชื่อพารามิเตอร์พร้อมหน่วยจาก registeredParameters; คืนค่าตรวจวัดเมื่อ status เป็น 1, Ok หรือ Normal; สถานะอื่นคืนชื่อสถานะแทน และรองรับค่าเดิมของ source รุ่นเก่าที่ไม่มีหรือไม่รู้จัก status; null เมื่อไม่มีคอลัมน์พารามิเตอร์',
-              example: { 'CO (ppm)': '12.5', 'NOx (ppm)': 'Shut Down' },
+                'key เป็น label จาก registeredParameters รวมหน่วยเมื่อพารามิเตอร์มีหน่วย; pH ไร้มิติใช้ label เดิม. คืนค่าตรวจวัดตามต้นทางเสมอ รวม 0 และชนิดข้อมูลเดิม แม้ status ไม่ใช่ Normal/Ok; values/statuses ของพารามิเตอร์หนึ่งต้องมาจาก family เดียวกัน. เลือกชุดคอลัมน์เฉพาะหน่วยก่อนในแต่ละแถวเมื่อมี value หรือ status แม้อีกค่าเป็น null; ใช้ generic ที่ตรงหน่วยเมื่อคู่ dedicated ไม่มีข้อมูลทั้งคู่เท่านั้น; generic รุ่นเก่าที่ไม่มีหน่วยใช้ได้เฉพาะ registered unit เดียวที่ชัดเจนและไม่มี dedicated ต่างหน่วยแข่งขันกัน. รักษาชื่อคอลัมน์ pm2_5 และรองรับ pH ไร้มิติที่หน่วยว่าง/null. ห้ามนำ ppm ไปซ้ำใต้ %. ไม่มีค่าหรือคอลัมน์ให้คืน null โดยมี key คู่กันเสมอ',
+              example: { 'CO (ppm)': '12.5', 'NOx (ppm)': '88.2' },
             },
             statuses: {
               type: 'object',
               additionalProperties: {},
               description:
-                'key เป็นชื่อพารามิเตอร์พร้อมหน่วย; StatusCode 0–9 แปลงเป็น NoData, Ok, Calibration, Defective, Maintenance, Start up, Shut Down, Turnaround, Etc., No Discharge ตามลำดับ; status เดิมที่ไม่รู้จักคงค่าเดิม และคืน null เมื่อไม่มี',
+                'key เป็นชื่อพารามิเตอร์พร้อมหน่วย (pH ไร้มิติใช้ label เดิม); เลือกจาก family เดียวกับ values เท่านั้น ไม่เติม status จาก generic เมื่อเลือก dedicated. StatusCode 0–9 แปลงเป็น NoData, Ok, Calibration, Defective, Maintenance, Start up, Shut Down, Turnaround, Etc., No Discharge ตามลำดับ; status เดิมที่ไม่รู้จักคงค่าเดิม และคืน null เมื่อไม่มี',
               example: { 'CO (ppm)': 'Ok', 'NOx (ppm)': 'Shut Down' },
             },
           },
@@ -2765,6 +2898,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้วผ่าน alias',
       operationId: 'listConnectedMeasurementPointsAlias',
+      successSchema: schemaRef('DeviceConfigEmbeddedListResponse'),
       description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription} ${currentConnectedPointDescription}`,
       parameters: connectedPointFilterParameters,
     }),
@@ -2909,6 +3043,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'อ่านแบบตั้งค่าอุปกรณ์ในคำขอ',
       operationId: 'getConnectionRequestDeviceConfigs',
+      successSchema: schemaRef('DeviceConfigFormDetailResponse'),
       description:
         'Permission: cems_wpms_requests:view. ถ้าไม่ส่ง stationId backend ใช้จุดแรกในคำขอ; DCON คืน connectionForms[].type = DCON, protocol = DCON_ASCII, values.slaveId และ rawConfigs.device[].settings เดิม. ' +
         deviceConfigFormNormalizationDescription,
@@ -2921,6 +3056,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'บันทึก config อุปกรณ์ในคำขอ',
       operationId: 'saveConnectionRequestDeviceConfigs',
+      successSchema: schemaRef('DeviceConfigPayloadResponse'),
       description:
         requestEditAccessDescription +
         'รับ config เดี่ยว, batch 1-50 หรือ structured form wrapper; คำขอต้องอยู่ WAITING_CONNECTION. ' +
@@ -2940,6 +3076,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'อ่าน config เดียวในคำขอ',
       operationId: 'getSingleConnectionRequestDeviceConfig',
+      successSchema: schemaRef('DeviceConfigFormDetailResponse'),
       description:
         'Permission: cems_wpms_requests:view. อ่าน configId ที่ระบุในคำขอนี้และตัด channel ซ้ำด้วยกติกาเดียวกับฟอร์มรวม; ไม่เปลี่ยนไปเลือก configId อื่น',
       parameters: [idPathParameter, configIdPathParameter],
@@ -3401,10 +3538,12 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         ' ' +
         requestApprovalAccessDescription +
         ' ' +
-        measurementCleanupDescription,
+        measurementCleanupDescription +
+        ' ' +
+        addedParameterCleanupDescription,
       extraResponses: {
         '409': connectionProfileAndParameterConflictResponse,
-        '503': measurementCleanupFailureResponse,
+        '503': parameterMeasurementCleanupFailureResponse,
       },
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(
@@ -3425,6 +3564,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้ว',
       operationId: 'listConnectedMeasurementPoints',
+      successSchema: schemaRef('DeviceConfigEmbeddedListResponse'),
       description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription} ${currentConnectedPointDescription}`,
       parameters: connectedPointFilterParameters,
     }),
@@ -3434,6 +3574,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านจุดที่เชื่อมต่อแล้วของโรงงาน',
       operationId: 'listConnectedMeasurementPointsForFactory',
+      successSchema: schemaRef('DeviceConfigEmbeddedListResponse'),
       description: `Permission: cems_wpms_requests:view. ${connectedPointNameDescription} ${currentConnectedPointDescription}`,
       parameters: [factoryIdPathParameter],
     }),
@@ -3443,6 +3584,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านประวัติคำขอของจุดตรวจวัด',
       operationId: 'listRequestsForConnectedMeasurementPoint',
+      successSchema: schemaRef('DeviceConfigEmbeddedListResponse'),
       description: 'Permission: cems_wpms_requests:view',
       parameters: [stationIdPathParameter],
     }),
@@ -3470,6 +3612,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'แทนที่ config ปัจจุบันของจุดตรวจวัด',
       operationId: 'saveCurrentConnectedPointDeviceConfigs',
+      successSchema: schemaRef('DeviceConfigPayloadResponse'),
       description:
         requestEditAccessDescription +
         'stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก. ' +
@@ -3494,6 +3637,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'จุดตรวจวัด',
       summary: 'อ่านประวัติคำขอของ annual point code (proxy-decoded path)',
       operationId: 'listRequestsForAnnualConnectedMeasurementPoint',
+      successSchema: schemaRef('DeviceConfigEmbeddedListResponse'),
       description:
         'Permission: cems_wpms_requests:view. Compatibility path เมื่อ reverse proxy ถอด %2F ในรหัส เช่น CEMS-0001/2569 ก่อนส่งถึง Express',
       parameters: [annualStationIdPathParameter, buddhistYearPathParameter],
@@ -3522,6 +3666,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'แทนที่ config ของ annual point code (proxy-decoded path)',
       operationId: 'saveAnnualConnectedPointDeviceConfigs',
+      successSchema: schemaRef('DeviceConfigPayloadResponse'),
       description:
         requestEditAccessDescription +
         'Middleware ประกอบ stationId/buddhistYear กลับเป็น annual point code ก่อนตรวจ body. stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก. ' +
@@ -3559,6 +3704,53 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       parameters: [parameterValueStationIdQuery],
       successSchema: schemaRef('ParameterConnectionTestResponse'),
       successExamples: {
+        mixedParameterFamilies: {
+          summary:
+            'CO2 แยก ppm/% และ PM2.5/pH: ไม่ผสมค่า generic กับสถานะ dedicated ของแถวเดียวกัน',
+          value: {
+            success: true,
+            data: [
+              {
+                timestamp: '2026-10-26 10:15:00',
+                values: {
+                  'CO2 (ppm)': null,
+                  'CO2 (%)': '0.04',
+                  'PM2.5 (µg/m3)': 0,
+                  pH: '7.2',
+                },
+                statuses: {
+                  'CO2 (ppm)': 'Maintenance',
+                  'CO2 (%)': 'Normal',
+                  'PM2.5 (µg/m3)': 'Calibration',
+                  pH: 'Normal',
+                },
+              },
+              {
+                timestamp: '2026-10-26 10:14:00',
+                values: {
+                  'CO2 (ppm)': '420.0',
+                  'CO2 (%)': null,
+                  'PM2.5 (µg/m3)': null,
+                  pH: null,
+                },
+                statuses: {
+                  'CO2 (ppm)': 'Normal',
+                  'CO2 (%)': null,
+                  'PM2.5 (µg/m3)': null,
+                  pH: null,
+                },
+              },
+            ],
+            meta: {
+              stationId: 'S2003',
+              interval: 'real',
+              schemaName: 'ingest',
+              tableName: 'S2003_data_real',
+              count: 2,
+              registeredParameters: ['CO2 (ppm)', 'CO2 (%)', 'PM2.5 (µg/m3)', 'pH'],
+            },
+          },
+        },
         latestRealtimeRows: {
           summary: 'ตัวอย่าง MODBUS_RTU, MODBUS_TCP หรือ DCON_ASCII มีข้อมูล realtime 1 แถว',
           value: {
@@ -3566,7 +3758,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
             data: [
               {
                 timestamp: '2026-10-21 10:15:00',
-                values: { 'CO (ppm)': '12.5', 'NOx (ppm)': 'Shut Down' },
+                values: { 'CO (ppm)': '12.5', 'NOx (ppm)': '88.2' },
                 statuses: { 'CO (ppm)': 'Ok', 'NOx (ppm)': 'Shut Down' },
               },
             ],
@@ -3587,7 +3779,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
             data: [
               {
                 timestamp: '2026-10-19 10:15:00',
-                values: { 'CO (ppm)': '12.5', 'NOx (ppm)': 'Shut Down' },
+                values: { 'CO (ppm)': '12.5', 'NOx (ppm)': '88.2' },
                 statuses: { 'CO (ppm)': 'Ok', 'NOx (ppm)': 'Shut Down' },
               },
             ],

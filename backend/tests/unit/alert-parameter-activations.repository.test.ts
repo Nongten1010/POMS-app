@@ -193,7 +193,7 @@ describe('alert parameter activation persistence', () => {
     ).toBe(600);
   });
 
-  it('ends test-only episodes and starts a fresh baseline when reporting resumes', async () => {
+  it('keeps the same activation when a legacy test flag changes', async () => {
     const memory = fixture();
     memory.tables.alert_parameter_activations.push({
       id: 1,
@@ -204,10 +204,11 @@ describe('alert parameter activation persistence', () => {
     });
     memory.tables.device_measurement_channels[0].test_mode = true;
     await syncAlertParameterActivations(memory.trx, ['S1'], { now });
-    expect(memory.tables.alert_parameter_activations[0].deactivated_at).toEqual(now);
+    expect(memory.tables.alert_parameter_activations[0].deactivated_at).toBeUndefined();
     memory.tables.device_measurement_channels[0].test_mode = false;
     await syncAlertParameterActivations(memory.trx, ['S1'], { now });
-    expect(memory.tables.alert_parameter_activations[1].activated_at).toEqual(now);
+    expect(memory.tables.alert_parameter_activations).toHaveLength(1);
+    expect(memory.tables.alert_parameter_activations[0].activated_at).toEqual(before);
   });
 
   it('retains the episode when another normal device still measures the same unit', async () => {
@@ -256,7 +257,7 @@ describe('alert parameter activation persistence', () => {
     });
     await syncAlertParameterActivations(memory.trx, ['S1'], { now });
     expect(memory.tables.alert_parameter_activations[0].activated_at).toEqual(future);
-    memory.tables.device_measurement_channels[0].test_mode = true;
+    memory.tables.device_measurement_channels[0].deleted_at = now;
     await syncAlertParameterActivations(memory.trx, ['S1'], { now });
     expect(memory.tables.alert_parameter_activations[0].deactivated_at).toEqual(future);
   });

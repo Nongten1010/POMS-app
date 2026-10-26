@@ -8,11 +8,12 @@ import {
 } from '../../shared/errors/AppError';
 import { createMeasurementCsvExport } from './measurement-csv-export';
 import { parameterValuesRepository } from './parameter-values.repository';
+import { measurementStatusValue, resolvePomsClientParameterStatus } from './parameter-status';
 import {
-  measurementDisplayValue,
-  measurementStatusValue,
-  resolvePomsClientParameterStatus,
-} from './parameter-status';
+  measurementParameterUnitMatches,
+  parseMeasurementParameter,
+  resolveMeasurementParameterFamilies,
+} from './measurement-parameter-columns';
 import {
   type CalendarStatusEvaluationOptions,
   type CalendarStatusDetailRowDTO,
@@ -217,16 +218,14 @@ export const parameterValuesService = {
             query.stationId,
             access,
           );
-    const filtered = filterRowsByRegisteredParameters(result.rows, registeredParameters);
-
     return {
-      data: filtered.rows.map((row) => buildConnectionTestData(row, registeredParameters)),
+      data: result.rows.map((row) => buildConnectionTestData(row, registeredParameters)),
       meta: {
         stationId: query.stationId,
         interval,
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
-        count: filtered.rows.length,
+        count: result.rows.length,
         registeredParameters,
       },
     };
@@ -1906,7 +1905,7 @@ function buildConnectionTestData(
 ): ConnectionTestResultDTO['data'][number] {
   const entries = registeredParameters.map((parameter) => ({
     parameter,
-    columns: findParameterColumns(row, parameter),
+    columns: findConnectionTestParameterColumns(row, parameter, registeredParameters),
   }));
 
   return {
@@ -1914,12 +1913,7 @@ function buildConnectionTestData(
     values: Object.fromEntries(
       entries.map(({ parameter, columns }) => [
         parameter,
-        columns.valueColumn
-          ? measurementDisplayValue(
-              row[columns.valueColumn],
-              columns.statusColumn ? row[columns.statusColumn] : null,
-            )
-          : null,
+        columns.valueColumn ? (row[columns.valueColumn] ?? null) : null,
       ]),
     ),
     statuses: Object.fromEntries(
@@ -1931,30 +1925,43 @@ function buildConnectionTestData(
   };
 }
 
-function findParameterColumns(
+function findConnectionTestParameterColumns(
   row: Record<string, unknown>,
   parameter: string,
+  registeredParameters: string[],
 ): { valueColumn: string | null; statusColumn: string | null } {
-  const keysByLower = new Map(Object.keys(row).map((key) => [key.toLowerCase(), key]));
-  const prefixes = toParameterColumnPrefixes(parameter);
-
-  return {
-    valueColumn: findColumn(keysByLower, prefixes, 'value'),
-    statusColumn: findColumn(keysByLower, prefixes, 'status'),
-  };
-}
-
-function findColumn(
-  keysByLower: Map<string, string>,
-  prefixes: string[],
-  suffix: string,
-): string | null {
-  for (const prefix of prefixes) {
-    const key = keysByLower.get(`${prefix}_${suffix}`);
-    if (key) return key;
+  const missing = { valueColumn: null, statusColumn: null };
+  const definition = parseMeasurementParameter(parameter);
+  const registeredUnits = new Set(
+    registeredParameters
+      .map(parseMeasurementParameter)
+      .filter((candidate) => candidate.nameKey === definition.nameKey)
+      .map((candidate) => candidate.unitKey),
+  );
+  try {
+    const families = resolveMeasurementParameterFamilies(Object.keys(row), parameter);
+    const matches = families.filter((candidate) => {
+      const value = candidate.valueColumn ? row[candidate.valueColumn] : null;
+      const status = candidate.statusColumn ? row[candidate.statusColumn] : null;
+      if (value == null && status == null) return false;
+      const unit = candidate.unitsColumn ? row[candidate.unitsColumn] : null;
+      const missingUnit = unit == null || (typeof unit === 'string' && !unit.trim());
+      if (candidate.unitSpecific && missingUnit) return true;
+      if (measurementParameterUnitMatches(definition, unit)) return true;
+      // Legacy rows can omit units when the registered name has one possible
+      // unit and the source schema supplies no competing unit-specific family.
+      return missingUnit && registeredUnits.size === 1 && !candidate.hasCompetingUnitFamilies;
+    });
+    const dedicated = matches.filter((candidate) => candidate.unitSpecific);
+    const selected = dedicated.length > 0 ? dedicated : matches;
+    const family = selected.length === 1 ? selected[0] : null;
+    return family
+      ? { valueColumn: family.valueColumn, statusColumn: family.statusColumn }
+      : missing;
+  } catch {
+    // Ambiguous metadata must never pair a value or status with a guessed unit.
+    return missing;
   }
-
-  return null;
 }
 
 function buildTimestamp(row: Record<string, unknown>): string | null {

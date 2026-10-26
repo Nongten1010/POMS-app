@@ -2,11 +2,11 @@
 
 [กลับไปหน้าขอเชื่อมต่อ](./README.md)
 
-ค่าที่เห็นระหว่างทดสอบของจุดใหม่จะถูก [ล้างเมื่อเชื่อมต่อสำเร็จ](./measurement-cleanup.md) ทั้ง 6 interval ก่อนยืนยัน `CONNECTED` หลังจากนั้นเก็บข้อมูลที่เข้ามาใหม่ตามปกติ รวมข้อมูลที่ส่งย้อนหลัง
+ค่าที่เห็นระหว่างทดสอบของจุดใหม่จะถูก [ล้างเมื่อเชื่อมต่อสำเร็จ](./measurement-cleanup.md) ทั้ง 6 interval ก่อนยืนยัน `CONNECTED`; สำหรับ `ADD_PARAMETER` ล้างเฉพาะค่ากับสถานะของพารามิเตอร์ที่เพิ่มใหม่ โดยเก็บทุกแถวและพารามิเตอร์เดิม หลังจากนั้นเก็บข้อมูลที่เข้ามาใหม่ตามปกติ รวมข้อมูลที่ส่งย้อนหลัง
 
 ## Frontend Quick Start
 
-อ่านข้อมูลทดสอบล่าสุดของจุดตรวจวัด โดย backend จะใช้ค่าตรวจวัดเฉพาะเมื่อ POMS Client ส่ง `StatusCode = 1`; สถานะอื่นจะแสดงชื่อสถานะแทนค่า:
+อ่านข้อมูลทดสอบล่าสุดของจุดตรวจวัด โดย `values` คืนค่าตรวจวัดตามต้นทางทุกสถานะ และ `statuses` คืนสถานะคู่กันเสมอ:
 
 ```bash
 curl --request GET \
@@ -20,9 +20,9 @@ Backend เลือก source จาก config ที่บันทึกแ�
 
 ## StatusCode Contract
 
-กติกานี้ใช้กับค่าที่จัดรูปสำหรับแสดงผลใน connection test, dashboard, public map และ measurement statistics:
+ตารางนี้อธิบายการแปลงรหัสสถานะ และค่าที่จัดรูปสำหรับ dashboard, public map และ measurement statistics. ส่วน connection test ใช้การแปลงชื่อสถานะเดียวกันใน `statuses` แต่ `values` คงค่าตรวจวัดจริงเสมอ รวม `0`, string และ `null` โดยไม่แทนด้วยชื่อสถานะ:
 
-| `StatusCode` | POMS Client status | ค่าที่แสดง |
+| `StatusCode` | POMS Client status | ค่าที่แสดงในหน้าหลัก/สถิติ |
 | ---: | --- | --- |
 | `0` | `NoData` | `NoData` |
 | `1` | `Ok` | ใช้ค่าใน `*_value` |
@@ -225,7 +225,7 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 | Field | Type | Nullable | Description |
 | --- | --- | --- | --- |
 | `data[].timestamp` | string | Yes | วันที่และเวลาของ source row |
-| `data[].values` | object | No | map จากชื่อพารามิเตอร์พร้อมหน่วยไปยังค่าตรวจวัดเมื่อ status เป็น `1`, `Ok` หรือ `Normal`; status อื่นใช้ชื่อสถานะแทน |
+| `data[].values` | object | No | map จากชื่อพารามิเตอร์พร้อมหน่วยไปยังค่าตรวจวัดจริงตามต้นทางทุกสถานะ; คง `0` และชนิดข้อมูลเดิม; ไม่มีค่าหรือคอลัมน์ให้คืน `null` และมี key คู่กับ `statuses` เสมอ |
 | `data[].statuses` | object | No | map สถานะของพารามิเตอร์; numeric StatusCode ถูกแปลงเป็นชื่อสถานะ |
 | `meta.stationId` | string | No | รหัสจุดตรวจวัดที่ขอ |
 | `meta.interval` | string | No | `real` สำหรับ `MODBUS_RTU`, `MODBUS_TCP`, `DCON_ASCII` (`DCON`); `1m` สำหรับ protocol อื่นหรือไม่มี config |
@@ -246,8 +246,8 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
       "timestamp": "2026-08-08 10:15:00",
       "values": {
         "CO (ppm)": "12.5",
-        "NOx (ppm)": "Shut Down",
-        "Flow Rate (m3/hr)": "No Discharge"
+        "NOx (ppm)": "88.2",
+        "Flow Rate (m3/hr)": "0"
       },
       "statuses": {
         "CO (ppm)": "Ok",
@@ -280,9 +280,42 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 - หากมีน้อยกว่า 10 แถว ให้คืนเท่าที่มี; ตารางว่างคืน `data: []` และ `meta.count: 0`.
 - หากไม่มีตารางที่เลือก ตอบ `404 NOT_FOUND`; ไม่ fallback ไปอ่านตาราง interval อื่น.
 - client ที่ตรวจ `meta.interval` ต้องรองรับทั้ง `real` และ `1m` และรายการได้ถึง 10 แถว ดู [ผลกระทบและการปรับ client](../../CHANGELOG.md#connection-test-protocol-source).
-- ชื่อ key ใน `values` และ `statuses` ต้องเป็นชื่อพารามิเตอร์พร้อมหน่วยจาก `registeredParameters`.
+- ชื่อ key ใน `values` และ `statuses` ต้องเป็นชื่อพารามิเตอร์พร้อมหน่วยจาก `registeredParameters` และมี key คู่กันเสมอ แม้ไม่มีค่าหรือสถานะ (`null`).
+- `values` คืนค่าตามต้นทางโดยไม่แทนด้วยสถานะ เช่น status `Maintenance` และ value `88.2` ยังคงส่งทั้งสองค่า ดู [ผลกระทบต่อ client](../../CHANGELOG.md#connection-test-measured-values).
+- `testMode` ไม่มีผลต่อการเลือกตารางของ endpoint นี้; ใช้ `real`/`1m` ตาม protocol เท่านั้น ไม่อ่าน `_data_test`.
 - StatusCode ที่รองรับคือ `0` ถึง `9`; `9` แสดงเป็น `No Discharge`.
 - Status ที่ไม่มีหรือไม่รู้จักยังใช้ค่าเดิมเพื่อรองรับ source rows รุ่นเก่าที่ไม่มี StatusCode.
+
+### การจับคู่ค่ากับสถานะและหน่วย
+
+`values` และ `statuses` ของพารามิเตอร์หนึ่งในแต่ละแถวต้องมาจากชุดคอลัมน์เดียวกัน เช่น `co2_ppm_value` คู่กับ `co2_ppm_status` โดยคงชื่อพร้อมหน่วยตามที่ลงทะเบียน; `pH` เป็นพารามิเตอร์ไร้มิติที่ใช้ชื่อ canonical โดยไม่ต้องเติมหน่วย
+
+- รองรับ dedicated family แยกหน่วย เช่น `co2_ppm_*` และ `co2_percent_*` รวมถึง generic `co2_*` ที่ระบุหน่วยใน `co2_units`. ข้อมูล ppm ไม่ถูกแสดงซ้ำใต้ `CO2 (%)`
+- ชื่อกับหน่วยของ dedicated ทั่วไปต้องแยกด้วย `_` จริง; รองรับชื่อ compact เฉพาะ CO2 ที่ระบุไว้คือ `co2ppm`, `co2percent`, `co2pct`. ไม่ตีความ `cod_*` เป็น `CO (d)`; เมื่อไม่มี family ที่ยืนยันได้ให้ค่ากับสถานะเป็น `null` แทนการเดา
+- เลือก dedicated ที่ตรงหน่วยก่อนในแต่ละแถว เมื่อมี value **หรือ** status แม้อีกฝั่งเป็น `null`. ตัวอย่าง `co2_ppm_value: null`, `co2_ppm_status: Maintenance` จะส่งค่า `null` คู่ `Maintenance` ไม่ดึง value จาก generic มาผสม
+- ใช้ generic ที่ตรงหน่วยได้เมื่อ dedicated ไม่มีข้อมูลทั้ง value และ status ในแถวนั้นเท่านั้น; รักษาค่า `0`, `null` และชนิดข้อมูลตามต้นทาง
+- generic รุ่นเก่าที่ไม่มีหน่วยอ่านเพื่อ compatibility ได้เฉพาะเมื่อพารามิเตอร์ที่ลงทะเบียนมีหน่วยเดียวที่ระบุได้แน่นอนและไม่มี dedicated ต่างหน่วยแข่งขันกัน. เมื่อกำกวมหรือหน่วยไม่ตรง จะไม่เดาหรือคัดลอกค่าไปทุก label
+- รองรับ identifier ที่มี underscore เช่น `pm2_5_value`/`pm2_5_status` สำหรับ `PM2.5 (µg/m3)` โดยใช้คู่คอลัมน์เดียวกัน
+- `pH` ที่ระบุเป็นไร้มิติชัดเจนรองรับ `ph_units` ว่างหรือ `NULL`; label เดิม `pH (pH)` ยังใช้ได้ตามที่ลงทะเบียน. ข้อยกเว้นนี้ไม่ใช้กับพารามิเตอร์อื่นที่หน่วยหาย
+
+ตัวอย่างสองแถว: แถวแรกมีสถานะใน dedicated ppm จึงรักษาคู่ `null`/`Maintenance`; แถวถัดมา dedicated ppm ไม่มีข้อมูลทั้งคู่ จึงใช้ generic ที่หน่วย ppm และไม่แสดงค่าซ้ำใต้ `%`:
+
+```json
+[
+  {
+    "timestamp": "2026-10-26 10:15:00",
+    "values": { "CO2 (ppm)": null, "CO2 (%)": "0.04", "PM2.5 (µg/m3)": 0, "pH": "7.2" },
+    "statuses": { "CO2 (ppm)": "Maintenance", "CO2 (%)": "Normal", "PM2.5 (µg/m3)": "Calibration", "pH": "Normal" }
+  },
+  {
+    "timestamp": "2026-10-26 10:14:00",
+    "values": { "CO2 (ppm)": "420.0", "CO2 (%)": null, "PM2.5 (µg/m3)": null, "pH": null },
+    "statuses": { "CO2 (ppm)": "Normal", "CO2 (%)": null, "PM2.5 (µg/m3)": null, "pH": null }
+  }
+]
+```
+
+ดู [ผลกระทบของการจับคู่ family](../../CHANGELOG.md#parameter-column-family-matching). การล้างข้อมูลหลังอนุมัติใช้กฎยืนยันหน่วยที่เข้มกว่าการอ่าน compatibility ตาม [สัญญา cleanup](./measurement-cleanup.md#ขอเพิ่มพารามิเตอร์-ล้างเฉพาะคอลัมน์ของพารามิเตอร์ใหม่)
 
 ## Errors
 
@@ -301,9 +334,11 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 - Validator: [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts)
 - Service: [`parameter-values.service.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.service.ts)
 - Repository และลำดับแถว: [`parameter-values.repository.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.repository.ts)
+- การจับคู่ family ร่วมกับ cleanup: [`measurement-parameter-columns.ts`](../../../../../backend/src/modules/parameter-values/measurement-parameter-columns.ts)
 - Status mapping: [`parameter-status.ts`](../../../../../backend/src/modules/parameter-values/parameter-status.ts)
 - Types: [`parameter-values.types.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.types.ts)
 - Tests: [`parameter-values.service.test.ts`](../../../../../backend/tests/unit/parameter-values.service.test.ts)
 - Tests การเลือกตารางและขอบเขต config: [`parameter-values.connection-test-source.repository.test.ts`](../../../../../backend/tests/unit/parameter-values.connection-test-source.repository.test.ts)
+- Tests ผ่าน API จริงสำหรับค่า/สถานะและหน่วย: [`parameter-values.connection-test-values.api.test.ts`](../../../../../backend/tests/unit/parameter-values.connection-test-values.api.test.ts)
 - Runtime OpenAPI: [`connection-requests.openapi.ts`](../../../../../backend/src/modules/api-docs/connection-requests.openapi.ts)
 - OpenAPI tests: [`parameter-values.connection-test.openapi.test.ts`](../../../../../backend/tests/unit/parameter-values.connection-test.openapi.test.ts)

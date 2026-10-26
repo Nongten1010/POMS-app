@@ -2845,7 +2845,7 @@ describe('connectionRequestsService', () => {
           deviceCode: 'STACK-A/RTU-01',
           addressId: '40001',
           parameter: 'NOx (ppm)',
-          testMode: true,
+          testMode: false,
           valueFormat: 'ค่าข้อมูลตรวจวัด',
           encodingData: 'Unsigned16 - Big Endian',
           status: 'Maintenance',
@@ -2891,7 +2891,7 @@ describe('connectionRequestsService', () => {
       deviceCode: 'STACK-A/RTU-01',
       addressId: 40001,
       dataType: 'NOx (ppm)',
-      testMode: true,
+      testMode: false,
     });
     expect(result.rawConfigs.channels[0]).not.toHaveProperty('unit');
   });
@@ -3568,13 +3568,13 @@ describe('connectionRequestsService', () => {
       'NOx (ppm)',
       'Temp. (°C)',
     ]);
-    expect(result.parameterMappings[0]?.testMode).toBe(true);
+    expect(result.parameterMappings[0]?.testMode).toBe(false);
     expect(result.rawConfigs.channels.map((channel) => channel.dataType)).toEqual([
       'CO (ppm)',
       'NOx (ppm)',
       'Temp. (°C)',
     ]);
-    expect(result.rawConfigs.channels[0]?.testMode).toBe(true);
+    expect(result.rawConfigs.channels[0]?.testMode).toBe(false);
   });
 
   it('returns one device config form detail by config id and rejects missing config', async () => {

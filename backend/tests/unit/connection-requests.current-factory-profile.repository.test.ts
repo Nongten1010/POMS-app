@@ -13,6 +13,9 @@ jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository
 jest.mock('../../src/modules/connection-requests/connection-measurement-cleanup', () => ({
   clearNewConnectionMeasurements: jest.fn(async () => undefined),
 }));
+jest.mock('../../src/modules/connection-requests/added-parameter-measurement-cleanup', () => ({
+  clearAddedParameterMeasurements: jest.fn(async () => undefined),
+}));
 
 import { db } from '../../src/config/database';
 import { env } from '../../src/config/env';
@@ -20,6 +23,7 @@ import { connectionRequestsRepository } from '../../src/modules/connection-reque
 import type { MeasurementPointInput } from '../../src/modules/connection-requests/connection-requests.types';
 import { syncAlertParameterActivations } from '../../src/modules/alert-emails/alert-parameter-activations.repository';
 import { clearNewConnectionMeasurements } from '../../src/modules/connection-requests/connection-measurement-cleanup';
+import { clearAddedParameterMeasurements } from '../../src/modules/connection-requests/added-parameter-measurement-cleanup';
 
 type Row = Record<string, unknown>;
 const mockedDb = db as unknown as { transaction: jest.Mock };
@@ -2106,6 +2110,7 @@ describe('ADD_PARAMETER point ownership at repository write boundaries', () => {
         },
       });
       expect(fixture.tables).toEqual(before);
+      expect(clearAddedParameterMeasurements).not.toHaveBeenCalled();
     },
   );
 
@@ -2294,6 +2299,21 @@ describe('ADD_PARAMETER point ownership at repository write boundaries', () => {
         ]);
       }
       expect(fixture.tables[REGISTRY]).toEqual(registryBefore);
+      if (operation === 'connect') {
+        expect(clearAddedParameterMeasurements).toHaveBeenCalledWith({
+          requestId: 3,
+          actorUserId: 7,
+          points: [
+            {
+              stationId: 'P0017',
+              requestedParameters: ['COD (mg/l)'],
+              connectedParametersJson: '["BOD (mg/l)"]',
+            },
+          ],
+        });
+      } else {
+        expect(clearAddedParameterMeasurements).not.toHaveBeenCalled();
+      }
     },
   );
 

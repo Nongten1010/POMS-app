@@ -141,14 +141,16 @@ describe('daily alert measurement adapter', () => {
       'source unavailable',
     );
   });
-  it('omits test channels, missing units, and unknown activation history', async () => {
+  it('includes retired test channels while still omitting missing units and unknown activation history', async () => {
     config.mockResolvedValue({
       parameterConfigs: [
         { parameterName: 'CO', parameterUnit: 'ppm', parameter: 'CO (ppm)', testMode: true },
         { parameterName: 'BOD', parameterUnit: null, parameter: 'BOD' },
       ],
     } as never);
-    expect(await loadAlertEmailParameters(point, '2026-01-01', policy)).toEqual([]);
+    expect(await loadAlertEmailParameters(point, '2026-01-01', policy)).toEqual([
+      expect.objectContaining({ code: 'co', unit: 'ppm' }),
+    ]);
     expect(
       await loadAlertEmailParameters({ ...point, connectedAt: null }, '2026-01-01', policy),
     ).toEqual([]);

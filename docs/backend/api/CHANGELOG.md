@@ -1,5 +1,49 @@
 # API Breaking Changes
 
+<a id="parameter-column-family-matching"></a>
+
+## 2026-10-26 — จับคู่ค่ากับสถานะใน family เดียวกันและล้างครบทุกชุดที่ตรงหน่วย
+
+- **Affected canonical docs:** [การจับคู่ค่า/สถานะกับหน่วย](./menus/connection-requests/parameter-values.md#การจับคู่ค่ากับสถานะและหน่วย), [การล้างเฉพาะพารามิเตอร์](./menus/connection-requests/measurement-cleanup.md#ขอเพิ่มพารามิเตอร์-ล้างเฉพาะคอลัมน์ของพารามิเตอร์ใหม่), [ตรวจ schema/receipt ก่อน release](../guides/parameter-measurement-cleanup-audit.md)
+- **Impact:** `GET /parameter-values/connection-test` เลือก value/status จาก family เดียวกันรายแถว: dedicated ตรงหน่วยมี value หรือ status ให้ใช้คู่นั้นแม้อีกค่าเป็น `null`; fallback generic เมื่อ dedicated ไม่มีข้อมูลทั้งคู่และหน่วยตรงเท่านั้น. แยก `CO2 (ppm)`/`CO2 (%)`, รักษา `pm2_5_*` สำหรับ PM2.5, และรองรับ canonical `pH` ไร้มิติที่หน่วยว่าง/`NULL` โดยคง `0`, `null`, ชนิดข้อมูล และ label ที่ลงทะเบียน. generic ไม่ระบุหน่วยอ่านเพื่อ compatibility ได้เฉพาะหน่วยเดียวที่ชัดเจนและไม่มี dedicated ต่างหน่วยแข่งขันกัน
+- **Migration:** ไม่เพิ่ม endpoint, payload หรือ response field และไม่เปลี่ยน identity hash ของ receipt. ใช้ migrations `0145`/`0146` ตามขั้นตอนเดิม แต่ก่อน release ต้องอ่าน metadata และ receipt ใน [คู่มือ audit](../guides/parameter-measurement-cleanup-audit.md) เพื่อตรวจว่ารุ่นเดิมเคยบันทึกสำเร็จทั้งที่ล้าง dedicated/generic ไม่ครบหรือไม่. ห้ามลบ receipt, เปลี่ยน hash หรือย้อนล้างข้อมูล `CONNECTED` อัตโนมัติ; recovery ของข้อมูลเดิมที่พิสูจน์ได้เป็นงานแยกซึ่งต้องได้รับอนุมัติ การแก้ code และ tests ยังไม่ยืนยันผลตรวจฐานจริง/ประวัติเดิม
+- **Old contract:** การจับคู่คอลัมน์อาจข้าม underscore/หน่วย ผสม value กับ status คนละ family หรือใช้ค่า generic ซ้ำต่างหน่วย และการล้างอาจหยุดที่ dedicated ชุดแรกจน generic เดิมค้างแม้มี receipt
+- **New contract:** เส้นทางอ่านคืนค่ากับสถานะจากชุดเดียวกัน ส่วน final `verify-connection` ของ `ADD_PARAMETER` ล้างทุก dedicated/generic family ที่ยืนยันว่าตรงหน่วย เช่นทั้ง `co2_ppm_*` และแถว generic หน่วย ppm โดยรักษา percent และพารามิเตอร์อื่น ตรวจผลทุกชุดก่อนเขียน receipt. การล้างพารามิเตอร์ที่ต้องมีหน่วยยังหยุดด้วย `503 MEASUREMENT_CLEANUP_FAILED` เมื่อหน่วยหาย/กำกวม; ไม่ใช้การผ่อนปรนของเส้นทางอ่านมาล้างข้อมูล ยกเว้น pH ไร้มิติที่ระบุได้ชัดเจน
+- **Breaking change:** yes — ข้อมูลที่เคยจับคู่ผิดและผลยืนยันที่เคยรายงานสำเร็จโดยตรวจไม่ครบเปลี่ยนไป; รูปแบบ API และรหัส error เดิมยังคงอยู่
+
+<a id="test-mode-retired"></a>
+
+## 2026-10-26 — เลิกใช้ Test mode โดยคง field สำหรับ client เดิม
+
+- **Affected canonical docs:** [ตั้งค่าอุปกรณ์](./menus/connection-requests/device-configs.md#เลิกใช้-test-mode), [Integration device config](./integrations/device-configs/README.md), [Alert operations](../guides/alert-email-operations.md)
+- **Impact:** ทุก response ของ config คง `testMode` ตำแหน่งเดิมและคืน `false` เสมอ รวม `channels`, `parameterMappings`, `rawConfigs.channels`, config ที่ฝังในรายละเอียด/รายการ และ `parameterConfigs` สำหรับ Worker แม้ข้อมูลเก่าเป็น `true`; payload เดิมที่ส่ง JSON boolean `true`/`false`/`null` หรือไม่ส่งยังรับได้ แต่ค่าที่ใช้งานและบันทึกใหม่เป็น `false`. `status` และ `statusManagement` ใช้ตามเดิม
+- **Migration:** หยุด backend และ Worker รุ่นเก่าที่อาจเขียน `true` ก่อนรัน `0146_retire_device_channel_test_mode.ts`; migration นี้เปลี่ยน flag เก่าเป็น `false` แบบ batch โดยไม่เขียนทับ audit timestamps และไม่ล้างค่าตรวจวัด. Current channel ที่เดิมเป็น Test mode และยังเป็นพารามิเตอร์/หน่วยที่อนุมัติจะมี activation ที่ขาดเริ่มที่เวลา UTC ที่ใหม่กว่าระหว่าง cutover กับ `connected_at` ของจุด จึงไม่เริ่มก่อน `connected_at` โดยรักษาช่วงเดิมที่มีอยู่ ไม่เดาประวัติย้อนหลัง. Worker ต้องทิ้ง cached config เดิมและโหลดใหม่ก่อนกลับมารับค่า; backend ที่คืน `false` ไม่สามารถหยุด writer ที่ยังใช้ config เก่าได้เอง หลัง deploy ตรวจ `/api/v1/openapi.json`, config endpoints และยืนยันฝั่ง Worker ว่าไม่มีค่าใหม่เข้า `_data_test`
+- **Old contract:** `testMode: true` เปิดใช้งานจริงและ response สะท้อน flag ที่บันทึก; channel ในโหมดทดสอบถูกกันจาก Alert activation
+- **New contract:** field คงไว้เพื่อ compatibility แต่มีผลเป็น `false` ทุกกรณี และ flag เก่าไม่กัน channel จากการใช้งาน/Alert อีก การอ่านทดสอบยังเลือก `real`/`1m` ตาม protocol
+- **Breaking change:** yes — เลิกความสามารถเปิด Test mode แม้ payload เดิมยังผ่าน validation
+
+<a id="connection-test-measured-values"></a>
+
+## 2026-10-26 — ผลทดสอบส่งค่าตรวจวัดจริงคู่กับสถานะทุกครั้ง
+
+- **Affected canonical docs:** [ค่าตรวจวัดและการทดสอบข้อมูล](./menus/connection-requests/parameter-values.md#get-apiv1parameter-valuesconnection-test)
+- **Impact:** `GET /parameter-values/connection-test?stationId=...` คง `timestamp`, `values`, `statuses` และ metadata เดิม แต่ `values` คืนค่าตามต้นทางทุกสถานะ เช่น `NOx (ppm): "88.2"` แม้ `statuses` เป็น `Shut Down`; คงเลข `0` และชนิดข้อมูลเดิม ไม่มีค่า/คอลัมน์ให้เป็น `null` โดยมี key คู่สถานะเสมอ
+- **Migration:** client แสดงค่าจาก `values` และอ่านสถานะจาก `statuses` แยกกัน หยุดอนุมานสถานะจากข้อความใน `values`; ไม่ต้องเปลี่ยน URL/query/auth และไม่ต้องย้ายฐานข้อมูล ยังคง protocol source `real`/`1m`, สูงสุด 10 แถว, ตารางว่าง `[]` และตารางไม่มี `404` ตามเดิม หลัง deploy ตรวจ `/api/v1/openapi.json` พร้อมกรณี `Maintenance`/`Shut Down` ที่ยังมีค่าจริง
+- **Old contract:** สถานะนอก `Normal`/`Ok` แทนค่าใน `values` ด้วยชื่อสถานะ
+- **New contract:** ค่าตรวจวัดกับสถานะแยกจากกันใน map เดิม; ไม่อ่าน `_data_test` ตาม `testMode` และไม่เปลี่ยนการจัดรูปแบบค่าของหน้าหลัก/สถิติ
+- **Breaking change:** yes — เนื้อหาของ `values` เปลี่ยนสำหรับ operational statuses
+
+<a id="add-parameter-measurement-cleanup"></a>
+
+## 2026-10-26 — ยืนยันเพิ่มพารามิเตอร์แล้วล้างเฉพาะค่าของพารามิเตอร์ใหม่
+
+- **Affected canonical docs:** [การล้างค่าระหว่างทดสอบ](./menus/connection-requests/measurement-cleanup.md#ขอเพิ่มพารามิเตอร์-ล้างเฉพาะคอลัมน์ของพารามิเตอร์ใหม่), [เมนูขอเชื่อมต่อ](./menus/connection-requests/README.md#main-flow)
+- **Impact:** `POST /cems-wpms-requests/:id/verify-connection` ของ `ADD_PARAMETER` ตั้งเฉพาะ `*_value`/`*_status` ของพารามิเตอร์ที่เพิ่มใหม่เป็น `NULL` ก่อนยืนยัน `CONNECTED` ใน `real`, `1m`, `5m`, `60m`, `1day`, `test` ที่มีอยู่ โดยเก็บหน่วย ทุกแถว วันเวลา และพารามิเตอร์อื่น ห้ามลบทั้งแถว/ทั้งตาราง; ไม่ล้างตอนอนุมัติแบบผ่าน `review`/`status`
+- **Migration:** รัน `0145_create_parameter_measurement_cleanup_receipts.ts` ก่อนเริ่ม backend และให้ runtime มีสิทธิ์ `UPDATE` ตารางค่าตรวจวัดรวมถึงอ่าน/เขียน receipt. Migration สร้างเฉพาะ receipt schema ไม่ล้างข้อมูลเก่า. client รองรับ `503 MEASUREMENT_CLEANUP_FAILED`/`retryable: true` โดยโหลดสถานะล่าสุดก่อนลองใหม่ และรองรับค่าพารามิเตอร์ใหม่ที่เป็น `null` จนมีข้อมูลเข้าใหม่; ไม่มี field ที่ต้องส่งเพิ่ม หลัง deploy ตรวจ `/api/v1/openapi.json` และยืนยันว่าพารามิเตอร์เดิมยังมีค่า
+- **Old contract:** `ADD_PARAMETER` ไม่ล้างค่าตรวจวัดระหว่างการเชื่อมต่อ
+- **New contract:** ล้างเฉพาะพารามิเตอร์ใหม่ตามชื่อพร้อมหน่วยในคำขอนั้น พร้อม lock/transaction และ request-scoped receipt ป้องกันล้างซ้ำเมื่อฐานค่าทำสำเร็จแล้วแต่ฐานคำขอยังไม่ commit. ตารางไม่มีข้ามได้ แต่metadata/baseline (รวม `parameters_json` ที่ผิดรูปแบบ)/การจับคู่คอลัมน์หรือหน่วยกำกวมหรือฐานค่าไม่พร้อมต้องตอบ `503` และยังไม่ยืนยันสำเร็จ; หาก current connected point หาย เปลี่ยนโรงงาน หรือ systemType ไม่ตรงก่อนยืนยัน ให้ตอบ `409 CONFLICT` ข้อความ `The connected point changed before parameter approval` ก่อนล้างค่า
+- **Breaking change:** yes — เพิ่มผลต่อค่าตรวจวัดและกรณีล้มเหลวใน endpoint เดิม
+
 <a id="device-config-duplicate-parameters"></a>
 
 ## 2026-10-21 — ป้องกันพารามิเตอร์และอุปกรณ์ซ้ำในหน้าตั้งค่า

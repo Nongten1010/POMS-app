@@ -14,6 +14,7 @@ import { normalizeAlertActivationStationIdentity } from '../alert-emails/alert-p
 import { db } from '../../config/database';
 import { reclaimCanceledPointCode } from './reclaim-canceled-point-code';
 import { clearNewConnectionMeasurements } from './connection-measurement-cleanup';
+import { clearAddedParameterMeasurements } from './added-parameter-measurement-cleanup';
 import { env } from '../../config/env';
 import {
   factoryProfileReadTable,
@@ -1863,6 +1864,17 @@ async function syncConnectedMeasurementPointsInTransaction(
       measurementPoints: request.measurementPoints,
       actorUserId,
     });
+    if (isAddParameter) {
+      await clearAddedParameterMeasurements({
+        requestId: request.id,
+        actorUserId,
+        points: request.measurementPoints.map((point, index) => ({
+          stationId: owners[index].point_code.trim(),
+          requestedParameters: getConnectedMeasurementPointParameters(point),
+          connectedParametersJson: owners[index].parameters_json,
+        })),
+      });
+    }
   }
   for (const [index, point] of request.measurementPoints.entries()) {
     const owner = owners[index];

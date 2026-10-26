@@ -295,7 +295,7 @@ describe('parameterValuesService', () => {
     expect(result.data[0]).toMatchObject({ cdate: '2026-08-08', ctime: '20:00:00' });
   });
 
-  it('returns formatted connection test values from the latest ten one-minute station rows', async () => {
+  it('returns measured connection test values from the latest ten one-minute station rows', async () => {
     mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
       'CO2 (%)',
       'CO2 (ppm)',
@@ -353,12 +353,12 @@ describe('parameterValuesService', () => {
         {
           timestamp: '2026-06-07 10:15:00',
           values: {
-            'CO2 (%)': '123.4',
+            'CO2 (%)': null,
             'CO2 (ppm)': '123.4',
-            'NOx (ppm)': 'Maintenance',
+            'NOx (ppm)': '8.5',
           },
           statuses: {
-            'CO2 (%)': 'Normal',
+            'CO2 (%)': null,
             'CO2 (ppm)': 'Normal',
             'NOx (ppm)': 'Maintenance',
           },
@@ -366,12 +366,12 @@ describe('parameterValuesService', () => {
         {
           timestamp: '2026-06-07 10:14:00',
           values: {
-            'CO2 (%)': '122.4',
+            'CO2 (%)': null,
             'CO2 (ppm)': '122.4',
             'NOx (ppm)': '8.1',
           },
           statuses: {
-            'CO2 (%)': 'Normal',
+            'CO2 (%)': null,
             'CO2 (ppm)': 'Normal',
             'NOx (ppm)': 'Normal',
           },
@@ -445,7 +445,7 @@ describe('parameterValuesService', () => {
     },
   );
 
-  it('uses the measurement value only for Ok status codes in connection-test responses', async () => {
+  it('returns measured values alongside both Ok and operational status codes', async () => {
     mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
       'CO (ppm)',
       'NOx (ppm)',
@@ -475,7 +475,7 @@ describe('parameterValuesService', () => {
       timestamp: '2026-08-08 10:15:00',
       values: {
         'CO (ppm)': '12.5',
-        'NOx (ppm)': 'Shut Down',
+        'NOx (ppm)': '88.2',
       },
       statuses: {
         'CO (ppm)': 'Ok',
@@ -484,7 +484,7 @@ describe('parameterValuesService', () => {
     });
   });
 
-  it('maps every non-Ok POMS client status code to its display label', async () => {
+  it('decodes non-Ok status labels without replacing their measured values', async () => {
     mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
       'SO2 (ppm)',
       'NO2 (ppm)',
@@ -528,6 +528,16 @@ describe('parameterValuesService', () => {
     );
 
     expect(result.data[0]?.values).toEqual({
+      'SO2 (ppm)': 10,
+      'NO2 (ppm)': 20,
+      'O2 (%)': 30,
+      'Temp. (°C)': 40,
+      'Flow (m3/hr)': 50,
+      'BOD (mg/l)': 60,
+      'COD (mg/l)': 70,
+      'TSS (mg/l)': 80,
+    });
+    expect(result.data[0]?.statuses).toEqual({
       'SO2 (ppm)': 'NoData',
       'NO2 (ppm)': 'Calibration',
       'O2 (%)': 'Defective',
@@ -537,7 +547,6 @@ describe('parameterValuesService', () => {
       'COD (mg/l)': 'Etc.',
       'TSS (mg/l)': 'No Discharge',
     });
-    expect(result.data[0]?.statuses).toEqual(result.data[0]?.values);
   });
 
   it('allows connection test when the station is accessible through a waiting connection request', async () => {

@@ -107,10 +107,8 @@ export async function syncAlertParameterActivations(
               configs.map((config) => config.id),
             )
             .whereNull('deleted_at')
-            .select('data_type', 'test_mode');
+            .select('data_type');
     const registered = channels.flatMap((channel) => {
-      // Legacy null test_mode means normal. Only explicit false/0/null is eligible.
-      if (![false, 0, '0', null, undefined].includes(channel.test_mode)) return [];
       const parameter = parseRegisteredAlertParameter(channel.data_type);
       return parameter ? [parameter] : [];
     });

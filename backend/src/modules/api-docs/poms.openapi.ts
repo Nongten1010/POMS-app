@@ -3372,7 +3372,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         nullable: true,
         default: false,
         description:
-          'ระบุว่า channel อยู่ในโหมดทดสอบ; เมื่อไม่ส่งหรือส่ง null ระบบ normalize เป็น false',
+          'คง field เพื่อรองรับ client เดิม; รับ boolean true/false หรือ null และ normalize ค่าที่ใช้งานและบันทึกใหม่เป็น false เสมอ เพราะเลิกใช้ Test mode',
       },
       valueFormat: { type: 'string', nullable: true },
       offset: { type: 'number', nullable: true },
@@ -4848,8 +4848,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
       parameterUnit: { type: 'string', nullable: true },
       testMode: {
         type: 'boolean',
+        enum: [false],
         default: false,
-        description: 'true เมื่อ channel ถูกตั้งเป็นโหมดทดสอบ; response คืน boolean เสมอ',
+        description: 'เลิกใช้ Test mode; response คืน false เสมอ รวม config เก่าที่เก็บ true',
       },
       valueRange: {
         type: 'object',
@@ -6452,6 +6453,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Connection Requests',
       summary: 'List device connection configs',
       operationId: 'listDeviceConnections',
+      successSchema: schemaRef('DeviceConnectionConfigListResponse'),
       parameters: [
         queryString('stationId', 'รหัสจุดตรวจวัด', true, 64),
         queryEnum('protocol', protocolValues, 'กรอง protocol'),
@@ -6461,6 +6463,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Connection Requests',
       summary: 'Create device connection config',
       operationId: 'createDeviceConnection',
+      successSchema: schemaRef('DeviceConnectionConfigResponse'),
       requestBody: jsonRequestBody(schemaRef('DeviceConnectionConfig'), deviceConnectionExample),
       successStatus: '201',
     }),
@@ -6470,6 +6473,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Connection Requests',
       summary: 'Get device connection config',
       operationId: 'getDeviceConnectionById',
+      successSchema: schemaRef('DeviceConnectionConfigResponse'),
       parameters: [idParameter],
     }),
   },

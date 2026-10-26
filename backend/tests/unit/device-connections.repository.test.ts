@@ -87,7 +87,7 @@ describe('deviceConnectionsRepository', () => {
             addressId: null,
             dataType: 'NOx (ppm)',
             valueRange: { min: null, max: 500 },
-            testMode: true,
+            testMode: false,
             alertLow: null,
             alertHigh: null,
             valueFormat: null,
@@ -252,7 +252,7 @@ describe('deviceConnectionsRepository', () => {
     });
   });
 
-  it('persists explicit and omitted testMode values for channel rows', async () => {
+  it('persists false for both legacy true and omitted testMode values', async () => {
     const insertedChannels: Array<Record<string, unknown>> = [];
     let channelTableCall = 0;
     const configRow = {
@@ -329,10 +329,10 @@ describe('deviceConnectionsRepository', () => {
     );
 
     expect(insertedChannels).toEqual([
-      expect.objectContaining({ data_type: 'CO (ppm)', test_mode: true }),
+      expect.objectContaining({ data_type: 'CO (ppm)', test_mode: false }),
       expect.objectContaining({ data_type: 'NOx (ppm)', test_mode: false }),
     ]);
-    expect(result.channels.map((channel) => channel.testMode)).toEqual([true, false]);
+    expect(result.channels.map((channel) => channel.testMode)).toEqual([false, false]);
     expect(lockAlertActivationPoints).toHaveBeenCalledWith(trx as unknown as Knex.Transaction, [
       'S0099',
     ]);
