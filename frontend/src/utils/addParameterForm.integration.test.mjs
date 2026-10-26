@@ -36,7 +36,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
           return `${code}\nexport { renderGeneralFactorySection, renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
         }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          code += '\nexport { formatApiErrorMessage, canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows, formatDeviceConnectionTestError };'
+          code += '\nexport { formatApiErrorMessage, canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows, formatDeviceConnectionTestError, buildDeviceConfigChannels, getTestResultParameterStatus };'
           return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapOperatorFactoryRow, mapRequestDetailRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
         }
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
@@ -53,6 +53,31 @@ test('add-parameter form and payload preserve live groups without affecting othe
       mapOperatorFactoryRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
       getAssignedRequestPointCodes,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('test table displays Ok as Normal while preserving other statuses', async () => {
+      const { getTestResultParameterStatus } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+      for (const status of ['Ok', 'OK', 'ok', 'Normal', 'Calibration', 'Defective', '']) {
+        const expected = status.toLowerCase() === 'ok' ? 'Normal' : status
+        const row = { statuses: { BOD: status } }
+        assert.equal(getTestResultParameterStatus(row, 'BOD'), expected)
+        assert.equal(getTestResultParameterStatus({ status }, 'BOD'), expected)
+        assert.equal(row.statuses.BOD, status)
+      }
+      assert.equal(getTestResultParameterStatus({ statuses: {} }, 'BOD'), '')
+    })
+
+    await t.test('device config temporarily sends testMode false without mutating input', async () => {
+      const { buildDeviceConfigChannels } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+      for (const testMode of [true, false, undefined]) {
+        const row = { parameter: 'BOD (mg/l)', testMode, addressId: '10', offset: '2' }
+        const [channel] = buildDeviceConfigChannels([row], 'P2001/01')
+        assert.equal(channel.testMode, false)
+        assert.equal(channel.deviceCode, 'P2001/01')
+        assert.equal(channel.addressId, 10)
+        assert.equal(channel.offset, 2)
+        assert.equal(row.testMode, testMode)
+      }
+    })
 
     await t.test('device test translates missing tables without hiding other errors', async () => {
       const { formatDeviceConnectionTestError } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')

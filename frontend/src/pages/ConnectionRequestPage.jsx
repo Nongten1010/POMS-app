@@ -4555,11 +4555,10 @@ function getDeviceConfigStatusManagement(data) {
 }
 
 function getTestResultParameterStatus(row, parameter) {
-  if (row.statuses && typeof row.statuses === 'object') {
-    return row.statuses[parameter] ?? ''
-  }
-
-  return row.status ?? ''
+  const status = row.statuses && typeof row.statuses === 'object'
+    ? row.statuses[parameter] ?? ''
+    : row.status ?? ''
+  return typeof status === 'string' && status.trim().toLowerCase() === 'ok' ? 'Normal' : status
 }
 
 function getTestResultColumnCount(parameterOptions) {
@@ -4845,7 +4844,8 @@ function buildDeviceConfigChannels(rows, deviceCode) {
       valueRange: buildValueRange(row.min, row.max) ?? null,
       alertLow: toNumberOrNull(row.alertLow),
       alertHigh: toNumberOrNull(row.alertHigh),
-      testMode: Boolean(row.testMode),
+      // Temporary override: always submit normal mode regardless of the saved/UI value.
+      testMode: false,
       valueFormat: nullIfBlank(valueFormatCodeMap[row.valueFormat] ?? row.valueFormat),
       offset: toNumberOrNull(row.offset),
       encoding: nullIfBlank(encodingCodeMap[row.encodingData] ?? row.encodingData),
