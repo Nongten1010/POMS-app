@@ -16,7 +16,19 @@ Contract: [Integration device config](../../api/integrations/device-configs/READ
 - ตรวจ SHA-256 ของ source ทั้ง 6 ไฟล์ใน artifact กับ manifest แล้วตรงกัน จากนั้นเทียบเนื้อหาจริงกับ candidate ที่รวม integration feature แล้ว
 - Controller, integration repository และ migration `0144` ตรงกับ candidate ส่วน device-config repository, integration service และ `poms.openapi.ts` ต่างเฉพาะการปรับ `testMode: false` และ response schemas ที่ตั้งใจเพิ่มในงานเลิกใช้ Test mode ไม่พบ live hotfix อื่นสูญหายใน source 6 ไฟล์ที่ตรวจ
 
-ผลนี้ยืนยันความครบของการเทียบ source ในขอบเขตที่ตรวจเท่านั้น ยังไม่ใช่หลักฐานว่า integrated candidate ถูก push หรือ deploy สำเร็จ ขั้นถัดไปใช้ [วิธีส่ง production ผ่าน Git](../../guides/production-git-delivery.md), เก็บการแก้เดิมตาม manifest ก่อน fast-forward แล้วตรวจ tests, migration, health และ production OpenAPI ของ commit ที่ workflow ใช้ ผล final deployment ยังรอยืนยันแยกจาก audit รอบนี้
+ผล audit ยืนยันความครบของการเทียบ source ในขอบเขตที่ตรวจ ส่วนผลการส่งผ่าน Git และ production หลังจากนั้นบันทึกแยกด้านล่าง
+
+## ผล production หลังนำ source กลับเข้า Git
+
+Push source รวมแล้วเป็น commit `977fceaadbf8fc22ef5de174d8bc2ed2de12c85c` ก่อนเปลี่ยน checkout บนเซิร์ฟเวอร์ จากนั้น [Deploy POMS run `40340221035`](https://github.com/Nongten1010/POMS-app/actions/runs/40340221035) ผ่านทุกขั้นตอนที่เกี่ยวข้องกับ backend และ health check สำเร็จวันที่ 26 ตุลาคม 2569 เวลา 21:47 น. (`Asia/Bangkok`) ไม่มีการ deploy frontend ในรอบนี้
+
+- การเก็บงานเดิมเกิดใน [run `40341547800`](https://github.com/Nongten1010/POMS-app/actions/runs/40341547800): backup ที่ `C:\apps\POMS-backups\20261026T143955027Z-4dea06bf32ed22b9`, stash `50e324fcdd286b86548432261b11cf97c3339850` และ checkout เลื่อนไป `977fceaa` สำเร็จ ก่อน run นี้หยุดที่ fixture setup timeout โดยยังไม่ได้รัน migration หรือเปลี่ยน runtime
+- Run ที่สำเร็จตรวจพบ checkout เป็น target ที่สะอาดอยู่แล้ว จึงไม่สร้าง backup/stash ซ้ำ และผ่าน 365 suites / 4,912 tests โดยข้าม 14 tests ตาม opt-in
+- Migration `0144` ยังคง batch `118`; `0145` และ `0146` สำเร็จใน batch `119` ตรวจด้วย `SELECT` ซ้ำแล้ว flag `test_mode = true` ลดจาก 682 เหลือ 0 และมีตาราง `parameter_measurement_cleanup_receipts` ในฐานค่าที่กำหนด
+- HTTP หลัง deploy: `P0437`, `P2008` และ `P0348` ตอบ `200`, `P0267` ตอบ `404`; ทุกคำตอบมี `Cache-Control: no-store`. ตรวจ field `testMode` รวม 11 จุดใน response ที่สำเร็จแล้วเป็น `false` ทั้งหมด โดยไม่บันทึก response body หรือ credentials
+- Health และ production OpenAPI ตอบ `200`; เทียบ connection-test, verify-connection และ integration config ทั้งสองเส้นทาง รวม 4 operations และ referenced components 12 รายการกับ build ที่ตรวจแล้ว ตรงกันทั้งหมด
+
+CI รอบถัดไปใช้การทดสอบแบบ worker เดียวตาม [แนวทางส่ง production ผ่าน Git](../../guides/production-git-delivery.md) เพื่อลดการแย่งทรัพยากรระหว่างเริ่ม test fixtures บน runner ร่วมกับ production การปรับ CI และบันทึกผลหลัง deploy คง source backend ชุดเดียวกับ commit `977fceaa`
 
 ## ผลตรวจสัญญา API ของ candidate ในรอบ sync
 
@@ -80,7 +92,7 @@ HTTP smoke test บน backend ที่รันบนเครื่องน�
 
 หลัง production deployment ต้องตรวจ `/api/v1/openapi.json` และ smoke test จุดก่อนเชื่อมต่อ, จุดที่เชื่อมต่อแล้ว และจุดที่ยกเลิก โดยไม่บันทึก API key หรือ response ที่มี `dbPass` ลง log
 
-## ผล production deployment
+## ผล production deployment โดยตรงเมื่อ 22 ตุลาคม 2569
 
 ผู้ใช้อนุญาตให้ deploy backend และรัน migration บนเซิร์ฟเวอร์โดยตรงแล้ว Deploy สำเร็จวันที่ 22 ตุลาคม 2569 เวลา 18:03 น. (`Asia/Bangkok`) ผ่าน Windows App ที่เชื่อมต่อเซิร์ฟเวอร์ ไม่ commit หรือ push Git และไม่ deploy frontend
 

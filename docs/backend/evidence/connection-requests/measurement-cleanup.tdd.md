@@ -6,7 +6,9 @@
 
 ## ชุดขึ้น production: เลิกใช้ Test mode และล้างเฉพาะพารามิเตอร์ใหม่
 
-เตรียมเฉพาะ backend และเอกสารจาก `origin/main` ที่ `baa5128c` โดยคงสิทธิ์ ขอบเขตการอนุมัติ ownership และ protocol selection ล่าสุดของ main ไม่รวม frontend, workflow, dependency changes หรือ migration `0144` ของงานอื่น
+ผลส่งจริง: นำ source integration ที่ใช้อยู่กลับเข้า Git ครบก่อน deploy และ [production workflow run `40340221035`](https://github.com/Nongten1010/POMS-app/actions/runs/40340221035) ของ commit `977fceaa` สำเร็จวันที่ 26 ตุลาคม 2569 เวลา 21:47 น. (`Asia/Bangkok`) Migration `0145`/`0146` อยู่ใน batch `119`, มี receipt table และตรวจ flag `test_mode = true` เหลือ 0 รายการ Health ตอบ `200` และ connection-test/verify-connection OpenAPI ตรง build ที่ตรวจแล้ว ดู [หลักฐานรวมหลัง sync Git](../integrations/device-config-request-status.tdd.md#ผล-production-หลังนำ-source-กลับเข้า-git) สำหรับ backup, การรักษา integration contract เดิม และ HTTP verification
+
+Candidate เริ่มต้นของงานนี้เตรียมจาก `origin/main` ที่ `baa5128c` โดยคงสิทธิ์ ขอบเขตการอนุมัติ ownership และ protocol selection ล่าสุดของ main ในขั้นนั้นยังไม่รวม workflow หรือ migration `0144` ก่อนนำงาน integration ที่ production ใช้อยู่กลับเข้า Git พร้อมกันใน `977fceaa` โดยคง frontend และ dependencies เดิม
 
 ```text
 Docs impact: updated
@@ -16,7 +18,7 @@ Client impact: frontend
 Breaking change: yes
 ```
 
-| รายการ | ผลตรวจชุดที่จะ deploy |
+| รายการ | ผลตรวจ candidate ก่อนนำ integration กลับเข้า Git |
 | --- | --- |
 | Build / typecheck | ผ่านทั้งสองคำสั่ง |
 | ชุดทดสอบรวมพร้อม coverage | 362 suites / 4,881 tests ผ่าน ไม่มี failure; 14 tests ข้ามตาม opt-in |
@@ -26,7 +28,7 @@ Breaking change: yes
 | SQL Server แยก | พฤติกรรม cleanup เดียวกันผ่าน 10 integration tests บนฐานข้อมูลจำลองในการตรวจรอบพัฒนา ไม่ใช้ผลนี้แทนการยืนยันสถานะฐาน production |
 | Diff / security / เอกสาร | เฉพาะ backend และ canonical docs, ไม่รวม secrets/generated files; diff whitespace และลิงก์เอกสารที่เปลี่ยนผ่าน |
 | SQL preflight จากเครื่องพัฒนา | ตรวจซ้ำก่อน push แล้ว timeout ทั้งฐานหลักและฐานค่า จึงยังไม่ยืนยัน migration/permission ล่าสุดจากเครื่องนี้ |
-| Production rollout | ก่อน push ยังไม่ได้ deploy; ต้องติดตาม workflow production ที่รัน `0145`/`0146`, health check และตรวจ runtime OpenAPI หลัง deploy |
+| Production rollout ณ รอบเตรียม candidate | ขณะนั้นยังไม่ได้ deploy; ผลส่งจริงภายหลังของ `977fceaa` อยู่ด้านบนและในหลักฐานรวมหลัง sync Git |
 
 การตรวจชุดนี้ใช้ environment สมมติและบัญชี loopback โดยกำหนด `NODE_ENV=test`, `PARAMETER_DB_SCHEMA=ingest`, `PUBLIC_BASE_URL=http://d-poms.diw.go.th` และปิด SQL integration ทั้งสองชุด ไม่คัดลอก `.env` จริงมาใน release worktree
 

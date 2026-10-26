@@ -263,7 +263,7 @@ jobs:
         working-directory: backend
         timeout-minutes: 15
         run: |
-          npm test
+          npm test -- --runInBand
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Prepare backend release

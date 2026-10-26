@@ -12,6 +12,8 @@
 4. Workflow sync checkout, build/test, เตรียม release, หยุด backend ก่อน migration, ติดตั้งรุ่นใหม่ และตรวจ health ตามขั้นตอนใน workflow การ migration ใช้ประวัติที่ฐานบันทึกไว้ จึงต้องมีไฟล์ migration ใน Git ครบก่อนเริ่ม
 5. ตรวจผล workflow, commit ใน deploy marker, health และ [production OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) ให้ตรงกับ canonical contract แล้วบันทึกหลักฐาน release จึงถือว่า deploy สำเร็จ
 
+การทดสอบ backend บน runner ที่ให้บริการ production ใช้ worker เดียว เพื่อจำกัดการแย่งทรัพยากรระหว่างเริ่มต้น test fixtures และคงการตรวจครบทั้งชุด
+
 หาก checkout บนเซิร์ฟเวอร์มีการแก้ source โดยตรง ให้ตรวจและนำการแก้นั้นกลับเข้า Git ตามขั้นตอนถัดไปก่อน sync ทับ
 
 ## ตรวจ source ที่เคยแก้บนเซิร์ฟเวอร์
