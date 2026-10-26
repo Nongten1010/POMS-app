@@ -44,6 +44,17 @@
 - **New contract:** ล้างเฉพาะพารามิเตอร์ใหม่ตามชื่อพร้อมหน่วยในคำขอนั้น พร้อม lock/transaction และ request-scoped receipt ป้องกันล้างซ้ำเมื่อฐานค่าทำสำเร็จแล้วแต่ฐานคำขอยังไม่ commit. ตารางไม่มีข้ามได้ แต่metadata/baseline (รวม `parameters_json` ที่ผิดรูปแบบ)/การจับคู่คอลัมน์หรือหน่วยกำกวมหรือฐานค่าไม่พร้อมต้องตอบ `503` และยังไม่ยืนยันสำเร็จ; หาก current connected point หาย เปลี่ยนโรงงาน หรือ systemType ไม่ตรงก่อนยืนยัน ให้ตอบ `409 CONFLICT` ข้อความ `The connected point changed before parameter approval` ก่อนล้างค่า
 - **Breaking change:** yes — เพิ่มผลต่อค่าตรวจวัดและกรณีล้มเหลวใน endpoint เดิม
 
+<a id="device-config-request-status"></a>
+
+## 2026-10-22 — Integration config อ่านก่อนเชื่อมต่อและไม่ใช้คำขอที่ยกเลิก
+
+- **Affected canonical docs:** [Integration device config](./integrations/device-configs/README.md#สถานะคำขอและการเลือก-config)
+- **Impact:** endpoint เดิมทั้ง legacy และ annual path อ่าน config ได้ทุกสถานะยกเว้น `CANCELED` รวม `REJECTED`; ตัด current copies, channels และ schedules จากคำขอที่ยกเลิก/ลบ โดย fallback ไป snapshot ที่ยังใช้ได้ของอุปกรณ์เดียวกัน อุปกรณ์ที่ถูกลบจาก current ไม่กลับมาจาก snapshot
+- **Migration:** รัน `0144_track_device_config_request_source.ts` ก่อนเริ่ม backend เวอร์ชันใหม่ เก็บข้อมูลเก่าโดยไม่เดาต้นทาง; current config เก่าที่มีประวัติคำขอที่ยกเลิก/ลบของอุปกรณ์เดียวกันและไม่มี snapshot ที่ยืนยันได้ จะไม่ถูกส่งให้ worker ให้ตรวจสอบและบันทึก current config ใหม่หากต้องการใช้ต่อ Worker ต้องหยุดใช้ cached config เมื่อได้รับ `404` และเลิกใช้ device ที่ไม่มีใน response ล่าสุด หลัง deploy ตรวจทั้ง `/api/v1/openapi.json`, จุดรอเชื่อมต่อและจุดที่ยกเลิกก่อนปิด release
+- **Old contract:** ต้องมี connected point ก่อน; การอ่าน current config ไม่ตรวจสถานะคำขอต้นทาง
+- **New contract:** ใช้ connected/request point ที่ยังใช้ได้และกรอง config ตามต้นทาง; ไม่พบจุดหรือมีแต่คำขอที่ยกเลิกตอบ `404 NOT_FOUND` พร้อมข้อความ `Measurement point not found`; จุดที่ยังใช้ได้แต่ไม่มี config ตอบ `200` พร้อม arrays ว่าง Authentication และ response fields คงเดิม
+- **Breaking change:** yes — บางชุด config ที่เคยอ่านได้จะไม่ถูกส่งอีก และข้อความ `404` เปลี่ยน
+
 <a id="device-config-duplicate-parameters"></a>
 
 ## 2026-10-21 — ป้องกันพารามิเตอร์และอุปกรณ์ซ้ำในหน้าตั้งค่า

@@ -2,7 +2,7 @@
 
 [กลับไป Integration API Index](../README.md)
 
-API read-only สำหรับอุปกรณ์ worker หรือระบบภายนอกดึง active device, parameter และ status config ของจุดตรวจวัดที่เชื่อมต่อแล้ว
+API read-only สำหรับอุปกรณ์ worker หรือระบบภายนอกดึง device, parameter และ status config ที่บันทึกแล้วได้ทุกสถานะคำขอ ยกเว้น `CANCELED` รวมช่วงก่อนเชื่อมต่อสำเร็จ
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ curl --request GET \
 
 - Authentication: required ผ่าน header `X-API-Key`
 - Permission: device-config integration key
-- Data scope: จุดตรวจวัด active ใน `cems_wpms_connected_measurement_points`
+- Data scope: จุดตรวจวัด active ใน `cems_wpms_connected_measurement_points` หรือ `cems_wpms_measurement_points` ของคำขอที่ไม่ใช่ `CANCELED` และไม่ถูกลบ
 
 ### Request Fields
 
@@ -51,14 +51,42 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 | `success` | boolean | No | `true` เมื่อสำเร็จ |
 | `data.stationId` | string | No | canonical station ID; ใช้ `pointCode` ก่อนและ fallback เป็น `pointName` |
 | `data.measurementPointType` | `CEMS` \| `WPMS` \| `MOBILE` \| `STATION` \| `UNKNOWN` | No | ประเภทสรุปสำหรับ client; ใช้ field นี้เมื่อต้องเลือก flow ตามประเภทจุดตรวจวัด |
-| `data.systemType` | `CEMS` \| `WPMS` | No | ระบบหลักของจุดตรวจวัดจาก connected-point snapshot |
+| `data.systemType` | `CEMS` \| `WPMS` | No | ระบบหลักของจุดตรวจวัดจาก connected point หรือ request point ที่เลือก |
 | `data.pointType` | `STACK` \| `WASTEWATER` \| `OTHER` | No | ประเภททางกายภาพของจุดตรวจวัด |
 | `data.monitoringPointKind` | `CEMS` \| `WPMS` \| `MOBILE` \| `STATION` | Yes | ประเภทจุดที่ normalize เป็นตัวพิมพ์ใหญ่; เป็น `null` เมื่อข้อมูลต้นทางไม่มีหรือไม่อยู่ใน enum |
-| `data.deviceConfigs` | object[] | No | หนึ่งรายการต่อ active device config |
+| `data.deviceConfigs` | object[] | No | หนึ่งรายการต่อ device config ที่ต้นทางยังใช้ได้ |
 | `data.parameterConfigs` | object[] | No | หนึ่งรายการต่อ channel/parameter |
 | `data.statusSchedules` | object[] | No | หนึ่งรายการต่อ parameter และช่วงสถานะ |
 
-หากพบ connected point แต่ยังไม่มี active device config ระบบตอบ arrays ว่างและยังเป็น `200 OK`
+หากพบจุดที่ยังใช้ได้แต่ยังไม่มี config ที่ใช้ได้ ระบบตอบ arrays ว่างและยังเป็น `200 OK`
+
+### สถานะคำขอและการเลือก config
+
+| สถานะ | อ่าน config ที่บันทึกแล้ว |
+| --- | --- |
+| `PENDING_DESIGN_REVIEW` | ได้ |
+| `WAITING_FACTORY_REVISION` | ได้ |
+| `REVISED_PENDING_DESIGN_REVIEW` | ได้ |
+| `WAITING_CONNECTION` | ได้ |
+| `CONNECTION_CONFIRMED` | ได้ |
+| `CONNECTED` | ได้ |
+| `REJECTED` | ได้ |
+| `CANCELED` | ไม่ใช้ config ของคำขอนี้ |
+
+- เลือก metadata ของ active connected point ที่ต้นทางยังใช้ได้ก่อน; หากไม่มี ให้เลือกจุดจากคำขอที่ไม่ถูกยกเลิกหรือลบ เรียง `updated_at`, request `id` และ point `id` จากใหม่ไปเก่า
+- เลือก config ต่ออุปกรณ์ โดยอุปกรณ์ที่มี `deviceCode` ใช้รหัสนั้นเป็น identity ข้าม protocol; อุปกรณ์เดิมที่ไม่มีรหัสแยกด้วย protocol
+- ใช้ current config ล่าสุดที่ต้นทางยังใช้ได้; เมื่อมาจากคำขอที่ยกเลิก/ลบ ให้ fallback ไป snapshot ล่าสุดที่ยัง active ของคำขอที่ใช้ได้สำหรับอุปกรณ์เดียวกัน ไม่รวม channels หรือ schedules จากชุดที่ยกเลิก
+- การยกเลิกทั้งโดยผู้ใช้และอัตโนมัติมีผลทันทีในการอ่านครั้งถัดไป เพราะตรวจสถานะคำขอต้นทางทุกครั้ง ไม่ต้องลบ config ที่เก็บเป็นประวัติ
+- หากมีคำขอใหม่ใช้รหัสจุดเดียวกัน จะไม่หยิบ config ของคำขอที่ยกเลิกกลับมาใช้; config ที่ถูกต้องของคำขออื่นยังอ่านได้
+- การลบอุปกรณ์ออกจากชุด current มีผลเหนือ snapshot เก่า ไม่คืนอุปกรณ์ที่ลบไปแล้ว
+- ถ้าพบเฉพาะจุดในคำขอ `CANCELED` หรือข้อมูลที่ถูกลบ ตอบ `404 NOT_FOUND` พร้อมข้อความ `Measurement point not found`
+- คำตอบจาก controller รวม `404` ใช้ `Cache-Control: no-store` เพื่อไม่ให้ cache สถานะก่อนยกเลิกหรือก่อนบันทึก config
+
+#### ข้อมูลเก่าที่ไม่ระบุต้นทาง
+
+Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_request_id` และ `source_recorded` ภายในฐานข้อมูล โดยไม่เปลี่ยน response fields และไม่เดาต้นทางของข้อมูลเก่าจากค่าที่เหมือนกัน การบันทึกใหม่ระบุต้นทางชัดเจน ทั้งชุดคัดลอกจากคำขอและชุด current ที่บันทึกโดยตรง
+
+สำหรับ current config เก่าที่ `source_recorded=false` และพบ snapshot ของคำขอที่ยกเลิก/ลบหรือหาคำขอต้นทางไม่ได้สำหรับอุปกรณ์เดียวกัน จะใช้เฉพาะ snapshot ที่ยัง active และยืนยันต้นทางได้ หากไม่มีจะไม่คืนอุปกรณ์นั้น แม้ชุดเก่าอาจเคยถูกบันทึกโดยตรง ให้ผู้มีสิทธิ์ตรวจสอบและบันทึก current config ใหม่เมื่อต้องการใช้ชุดนั้นต่อ ไม่มีการแก้หรือลบข้อมูลระหว่าง GET
 
 #### การแยกประเภทจุดตรวจวัด
 
@@ -240,18 +268,18 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 
 - `stationId` รับ legacy safe identifier ที่ประกอบด้วยตัวอักษร ตัวเลข `_` หรือ `-` และ annual code เช่น `WEMS-0003/2571`
 - เมื่อ annual code อยู่ใน path client ต้อง encode `/` เป็น `%2F`; backend รองรับกรณี reverse proxy decode slash ก่อนส่งต่อด้วย
-- API คืนเฉพาะจุดที่มี active row ใน `cems_wpms_connected_measurement_points`; ไม่พบจุดให้ตอบ `404`
-- `deviceConfigs` อ่านเฉพาะ active config ของ canonical station ID
-- `systemType`, `pointType` และ `monitoringPointKind` อ่านจาก connected-point snapshot และไม่ถูกเก็บซ้ำใน device config แต่ละรายการ
+- API คืนจุดที่ยังใช้ได้จาก connected point หรือคำขอทุกสถานะยกเว้น `CANCELED`; ไม่พบจุดให้ตอบ `404`
+- `deviceConfigs` อ่านเฉพาะ config ที่ต้นทางยังใช้ได้ของ canonical station ID ตามกติกาการเลือก config ข้างต้น
+- `systemType`, `pointType` และ `monitoringPointKind` อ่านจาก connected point หรือ request point ที่เลือก และไม่ถูกเก็บซ้ำใน device config แต่ละรายการ
 - `monitoringPointKind` normalize แบบไม่สนตัวพิมพ์ใหญ่-เล็กและช่องว่างหัวท้าย โดยคืนเฉพาะ `CEMS`, `WPMS`, `MOBILE`, `STATION` หรือ `null`
 - `measurementPointType` เป็น field สรุป; ระบบคืน `UNKNOWN` เมื่อข้อมูลขัดแย้งหรือไม่พอสำหรับจำแนกอย่างปลอดภัย
 - `Mobile` และ `Station` ต้องใช้ `pointType=OTHER` ร่วมกับ `monitoringPointKind`; ระบบไม่แยกสองประเภทนี้จาก `systemType` เพียงอย่างเดียว
-- การเพิ่ม response fields รอบนี้ไม่เปลี่ยน connection-request write validator; API จะคืน `MOBILE`/`STATION` เมื่อ connected-point snapshot มี kind ดังกล่าวอยู่แล้วเท่านั้น
+- API คืน `MOBILE`/`STATION` เมื่อ point snapshot ที่เลือกมี kind ดังกล่าวอยู่แล้ว ไม่เปลี่ยน connection-request write validator
 - settings ที่ไม่มีค่าแปลงเป็น `null`; `minuteTableName`, `fiveMinuteTableName` และ `hourlyTableName` มีค่ากับ `MSSQL`/`MYSQL` เมื่อบันทึกไว้
 - `dbPass` คืนค่าจริงเฉพาะ endpoint integration นี้; device-config endpoint สำหรับ UI และระบบภายในอื่นยังคง mask เป็น `********`
 - success response กำหนด `Cache-Control: no-store`; client ต้องไม่ cache response และห้ามบันทึก `X-API-Key` หรือ response body ลง log
 - `parameterConfigs.addressId`, `offset`, `valueRange.min` และ `valueRange.max` รักษา `null` ตาม storage contract
-- `parameterConfigs.testMode` คืน `false` เสมอ รวมข้อมูลเก่าที่เคยเป็น `true`; Worker ต้องโหลด config ใหม่และเลิกใช้ flag เก่าที่ cache ไว้ จึงจะหยุดเขียนข้อมูลเข้า `_data_test`. API นี้ไม่ใช่ตัวรับค่าตรวจวัดและไม่ได้ควบคุมการเขียนของ Worker โดยตรง ดู [การเปลี่ยนผ่าน](../../CHANGELOG.md#test-mode-retired)
+- `parameterConfigs.testMode` คืน `false` เสมอ รวมข้อมูลเก่าที่เคยเป็น `true`; Worker ต้องโหลด config ใหม่และเลิกใช้ flag เก่าที่ cache ไว้ จึงจะหยุดเขียนข้อมูลใหม่เข้า `_data_test` ได้. API นี้ส่ง config ไม่รับค่าตรวจวัดเข้า ดู [การเลิกใช้ Test mode และ migration](../../CHANGELOG.md#test-mode-retired). การอ่านข้อมูลทดสอบใช้ `real`/`1m` ตาม protocol ตาม [สัญญา connection-test](../../menus/connection-requests/parameter-values.md#get-apiv1parameter-valuesconnection-test)
 - `parameterName` และ `parameterUnit` แยกจากวงเล็บท้าย `parameter`; client ควรใช้ `parameter` เป็น display label ที่มีชื่อพร้อมหน่วย
 - `standardCriteria`, `eiaCriteria`, `standardCondition`, `dryBasis` และ `oxygenOrExcessAir` จับคู่กับเครื่องมือของ connected point ด้วยชื่อพารามิเตอร์พร้อมหน่วยก่อน หากต้อง fallback แบบไม่รวมหน่วยจะใช้เฉพาะกรณีที่ตรงเพียงรายการเดียว
 - ค่าในกลุ่มการรายงานค่าเป็น `null` เมื่อข้อมูลต้นทางไม่ได้บันทึกค่า หรือไม่พบพารามิเตอร์ต้นทางที่จับคู่ได้; ค่า `false` จะคงเป็น `false` และไม่ถูกแปลงเป็น `null`
@@ -269,7 +297,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | `stationId` ว่าง ยาวเกิน หรือมีรูปแบบไม่ปลอดภัย | ตรวจและ encode station ID |
 | `401` | `UNAUTHORIZED` | ไม่มี `X-API-Key` หรือ key ไม่ถูกต้อง | ตรวจ scoped integration key |
-| `404` | `NOT_FOUND` | ไม่พบ connected measurement point ที่ active | หยุดอ่าน config และตรวจ station |
+| `404` | `NOT_FOUND` | ไม่พบจุดที่ใช้ได้ หรือพบเฉพาะคำขอ `CANCELED`/ข้อมูลที่ถูกลบ | หยุดใช้ config ที่ cache ไว้และตรวจ station; ข้อความ `Measurement point not found` |
 
 ## Backend Maintainer Links
 
@@ -281,4 +309,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - Service and repository: [`integration-device-configs.service.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.service.ts), [`integration-device-configs.repository.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.repository.ts)
 - Device config storage: [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts), [`0087_allow_poms_box_device_protocol.ts`](../../../../../backend/src/db/migrations/0087_allow_poms_box_device_protocol.ts)
 - Tests: [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts), [`integration-device-configs.service.test.ts`](../../../../../backend/tests/unit/integration-device-configs.service.test.ts)
+- Request-status regression: [`integration-device-configs.request-status.test.ts`](../../../../../backend/tests/unit/integration-device-configs.request-status.test.ts)
+- Migration: [`0144_track_device_config_request_source.ts`](../../../../../backend/src/db/migrations/0144_track_device_config_request_source.ts) ต้องรันก่อนเริ่ม backend เวอร์ชันนี้; ไม่รัน migration หรือแก้ข้อมูล production ผ่าน GET
 - Evidence: [การรายงานค่าต่อพารามิเตอร์](../../../evidence/integrations/device-config-parameter-reporting.tdd.md), [ประเภทจุดตรวจวัด](../../../evidence/integrations/device-config-point-types.tdd.md)
+- Evidence: [สถานะคำขอและการตัด config ที่ยกเลิก](../../../evidence/integrations/device-config-request-status.tdd.md)

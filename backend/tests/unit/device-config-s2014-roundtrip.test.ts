@@ -56,6 +56,8 @@ describe('S2014 device configuration read-save roundtrip', () => {
       device_connection_configs: configs.map((config) => ({
         id: config.id,
         request_id: config.requestId,
+        source_request_id: config.requestId,
+        source_recorded: 1,
         station_id: 'S2014',
         device_code: 'S2014/01',
         protocol: config.protocol,

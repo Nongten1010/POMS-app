@@ -19,8 +19,8 @@ import type {
 
 export const integrationDeviceConfigsService = {
   async getByStationId(stationId: string): Promise<IntegrationDeviceConfigsResponseDTO> {
-    const point = await integrationDeviceConfigsRepository.findConnectedPointByStationId(stationId);
-    if (!point) throw new NotFoundError('Connected measurement point not found');
+    const point = await integrationDeviceConfigsRepository.findPointByStationId(stationId);
+    if (!point) throw new NotFoundError('Measurement point not found');
 
     const configs = await deviceConnectionsService.listActiveSettingsForIntegration({
       stationId: point.stationId,

@@ -8,6 +8,7 @@ jest.mock('../../src/modules/integrations/integration-device-configs.service', (
 }));
 
 import { createApp } from '../../src/app';
+import { NotFoundError } from '../../src/shared/errors/AppError';
 import { integrationDeviceConfigsService } from '../../src/modules/integrations/integration-device-configs.service';
 
 const mockedIntegrationDeviceConfigsService = jest.mocked(integrationDeviceConfigsService);
@@ -132,6 +133,21 @@ describe('integration device configs route', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('UNAUTHORIZED');
     expect(mockedIntegrationDeviceConfigsService.getByStationId).not.toHaveBeenCalled();
+  });
+
+  it('does not cache a canceled or unavailable point response', async () => {
+    mockedIntegrationDeviceConfigsService.getByStationId.mockRejectedValueOnce(
+      new NotFoundError('Measurement point not found'),
+    );
+    const response = await request(createApp())
+      .get('/api/v1/integrations/device-configs/P0267')
+      .set('X-API-Key', 'test-integration-key');
+    expect(response.status).toBe(404);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.body).toEqual({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'Measurement point not found' },
+    });
   });
 
   it('rejects invalid API keys', async () => {

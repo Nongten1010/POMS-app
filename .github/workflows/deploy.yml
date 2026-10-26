@@ -13,6 +13,16 @@ on:
         type: choice
         options:
           - frontend
+          - backend
+      reconcile_server_changes:
+        description: Back up the inspected server edits before synchronizing its checkout
+        required: false
+        default: false
+        type: boolean
+      server_snapshot_manifest:
+        description: Reviewed manifest from Inspect production checkout (required for reconciliation)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -65,11 +75,12 @@ jobs:
           $before = "${{ github.event.before }}"
           $after = "${{ github.sha }}"
           $manualFrontendDeploy = "${{ github.event_name }}" -eq 'workflow_dispatch' -and "${{ inputs.deploy_target }}" -eq 'frontend'
+          $manualBackendDeploy = "${{ github.event_name }}" -eq 'workflow_dispatch' -and "${{ inputs.deploy_target }}" -eq 'backend'
           $pushFrontendDeploy = "${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[deploy-frontend]') }}" -eq 'true'
           $forceFrontendDeploy = $manualFrontendDeploy -or $pushFrontendDeploy
 
-          if ($manualFrontendDeploy) {
-            Write-Host "Manual frontend deployment requested; forcing frontend build and deploy."
+          if ($manualFrontendDeploy -or $manualBackendDeploy) {
+            Write-Host "Manual deployment requested; building and deploying the selected app part."
             $files = @()
           } elseif ([string]::IsNullOrWhiteSpace($before) -or $before -match '^0+$') {
             $files = git ls-tree -r --name-only $after
@@ -99,7 +110,7 @@ jobs:
           }
 
           $frontend = if ($frontendChanged -or $forceFrontendDeploy) { 'true' } else { 'false' }
-          $backend = if ($backendChanged) { 'true' } else { 'false' }
+          $backend = if ($backendChanged -or $manualBackendDeploy) { 'true' } else { 'false' }
           $frontendDeps = if ($frontendDepsChanged) { 'true' } else { 'false' }
           $backendDeps = if ($backendDepsChanged) { 'true' } else { 'false' }
 
@@ -107,6 +118,21 @@ jobs:
           "backend_changed=$backend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "frontend_deps_changed=$frontendDeps" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "backend_deps_changed=$backendDeps" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Preserve inspected server edits before Git synchronization
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_target == 'backend' && inputs.reconcile_server_changes
+        env:
+          EXPECTED_SERVER_MANIFEST: ${{ inputs.server_snapshot_manifest }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_SERVER_MANIFEST)) {
+            throw 'A reviewed source manifest is required to reconcile server changes.'
+          }
+          $manifestPath = Join-Path $env:RUNNER_TEMP "poms-reviewed-source-${{ github.run_id }}.json"
+          [System.IO.File]::WriteAllText($manifestPath, $env:EXPECTED_SERVER_MANIFEST, (New-Object System.Text.UTF8Encoding($false)))
+          $repoRoot = Split-Path -Parent $env:BACKEND_TARGET
+          $backupRoot = Join-Path (Split-Path -Parent $repoRoot) 'POMS-backups'
+          node .\backend\deploy\windows\reconcile-production-checkout.cjs --repo $repoRoot --manifest $manifestPath --target "${{ github.sha }}" --backup-root $backupRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Update server git checkout
         if: steps.changes.outputs.frontend_changed == 'true' || steps.changes.outputs.backend_changed == 'true'

@@ -97,6 +97,8 @@
 
 ## Integrations
 
+- [อ่าน device config ทุกสถานะยกเว้นยกเลิกและไม่ใช้สำเนาของคำขอที่ยกเลิก](./integrations/device-config-request-status.tdd.md)
+
 - [Dashboard ข้อมูลตรวจวัดรายโรงงานสำหรับระบบภายนอก](./integrations/factory-dashboard-api.tdd.md)
 - [Test Mode ของ Device Config Channel](./integrations/device-config-test-mode.tdd.md)
 - [การรายงานค่าต่อพารามิเตอร์ใน Device Config](./integrations/device-config-parameter-reporting.tdd.md)

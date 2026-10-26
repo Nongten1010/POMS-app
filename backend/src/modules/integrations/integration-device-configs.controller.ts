@@ -6,9 +6,10 @@ import { integrationDeviceConfigsService } from './integration-device-configs.se
 export const integrationDeviceConfigsController = {
   async getByStationId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      // Cancellation and newly configured stations must not leave cached errors behind.
+      res.set('Cache-Control', 'no-store');
       const { stationId } = integrationDeviceConfigParamsSchema.parse(req.params);
       const data = await integrationDeviceConfigsService.getByStationId(stationId);
-      res.set('Cache-Control', 'no-store');
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);

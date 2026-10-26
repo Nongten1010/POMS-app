@@ -23,6 +23,10 @@
 - [ล้างข้อมูลทดสอบด้วย SQL](./test-data-cleanup.md)
 - [ล้างจุดที่ยังไม่เชื่อมต่อและคืนรหัสค้าง: กรณี S0527](./cleanup-unconnected-point-code.md)
 
+## Production delivery
+
+- [ส่ง backend ขึ้น production ผ่าน Git และเก็บการแก้เดิมบนเซิร์ฟเวอร์ก่อน sync](./production-git-delivery.md)
+
 ## Integrations
 
 - [คู่มือการเชื่อมโยง Integration Device Config API (PDF)](./integrations/integration-device-config-api-user-guide.pdf)

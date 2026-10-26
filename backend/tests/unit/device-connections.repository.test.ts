@@ -161,8 +161,10 @@ describe('deviceConnectionsRepository', () => {
   });
 
   it('returns the stored database password only for the integration-specific reader', async () => {
+    let configReads = 0;
     mockedDb.mockImplementation((tableName: unknown) => {
       if (tableName === 'device_connection_configs') {
+        if (configReads++ > 0) return rowsQuery([]);
         return rowsQuery([
           {
             id: '11',
@@ -348,6 +350,8 @@ function rowsQuery(rows: unknown[]) {
   Object.assign(chain, {
     where: returnChain,
     whereNull: returnChain,
+    whereIn: returnChain,
+    whereNotNull: returnChain,
     orderBy: returnChain,
     modify: jest.fn((callback: (builder: typeof chain) => void) => {
       callback(chain);

@@ -100,6 +100,7 @@
 - หากคำขอเป็น `CANCELED` อยู่แล้ว endpoint ตอบ `409 CONFLICT` และไม่แก้เหตุผล, เวลา, actor หรือเพิ่ม history ซ้ำ รวมกรณีมีการยกเลิกอีกคำสั่งก่อน lock แถวสำเร็จ.
 - Backend lock แถวคำขอใน transaction ก่อนตรวจสถานะและเขียน history เพื่อไม่ให้ cancel แข่งกับ action อื่นแล้วสำเร็จทั้งคู่.
 - ไม่ลบ request, factory snapshot, measurement points, documents, point codes หรือ device configs.
+- แม้เก็บ device configs เป็นประวัติ [Integration device config](../../integrations/device-configs/README.md#สถานะคำขอและการเลือก-config) จะไม่ใช้ config ของคำขอ `CANCELED` รวมสำเนา current; ตรวจสถานะต้นทางทุกครั้งทั้งการยกเลิกโดยผู้ใช้และอัตโนมัติ
 - รหัสจากคำขอ `CANCELED` ที่ยังไม่เคยเชื่อมต่อ เช่น `P0267` สามารถนำไปใช้กับคำขอใหม่ของโรงงานเดิมและ `systemType` เดิมได้ รวมคำขอที่ยกเลิกไว้ก่อน deploy การยกเลิกยังเก็บการจองเดิมไว้; backend ตรวจและเปลี่ยนเจ้าของการจองอย่างปลอดภัยใน transaction ตอน [กำหนดรหัสให้คำขอใหม่](./request-payloads-and-validation.md#business-rules) หรือสร้าง direct connection โดยคงคำขอและจุดเก่าเป็นประวัติ รหัสที่เคยเชื่อมต่อแม้เลิกใช้งานแล้ว หรือยังมีจุดอื่น/live device config ใช้งานอยู่ ไม่เข้าเงื่อนไขนำกลับมาใช้
 - เวอร์ชันนี้ไม่ส่ง email, push notification หรือ notification อื่น.
 

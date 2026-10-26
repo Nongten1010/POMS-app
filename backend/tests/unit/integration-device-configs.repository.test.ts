@@ -36,8 +36,7 @@ describe('integrationDeviceConfigsRepository', () => {
         instruments_json: null,
       });
       mockedDb.mockReturnValue(query);
-      const result =
-        await integrationDeviceConfigsRepository.findConnectedPointByStationId('S0001');
+      const result = await integrationDeviceConfigsRepository.findPointByStationId('S0001');
       expect(mockedDb).toHaveBeenCalledWith(table);
       expect(result).toEqual({
         stationId: 'S0001',
@@ -61,7 +60,7 @@ describe('integrationDeviceConfigsRepository', () => {
     mockedDb.mockReturnValue(query);
 
     await expect(
-      integrationDeviceConfigsRepository.findConnectedPointByStationId('MOBILE-0001'),
+      integrationDeviceConfigsRepository.findPointByStationId('MOBILE-0001'),
     ).resolves.toEqual({
       stationId: 'MOBILE-0001',
       systemType: 'CEMS',
@@ -93,7 +92,7 @@ describe('integrationDeviceConfigsRepository', () => {
     });
     mockedDb.mockReturnValue(query);
 
-    const result = await integrationDeviceConfigsRepository.findConnectedPointByStationId('S0002');
+    const result = await integrationDeviceConfigsRepository.findPointByStationId('S0002');
 
     expect(result?.monitoringPointKind).toBeNull();
   });
@@ -109,6 +108,7 @@ function connectedPointQuery(row: Record<string, unknown>) {
   };
   const query = {
     whereNull: jest.fn().mockReturnThis(),
+    whereNotExists: jest.fn().mockReturnThis(),
     where: jest.fn((callback: (builder: typeof nestedWhere) => void) => {
       callback(nestedWhere);
       return query;

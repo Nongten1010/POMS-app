@@ -123,6 +123,21 @@ const standardErrorResponses: OpenApiObject = {
   '404': { $ref: '#/components/responses/NotFound' },
 };
 
+const integrationDeviceConfigDescription =
+  'อ่าน config ที่บันทึกแล้วได้ทุกสถานะคำขอยกเว้น CANCELED รวม REJECTED; ' +
+  'ใช้ metadata ของ active connected point ก่อน แล้ว fallback ไปจุดในคำขอล่าสุดที่ไม่ถูกยกเลิกหรือลบ. ' +
+  'ไม่ใช้ device, parameter หรือ status config จากคำขอ CANCELED รวมสำเนา current; ' +
+  'เลือกชุดปัจจุบันที่ใช้ได้ต่ออุปกรณ์ หรือ snapshot ล่าสุดจากคำขอที่ใช้ได้เมื่อสำเนาปัจจุบันมาจากคำขอที่ยกเลิก. ' +
+  'ข้อมูลเก่าที่ไม่รู้ต้นทางและมีประวัติคำขอที่ยกเลิก/ลบของอุปกรณ์เดียวกัน ใช้เฉพาะ snapshot ที่ยืนยันต้นทางได้; ' +
+  'ไม่คืนอุปกรณ์ที่ถูกลบจากชุดปัจจุบัน. จุดที่ยังใช้ได้แต่ไม่มี config ตอบ 200 พร้อม arrays ว่าง; ' +
+  'ไม่พบจุดหรือพบเฉพาะคำขอ CANCELED ตอบ 404 NOT_FOUND. ใช้ scoped X-API-Key และ Cache-Control: no-store; ' +
+  'response อาจมี dbPass จริง ห้ามบันทึก response หรือ credentials ลง log.';
+
+const integrationDeviceConfigNotFound = errorResponse(
+  'ไม่พบจุดตรวจวัดที่ใช้ได้ หรือมีเฉพาะคำขอ CANCELED/ข้อมูลที่ถูกลบ',
+  { success: false, error: { code: 'NOT_FOUND', message: 'Measurement point not found' } },
+);
+
 function operation(options: OperationOptions): OpenApiObject {
   const successStatus = options.successStatus ?? '200';
   return {
@@ -7082,8 +7097,11 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Integrations',
       summary: 'Get device config for station',
       operationId: 'getIntegrationDeviceConfig',
+      description: integrationDeviceConfigDescription,
       parameters: [integrationStationIdParameter],
       successSchema: schemaRef('IntegrationDeviceConfigsResponse'),
+      successDescription: 'config ที่ใช้ได้ หรือ arrays ว่างเมื่อจุดยังไม่มี config',
+      extraResponses: { '404': integrationDeviceConfigNotFound },
     }),
   },
   '/integrations/lasthour/factories/{registrationNo}': {
@@ -7144,8 +7162,11 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Integrations',
       summary: 'Get device config for annual station code',
       operationId: 'getIntegrationDeviceConfigByAnnualPath',
+      description: integrationDeviceConfigDescription,
       parameters: [annualStationIdParameter, buddhistYearParameter],
       successSchema: schemaRef('IntegrationDeviceConfigsResponse'),
+      successDescription: 'config ที่ใช้ได้ หรือ arrays ว่างเมื่อจุดยังไม่มี config',
+      extraResponses: { '404': integrationDeviceConfigNotFound },
     }),
   },
   '/integrations/alert-events': {

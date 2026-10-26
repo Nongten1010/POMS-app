@@ -11,6 +11,7 @@ import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { toCanonicalStatusDateTime } from './device-connection-status-datetime';
+import { deviceConnectionIdentity } from './device-connection-identity';
 import {
   lockAlertActivationPoints,
   syncAlertParameterActivations,
@@ -28,6 +29,9 @@ import {
 interface DeviceConnectionConfigRow {
   id: number | string;
   request_id: number | string | null;
+  source_request_id?: number | string | null;
+  source_recorded?: boolean | number;
+  deleted_at?: Date | string | null;
   station_id: string;
   device_code: string | null;
   protocol: DeviceConnectionProtocol;
@@ -62,7 +66,7 @@ export const deviceConnectionsRepository = {
   async listActiveForIntegration(
     query: ListDeviceConnectionConfigsQuery,
   ): Promise<DeviceConnectionConfigDTO[]> {
-    return listActiveConfigs(query, 'plaintext');
+    return listIntegrationConfigs(query);
   },
 
   async findById(
@@ -233,7 +237,7 @@ export const deviceConnectionsRepository = {
       }
 
       const requestSnapshots = await insertConfigs(trx, inputs, actorUserId, requestId);
-      await insertConfigs(trx, inputs, actorUserId, null);
+      await insertConfigs(trx, inputs, actorUserId, null, requestId);
       await syncAlertParameterActivations(trx, stationIds);
       return requestSnapshots;
     });
@@ -241,6 +245,95 @@ export const deviceConnectionsRepository = {
 };
 
 type SensitiveSettingsMode = 'masked' | 'plaintext';
+
+async function listIntegrationConfigs(
+  query: ListDeviceConnectionConfigsQuery,
+): Promise<DeviceConnectionConfigDTO[]> {
+  const current: DeviceConnectionConfigRow[] = await db('device_connection_configs')
+    .whereNull('request_id')
+    .modify((builder) => {
+      if (query.stationId) builder.where('station_id', query.stationId);
+    })
+    .orderBy('id', 'desc');
+  if (current.length === 0 && !query.stationId) return [];
+
+  const snapshots: DeviceConnectionConfigRow[] = await db('device_connection_configs')
+    .whereIn(
+      'station_id',
+      query.stationId ? [query.stationId] : [...new Set(current.map((row) => row.station_id))],
+    )
+    .whereNotNull('request_id')
+    .orderBy('id', 'desc');
+  const requestIds = [
+    ...new Set(
+      [...snapshots.map((row) => row.request_id), ...current.map((row) => row.source_request_id)]
+        .filter((id): id is number | string => id != null)
+        .map(Number),
+    ),
+  ];
+  const requests: { id: number | string; status: string; deleted_at: Date | string | null }[] =
+    requestIds.length === 0
+      ? []
+      : await db('cems_wpms_connection_requests')
+          .whereIn('id', requestIds)
+          .select('id', 'status', 'deleted_at');
+  const allowedRequests = new Set(
+    requests
+      .filter((row) => row.status !== 'CANCELED' && row.deleted_at === null)
+      .map((row) => Number(row.id)),
+  );
+  const snapshotsByDevice = new Map<string, DeviceConnectionConfigRow[]>();
+  for (const row of snapshots) {
+    const key = integrationDeviceIdentity(row);
+    const group = snapshotsByDevice.get(key) ?? [];
+    group.push(row);
+    snapshotsByDevice.set(key, group);
+  }
+
+  const selected = new Map<string, DeviceConnectionConfigRow>();
+  const seen = new Set<string>();
+  for (const row of current) {
+    const key = integrationDeviceIdentity(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // A later explicit removal wins over older copies and request snapshots.
+    if (row.deleted_at != null) continue;
+    const history = snapshotsByDevice.get(key) ?? [];
+    const allowed =
+      row.source_request_id != null
+        ? allowedRequests.has(Number(row.source_request_id))
+        : toBoolean(row.source_recorded) ||
+          history.every((snapshot) => allowedRequests.has(Number(snapshot.request_id)));
+    const candidate = allowed
+      ? row
+      : history.find(
+          (snapshot) =>
+            snapshot.deleted_at === null && allowedRequests.has(Number(snapshot.request_id)),
+        );
+    if (candidate && (!query.protocol || candidate.protocol === query.protocol)) {
+      selected.set(key, candidate);
+    }
+  }
+  for (const [key, history] of snapshotsByDevice) {
+    if (seen.has(key)) continue;
+    const candidate = history.find(
+      (snapshot) =>
+        snapshot.deleted_at === null && allowedRequests.has(Number(snapshot.request_id)),
+    );
+    if (candidate && (!query.protocol || candidate.protocol === query.protocol)) {
+      selected.set(key, candidate);
+    }
+  }
+  return Promise.all([...selected.values()].map((row) => hydrate(row, undefined, 'plaintext')));
+}
+
+function integrationDeviceIdentity(row: DeviceConnectionConfigRow): string {
+  return deviceConnectionIdentity({
+    stationId: row.station_id.trim().toUpperCase(),
+    deviceCode: row.device_code?.trim().toUpperCase() || null,
+    protocol: row.protocol,
+  });
+}
 
 async function listActiveConfigs(
   query: ListDeviceConnectionConfigsQuery,
@@ -400,6 +493,7 @@ async function insertConfigs(
   inputs: CreateDeviceConnectionConfigInput[],
   actorUserId: number,
   requestId: number | null,
+  sourceRequestId: number | null = requestId,
 ): Promise<DeviceConnectionConfigDTO[]> {
   const createdConfigs: DeviceConnectionConfigDTO[] = [];
 
@@ -407,6 +501,8 @@ async function insertConfigs(
     const [{ id }] = await trx('device_connection_configs')
       .insert({
         request_id: requestId,
+        source_request_id: sourceRequestId,
+        source_recorded: true,
         station_id: input.stationId,
         device_code: input.deviceCode ?? null,
         protocol: input.protocol,
@@ -607,6 +703,7 @@ function toChannelDTO(row: DeviceMeasurementChannelRow): DeviceMeasurementChanne
   return {
     addressId: toNullableNumber(row.address_id),
     dataType: row.data_type,
+    // Retain the compatibility field without reactivating historical test mode.
     testMode: false,
     valueRange: row.value_range_json ? parseMeasurementRange(row.value_range_json) : null,
     alertLow: toNullableNumber(row.alert_low),
@@ -698,4 +795,14 @@ function toNullableNumber(value: unknown): number | null {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true';
+  }
+  return false;
 }

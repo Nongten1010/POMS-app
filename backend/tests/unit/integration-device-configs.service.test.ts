@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../src/modules/integrations/integration-device-configs.repository', () => ({
   integrationDeviceConfigsRepository: {
-    findConnectedPointByStationId: jest.fn(),
+    findPointByStationId: jest.fn(),
   },
 }));
 
@@ -24,7 +24,7 @@ const serialProtocols = ['MODBUS_RTU', 'DCON_ASCII'] as const;
 describe('integrationDeviceConfigsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedRepository.findConnectedPointByStationId.mockResolvedValue({
+    mockedRepository.findPointByStationId.mockResolvedValue({
       stationId: 'S0002',
       systemType: 'CEMS',
       pointType: 'STACK',
@@ -418,7 +418,7 @@ describe('integrationDeviceConfigsService', () => {
   });
 
   it('returns database table names and preserves nullable channel config values', async () => {
-    mockedRepository.findConnectedPointByStationId.mockResolvedValue({
+    mockedRepository.findPointByStationId.mockResolvedValue({
       stationId: 'S0002',
       systemType: 'CEMS',
       pointType: 'STACK',
@@ -495,7 +495,7 @@ describe('integrationDeviceConfigsService', () => {
   });
 
   it('uses reporting settings from a unique unitless match and avoids ambiguous matches', async () => {
-    mockedRepository.findConnectedPointByStationId.mockResolvedValue({
+    mockedRepository.findPointByStationId.mockResolvedValue({
       stationId: 'S0002',
       systemType: 'CEMS',
       pointType: 'STACK',
@@ -615,7 +615,7 @@ describe('integrationDeviceConfigsService', () => {
         ...source,
         measurementInstruments: null,
       };
-      mockedRepository.findConnectedPointByStationId.mockResolvedValue(connectedPoint);
+      mockedRepository.findPointByStationId.mockResolvedValue(connectedPoint);
       mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
 
       const result = await integrationDeviceConfigsService.getByStationId('S0002');
@@ -637,7 +637,7 @@ describe('integrationDeviceConfigsService', () => {
         monitoringPointKind: null,
         measurementInstruments: null,
       };
-      mockedRepository.findConnectedPointByStationId.mockResolvedValue(connectedPoint);
+      mockedRepository.findPointByStationId.mockResolvedValue(connectedPoint);
       mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
 
       const result = await integrationDeviceConfigsService.getByStationId('S0002');
@@ -665,7 +665,7 @@ describe('integrationDeviceConfigsService', () => {
         monitoringPointKind,
         measurementInstruments: null,
       };
-      mockedRepository.findConnectedPointByStationId.mockResolvedValue(connectedPoint);
+      mockedRepository.findPointByStationId.mockResolvedValue(connectedPoint);
       mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
 
       const result = await integrationDeviceConfigsService.getByStationId('S0002');
@@ -679,12 +679,12 @@ describe('integrationDeviceConfigsService', () => {
     },
   );
 
-  it('throws not found when the station is not connected', async () => {
-    mockedRepository.findConnectedPointByStationId.mockResolvedValue(null);
+  it('throws not found when no eligible connected or request point exists', async () => {
+    mockedRepository.findPointByStationId.mockResolvedValue(null);
     mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
 
     await expect(integrationDeviceConfigsService.getByStationId('S9999')).rejects.toThrow(
-      'Connected measurement point not found',
+      'Measurement point not found',
     );
     expect(mockedDeviceConnectionsService.listActiveSettingsForIntegration).not.toHaveBeenCalled();
   });
