@@ -28,7 +28,6 @@ import {
   Badge,
   Snackbar,
   Stack,
-  Switch,
   Tab,
   Table,
   TableBody,
@@ -3879,7 +3878,6 @@ function ConnectionParameterTable({ deviceCodeOptions, connectionForms = [], row
     },
     { label: 'พารามิเตอร์', width: 144 },
     { label: 'สถานะ', width: 170 },
-    { label: 'Test Mode', width: 112 },
     { label: 'Min', width: 108 },
     { label: 'Max', width: 108 },
     { label: 'Alert(Low)', width: 118 },
@@ -3967,13 +3965,6 @@ function ConnectionParameterTable({ deviceCodeOptions, connectionForms = [], row
                         </MenuItem>
                       ))}
                     </TextField>
-                  </TableCell>
-                  <TableCell sx={{ minWidth: 112, textAlign: 'center' }}>
-                    <Switch
-                      checked={Boolean(row.testMode)}
-                      onChange={(event) => updateRow(index, 'testMode', event.target.checked)}
-                      inputProps={{ 'aria-label': `Test Mode ${row.parameter || index + 1}` }}
-                    />
                   </TableCell>
                   <TableCell sx={{ minWidth: 108 }}>
                     <TextField
