@@ -100,6 +100,9 @@ Never commit:
 
 ## Before Commit
 
+- Production delivery must start with reviewed changes committed and pushed to Git, including release migrations. Deploy the pushed commit to the server, then verify health and the runtime API contract.
+- When production has uncommitted source changes, preserve a backup, reconcile those changes into Git, and push them before synchronizing the server checkout or deploying another release.
+
 Before committing or pushing:
 
 - Run `git status --short`.

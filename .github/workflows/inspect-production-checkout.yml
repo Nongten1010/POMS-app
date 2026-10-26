@@ -1,0 +1,85 @@
+name: Inspect production checkout
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poms-prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, poms, windows, prod]
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Snapshot the six reviewed source files without changing production
+        id: snapshot
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:GIT_OPTIONAL_LOCKS = '0'
+          $repo = 'C:\apps\POMS-app'
+          $destination = Join-Path $env:RUNNER_TEMP "poms-source-audit-${{ github.run_id }}-${{ github.run_attempt }}"
+          $files = @(
+            'backend/src/modules/api-docs/poms.openapi.ts',
+            'backend/src/modules/device-connections/device-connections.repository.ts',
+            'backend/src/modules/integrations/integration-device-configs.controller.ts',
+            'backend/src/modules/integrations/integration-device-configs.repository.ts',
+            'backend/src/modules/integrations/integration-device-configs.service.ts',
+            'backend/src/db/migrations/0144_track_device_config_request_source.ts'
+          )
+          New-Item -ItemType Directory -Path $destination | Out-Null
+          Push-Location $repo
+          try {
+            $head = git rev-parse HEAD
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the production checkout.' }
+            $changed = @(git diff --name-only HEAD)
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect tracked changes.' }
+            $status = @(git status --short --untracked-files=all -- $files)
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect reviewed source paths.' }
+            $hashes = @()
+            foreach ($file in $files) {
+              $source = Join-Path $repo $file
+              if (!(Test-Path -LiteralPath $source -PathType Leaf)) {
+                throw "Reviewed source is missing: $file"
+              }
+              $text = [System.IO.File]::ReadAllText($source)
+              if ($text -match '(?:ghp_|github_pat_|sk-)[A-Za-z0-9_]{20,}|BEGIN [A-Z ]*PRIVATE KEY') {
+                throw "Potential credential in reviewed source; snapshot stopped: $file"
+              }
+              $target = Join-Path $destination $file
+              New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+              Copy-Item -LiteralPath $source -Destination $target
+              $hashes += [ordered]@{
+                path = $file
+                sha256 = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+              }
+            }
+            $patch = Join-Path $destination 'tracked-server-changes.patch'
+            git diff --binary --output="$patch" HEAD -- $files
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot snapshot the reviewed source diff.' }
+            [ordered]@{
+              head = $head
+              trackedChanges = $changed
+              reviewedStatus = $status
+              files = $hashes
+            } | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $destination 'manifest.json') -Encoding UTF8
+            "folder=$destination" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Host 'Reviewed source snapshot complete; checkout, database and service unchanged.'
+          } finally {
+            Pop-Location
+          }
+
+      - name: Preserve reviewed source for reconciliation into Git
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-source-audit-${{ github.run_attempt }}
+          path: ${{ steps.snapshot.outputs.folder }}
+          if-no-files-found: error
+          retention-days: 3
