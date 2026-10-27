@@ -426,7 +426,11 @@ const tableActionStackSx = {
 }
 
 const pomsBoxConnectionType = 'POMS Box'
-const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'DCON', 'Microsoft SQL', 'MySQL', pomsBoxConnectionType]
+const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'DCON', 'Serial ASCII', 'Microsoft SQL', 'MySQL', pomsBoxConnectionType]
+const modbusReadFunctionOptions = [
+  { value: 'READ_INPUT', label: 'Read Input' },
+  { value: 'READ_HOLDING', label: 'Read holding' },
+]
 
 const baudRateOptions = ['2400', '4800', '9600', '14400', '19200', '38400']
 const parityOptions = ['Even', 'Odd', 'None']
@@ -598,7 +602,7 @@ function getDefaultConnectionForm(type) {
   if (type === pomsBoxConnectionType) {
     return {}
   }
-  if (type === 'Modbus RTU' || type === 'DCON') {
+  if (['Modbus RTU', 'DCON', 'Serial ASCII'].includes(type)) {
     return {
       comPort: '',
       slaveId: '',
@@ -609,6 +613,7 @@ function getDefaultConnectionForm(type) {
       measureMin: '',
       measureMax: '',
       quantity: '',
+      ...(type === 'Modbus RTU' ? { readFunction: '' } : {}),
     }
   }
   if (type === 'Modbus TCP') {
@@ -616,6 +621,7 @@ function getDefaultConnectionForm(type) {
       slaveId: '',
       hostIp: '',
       port: '',
+      readFunction: '',
     }
   }
   if (type === 'Microsoft SQL') {
@@ -3694,19 +3700,27 @@ function OptionSelectField({ label, value, options, onChange, defaultOption }) {
 
 function ConnectionFormFields({ connectionType, value, onChange }) {
   const updateField = (field, nextValue) => onChange({ ...value, [field]: nextValue })
+  const readFunctionField = (
+    <Grid size={{ xs: 12, md: 3 }}>
+      <TextField select label="ฟังก์ชันการอ่านข้อมูล" size="small" value={value.readFunction ?? ''} onChange={(event) => updateField('readFunction', event.target.value)} fullWidth>
+        <MenuItem value=""><em>ไม่ระบุ</em></MenuItem>
+        {modbusReadFunctionOptions.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+      </TextField>
+    </Grid>
+  )
 
   if (!connectionType || connectionType === pomsBoxConnectionType) {
     return null
   }
 
-  if (connectionType === 'Modbus RTU' || connectionType === 'DCON') {
+  if (['Modbus RTU', 'DCON', 'Serial ASCII'].includes(connectionType)) {
     return (
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextInputField label="COMPORT" value={value.comPort ?? value.comport ?? ''} onChange={(nextValue) => updateField('comPort', nextValue)} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <PositiveNumberField label={connectionType === 'DCON' ? 'device address' : 'Slave ID'} value={value.slaveId} onChange={(nextValue) => updateField('slaveId', nextValue)} />
+          <PositiveNumberField label={connectionType === 'Modbus RTU' ? 'Slave ID' : 'device address'} value={value.slaveId} onChange={(nextValue) => updateField('slaveId', nextValue)} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <OptionSelectField label="Baud Rate" value={value.baudRate} options={baudRateOptions} defaultOption="9600" onChange={(nextValue) => updateField('baudRate', nextValue)} />
@@ -3729,6 +3743,7 @@ function ConnectionFormFields({ connectionType, value, onChange }) {
         <Grid size={{ xs: 12, md: 3 }}>
           <PositiveNumberField label="Quantity" value={value.quantity} onChange={(nextValue) => updateField('quantity', nextValue)} />
         </Grid>
+        {connectionType === 'Modbus RTU' ? readFunctionField : null}
       </Grid>
     )
   }
@@ -3745,6 +3760,7 @@ function ConnectionFormFields({ connectionType, value, onChange }) {
         <Grid size={{ xs: 12, md: 3 }}>
           <PositiveNumberField label="Port" value={value.port} onChange={(nextValue) => updateField('port', nextValue)} />
         </Grid>
+        {readFunctionField}
       </Grid>
     )
   }
@@ -4330,6 +4346,7 @@ const protocolCodeMap = {
   'Modbus RTU': 'MODBUS_RTU',
   'Modbus TCP': 'MODBUS_TCP',
   DCON: 'DCON_ASCII',
+  'Serial ASCII': 'SERIAL_ASCII',
   'Microsoft SQL': 'MSSQL',
   MySQL: 'MYSQL',
 }
@@ -4339,12 +4356,13 @@ const protocolLabelMap = {
   MODBUS_RTU: 'Modbus RTU',
   MODBUS_TCP: 'Modbus TCP',
   DCON_ASCII: 'DCON',
+  SERIAL_ASCII: 'Serial ASCII',
   MSSQL: 'Microsoft SQL',
   MICROSOFT_SQL: 'Microsoft SQL',
   MYSQL: 'MySQL',
 }
 
-const allowedProtocolCodes = new Set(['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'DCON_ASCII', 'MSSQL', 'MYSQL'])
+const allowedProtocolCodes = new Set(['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'DCON_ASCII', 'SERIAL_ASCII', 'MSSQL', 'MYSQL'])
 
 function normalizeConnectionType(type) {
   return protocolLabelMap[type] ?? type ?? ''
@@ -4375,7 +4393,7 @@ function mapConnectionForms(forms = []) {
         ...getDefaultConnectionForm(type),
         ...values,
         comPort: getComPortValue(values),
-        ...(['Modbus RTU', 'DCON'].includes(type) ? {
+        ...(['Modbus RTU', 'DCON', 'Serial ASCII'].includes(type) ? {
           parity: parityOptions.find((option) => option.toUpperCase() === String(values.parity).toUpperCase()) ?? values.parity ?? '',
         } : {}),
         measureMin: values.measureMin ?? valueRange.min ?? '',
@@ -4779,7 +4797,7 @@ function buildConnectionSettings(form) {
     return null
   }
 
-  if (type === 'Modbus RTU' || type === 'DCON') {
+  if (['Modbus RTU', 'DCON', 'Serial ASCII'].includes(type)) {
     return {
       comPort: toNumberOrStringOrNull(getComPortValue(values)),
       slaveId: toNumberOrNull(values.slaveId),
@@ -4789,6 +4807,7 @@ function buildConnectionSettings(form) {
       dataBits: toNumberOrNull(values.dataBits),
       quantity: toNumberOrNull(values.quantity),
       valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
+      ...(type === 'Modbus RTU' && values.readFunction ? { readFunction: values.readFunction } : {}),
     }
   }
 
@@ -4798,6 +4817,7 @@ function buildConnectionSettings(form) {
       slaveId: toNumberOrNull(values.slaveId),
       port: toNumberOrNull(values.port),
       valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
+      ...(values.readFunction ? { readFunction: values.readFunction } : {}),
     }
   }
 

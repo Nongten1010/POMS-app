@@ -36,7 +36,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
           return `${code}\nexport { renderGeneralFactorySection, renderInstrumentTable, getRequestContext, getRequestedParametersDisplay };`
         }
         if (id.endsWith('/src/pages/ConnectionRequestPage.jsx')) {
-          code += '\nexport { formatApiErrorMessage, canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows, formatDeviceConnectionTestError, buildDeviceConfigChannels, getTestResultParameterStatus };'
+          code += '\nexport { formatApiErrorMessage, canShowRequestConnectionTest, getConnectionTestApiUrl, mapTestResultRows, formatDeviceConnectionTestError, buildDeviceConfigChannels, getTestResultParameterStatus, getDefaultConnectionForm, mapConnectionForms, buildConnectionSettings, getConnectionProtocolCode, ConnectionFormFields, connectionTypeOptions };'
           return `${code}\nexport { validateParameterGroups, validateConnectionRequestPayload, buildMeasurementPointRequestBody, syncInstrumentRowsWithRequestedParameters, getParameterFormDefaultsFromPayload, MeasurementInstrumentSection, getFactoryColumns, getAssignedRequestPointCodes, isAddParameterRequest, buildRequestApprovalPayload, mapOperatorFactoryRow, mapRequestDetailRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed, approvePointCodeModeOptions };`
         }
         if (id.endsWith('/src/pages/MasterDataPage.jsx')) {
@@ -53,6 +53,38 @@ test('add-parameter form and payload preserve live groups without affecting othe
       mapOperatorFactoryRow, getInitialRequestFactory, OfficerRequestActions, isPendingDesignReview, isConnectionConfirmed,
       getAssignedRequestPointCodes,
     } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+
+    await t.test('Serial ASCII mirrors DCON and Modbus read function round trips without changing old settings', async () => {
+      const { getDefaultConnectionForm, mapConnectionForms, buildConnectionSettings, getConnectionProtocolCode, ConnectionFormFields, connectionTypeOptions } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
+      assert.equal(connectionTypeOptions[connectionTypeOptions.indexOf('DCON') + 1], 'Serial ASCII')
+      assert.deepEqual(getDefaultConnectionForm('Serial ASCII'), getDefaultConnectionForm('DCON'))
+      assert.equal(getConnectionProtocolCode('Serial ASCII'), 'SERIAL_ASCII')
+      const values = { comPort: 'COM1', slaveId: '1', baudRate: '9600', parity: 'None', stopBits: '1', dataBits: '8', quantity: '2', measureMin: '0', measureMax: '100' }
+      const serial = buildConnectionSettings({ type: 'Serial ASCII', values })
+      assert.deepEqual(serial, buildConnectionSettings({ type: 'DCON', values }))
+      const [restored] = mapConnectionForms([{ protocol: 'SERIAL_ASCII', settings: serial }])
+      assert.equal(restored.type, 'Serial ASCII')
+      assert.deepEqual(buildConnectionSettings(restored), serial)
+      for (const type of ['Modbus TCP', 'Modbus RTU']) {
+        assert.equal(Object.hasOwn(buildConnectionSettings({ type, values: {} }), 'readFunction'), false)
+        for (const readFunction of ['READ_INPUT', 'READ_HOLDING']) {
+          const settings = buildConnectionSettings({ type, values: { ...values, readFunction } })
+          assert.equal(settings.readFunction, readFunction)
+          const [form] = mapConnectionForms([{ protocol: getConnectionProtocolCode(type), settings }])
+          assert.equal(form.values.readFunction, readFunction)
+          assert.equal(buildConnectionSettings(form).readFunction, readFunction)
+        }
+        const html = renderToStaticMarkup(React.createElement(ConnectionFormFields, { connectionType: type, value: getDefaultConnectionForm(type), onChange: () => {} }))
+        assert.ok(html.indexOf('ฟังก์ชันการอ่านข้อมูล') > html.indexOf(type === 'Modbus RTU' ? 'Quantity' : 'Port'))
+        if (type === 'Modbus TCP') assert.ok(!html.includes('Quantity'))
+      }
+      for (const type of ['DCON', 'Serial ASCII']) {
+        const html = renderToStaticMarkup(React.createElement(ConnectionFormFields, { connectionType: type, value: getDefaultConnectionForm(type), onChange: () => {} }))
+        assert.ok(html.includes('device address'))
+        assert.ok(!html.includes('ฟังก์ชันการอ่านข้อมูล'))
+        assert.equal(Object.hasOwn(buildConnectionSettings({ type, values: { ...values, readFunction: 'READ_INPUT' } }), 'readFunction'), false)
+      }
+    })
 
     await t.test('test table displays Ok as Normal while preserving other statuses', async () => {
       const { getTestResultParameterStatus } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
