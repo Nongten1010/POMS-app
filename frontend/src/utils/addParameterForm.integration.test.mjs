@@ -279,6 +279,26 @@ test('add-parameter form and payload preserve live groups without affecting othe
       ])
     })
 
+    await t.test('factory rows retain estate names without adding a grid column or requiring an estate code', () => {
+      for (const isOperator of [true, false]) {
+        const column = getFactoryColumns(isOperator).find((item) => item.field === 'industrialEstateName')
+        assert.equal(column, undefined)
+        for (const name of ['นิคมอุตสาหกรรมมาบตาพุด', null, undefined, '']) {
+          const row = mapOperatorFactoryRow({ factoryId: 'TEST', isEligible: true, industrialEstateName: name })
+          assert.equal(row.industrialEstateName, name)
+          assert.equal(row.industrialEstateCode, null)
+        }
+        const eligibilityRequest = { id: 12, status: 'PENDING_REVIEW' }
+        const row = mapOperatorFactoryRow({ factoryId: 'TEST', isEligible: false, industrialEstateName: null, eligibilityRequest, canRequestEligibility: false })
+        assert.equal(row.industrialEstateName, null)
+        assert.equal(row.isEligible, false)
+        const withoutEstate = mapOperatorFactoryRow({ factoryId: 'TEST', isEligible: false, eligibilityRequest, canRequestEligibility: false })
+        for (const field of ['eligibilityStatus', 'eligibilityRequest', 'canRequestEligibility', 'requestStatus', 'status']) {
+          assert.deepEqual(row[field], withoutEstate[field])
+        }
+      }
+    })
+
     await t.test('PDF instrument headers use IEE/EIA/HEIA and fit both CEMS and WPMS columns', async () => {
       const { renderInstrumentTable } = await server.ssrLoadModule('/src/utils/connectionRequestPdf.js')
       const font = fontkit.create(await readFile(new URL('../assets/fonts/THSarabunNew-Bold.ttf', import.meta.url)))
