@@ -281,8 +281,8 @@ describe('saved factory status across master data and connection menus', () => {
       doc.paths['/cems-wpms-requests/eligible-factories'].get.responses['200'].content[
         'application/json'
       ].schema,
-    ).toEqual({ $ref: '#/components/schemas/OperatorFactoryTableResponse' });
-    expect(doc.components.schemas.OperatorFactoryTableRow.properties.status.enum).toEqual([
+    ).toEqual({ $ref: '#/components/schemas/ConnectionRequestFactoryTableResponse' });
+    expect(doc.components.schemas.ConnectionRequestFactoryTableRow.properties.status.enum).toEqual([
       'แสดง',
       'ซ่อน',
       'ยกเลิกการเชื่อมต่อ',

@@ -514,6 +514,20 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/table-rows" \
 { "eia": "อื่นๆ", "eiaOther": "อยู่ระหว่างตรวจสอบ", "projectName": "โครงการปัจจุบัน" }
 ```
 
+ทั้ง `GET /api/v1/cems-wpms-requests/operator-factories` และ `GET /api/v1/cems-wpms-requests/eligible-factories` คืน `data[].industrialEstateName` ทุกแถว โดยอ่านชื่อนิคมจากข้อมูลโรงงานเข้าข่าย และคืน `null` เมื่อไม่มีข้อมูล. รายการผู้ประกอบการคืน `null` สำหรับโรงงานที่ไม่เข้าข่ายตามกติกาข้อมูลขั้นต่ำเดิม.
+
+แนวทางแสดงผลและรายการตรวจรับอยู่ที่ [ส่งต่อ Frontend: ชื่อนิคมในรายการโรงงาน](../../../guides/frontend-handoffs/connection-factory-estate-name/README.md)
+
+| Response field | Type | ความหมาย |
+| --- | --- | --- |
+| `data[].industrialEstateName` | string \| null | ชื่อนิคมอุตสาหกรรมที่บันทึกใน `eligible_factories.industrial_estate_name`; `null` เมื่อไม่มีข้อมูลหรือโรงงานไม่เข้าข่าย |
+
+ตัวอย่างส่วนของแถวที่มีชื่อนิคมสำหรับทั้งสอง endpoint:
+
+```json
+{ "industrialEstateName": "นิคมอุตสาหกรรมมาบตาพุด" }
+```
+
 ### Operator factory list source
 
 `GET /api/v1/cems-wpms-requests/operator-factories` คืนทุกโรงงานที่ user เข้าถึงได้จากความสัมพันธ์ใน `factories` และสิทธิ์ `factories:view` พร้อมสถานะปัจจุบัน `แสดง`, `ซ่อน` หรือ `ยกเลิกการเชื่อมต่อ`. สถานะใช้เป็นป้ายกำกับในหน้าขอเชื่อมต่อ ไม่กรองแถวหรือรายละเอียดออก. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานที่ยังไม่มี active row ใน `eligible_factories` ยังคงแสดงตามสิทธิ์เดิม. Endpoint นี้ใช้เป็น owner/request list ไม่ใช่ connected-only dashboard list.
@@ -545,6 +559,7 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/table-rows" \
 | `data[].eiaOther` | string \| null (optional) | รายละเอียด EIA ที่บันทึกไว้สำหรับโรงงานเข้าข่าย ทั้งโหมดข้อมูลเดิมและ canonical; ไม่มีรายละเอียดเป็น `null` |
 | `data[].address`                                      | string \| null                  | ที่อยู่จาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                        |
 | `data[].province`                                     | string \| null                  | จังหวัดจาก eligible data; เป็น `null` เมื่อไม่เข้าข่าย                                                      |
+| `data[].industrialEstateName`                         | string \| null                  | ชื่อนิคมจาก active `eligible_factories`; เป็น `null` เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย |
 | `data[].latitude`, `data[].longitude`                 | string \| null                  | พิกัดจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                          |
 | `data[].officerNotificationEmails`                    | string[]                        | รายชื่ออีเมลเจ้าหน้าที่สำหรับโรงงานเข้าข่าย; เป็น `[]` เมื่อไม่เข้าข่าย                                     |
 | `data[].isEligible`                                   | boolean                         | true เมื่อจับคู่ active `eligible_factories` ได้; false เมื่อ owner เข้าถึงโรงงานได้แต่โรงงานยังไม่เข้าข่าย |
@@ -578,6 +593,7 @@ Minimal response:
       "businessActivity": "ผลิตผลิตภัณฑ์ตัวอย่าง",
       "address": "88 หมู่ 2 ตำบลตัวอย่าง อำเภอตัวอย่าง จังหวัดนนทบุรี 11120",
       "province": "นนทบุรี",
+      "industrialEstateName": "นิคมอุตสาหกรรมตัวอย่าง",
       "latitude": "13.8621",
       "longitude": "100.5144",
       "eia": "มี EIA",
@@ -603,6 +619,7 @@ Minimal response:
       "businessActivity": null,
       "address": null,
       "province": null,
+      "industrialEstateName": null,
       "latitude": null,
       "longitude": null,
       "eia": null,

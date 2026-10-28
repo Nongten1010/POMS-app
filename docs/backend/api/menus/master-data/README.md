@@ -8,7 +8,7 @@
 
 โรงงานในระบบ POMS หมายถึงโรงงานที่มี active row ใน `cems_wpms_connected_measurement_points` ไม่ใช่รายชื่อจากตาราง `factories` ส่วนข้อมูลโรงงานที่เข้าข่ายเก็บแยกใน `eligible_factories`
 
-`GET /api/v1/poms-factories` ใช้ response shape เดียวกับ `GET /api/v1/cems-wpms-requests/operator-factories` เพื่อให้ frontend ใช้ชื่อ field ชุดเดียวกัน แต่คืนเฉพาะโรงงาน current/live ใน POMS: connected rows เป็น authoritative source และใช้ active `eligible_factories` เฉพาะ metadata ที่ผูกกับโรงงานนั้น โดยไม่ hydrate payload จากคำขอเชื่อมต่อหรือ `factories`
+`GET /api/v1/poms-factories` ใช้ชื่อ field พื้นฐานร่วมกับ `GET /api/v1/cems-wpms-requests/operator-factories` แต่ยังไม่รวม `industrialEstateName` ที่เพิ่มเฉพาะ[รายการโรงงานในหน้าขอเชื่อมต่อ](../connection-requests/README.md#operator-factory-list-source). รายการนี้คืนเฉพาะโรงงาน current/live ใน POMS: connected rows เป็น authoritative source และใช้ active `eligible_factories` เฉพาะ metadata ที่ผูกกับโรงงานนั้น โดยไม่ hydrate payload จากคำขอเชื่อมต่อหรือ `factories`
 
 คู่มือส่งต่อ frontend สำหรับ section ข้อมูลทั่วไปในฟอร์มแก้ไขจุดตรวจวัด: [จุดที่ต้องแก้ ตัวอย่าง payload และรายการตรวจรับ](../../../guides/frontend-handoffs/measurement-point-general-info/README.md)
 
