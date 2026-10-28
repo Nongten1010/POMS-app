@@ -15,5 +15,8 @@ export async function fetchSubmissionText(url, options, fetchImpl = fetch) {
 
 export function getSubmissionErrorMessage(error) {
   if (error instanceof TypeError) return submissionProcessingError
+  if (error instanceof Error && error.message.trim() === 'Script or active web content is not allowed') {
+    return 'ไม่สามารถอัปโหลดไฟล์แนบได้ เนื่องจากประเภทหรือเนื้อหาของไฟล์ไม่เป็นไปตามข้อกำหนดของระบบ กรุณาตรวจสอบไฟล์แนบแล้วลองใหม่'
+  }
   return error instanceof Error ? error.message : submissionProcessingError
 }

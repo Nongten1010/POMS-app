@@ -7,6 +7,16 @@ test('processing TypeErrors and explicit server messages remain distinct', () =>
   assert.equal(getSubmissionErrorMessage(new Error('Invalid parameter')), 'Invalid parameter')
 })
 
+test('blocked active web content displays Thai advice without changing other upload errors', () => {
+  const message = 'Script or active web content is not allowed'
+  for (const value of [message, ` ${message} `]) {
+    const error = new Error(value)
+    assert.equal(getSubmissionErrorMessage(error), 'ไม่สามารถอัปโหลดไฟล์แนบได้ เนื่องจากประเภทหรือเนื้อหาของไฟล์ไม่เป็นไปตามข้อกำหนดของระบบ กรุณาตรวจสอบไฟล์แนบแล้วลองใหม่')
+    assert.equal(error.message, value)
+  }
+  assert.equal(getSubmissionErrorMessage(new Error('Uploaded file is too large')), 'Uploaded file is too large')
+})
+
 test('transport and interrupted response failures display connection advice without retrying', async () => {
   for (const readFailure of [false, true]) {
     let calls = 0
