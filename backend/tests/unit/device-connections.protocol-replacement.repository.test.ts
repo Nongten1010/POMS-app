@@ -89,24 +89,25 @@ describe('device configuration protocol replacement', () => {
 
   afterEach(() => fixture?.close());
 
-  it('replaces the named device across protocols in request and current scopes only', async () => {
+  it('replaces the submitted station across devices and protocols in request and current scopes only', async () => {
     await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings([input], 42, 10195);
 
     const retained = await db('device_connection_configs').whereNull('deleted_at').orderBy('id');
-    expect(retained.filter((row) => Number(row.id) <= 7).map((row) => row.id)).toEqual([
-      3, 4, 5, 6, 7,
-    ]);
+    expect(retained.filter((row) => Number(row.id) <= 7).map((row) => row.id)).toEqual([5, 6, 7]);
     expect(retained.filter((row) => Number(row.id) > 7)).toEqual([
       expect.objectContaining({ request_id: 10195, protocol: 'MSSQL', device_code: 'S2014/01' }),
       expect.objectContaining({ request_id: null, protocol: 'MSSQL', device_code: 'S2014/01' }),
     ]);
-    const retiredChannels = await db('device_measurement_channels').whereIn('config_id', [1, 2]);
-    expect(retiredChannels).toHaveLength(2);
+    const retiredChannels = await db('device_measurement_channels').whereIn(
+      'config_id',
+      [1, 2, 3, 4],
+    );
+    expect(retiredChannels).toHaveLength(4);
     expect(retiredChannels.every((row) => row.deleted_at !== null && row.updated_by === 42)).toBe(
       true,
     );
     expect(
-      (await db('device_measurement_channels').whereIn('config_id', [3, 4, 5, 6, 7])).every(
+      (await db('device_measurement_channels').whereIn('config_id', [5, 6, 7])).every(
         (row) => row.deleted_at === null && row.updated_by === 1,
       ),
     ).toBe(true);
@@ -144,11 +145,12 @@ describe('device configuration protocol replacement', () => {
     }
   });
 
-  it('preserves distinct protocols for legacy configs without a device code', async () => {
+  it('preserves submitted distinct protocols for legacy configs without a device code', async () => {
     fixture.execute('UPDATE device_connection_configs SET device_code = NULL WHERE id IN (1, 2)');
     const unnamed = { ...input, deviceCode: null };
-    await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings([unnamed], 42, 10195);
-    await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings([unnamed], 42, 10195);
+    const inputs = [{ ...unnamed, protocol: 'MYSQL' as const }, unnamed];
+    await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(inputs, 42, 10195);
+    await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(inputs, 42, 10195);
 
     const current = await db('device_connection_configs')
       .where('station_id', 'S2014')
@@ -157,8 +159,8 @@ describe('device configuration protocol replacement', () => {
       .orderBy('id');
     expect(current.map((row) => [row.request_id, row.protocol])).toEqual([
       [10195, 'MYSQL'],
-      [null, 'MYSQL'],
       [10195, 'MSSQL'],
+      [null, 'MYSQL'],
       [null, 'MSSQL'],
     ]);
   });

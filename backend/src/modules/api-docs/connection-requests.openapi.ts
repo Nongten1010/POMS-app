@@ -86,6 +86,8 @@ const deviceConfigFormNormalizationDescription =
 const serialAndReadFunctionDescription =
   'SERIAL_ASCII แยกจาก DCON_ASCII และใช้ serial settings เดิม; device address ใช้ settings.slaveId. MODBUS_RTU / MODBUS_TCP รองรับ settings.readFunction = READ_INPUT หรือ READ_HOLDING แบบ optional; ไม่รับ null/สตริงว่าง ไม่มี default และละ property เมื่อไม่เลือก. GET คืน values.readFunction เมื่อบันทึกไว้และไม่เพิ่มให้ protocol อื่น. ต้องรัน migration 0147_allow_serial_ascii_device_protocol ก่อนใช้งาน';
 const deviceConfigWriteDescription = `${deviceConfigIdentityDescription}. ${deviceChannelUniquenessDescription}. ${retiredTestModeDescription}. ${serialAndReadFunctionDescription}. settings.dbPass = ******** รักษารหัสจริงได้เฉพาะ active config ที่ stationId + protocol + deviceCode ตรงกัน; เมื่อเปลี่ยน protocol แล้วไม่มีรหัสที่ตรงกัน ต้องกรอกรหัสจริงใหม่ มิฉะนั้นตอบ 400 BAD_REQUEST`;
+const requestDeviceConfigReplacementDescription =
+  'แทนที่อุปกรณ์ทั้งหมดของแต่ละ stationId ที่ส่งมา ทั้ง config เดี่ยว, configs[] และ config.device[]; ต้องส่งอุปกรณ์/channels/schedules ที่ต้องการเก็บให้ครบทุกครั้ง. อุปกรณ์ที่ไม่ส่งมาจะถูก soft delete พร้อม channels ทั้ง request snapshot ของคำขอนี้และ current settings ใน transaction เดียวกัน; ไม่แก้ snapshot ของคำขออื่นหรือ station ที่ไม่ส่งมา. ส่ง P0002/01 ตัวเดียวหลังเคยมี P0002/01 และ P0002/02 จะเหลือเฉพาะ P0002/01; Worker ไม่คืน current config ที่ลบไปแล้ว. configs: [] หรือ config.device: [] ตอบ 400 VALIDATION_ERROR และไม่ลบข้อมูล';
 const deviceConfigBadRequestResponse: OpenApiObject = {
   description:
     '400 VALIDATION_ERROR เมื่อพารามิเตอร์ซ้ำภายในอุปกรณ์, readFunction ของ Modbus ไม่ใช่ READ_INPUT/READ_HOLDING (รวม null/สตริงว่าง) หรือโครงสร้าง payload ไม่ถูกต้อง; 400 BAD_REQUEST เมื่อ identity อุปกรณ์ซ้ำใน batch, station/parameter ไม่อยู่ในขอบเขตคำขอ หรือไม่มีรหัสฐานข้อมูลจริงให้รักษา',
@@ -3220,6 +3222,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       description:
         requestEditAccessDescription +
         'รับ config เดี่ยว, batch 1-50 หรือ structured form wrapper; คำขอต้องอยู่ WAITING_CONNECTION. ' +
+        requestDeviceConfigReplacementDescription +
+        '. ' +
         deviceConfigWriteDescription,
       parameters: [idPathParameter],
       requestBody: jsonRequestBody(

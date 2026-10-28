@@ -203,7 +203,7 @@ export const deviceConnectionsRepository = {
           'Approved station parameters changed before device configuration was saved',
           { invalidParameters, allowedParameters: parameters },
         );
-      await softDeleteActiveConfigsByStation(trx, stationId, actorUserId);
+      await softDeleteConfigsByStation(trx, stationId, actorUserId, null);
       const saved = await insertConfigs(trx, inputs, actorUserId, null);
       await syncAlertParameterActivations(trx, [stationId]);
       return saved;
@@ -231,9 +231,10 @@ export const deviceConnectionsRepository = {
     return db.transaction(async (trx) => {
       const stationIds = [...new Set(inputs.map((input) => input.stationId))];
       await lockAlertActivationPoints(trx, stationIds);
-      for (const input of inputs) {
-        await softDeleteRequestConfigByDeviceKey(trx, input, actorUserId, requestId);
-        await softDeleteActiveConfigByDeviceKey(trx, input, actorUserId);
+      // Each submitted station is a complete form snapshot, including omitted devices.
+      for (const stationId of stationIds) {
+        await softDeleteConfigsByStation(trx, stationId, actorUserId, requestId);
+        await softDeleteConfigsByStation(trx, stationId, actorUserId, null);
       }
 
       const requestSnapshots = await insertConfigs(trx, inputs, actorUserId, requestId);
@@ -603,13 +604,14 @@ async function softDeleteActiveConfigByDeviceKey(
     .update(auditUpdate);
 }
 
-async function softDeleteActiveConfigsByStation(
+async function softDeleteConfigsByStation(
   trx: Knex.Transaction,
   stationId: string,
   actorUserId: number,
+  requestId: number | null,
 ): Promise<void> {
   const rows = await trx<DeviceConnectionConfigRow>('device_connection_configs')
-    .whereNull('request_id')
+    .where('request_id', requestId)
     .where('station_id', stationId)
     .whereNull('deleted_at')
     .select('id');
