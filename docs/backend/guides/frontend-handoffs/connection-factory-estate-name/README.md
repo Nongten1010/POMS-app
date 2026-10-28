@@ -45,7 +45,15 @@ Contract เต็ม รวม query, response, สิทธิ์และก�
 
 ตรวจ typecheck, build, regression ของ service/routes และ OpenAPI จาก clean worktree ก่อนส่ง release โดยใช้ข้อมูลทดสอบสมมติ ไม่เก็บ token หรือ production credential ในเอกสารนี้
 
-สถานะ deploy และหลักฐาน production จะบันทึกหลัง workflow และ runtime contract ผ่านการตรวจแล้ว
+## ผล deploy และตรวจ production
+
+- [PR #29](https://github.com/Nongten1010/POMS-app/pull/29) merge เป็น commit `0bfbc3c5812afe543f89b40f1aa26e0f38be8f6f`
+- [Deploy POMS run 40646377235](https://github.com/Nongten1010/POMS-app/actions/runs/40646377235): `success` รวมขั้น build, test, ติดตั้งไฟล์และ health check
+- ผลทดสอบ backend บนเซิร์ฟเวอร์: ผ่าน 370 suites / 4,956 tests; ข้าม 2 suites / 18 tests
+- ตรวจ production เมื่อ `2026-10-28T13:58:14+07:00` ตามเวลาไทย: GET operations ของทั้งสอง endpoint และ response schemas ทั้ง 4 ชุดตรงกับโค้ด release
+- `ConnectionRequestFactoryTableRow` ประกาศ `industrialEstateName` เป็น required nullable string และทั้งสอง endpoint อ้างถึง response ชุดนี้
+- Swagger UI ตอบ `200`; เรียกสอง endpoint โดยไม่มี token ตอบ `401 UNAUTHORIZED` ตามเดิม
+- ยังไม่ได้ตรวจข้อมูลโรงงานจริงใน response `200` ด้วยบัญชีผู้ใช้ ส่วนค่าชื่อนิคม/null/โรงงานไม่เข้าข่ายยืนยันด้วย regression tests ในเครื่อง
 
 ## แหล่งอ้างอิง
 
