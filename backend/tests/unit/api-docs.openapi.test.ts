@@ -1076,7 +1076,9 @@ describe('POMS OpenAPI contract', () => {
       ).schema,
       'operator response schema',
     );
-    expect(operatorResponseSchema.$ref).toBe('#/components/schemas/OperatorFactoryTableResponse');
+    expect(operatorResponseSchema.$ref).toBe(
+      '#/components/schemas/ConnectionRequestFactoryTableResponse',
+    );
 
     const operatorRow = asObject(schemas.OperatorFactoryTableRow, 'OperatorFactoryTableRow');
     expect(operatorRow.required).toEqual(
@@ -1088,6 +1090,50 @@ describe('POMS OpenAPI contract', () => {
     );
     expect(operatorRowProperties).toHaveProperty('eligibilityRequest');
     expect(operatorRowProperties).toHaveProperty('canRequestEligibility');
+  });
+
+  it('documents industrial estate names on both connection factory lists', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const paths = asObject(document.paths, 'paths');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const row = asObject(
+      schemas.ConnectionRequestFactoryTableRow,
+      'ConnectionRequestFactoryTableRow',
+    );
+    const properties = asObject(row.properties, 'ConnectionRequestFactoryTableRow.properties');
+
+    expect(row.required).toContain('industrialEstateName');
+    expect(properties.industrialEstateName).toMatchObject({
+      type: 'string',
+      nullable: true,
+      maxLength: 255,
+      example: 'นิคมอุตสาหกรรมมาบตาพุด',
+    });
+    const response = asObject(
+      schemas.ConnectionRequestFactoryTableResponse,
+      'ConnectionRequestFactoryTableResponse',
+    );
+    const responseProperties = asObject(response.properties, 'response properties');
+    expect(asObject(responseProperties.data, 'data').items).toEqual({
+      $ref: '#/components/schemas/ConnectionRequestFactoryTableRow',
+    });
+
+    for (const pathKey of [
+      '/cems-wpms-requests/operator-factories',
+      '/cems-wpms-requests/eligible-factories',
+    ]) {
+      const operation = asObject(asObject(paths[pathKey], pathKey).get, `GET ${pathKey}`);
+      const responses = asObject(operation.responses, 'responses');
+      const content = asObject(asObject(responses['200'], '200').content, 'content');
+      expect(asObject(content['application/json'], 'application/json').schema).toEqual({
+        $ref: '#/components/schemas/ConnectionRequestFactoryTableResponse',
+      });
+    }
+
+    const pomsRow = asObject(schemas.OperatorFactoryTableRow, 'OperatorFactoryTableRow');
+    expect(asObject(pomsRow.properties, 'POMS row properties')).not.toHaveProperty(
+      'industrialEstateName',
+    );
   });
 
   it('documents the Fac60k source-factory lookup path, permission, and response schema', () => {

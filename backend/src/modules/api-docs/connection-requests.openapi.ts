@@ -2879,6 +2879,35 @@ const componentSchemas: Record<string, OpenApiObject> = {
     },
   },
 };
+// Keep the POMS list's shared table contract separate from request-form additions.
+componentSchemas.ConnectionRequestFactoryTableRow = {
+  ...componentSchemas.OperatorFactoryTableRow,
+  required: [
+    ...(componentSchemas.OperatorFactoryTableRow.required as string[]),
+    'industrialEstateName',
+  ],
+  properties: {
+    ...(componentSchemas.OperatorFactoryTableRow.properties as OpenApiObject),
+    industrialEstateName: {
+      ...nullableString(
+        255,
+        'ชื่อนิคมจากข้อมูลโรงงานเข้าข่าย; null เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย',
+      ),
+      example: 'นิคมอุตสาหกรรมมาบตาพุด',
+    },
+  },
+};
+componentSchemas.ConnectionRequestFactoryTableResponse = {
+  ...componentSchemas.OperatorFactoryTableResponse,
+  properties: {
+    ...(componentSchemas.OperatorFactoryTableResponse.properties as OpenApiObject),
+    data: {
+      type: 'array',
+      items: schemaRef('ConnectionRequestFactoryTableRow'),
+    },
+  },
+};
+
 const connectionRequestPaths: Record<string, OpenApiObject> = {
   '/cems-wpms-requests': {
     get: securedOperation({
@@ -2953,9 +2982,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านโรงงานของผู้ประกอบการ',
       operationId: 'listOperatorFactories',
       description:
-        'Permission: factories:view. คืนทุกโรงงานที่ผู้ใช้เข้าถึงได้ พร้อม status ปัจจุบันจาก POMS ด้วย eligible factory id: แสดง, ซ่อน หรือ ยกเลิกการเชื่อมต่อ. สถานะใช้เป็นป้ายกำกับ ไม่กรองแถวหรือรายละเอียดออก; meta.total รวมทุกแถวที่คืน. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานไม่เข้าข่ายยังแสดงตามสิทธิ์เดิม. industryType ใช้ businessActivity, ลำดับหลัก/ย่อยที่ไม่มีข้อมูลเป็น null และคงค่า EIA/ชื่อโครงการที่บันทึกไว้. ทุก row คืน eligibilityRequest และ canRequestEligibility เพื่อควบคุมปุ่มแจ้งความประสงค์โดยไม่ต้องเดาสถานะจาก client',
+        'Permission: factories:view. คืนทุกโรงงานที่ผู้ใช้เข้าถึงได้ พร้อม status ปัจจุบันจาก POMS ด้วย eligible factory id: แสดง, ซ่อน หรือ ยกเลิกการเชื่อมต่อ. สถานะใช้เป็นป้ายกำกับ ไม่กรองแถวหรือรายละเอียดออก; meta.total รวมทุกแถวที่คืน. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานไม่เข้าข่ายยังแสดงตามสิทธิ์เดิม. industryType ใช้ businessActivity, ลำดับหลัก/ย่อยที่ไม่มีข้อมูลเป็น null และคงค่า EIA/ชื่อโครงการที่บันทึกไว้. industrialEstateName คืนชื่อนิคมจากข้อมูลโรงงานเข้าข่าย หรือ null เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย. ทุก row คืน eligibilityRequest และ canRequestEligibility เพื่อควบคุมปุ่มแจ้งความประสงค์โดยไม่ต้องเดาสถานะจาก client',
       parameters: operatorFactoryParameters,
-      successSchema: schemaRef('OperatorFactoryTableResponse'),
+      successSchema: schemaRef('ConnectionRequestFactoryTableResponse'),
     }),
   },
   '/cems-wpms-requests/eligible-factories': {
@@ -2964,9 +2993,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านโรงงานเข้าข่ายสำหรับเจ้าหน้าที่',
       operationId: 'listOfficerEligibleFactories',
       description:
-        'Permission: cems_wpms_requests:view. status อ่านสถานะโรงงานเดียวกับข้อมูลพื้นฐาน: ยกเลิกการเชื่อมต่อ มีลำดับก่อน ซ่อน และ แสดง; หากยังไม่มีสถานะที่บันทึกไว้ใช้ แสดง. ไม่กรองแถวที่ซ่อนหรือยกเลิกการเชื่อมต่อออกจากรายการ. eia, eiaOther และ projectName คงค่าที่บันทึกในข้อมูลโรงงานเข้าข่าย โดยใช้ hasEia เป็นค่า fallback เฉพาะเมื่อไม่มีค่า eia',
+        'Permission: cems_wpms_requests:view. status อ่านสถานะโรงงานเดียวกับข้อมูลพื้นฐาน: ยกเลิกการเชื่อมต่อ มีลำดับก่อน ซ่อน และ แสดง; หากยังไม่มีสถานะที่บันทึกไว้ใช้ แสดง. ไม่กรองแถวที่ซ่อนหรือยกเลิกการเชื่อมต่อออกจากรายการ. eia, eiaOther และ projectName คงค่าที่บันทึกในข้อมูลโรงงานเข้าข่าย โดยใช้ hasEia เป็นค่า fallback เฉพาะเมื่อไม่มีค่า eia. industrialEstateName คืนชื่อนิคมจากข้อมูลโรงงานเข้าข่าย หรือ null เมื่อไม่มีข้อมูล',
       parameters: operatorFactoryParameters,
-      successSchema: schemaRef('OperatorFactoryTableResponse'),
+      successSchema: schemaRef('ConnectionRequestFactoryTableResponse'),
     }),
   },
   '/cems-wpms-requests/operator-factory-dashboard': {

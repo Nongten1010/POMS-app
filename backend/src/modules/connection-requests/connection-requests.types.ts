@@ -562,6 +562,10 @@ export interface OperatorFactoryTableRowDTO {
   status: 'แสดง' | 'ซ่อน' | 'ยกเลิกการเชื่อมต่อ';
 }
 
+export interface ConnectionRequestFactoryTableRowDTO extends OperatorFactoryTableRowDTO {
+  industrialEstateName: string | null;
+}
+
 export interface OperatorFactoryDashboardRowDTO {
   id: number | null;
   eligibleFactoryId: number | null;

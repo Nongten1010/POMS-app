@@ -60,6 +60,7 @@ import {
   type ConnectionSystemType,
   type ConfirmConnectionInput,
   type ConnectionRequestDTO,
+  type ConnectionRequestFactoryTableRowDTO,
   type ConnectionRequestFormDTO,
   type ConnectionRequestDetailDTO,
   type ConnectionRequestStatus,
@@ -91,7 +92,6 @@ import {
   type OperatorFactoryOverviewResultDTO,
   type OperatorFactoryOverviewRowDTO,
   type OperatorFactoryParameterStandardDTO,
-  type OperatorFactoryTableRowDTO,
   type PaginatedConnectionRequestsDTO,
   type PaginatedTableRowsDTO,
   type PublicFactoryMapPointDTO,
@@ -227,7 +227,7 @@ export const connectionRequestsService = {
     factoryViewScope: AccessScope,
     query: ListOperatorFactoriesQuery = {},
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
+  ): Promise<PaginatedTableRowsDTO<ConnectionRequestFactoryTableRowDTO>> {
     void query;
     const factories = await connectionRequestsRepository.listFactoriesForAccess({
       actorUserId,
@@ -272,7 +272,7 @@ export const connectionRequestsService = {
       }
     });
 
-    const data = factories.map<OperatorFactoryTableRowDTO>((factory) => {
+    const data = factories.map<ConnectionRequestFactoryTableRowDTO>((factory) => {
       if (factory.isEligible !== true) {
         return toNonEligibleOperatorFactoryTableRow(
           factory,
@@ -302,6 +302,7 @@ export const connectionRequestsService = {
         latitude: factory.latitude,
         longitude: factory.longitude,
         province: factory.province,
+        industrialEstateName: factory.industrialEstateName ?? null,
         officerNotificationEmails: officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
         isEligible: factory.isEligible ?? false,
         eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
@@ -321,7 +322,7 @@ export const connectionRequestsService = {
     viewScope: AccessScope,
     query: ListOperatorFactoriesQuery = {},
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
+  ): Promise<PaginatedTableRowsDTO<ConnectionRequestFactoryTableRowDTO>> {
     const result = await eligibleFactoriesService.list(
       {},
       { actorUserId, scope: viewScope, regionalAccess },
@@ -361,7 +362,7 @@ export const connectionRequestsService = {
         })),
       );
 
-    const data = eligibleFactories.map<OperatorFactoryTableRowDTO>((factory) => ({
+    const data = eligibleFactories.map<ConnectionRequestFactoryTableRowDTO>((factory) => ({
       ...toOfficerEligibleFactoryTableRow(factory),
       status: measurementPointsByFactory.get(factory.factoryId)?.[0]?.factoryStatus ?? 'แสดง',
       officerNotificationEmails: officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
@@ -3239,7 +3240,7 @@ function toFactoryDashboardBaseRow(
 function toNonEligibleOperatorFactoryTableRow(
   factory: FactorySummaryDTO,
   eligibilityRequest?: OperatorFactoryEligibilityRequestDTO,
-): OperatorFactoryTableRowDTO {
+): ConnectionRequestFactoryTableRowDTO {
   return {
     id: factory.id,
     factoryId: factory.factoryId,
@@ -3256,6 +3257,7 @@ function toNonEligibleOperatorFactoryTableRow(
     latitude: null,
     longitude: null,
     province: null,
+    industrialEstateName: null,
     officerNotificationEmails: [],
     isEligible: false,
     eligibilityStatus: 'ไม่เข้าข่าย',
@@ -3270,7 +3272,7 @@ function toNonEligibleOperatorFactoryTableRow(
 function toOfficerEligibleFactoryTableRow(
   factory: SelectedEligibleFactoryDTO,
 ): Omit<
-  OperatorFactoryTableRowDTO,
+  ConnectionRequestFactoryTableRowDTO,
   'officerNotificationEmails' | 'monitoringPointCount' | 'status'
 > {
   return {
@@ -3291,6 +3293,7 @@ function toOfficerEligibleFactoryTableRow(
     latitude: toStringOrNull(factory.latitude),
     longitude: toStringOrNull(factory.longitude),
     province: factory.provinceName,
+    industrialEstateName: factory.industrialEstateName ?? null,
     isEligible: true,
     eligibilityStatus: 'เข้าข่าย',
     requestStatusCode: null,

@@ -651,6 +651,7 @@ describe('connectionRequestsService', () => {
       latitude: '13.7563',
       longitude: '100.5018',
       province: 'สระบุรี',
+      industrialEstateName: null,
       officerNotificationEmails: ['saraban_saraburi@industry.go.th'],
       isEligible: true,
       eligibilityStatus: 'เข้าข่าย',
@@ -693,6 +694,7 @@ describe('connectionRequestsService', () => {
       'contact@ieat.mail.go.th',
       'investment.1@ieat.mail.go.th',
     ]);
+    expect(result.data[0]?.industrialEstateName).toBe('นิคมอุตสาหกรรมมาบตาพุด');
   });
 
   it('returns selected eligible factories for officer connection request forms in the operator table shape', async () => {
@@ -833,6 +835,7 @@ describe('connectionRequestsService', () => {
           latitude: '13.5001',
           longitude: '100.7002',
           province: 'ชลบุรี',
+          industrialEstateName: 'นิคมอุตสาหกรรมอมตะซิตี้ ชลบุรี',
           officerNotificationEmails: ['contact@ieat.mail.go.th'],
           isEligible: true,
           eligibilityStatus: 'เข้าข่าย',
@@ -900,6 +903,7 @@ describe('connectionRequestsService', () => {
       'factory-not-favorite-east',
     ]);
     expect(result.meta.total).toBe(2);
+    expect(result.data.map((factory) => factory.industrialEstateName)).toEqual([null, null]);
   });
 
   it('keeps all accessible operator factories even when they are inactive or not eligible', async () => {
@@ -918,6 +922,7 @@ describe('connectionRequestsService', () => {
         factoryName: 'โรงงานไม่เข้าข่าย',
         isEligible: false,
         eligibilityStatus: 'ไม่เข้าข่าย',
+        industrialEstateName: 'นิคมจากข้อมูลโรงงานที่ยังไม่เข้าข่าย',
       }),
     ]);
     mockedRepository.listRequestsForFactories.mockResolvedValue([
@@ -971,6 +976,7 @@ describe('connectionRequestsService', () => {
           latitude: null,
           longitude: null,
           province: null,
+          industrialEstateName: null,
           officerNotificationEmails: [],
           isEligible: false,
           eligibilityStatus: 'ไม่เข้าข่าย',

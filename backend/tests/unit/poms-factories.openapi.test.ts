@@ -231,15 +231,15 @@ describe('POMS factory master-data OpenAPI contract', () => {
     );
   });
 
-  it('reuses the operator-factory table response for the active connected POMS list', () => {
+  it('keeps the active connected POMS table contract separate from request-form additions', () => {
     const pomsList = operation('/poms-factories', 'get');
     const operatorList = operation('/cems-wpms-requests/operator-factories', 'get');
 
-    expect(jsonSuccessSchema('/poms-factories', 'get')).toEqual(
-      jsonSuccessSchema('/cems-wpms-requests/operator-factories', 'get'),
-    );
     expect(jsonSuccessSchema('/poms-factories', 'get')).toEqual({
       $ref: '#/components/schemas/OperatorFactoryTableResponse',
+    });
+    expect(jsonSuccessSchema('/cems-wpms-requests/operator-factories', 'get')).toEqual({
+      $ref: '#/components/schemas/ConnectionRequestFactoryTableResponse',
     });
     expect(pomsList.description).toEqual(
       expect.stringContaining('active row ใน cems_wpms_connected_measurement_points'),
