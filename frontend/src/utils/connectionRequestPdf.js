@@ -92,6 +92,10 @@ function removeRequestedParameterSpecialOptions(values) {
 function getRequestedParametersDisplay(point = {}, details = {}) {
   const requestedParameters = normalizeArrayValue(details.requestedParameters)
 
+  if (point.monitoringPointStatus === 'อยู่ระหว่างขยายเวลา' && requestedParameters.length === 0) {
+    return 'อยู่ระหว่างขยายระยะเวลาทั้งปล่อง'
+  }
+
   if (
     isFullyExemptedMonitoringPoint(point, details)
     || requestedParameters.includes(requestedParametersExemptAllOption)

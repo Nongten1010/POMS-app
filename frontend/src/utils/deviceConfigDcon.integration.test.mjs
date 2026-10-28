@@ -33,6 +33,7 @@ test('DCON device settings preserve the RTU field shape and use DCON_ASCII on th
             mapConnectionForms, getDeviceConfigConnectionForms, buildConnectionSettings,
             buildDeviceConfigPayloadItem, buildDeviceConfigDeviceItem, buildStructuredDeviceConfigPayload,
             getDeviceConfigsApiUrl, getConnectedMeasurementPointDeviceConfigsApiUrl,
+            getDeviceConfigParameterOptions, getDeviceConfigParameterMappings, mapParameterMappingRows,
           };`
         }
       },
@@ -51,7 +52,7 @@ test('DCON device settings preserve the RTU field shape and use DCON_ASCII on th
     }
 
     await t.test('DCON follows Modbus TCP and maps both directions without changing other protocols', () => {
-      assert.deepEqual(api.connectionTypeOptions, ['Modbus RTU', 'Modbus TCP', 'DCON', 'Microsoft SQL', 'MySQL', 'POMS Box'])
+      assert.deepEqual(api.connectionTypeOptions, ['Modbus RTU', 'Modbus TCP', 'DCON', 'Serial ASCII', 'Microsoft SQL', 'MySQL', 'POMS Box'])
       for (const [label, code] of [
         ['Modbus RTU', 'MODBUS_RTU'], ['Modbus TCP', 'MODBUS_TCP'], ['DCON', 'DCON_ASCII'],
         ['Microsoft SQL', 'MSSQL'], ['MySQL', 'MYSQL'], ['POMS Box', 'POMS_BOX'],
@@ -64,14 +65,14 @@ test('DCON device settings preserve the RTU field shape and use DCON_ASCII on th
       assert.notEqual(api.validateDeviceConfigForm({ type: 'INVALID_PROTOCOL' }), '')
     })
 
-    await t.test('only DCON labels slaveId as device address and edits the same state field', () => {
-      assert.deepEqual(api.getDefaultConnectionForm('DCON'), api.getDefaultConnectionForm('Modbus RTU'))
+    await t.test('DCON retains serial fields without the Modbus read function', () => {
+      assert.deepEqual({ ...api.getDefaultConnectionForm('DCON'), readFunction: '' }, api.getDefaultConnectionForm('Modbus RTU'))
       let nextValues
       const dcon = api.ConnectionFormFields({ connectionType: 'DCON', value: values, onChange: (next) => { nextValues = next } })
       const rtu = api.ConnectionFormFields({ connectionType: 'Modbus RTU', value: values, onChange: () => {} })
       const dconFields = fields(dcon)
       assert.deepEqual(dconFields.map((field) => field.props.label),
-        fields(rtu).map((field) => field.props.label === 'Slave ID' ? 'device address' : field.props.label))
+        fields(rtu).filter((field) => field.props.label !== 'ฟังก์ชันการอ่านข้อมูล').map((field) => field.props.label === 'Slave ID' ? 'device address' : field.props.label))
       const address = dconFields.find((field) => field.props.label === 'device address')
       assert.equal(address.props.value, '7')
       address.props.onChange('12')
@@ -133,6 +134,25 @@ test('DCON device settings preserve the RTU field shape and use DCON_ASCII on th
       const [loaded] = api.mapConnectionForms([{ protocol: 'DCON_ASCII', settings: {} }])
       assert.equal(loaded.values.slaveId, '')
       assert.equal(loaded.values.parity, '')
+    })
+
+    await t.test('explicit empty API lists override stale raw configs and fallback parameters', () => {
+      const channel = { dataType: 'COD (mg/l)', addressId: 2 }
+      const rawConfigs = { device: [{ protocol: 'DCON_ASCII', settings }], channels: [channel] }
+      const response = { connectionForms: [], parameterMappings: [], parameterOptions: [], rawConfigs }
+      assert.deepEqual(api.getDeviceConfigConnectionForms(response), [])
+      assert.deepEqual(api.getDeviceConfigParameterMappings(response), [])
+      assert.deepEqual(api.getDeviceConfigParameterOptions(response, ['COD (mg/l)']), [])
+      assert.deepEqual(api.getDeviceConfigParameterMappings({ rawConfigs }), [channel])
+      assert.deepEqual(api.getDeviceConfigParameterOptions({ rawConfigs }), ['COD (mg/l)'])
+      const rows = api.mapParameterMappingRows([
+        { parameter: 'BOD (mg/l)', addressId: '1', testMode: true, status: 'Maintenance' },
+        { parameter: 'Flow (m3/hr)', addressId: '', configId: null },
+      ])
+      assert.equal(rows[0].testMode, false)
+      assert.equal(rows[0].status, 'Maintenance')
+      assert.equal(rows[1].addressId, '')
+      assert.equal(rows[1].deviceCode, '')
     })
 
     await t.test('uses existing request and connected-point endpoints without a new DCON API', () => {

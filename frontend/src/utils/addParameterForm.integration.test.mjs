@@ -86,6 +86,31 @@ test('add-parameter form and payload preserve live groups without affecting othe
       }
     })
 
+    await t.test('whole-point extension maps to API status without synthetic parameters or stale instruments', async () => {
+      const { getRequestedParametersDisplay } = await server.ssrLoadModule('/src/utils/connectionRequestPdf.js')
+      for (const system of ['CEMS', 'WPMS']) {
+        for (const [label, status] of [['ได้รับการยกเว้นทั้งหมด', 'ได้รับการยกเว้นทั้งหมด'], ['อยู่ระหว่างขยายระยะเวลาทั้งปล่อง', 'อยู่ระหว่างขยายเวลา']]) {
+          const form = new FormData()
+          form.append('requestedParameters', label)
+          const body = buildMeasurementPointRequestBody({}, system, form, [], [{ parameter: 'STALE' }])
+          const point = body.measurementPoints[0]
+          assert.equal(point.monitoringPointStatus, status)
+          assert.deepEqual(point.details.requestedParameters, [])
+          assert.deepEqual(point.measurementInstruments.parameters, [])
+          assert.equal(validateParameterGroups({ requestedParameters: [] }, [], point).length, 0)
+          assert.equal(getRequestedParametersDisplay(point, point.details), label)
+          form.append('requestedParameters', 'BOD (mg/l)')
+          assert.throws(() => buildMeasurementPointRequestBody({}, system, form), /ต้องเลือกเพียงตัวเดียว/)
+        }
+        const form = new FormData()
+        form.append('requestedParameters', 'ได้รับการยกเว้นทั้งหมด')
+        form.append('requestedParameters', 'อยู่ระหว่างขยายระยะเวลาทั้งปล่อง')
+        assert.throws(() => buildMeasurementPointRequestBody({}, system, form), /ต้องเลือกเพียงตัวเดียว/)
+      }
+      assert.ok(validateParameterGroups({ requestedParameters: [] }, [], {}).some((message) => message.includes('กรุณาเลือก')))
+      assert.equal(getRequestedParametersDisplay({ monitoringPointStatus: 'อยู่ระหว่างขยายเวลา' }, { requestedParameters: ['BOD (mg/l)'] }), 'BOD (mg/l)')
+    })
+
     await t.test('test table displays Ok as Normal while preserving other statuses', async () => {
       const { getTestResultParameterStatus } = await server.ssrLoadModule('/src/pages/ConnectionRequestPage.jsx')
       for (const status of ['Ok', 'OK', 'ok', 'Normal', 'Calibration', 'Defective', '']) {

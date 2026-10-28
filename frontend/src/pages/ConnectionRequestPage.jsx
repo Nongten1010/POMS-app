@@ -86,20 +86,31 @@ const getOptionLabel = (option) => (typeof option === 'string' ? option : option
 const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.label)
 const parameterNoneOption = 'ไม่มี'
 const requestedParametersExemptAllOption = 'ได้รับการยกเว้นทั้งหมด'
+const requestedParametersExtensionOption = 'อยู่ระหว่างขยายระยะเวลาทั้งปล่อง'
+const wholePointOptions = [requestedParametersExemptAllOption, requestedParametersExtensionOption]
+const getWholePointOption = (status) => status === 'อยู่ระหว่างขยายเวลา'
+  ? requestedParametersExtensionOption : status === requestedParametersExemptAllOption ? status : null
 const pendingEligibleFactoryAddRequestLabel = 'แจ้งความประสงค์แล้ว/รอดำเนินการ'
 const withNoneOption = (options = []) => [parameterNoneOption, ...options.filter((option) => option !== parameterNoneOption)]
 const withRequestedParameterOptions = (options = []) => [
-  requestedParametersExemptAllOption,
-  ...options.filter((option) => option !== requestedParametersExemptAllOption),
+  ...wholePointOptions,
+  ...options.filter((option) => !wholePointOptions.includes(option)),
 ]
-const isRequestedParameterSpecialOption = (parameter) => parameter === requestedParametersExemptAllOption
+const isRequestedParameterSpecialOption = (parameter) => wholePointOptions.includes(parameter)
 const getRequestedParameterState = (parameters = []) => {
   const values = normalizeArrayValue(parameters)
   const isFullyExempted = values.includes(requestedParametersExemptAllOption)
+  const isWholePoint = values.some(isRequestedParameterSpecialOption)
+  if (isWholePoint && values.length > 1) {
+    throw new Error('สถานะทั้งจุดต้องเลือกเพียงตัวเดียว และห้ามเลือกร่วมกับพารามิเตอร์ตรวจวัด')
+  }
 
   return {
     values,
     isFullyExempted,
+    isWholePoint,
+    monitoringPointStatus: isFullyExempted ? requestedParametersExemptAllOption
+      : values.includes(requestedParametersExtensionOption) ? 'อยู่ระหว่างขยายเวลา' : null,
     actualValues: values.filter((parameter) => !isRequestedParameterSpecialOption(parameter)),
   }
 }
@@ -1693,7 +1704,7 @@ function validateParameterGroups(details = {}, instrumentParameters = [], point 
   requiredParameterGroupKeys.forEach(([key, label]) => {
     const values = Array.isArray(details[key]) ? details[key].filter(isPresentValue) : []
     const isFullyExemptedRequest = key === 'requestedParameters'
-      && point.monitoringPointStatus === requestedParametersExemptAllOption
+      && Boolean(getWholePointOption(point.monitoringPointStatus))
 
     if (!values.length && !isFullyExemptedRequest) {
       errors.push(`กรุณาเลือก${label}`)
@@ -1705,8 +1716,8 @@ function validateParameterGroups(details = {}, instrumentParameters = [], point 
   if (requestedParameters.includes(parameterNoneOption)) {
     errors.push('พารามิเตอร์ที่ขอเชื่อมต่อห้ามเลือก "ไม่มี"')
   }
-  if (requestedParameters.includes(requestedParametersExemptAllOption) && requestedParameters.length > 1) {
-    errors.push('พารามิเตอร์ที่ขอเชื่อมต่อถ้าเลือก "ได้รับการยกเว้นทั้งหมด" ต้องเลือกเพียงตัวเดียว')
+  if (requestedParameters.some(isRequestedParameterSpecialOption) && requestedParameters.length > 1) {
+    errors.push('สถานะทั้งจุดต้องเลือกเพียงตัวเดียว และห้ามเลือกร่วมกับพารามิเตอร์ตรวจวัด')
   }
   if (actualRequestedParameters.length) {
     const instrumentParameterNames = instrumentParameters.map((parameter) => parameter.parameter).filter(Boolean)
@@ -2247,7 +2258,7 @@ function buildMeasurementPointRequestBody(
             pointCode,
             pointName,
             pointType: 'WASTEWATER',
-            monitoringPointStatus: requestedParameterState.isFullyExempted ? requestedParametersExemptAllOption : null,
+            monitoringPointStatus: requestedParameterState.monitoringPointStatus,
             details: {
               monitoringPointKind: 'WPMS',
               averageWastewaterDischarge: toNumberOrNull(getFormValue(formData, 'averageWastewaterDischarge')),
@@ -2274,14 +2285,14 @@ function buildMeasurementPointRequestBody(
             measurementInstruments: {
               converterBrand: converterBrand || null,
               converterModel: converterModel || null,
-              parameters: requestedParameterState.isFullyExempted ? [] : instrumentParameters,
+              parameters: requestedParameterState.isWholePoint ? [] : instrumentParameters,
             },
           }
         : {
             pointCode,
             pointName,
             pointType: 'STACK',
-            monitoringPointStatus: requestedParameterState.isFullyExempted ? requestedParametersExemptAllOption : null,
+            monitoringPointStatus: requestedParameterState.monitoringPointStatus,
             details: {
               monitoringPointKind: 'CEMS',
               productionUnitType: getOptionalFormValue(formData, 'productionUnitType'),
@@ -2332,7 +2343,7 @@ function buildMeasurementPointRequestBody(
             measurementInstruments: {
               converterBrand: converterBrand || null,
               converterModel: converterModel || null,
-              parameters: requestedParameterState.isFullyExempted ? [] : instrumentParameters,
+              parameters: requestedParameterState.isWholePoint ? [] : instrumentParameters,
             },
           },
     ],
@@ -3859,7 +3870,7 @@ function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) 
       offset: mapping.offset ?? '',
       encodingData: encodingLabelMap[encodingData] ?? encodingData,
       status: mapping.status ?? '',
-      testMode: Boolean(mapping.testMode ?? mapping.test_mode),
+      testMode: false,
     }
   })
 }
@@ -4528,7 +4539,7 @@ function getRawDeviceConfig(data) {
 }
 
 function getDeviceConfigConnectionForms(data) {
-  if (data?.connectionForms?.length) {
+  if (Array.isArray(data?.connectionForms)) {
     return data.connectionForms
   }
 
@@ -4537,7 +4548,7 @@ function getDeviceConfigConnectionForms(data) {
 }
 
 function getDeviceConfigParameterMappings(data) {
-  if (data?.parameterMappings?.length) {
+  if (Array.isArray(data?.parameterMappings)) {
     return data.parameterMappings
   }
 
@@ -4546,7 +4557,7 @@ function getDeviceConfigParameterMappings(data) {
 }
 
 function getDeviceConfigParameterOptions(data, fallback = []) {
-  if (Array.isArray(data?.parameterOptions) && data.parameterOptions.length) {
+  if (Array.isArray(data?.parameterOptions)) {
     return data.parameterOptions
   }
 
@@ -4855,7 +4866,7 @@ function buildDeviceConfigChannels(rows, deviceCode) {
       valueRange: buildValueRange(row.min, row.max) ?? null,
       alertLow: toNumberOrNull(row.alertLow),
       alertHigh: toNumberOrNull(row.alertHigh),
-      // Temporary override: always submit normal mode regardless of the saved/UI value.
+      // Test mode is retired; parameter status remains independent.
       testMode: false,
       valueFormat: nullIfBlank(valueFormatCodeMap[row.valueFormat] ?? row.valueFormat),
       offset: toNumberOrNull(row.offset),
@@ -5143,15 +5154,15 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
   }
 
   const applyDeviceConfigResponse = (data) => {
-    const nextConnectionForms = mapConnectionForms(getDeviceConfigConnectionForms(data).length ? getDeviceConfigConnectionForms(data) : connectionForms)
+    const nextConnectionForms = mapConnectionForms(getDeviceConfigConnectionForms(data))
     setDeviceConfig(data)
     setConnectionForms(nextConnectionForms.length ? nextConnectionForms : [createDefaultConnectionItem(context)])
     setParameterMappingRows(mapParameterMappingRows(
-      getDeviceConfigParameterMappings(data).length ? getDeviceConfigParameterMappings(data) : parameterMappingRows,
-      getDeviceConfigParameterOptions(data, parameterOptions),
+      getDeviceConfigParameterMappings(data),
+      getDeviceConfigParameterOptions(data),
     ))
-    setStatusManagementValue(getDeviceConfigStatusManagement(data) ?? statusManagement)
-    setTestResultRows(mapTestResultRows(data?.testResults ?? testResultRows))
+    setStatusManagementValue(getDeviceConfigStatusManagement(data))
+    setTestResultRows(mapTestResultRows(data?.testResults ?? []))
   }
 
   const saveDeviceConfig = async () => {
@@ -6046,7 +6057,7 @@ function CemsMonitoringPointDetails({
             name="requestedParameters"
             label="พารามิเตอร์ที่ขอเชื่อมต่อ"
             options={withRequestedParameterOptions(cemsParameterOptions)}
-            exclusiveOptions={[requestedParametersExemptAllOption]}
+            exclusiveOptions={wholePointOptions}
             value={requestedParameters}
             onChange={onRequestedParametersChange}
           />
@@ -6838,7 +6849,7 @@ function WpmsMonitoringPointDetails({
             name="requestedParameters"
             label="พารามิเตอร์ที่ขอเชื่อมต่อ"
             options={withRequestedParameterOptions(wpmsInstrumentParameters)}
-            exclusiveOptions={[requestedParametersExemptAllOption]}
+            exclusiveOptions={wholePointOptions}
             value={requestedParameters}
             onChange={onRequestedParametersChange}
           />
@@ -7230,8 +7241,8 @@ export function RequestFormBottomSheet({
   const initialRequestedParameters = isAddParameterMode
     ? addParameterGroups.requestedParameters
     : isEditMode
-      ? initialPoint.monitoringPointStatus === requestedParametersExemptAllOption
-        ? [requestedParametersExemptAllOption]
+      ? getWholePointOption(initialPoint.monitoringPointStatus)
+        ? [getWholePointOption(initialPoint.monitoringPointStatus)]
         : normalizeArrayValue(initialPoint.details?.requestedParameters ?? [])
       : []
   const [contacts, setContacts] = useState(initialContactPersons)
