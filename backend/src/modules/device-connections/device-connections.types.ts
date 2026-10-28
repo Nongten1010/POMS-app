@@ -5,6 +5,7 @@ export const DEVICE_CONNECTION_PROTOCOL = {
   POMS_BOX: 'POMS_BOX',
   MODBUS_RTU: 'MODBUS_RTU',
   DCON_ASCII: 'DCON_ASCII',
+  SERIAL_ASCII: 'SERIAL_ASCII',
   MODBUS_TCP: 'MODBUS_TCP',
   MSSQL: 'MSSQL',
   MYSQL: 'MYSQL',
@@ -33,6 +34,8 @@ export interface DeviceConnectionAccessContext {
 
 export type DataValueFormat = 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE';
 export type ModbusParity = 'EVEN' | 'ODD' | 'NONE';
+export const MODBUS_READ_FUNCTIONS = ['READ_INPUT', 'READ_HOLDING'] as const;
+export type ModbusReadFunction = (typeof MODBUS_READ_FUNCTIONS)[number];
 export type ModbusEncoding =
   | 'SIGNED'
   | 'UNSIGNED'
@@ -70,7 +73,7 @@ export interface DeviceMeasurementChannelInput {
   status?: string | null;
 }
 
-export interface ModbusRtuConnectionSettingsInput extends Record<string, unknown> {
+export interface SerialConnectionSettingsInput extends Record<string, unknown> {
   comPort?: number | string | null;
   slaveId?: number | null;
   baudRate?: number | null;
@@ -81,11 +84,16 @@ export interface ModbusRtuConnectionSettingsInput extends Record<string, unknown
   valueRange?: MeasurementRangeInput | null;
 }
 
+export interface ModbusRtuConnectionSettingsInput extends SerialConnectionSettingsInput {
+  readFunction?: ModbusReadFunction;
+}
+
 export interface ModbusTcpConnectionSettingsInput extends Record<string, unknown> {
   hostIp?: string | null;
   slaveId?: number | null;
   port?: number | null;
   valueRange?: MeasurementRangeInput | null;
+  readFunction?: ModbusReadFunction;
 }
 
 export interface DatabaseConnectionSettingsInput extends Record<string, unknown> {
@@ -130,6 +138,11 @@ export interface CreateDconAsciiConnectionConfigInput extends BaseDeviceConnecti
   settings: DeviceConnectionSettingsInput;
 }
 
+export interface CreateSerialAsciiConnectionConfigInput extends BaseDeviceConnectionConfigInput {
+  protocol: typeof DEVICE_CONNECTION_PROTOCOL.SERIAL_ASCII;
+  settings: DeviceConnectionSettingsInput;
+}
+
 export interface CreatePomsBoxConnectionConfigInput extends BaseDeviceConnectionConfigInput {
   protocol: typeof DEVICE_CONNECTION_PROTOCOL.POMS_BOX;
   settings: DeviceConnectionSettingsInput;
@@ -154,6 +167,7 @@ export type CreateDeviceConnectionConfigInput =
   | CreatePomsBoxConnectionConfigInput
   | CreateModbusRtuConnectionConfigInput
   | CreateDconAsciiConnectionConfigInput
+  | CreateSerialAsciiConnectionConfigInput
   | CreateModbusTcpConnectionConfigInput
   | CreateMssqlConnectionConfigInput
   | CreateMysqlConnectionConfigInput;

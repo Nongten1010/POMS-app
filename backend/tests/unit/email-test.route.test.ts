@@ -18,7 +18,10 @@ describe('email test route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedEmailService.isConfigured.mockReturnValue(true);
-    mockedEmailService.send.mockResolvedValue({ messageId: 'test-message-id' });
+    mockedEmailService.send.mockResolvedValue({
+      messageId: 'test-message-id',
+      envelope: { from: 'sender@example.invalid', to: ['recipient@example.invalid'] },
+    });
   });
 
   it('sends a test email to the fixed test recipient', async () => {

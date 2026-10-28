@@ -11,6 +11,10 @@ import {
 } from '../connection-requests/connection-requests.types';
 import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
 import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-point-forms.types';
+import {
+  DEVICE_CONNECTION_PROTOCOL,
+  MODBUS_READ_FUNCTIONS,
+} from '../device-connections/device-connections.types';
 
 type OpenApiObject = Record<string, unknown>;
 type EnumLabelMap = Record<string, string>;
@@ -34,6 +38,34 @@ interface OperationOptions {
   focus?: boolean;
 }
 const schemaRef = (name: string): OpenApiObject => ({ $ref: `#/components/schemas/${name}` });
+const protocolValues = Object.values(DEVICE_CONNECTION_PROTOCOL);
+const modbusReadFunctionSchema = {
+  type: 'string',
+  enum: [...MODBUS_READ_FUNCTIONS],
+  description:
+    'ใช้เฉพาะ MODBUS_RTU / MODBUS_TCP; optional ไม่รับ null หรือสตริงว่าง และไม่มีค่าเริ่มต้น หากไม่เลือกให้ละ property นี้',
+};
+const serialConnectionSettingsSchema: OpenApiObject = {
+  type: 'object',
+  nullable: true,
+  additionalProperties: true,
+  description: 'Serial settings ของ DCON_ASCII / SERIAL_ASCII; device address ใช้ settings.slaveId',
+  properties: {
+    comPort: { oneOf: [{ type: 'number' }, { type: 'string' }], nullable: true },
+    slaveId: {
+      type: 'number',
+      nullable: true,
+      description:
+        'Slave ID ของ Modbus หรือ device address ของ DCON / Serial ASCII; ใช้ key slaveId เดิม',
+    },
+    baudRate: { type: 'number', nullable: true },
+    parity: { type: 'string', nullable: true },
+    stopBits: { type: 'number', nullable: true },
+    dataBits: { type: 'number', nullable: true },
+    quantity: { type: 'number', nullable: true },
+    valueRange: { allOf: [schemaRef('DeviceConnectionRange')], nullable: true },
+  },
+};
 const retiredTestModeDescription =
   'เลิกใช้ Test mode แต่คง field testMode เพื่อรองรับ client เดิม; payload รับ boolean true/false หรือ null ตามเดิมและ normalize ค่าที่ใช้งาน/บันทึกใหม่เป็น false; ทุก response คืน false เสมอ รวม config เก่าที่เก็บ true';
 const testModeResponseField: OpenApiObject = {
@@ -48,10 +80,12 @@ const deviceChannelUniquenessDescription =
   'dataType รวมหน่วยต้องไม่ซ้ำภายในอุปกรณ์เดียวกัน โดยเปรียบเทียบหลัง normalize unit, Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก; ซ้ำตอบ 400 VALIDATION_ERROR. พารามิเตอร์ต่างหน่วยหรือคนละอุปกรณ์ยังแยกกัน และ addressId ซ้ำหรือ null ได้';
 const deviceConfigFormNormalizationDescription =
   'ฟอร์มตัดข้อมูลเก่าที่ซ้ำก่อนสร้าง connectionForms, deviceCodeOptions, parameterMappings และ rawConfigs: คำขอที่มี measurementInstruments.parameters ใช้รายชื่อนั้นกรอง channel โดยเปรียบเทียบชื่อพร้อมหน่วยหลัง Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก แล้วคืน label ตามรายชื่อก่อนตัดข้อมูลซ้ำ; หน่วยต่างกันยังเป็นคนละพารามิเตอร์. ภายใน station/request/device เดียวกันเลือก config ที่ updatedAt ล่าสุด แล้วใช้ id มากสุดเมื่อเวลาเท่ากัน; deviceCode null ยังคงแยก protocol. Channel ที่ชื่อพร้อมหน่วยซ้ำเลือกแถวที่มี addressId ก่อน ตามด้วยแถวที่มีค่าตั้งค่ามากกว่า และแถวแรกที่บันทึกเมื่อเท่ากัน โดยใช้ทั้งแถว ไม่ผสมค่า. GET ไม่แก้ฐานข้อมูล';
-const deviceConfigWriteDescription = `${deviceConfigIdentityDescription}. ${deviceChannelUniquenessDescription}. ${retiredTestModeDescription}. settings.dbPass = ******** รักษารหัสจริงได้เฉพาะ active config ที่ stationId + protocol + deviceCode ตรงกัน; เมื่อเปลี่ยน protocol แล้วไม่มีรหัสที่ตรงกัน ต้องกรอกรหัสจริงใหม่ มิฉะนั้นตอบ 400 BAD_REQUEST`;
+const serialAndReadFunctionDescription =
+  'SERIAL_ASCII แยกจาก DCON_ASCII และใช้ serial settings เดิม; device address ใช้ settings.slaveId. MODBUS_RTU / MODBUS_TCP รองรับ settings.readFunction = READ_INPUT หรือ READ_HOLDING แบบ optional; ไม่รับ null/สตริงว่าง ไม่มี default และละ property เมื่อไม่เลือก. GET คืน values.readFunction เมื่อบันทึกไว้และไม่เพิ่มให้ protocol อื่น. ต้องรัน migration 0147_allow_serial_ascii_device_protocol ก่อนใช้งาน';
+const deviceConfigWriteDescription = `${deviceConfigIdentityDescription}. ${deviceChannelUniquenessDescription}. ${retiredTestModeDescription}. ${serialAndReadFunctionDescription}. settings.dbPass = ******** รักษารหัสจริงได้เฉพาะ active config ที่ stationId + protocol + deviceCode ตรงกัน; เมื่อเปลี่ยน protocol แล้วไม่มีรหัสที่ตรงกัน ต้องกรอกรหัสจริงใหม่ มิฉะนั้นตอบ 400 BAD_REQUEST`;
 const deviceConfigBadRequestResponse: OpenApiObject = {
   description:
-    '400 VALIDATION_ERROR เมื่อพารามิเตอร์ซ้ำภายในอุปกรณ์หรือโครงสร้าง payload ไม่ถูกต้อง; 400 BAD_REQUEST เมื่อ identity อุปกรณ์ซ้ำใน batch, station/parameter ไม่อยู่ในขอบเขตคำขอ หรือไม่มีรหัสฐานข้อมูลจริงให้รักษา',
+    '400 VALIDATION_ERROR เมื่อพารามิเตอร์ซ้ำภายในอุปกรณ์, readFunction ของ Modbus ไม่ใช่ READ_INPUT/READ_HOLDING (รวม null/สตริงว่าง) หรือโครงสร้าง payload ไม่ถูกต้อง; 400 BAD_REQUEST เมื่อ identity อุปกรณ์ซ้ำใน batch, station/parameter ไม่อยู่ในขอบเขตคำขอ หรือไม่มีรหัสฐานข้อมูลจริงให้รักษา',
   content: {
     'application/json': {
       schema: schemaRef('ErrorEnvelope'),
@@ -109,13 +143,26 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
           items: {
             type: 'object',
             properties: {
-              type: { type: 'string', example: 'DCON' },
-              protocol: { type: 'string', example: 'DCON_ASCII' },
+              type: {
+                type: 'string',
+                enum: [
+                  'POMS Box',
+                  'Modbus RTU',
+                  'DCON',
+                  'Serial ASCII',
+                  'Modbus TCP',
+                  'Microsoft SQL',
+                  'MySQL',
+                ],
+                example: 'Serial ASCII',
+              },
+              protocol: { type: 'string', enum: protocolValues, example: 'SERIAL_ASCII' },
               values: {
                 type: 'object',
                 additionalProperties: { type: 'string' },
+                properties: { readFunction: modbusReadFunctionSchema },
                 description:
-                  'DCON ใช้ comport, slaveId, baudRate, parity, stopBits, dataBits, quantity, measureMin, measureMax เช่นเดียวกับ Modbus RTU; null แสดงเป็นสตริงว่าง',
+                  'DCON / Serial ASCII ใช้ comport, slaveId, baudRate, parity, stopBits, dataBits, quantity, measureMin, measureMax เช่นเดียวกับ Modbus RTU; null แสดงเป็นสตริงว่าง. readFunction คืนเฉพาะ Modbus RTU/TCP เมื่อมีค่าที่บันทึก; ข้อมูลเดิมที่ไม่มี field นี้ยังคงไม่มี ไม่เติม default',
                 example: { comport: 'COM3', slaveId: '7', measureMin: '0', measureMax: '' },
               },
             },
@@ -924,6 +971,43 @@ const annualDeviceConnectionExample = {
   ...deviceConnectionExample,
   stationId: 'CEMS-0001/2569',
   deviceCode: 'CEMS-0001/2569/01',
+};
+const protocolSettingsSchemas: Record<string, string> = {
+  POMS_BOX: 'PomsBoxSettings',
+  MODBUS_RTU: 'ModbusRtuSettings',
+  DCON_ASCII: 'SerialConnectionSettings',
+  SERIAL_ASCII: 'SerialConnectionSettings',
+  MODBUS_TCP: 'ModbusTcpSettings',
+  MSSQL: 'DatabaseConnectionSettings',
+  MYSQL: 'DatabaseConnectionSettings',
+};
+const protocolExamples: Record<string, OpenApiObject> = {
+  DCON_ASCII: dconConnectionExample,
+  SERIAL_ASCII: { ...dconConnectionExample, deviceCode: 'S2001/01', protocol: 'SERIAL_ASCII' },
+  MODBUS_RTU: {
+    ...dconConnectionExample,
+    deviceCode: 'S2001/01',
+    protocol: 'MODBUS_RTU',
+    settings: { ...dconConnectionExample.settings, readFunction: 'READ_INPUT' },
+  },
+  MODBUS_TCP: {
+    stationId: 'S2001',
+    deviceCode: 'S2001/01',
+    protocol: 'MODBUS_TCP',
+    settings: { hostIp: '192.0.2.1', slaveId: 1, port: 502, readFunction: 'READ_HOLDING' },
+    channels: [],
+  },
+};
+const deviceProtocolSettingsSchema = {
+  oneOf: Object.entries(protocolSettingsSchemas).map(([protocol, settingsSchema]) => ({
+    type: 'object',
+    required: ['protocol'],
+    properties: {
+      protocol: { type: 'string', enum: [protocol] },
+      settings: schemaRef(settingsSchema),
+    },
+    ...(protocolExamples[protocol] ? { example: protocolExamples[protocol] } : {}),
+  })),
 };
 const statusHistoryNoteSchema: OpenApiObject = {
   type: 'string',
@@ -2294,25 +2378,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
       valueRange: nullableRef('DeviceConnectionRange'),
     },
   },
+  SerialConnectionSettings: serialConnectionSettingsSchema,
+  PomsBoxSettings: { type: 'object', nullable: true, additionalProperties: true },
   ModbusRtuSettings: {
+    ...serialConnectionSettingsSchema,
     description:
-      'Serial settings ใช้ร่วมกันระหว่าง MODBUS_RTU และ DCON_ASCII; สำหรับ DCON แสดง slaveId เป็น device address',
-    type: 'object',
-    nullable: true,
-    additionalProperties: true,
+      'MODBUS_RTU ใช้ serial settings และ optional readFunction; DCON_ASCII / SERIAL_ASCII ใช้ SerialConnectionSettings',
     properties: {
-      comPort: { oneOf: [{ type: 'number' }, { type: 'string' }], nullable: true },
-      slaveId: {
-        type: 'number',
-        nullable: true,
-        description: 'Slave ID ของ Modbus หรือ device address ของ DCON; ใช้ key slaveId เดิม',
-      },
-      baudRate: { type: 'number', nullable: true },
-      parity: { type: 'string', nullable: true },
-      stopBits: { type: 'number', nullable: true },
-      dataBits: { type: 'number', nullable: true },
-      quantity: { type: 'number', nullable: true },
-      valueRange: nullableRef('DeviceConnectionRange'),
+      ...(serialConnectionSettingsSchema.properties as OpenApiObject),
+      readFunction: modbusReadFunctionSchema,
     },
   },
   ModbusTcpSettings: {
@@ -2324,6 +2398,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       slaveId: { type: 'number', nullable: true },
       port: { type: 'number', nullable: true },
       valueRange: nullableRef('DeviceConnectionRange'),
+      readFunction: modbusReadFunctionSchema,
     },
   },
   DeviceChannel: {
@@ -2468,7 +2543,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       deviceCode: { type: 'string', nullable: true },
       protocol: {
         type: 'string',
-        enum: ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
+        enum: protocolValues,
       },
       settings: { type: 'object', additionalProperties: true },
       channels: { type: 'array', items: schemaRef('DeviceChannelResponse') },
@@ -2544,23 +2619,20 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     required: ['stationId', 'protocol'],
     discriminator: { propertyName: 'protocol' },
+    allOf: [deviceProtocolSettingsSchema],
     properties: {
       stationId: { type: 'string', minLength: 1, maxLength: 64 },
       deviceCode: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       protocol: {
         type: 'string',
-        enum: ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
+        enum: protocolValues,
       },
       settings: {
-        oneOf: [
-          { type: 'object', additionalProperties: true, description: 'POMS_BOX' },
-          schemaRef('ModbusRtuSettings'),
-          schemaRef('ModbusTcpSettings'),
-          schemaRef('DatabaseConnectionSettings'),
-        ],
+        type: 'object',
+        additionalProperties: true,
         nullable: true,
         default: {},
-        description: 'DCON_ASCII ใช้ ModbusRtuSettings; device address ใช้ settings.slaveId',
+        description: serialAndReadFunctionDescription,
       },
       channels: {
         type: 'array',
@@ -2579,11 +2651,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
     description: deviceConfigIdentityDescription,
     additionalProperties: true,
     required: ['protocol'],
+    allOf: [deviceProtocolSettingsSchema],
     properties: {
       deviceCode: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       protocol: {
         type: 'string',
-        enum: ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
+        enum: protocolValues,
       },
       settings: {
         type: 'object',
@@ -2634,9 +2707,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
     },
   },
   DeviceConnectionConfigRequest: {
-    description:
-      'DCON แสดง label device address แต่ส่ง settings.slaveId; protocol ต้องเป็น DCON_ASCII และใช้ settings เช่นเดียวกับ MODBUS_RTU. ' +
-      deviceConfigWriteDescription,
+    description: deviceConfigWriteDescription,
     oneOf: [
       schemaRef('DeviceConnectionConfig'),
       {
@@ -2753,7 +2824,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
           },
           protocol: {
             type: 'string',
-            enum: ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'],
+            enum: protocolValues,
           },
           stationId: { type: 'string' },
           message: { type: 'string', example: 'Mock connection succeeded' },
@@ -3045,7 +3116,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'getConnectionRequestDeviceConfigs',
       successSchema: schemaRef('DeviceConfigFormDetailResponse'),
       description:
-        'Permission: cems_wpms_requests:view. ถ้าไม่ส่ง stationId backend ใช้จุดแรกในคำขอ; DCON คืน connectionForms[].type = DCON, protocol = DCON_ASCII, values.slaveId และ rawConfigs.device[].settings เดิม. ' +
+        'Permission: cems_wpms_requests:view. ถ้าไม่ส่ง stationId backend ใช้จุดแรกในคำขอ; DCON / Serial ASCII คืน type, protocol, values.slaveId และ rawConfigs.device[].settings ตาม protocol. ' +
+        serialAndReadFunctionDescription +
+        '. ' +
         deviceConfigFormNormalizationDescription,
       parameters: [
         idPathParameter,

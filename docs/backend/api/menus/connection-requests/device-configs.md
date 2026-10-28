@@ -27,7 +27,7 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 2. batch แบบ `{ "configs": [...] }` จำนวน 1-50 configs;
 3. form payload แบบ `{ "config": { "stationId", "device", "channels", "statusManagement" } }` ซึ่ง frontend ใช้เมื่อมีหลายอุปกรณ์หรือแก้จุดที่เชื่อมต่อแล้ว
 
-`stationId` และ `protocol` ยังเป็นข้อมูลโครงสร้างที่จำเป็นสำหรับระบุตัวจุดและชนิดการเชื่อมต่อ ส่วนค่าที่ผู้ใช้กรอกใน `settings`, `channels` และ `statusManagement` เป็น optional/nullable ตามตารางด้านล่าง
+`stationId` และ `protocol` ยังเป็นข้อมูลโครงสร้างที่จำเป็นสำหรับระบุตัวจุดและชนิดการเชื่อมต่อ ส่วนค่าที่ผู้ใช้กรอกใน `settings`, `channels` และ `statusManagement` เป็น optional/nullable ตามตารางด้านล่าง ยกเว้น `settings.readFunction` ของ Modbus ซึ่งเป็น optional แต่ไม่รับ `null` หรือสตริงว่าง
 
 แต่ละ config รับได้ไม่เกิน 200 channels ขีดจำกัดจำนวน config/channel เป็น structural payload limit ไม่ใช่ business validation ของค่าในแบบ
 
@@ -37,8 +37,8 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | --- | --- | --- | --- | --- |
 | `stationId` | string | Yes | No | รหัสหรือชื่อจุดตรวจวัด ต้องตรงกับจุดใน request หรือ `:stationId` ใน path |
 | `deviceCode` | string | No | Yes | รหัสอุปกรณ์; ใช้จับคู่ `device` กับ `channels` เมื่อส่ง form payload |
-| `protocol` | `POMS_BOX` \| `MODBUS_RTU` \| `DCON_ASCII` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | Yes | No | discriminator ของ config แต่ละอุปกรณ์ |
-| `settings` | object | No | Yes | ถ้าไม่ส่งหรือส่ง `null` backend normalize เป็น `{}`; field ภายในเป็น optional และส่ง `null` ได้ |
+| `protocol` | `POMS_BOX` \| `MODBUS_RTU` \| `DCON_ASCII` \| `SERIAL_ASCII` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | Yes | No | discriminator ของ config แต่ละอุปกรณ์ |
+| `settings` | object | No | Yes | ถ้าไม่ส่งหรือส่ง `null` backend normalize เป็น `{}`; field ภายในเป็น optional และส่ง `null` ได้ ยกเว้น `readFunction` |
 | `channels` | array | No | Yes | ถ้าไม่ส่งหรือส่ง `null` backend normalize เป็น `[]` |
 | `statusManagement` | object | No | Yes | ถ้าไม่ส่ง, ส่ง `null` หรือส่งข้อมูลไม่ครบ backend เก็บเป็น `null` |
 
@@ -60,13 +60,102 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | `settings.valueRange.min` | number | No | Yes | ค่าต่ำสุด |
 | `settings.valueRange.max` | number | No | Yes | ค่าสูงสุด |
 
-### Modbus และ DCON Settings
+### Modbus, DCON และ Serial ASCII Settings
 
 | Protocol | Optional nullable fields in `settings` |
 | --- | --- |
 | `MODBUS_RTU` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
 | `DCON_ASCII` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
+| `SERIAL_ASCII` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
 | `MODBUS_TCP` | `hostIp`, `slaveId`, `port`, `valueRange` |
+
+Modbus RTU/TCP ยังรับ `readFunction` แบบ optional และ non-nullable ตามตารางถัดไป; TCP ไม่เพิ่ม `quantity` เป็น field ของ contract
+
+### ฟังก์ชันการอ่านข้อมูลของ Modbus
+
+| Field | Type | Required | Nullable | Description |
+| --- | --- | --- | --- | --- |
+| `settings.readFunction` | enum string | No | No | `READ_INPUT` สำหรับ Read Input หรือ `READ_HOLDING` สำหรับ Read holding; ใช้เฉพาะ `MODBUS_RTU` / `MODBUS_TCP` |
+
+ไม่เลือกให้ละ property `readFunction` โดยไม่มีค่าเริ่มต้นอัตโนมัติ ไม่ส่ง `null`, `""` หรือค่าที่ไม่อยู่ใน enum; Modbus ที่ส่งค่าเหล่านี้ตอบ `400 VALIDATION_ERROR` และไม่แทนที่ config เดิม ถ้าบันทึกโดยละ field หลังเคยเลือกไว้ ค่าใหม่จะไม่มี `readFunction` ไม่รักษาค่าเก่าให้อัตโนมัติ
+
+ฟิลด์นี้อยู่ระดับอุปกรณ์ ไม่ใช่ `channels[]`: config เดี่ยวใช้ `settings.readFunction`, batch ใช้ `configs[].settings.readFunction` และ form wrapper ใช้ `config.device[].settings.readFunction`. ไม่เพิ่มช่องนี้ให้ DCON, Serial ASCII, MSSQL, MYSQL หรือ POMS Box
+
+ตัวอย่าง Modbus TCP สำหรับ POST ทั้งสอง endpoint:
+
+```json
+{
+  "stationId": "S2001",
+  "deviceCode": "S2001/01",
+  "protocol": "MODBUS_TCP",
+  "settings": {
+    "hostIp": "192.0.2.1",
+    "slaveId": 1,
+    "port": 502,
+    "readFunction": "READ_INPUT"
+  },
+  "channels": []
+}
+```
+
+Modbus RTU ใช้ serial settings เดิม และเพิ่ม `"readFunction": "READ_HOLDING"` หรือ `"READ_INPUT"` ใน `settings` เมื่อเลือกฟังก์ชัน
+
+### Serial ASCII
+
+เพิ่ม `protocol: "SERIAL_ASCII"` แยกจาก `DCON_ASCII` ใช้ชนิดข้อมูลและ field serial ตาม [ตาราง DCON](#dcon-device-address) เดียวกัน รวม `settings.slaveId` สำหรับ device address; `comPort` รับ number/string/null และค่า serial ตัวเลขรวม `quantity` รับ number/null ไม่เพิ่มชื่อ field ใหม่
+
+ตัวอย่าง POST แบบอุปกรณ์เดียว:
+
+```json
+{
+  "stationId": "S2001",
+  "deviceCode": "S2001/01",
+  "protocol": "SERIAL_ASCII",
+  "settings": {
+    "comPort": "COM1",
+    "slaveId": 1,
+    "baudRate": 9600,
+    "parity": "NONE",
+    "stopBits": 1,
+    "dataBits": 8,
+    "quantity": 2,
+    "valueRange": { "min": 0, "max": 100 }
+  },
+  "channels": []
+}
+```
+
+รองรับ config เดี่ยว, `configs[]` และ `config.device[]` รวมชุดที่มีหลาย protocol โดย `stationId`, `deviceCode`, channels และ status-management ใช้กติกาเดิม หลัง POST สำเร็จให้เรียก GET ตามบริบทเดิมเพื่อโหลดค่าที่บันทึก
+
+GET ทั้งสอง endpoint คืน `connectionForms[].type: "Serial ASCII"`, `protocol: "SERIAL_ASCII"` และ serial fields ใน `values` เช่น `comport`, `slaveId`, `quantity`, `measureMin`, `measureMax` เป็น string; `null` เป็น `""` ส่วน `rawConfigs.device[].settings` รักษา number, `0` และ `null` จริง
+
+สำหรับ Modbus คืน `connectionForms[].values.readFunction` ตามค่าที่บันทึก และรักษาค่าเดียวกันใน `rawConfigs.device[].settings.readFunction`. ข้อมูลเก่าหรือ config ใหม่ที่ไม่ส่ง field นี้จะไม่มี `readFunction` ทั้งสองตำแหน่ง ให้ frontend แสดง `ไม่ระบุ` โดยไม่กำหนดค่าแทน ตัวอย่าง response เฉพาะส่วนที่เกี่ยวข้อง:
+
+```json
+{
+  "success": true,
+  "data": {
+    "connectionForms": [
+      {
+        "type": "Modbus TCP",
+        "protocol": "MODBUS_TCP",
+        "deviceCode": "S2001/01",
+        "values": { "hostIp": "192.0.2.1", "slaveId": "1", "port": "502", "readFunction": "READ_INPUT", "measureMin": "", "measureMax": "" }
+      }
+    ],
+    "rawConfigs": {
+      "stationId": "S2001",
+      "device": [
+        { "deviceCode": "S2001/01", "protocol": "MODBUS_TCP", "settings": { "hostIp": "192.0.2.1", "slaveId": 1, "port": 502, "readFunction": "READ_INPUT" } }
+      ]
+    }
+  }
+}
+```
+
+ต้องรัน migration [`0147_allow_serial_ascii_device_protocol`](../../../../../backend/src/db/migrations/0147_allow_serial_ascii_device_protocol.ts) ก่อนใช้งาน เพื่อขยาย protocol constraint ของ `device_connection_configs`. Settings เก็บใน JSON เดิม จึงไม่เพิ่ม column สำหรับ `readFunction`. Rollback จะปฏิเสธเมื่อยังมีแถว `SERIAL_ASCII` รวมแถว soft-deleted เพื่อรักษาประวัติ; ห้ามลบประวัติเพื่อฝืน rollback
+
+การเปลี่ยนนี้รองรับการบันทึก/อ่าน config ไม่เพิ่ม driver สื่อสารกับอุปกรณ์จริงหรือเปลี่ยนสิทธิ์และสถานะคำขอ การทดสอบ transport แบบ mock ยังคงเป็น `MOCK`; [connection-test](./parameter-values.md#get-apiv1parameter-valuesconnection-test) คงกติกาเลือกตารางเดิม (`SERIAL_ASCII` อยู่กลุ่ม fallback `1m`). Integration Worker ใช้ [สัญญาของตนเอง](../../integrations/device-configs/README.md); การเพิ่ม `readFunction` ในฟอร์มไม่ได้เพิ่ม field นี้ใน flattened Worker response
 
 ### DCON: device address
 
@@ -468,6 +557,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol`, status/time ผิดรูปแบบ, เกิน 100 ช่วง หรือช่วงทับกัน | แก้ payload ตาม field issues |
 | `400` | `VALIDATION_ERROR` | `channels[].dataType` พร้อมหน่วยซ้ำในอุปกรณ์เดียวกันหลัง normalize | โหลดฟอร์มใหม่และส่งเพียงหนึ่งแถวต่อพารามิเตอร์/อุปกรณ์ |
+| `400` | `VALIDATION_ERROR` | `settings.readFunction` ของ Modbus ไม่ใช่ `READ_INPUT` / `READ_HOLDING` รวม `null` และสตริงว่าง | เลือกค่าจาก enum หรือละ property เมื่อไม่เลือก |
 | `400` | `BAD_REQUEST` | identity อุปกรณ์ซ้ำใน batch แม้เลือกต่าง protocol | ส่งหนึ่ง config ต่ออุปกรณ์; ใช้ `deviceCode` ต่างกันสำหรับคนละอุปกรณ์ |
 | `400` | `BAD_REQUEST` | station ไม่อยู่ใน request, parameter ไม่อยู่ในจุด หรือ request ไม่ได้อยู่สถานะ `WAITING_CONNECTION` | refresh request และเลือก station/parameter ใหม่ |
 | `400` | `BAD_REQUEST` | ส่ง `settings.dbPass = "********"` แต่ไม่มีรหัสจริงเดิมให้รักษา | ให้ผู้ใช้กรอกรหัสฐานข้อมูลจริงใหม่ |
@@ -711,6 +801,7 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol`, status/time ผิดรูปแบบ, เกิน 100 ช่วง หรือช่วงทับกัน | แก้ payload ตาม field issues |
 | `400` | `VALIDATION_ERROR` | `channels[].dataType` พร้อมหน่วยซ้ำในอุปกรณ์เดียวกันหลัง normalize | โหลดฟอร์มใหม่และส่งเพียงหนึ่งแถวต่อพารามิเตอร์/อุปกรณ์ |
+| `400` | `VALIDATION_ERROR` | `settings.readFunction` ของ Modbus ไม่ใช่ `READ_INPUT` / `READ_HOLDING` รวม `null` และสตริงว่าง | เลือกค่าจาก enum หรือละ property เมื่อไม่เลือก |
 | `400` | `BAD_REQUEST` | identity อุปกรณ์ซ้ำใน batch แม้เลือกต่าง protocol | ส่งหนึ่ง config ต่ออุปกรณ์; ใช้ `deviceCode` ต่างกันสำหรับคนละอุปกรณ์ |
 | `400` | `BAD_REQUEST` | `stationId` ใน body ไม่ตรงกับ path หรือ parameter ไม่อยู่ในจุด | ใช้ station และ parameter ของจุดที่เลือก |
 | `400` | `BAD_REQUEST` | ส่ง `settings.dbPass = "********"` แต่ไม่มีรหัสจริงเดิมให้รักษา | ให้ผู้ใช้กรอกรหัสฐานข้อมูลจริงใหม่ |
@@ -734,6 +825,10 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 
 - DCON migration: [`0122_allow_dcon_ascii_device_protocol.ts`](../../../../../backend/src/db/migrations/0122_allow_dcon_ascii_device_protocol.ts)
 - DCON OpenAPI tests: [`dcon-device-config.openapi.test.ts`](../../../../../backend/tests/unit/dcon-device-config.openapi.test.ts)
+- Serial ASCII migration: [`0147_allow_serial_ascii_device_protocol.ts`](../../../../../backend/src/db/migrations/0147_allow_serial_ascii_device_protocol.ts)
+- Serial ASCII / Modbus API และ OpenAPI: [`device-config-protocols.api.test.ts`](../../../../../backend/tests/unit/device-config-protocols.api.test.ts), [`device-config-protocols.openapi.api.test.ts`](../../../../../backend/tests/unit/device-config-protocols.openapi.api.test.ts)
+- Migration checks: [`serial-ascii-protocol.migration.test.ts`](../../../../../backend/tests/unit/serial-ascii-protocol.migration.test.ts), [`serial-ascii-protocol.sql-server.test.ts`](../../../../../backend/tests/integration/serial-ascii-protocol.sql-server.test.ts)
+- [หลักฐาน TDD และข้อจำกัดการตรวจ SQL Server](../../../evidence/connection-requests/serial-ascii-modbus-read-function.md)
 
 ## พารามิเตอร์หลังอนุมัติคำขอแก้ไขจุดตรวจวัด
 

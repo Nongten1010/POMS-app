@@ -2454,6 +2454,7 @@ function protocolToConnectionType(protocol: string): DeviceConfigFormConnectionD
   if (protocol === 'POMS_BOX') return 'POMS Box';
   if (protocol === 'MODBUS_RTU') return 'Modbus RTU';
   if (protocol === 'DCON_ASCII') return 'DCON';
+  if (protocol === 'SERIAL_ASCII') return 'Serial ASCII';
   if (protocol === 'MODBUS_TCP') return 'Modbus TCP';
   if (protocol === 'MSSQL') return 'Microsoft SQL';
   return 'MySQL';
@@ -2465,7 +2466,7 @@ function settingsToFormValues(
 ): Record<string, string> {
   if (protocol === 'POMS_BOX') return {};
 
-  if (protocol === 'MODBUS_RTU' || protocol === 'DCON_ASCII') {
+  if (protocol === 'MODBUS_RTU' || protocol === 'DCON_ASCII' || protocol === 'SERIAL_ASCII') {
     const range = readRange(settings.valueRange);
     return {
       comport: valueToString(settings.comPort),
@@ -2477,6 +2478,9 @@ function settingsToFormValues(
       measureMin: range.min,
       measureMax: range.max,
       quantity: valueToString(settings.quantity),
+      ...(protocol === 'MODBUS_RTU' && settings.readFunction !== undefined
+        ? { readFunction: valueToString(settings.readFunction) }
+        : {}),
     };
   }
 
@@ -2488,6 +2492,9 @@ function settingsToFormValues(
       port: valueToString(settings.port),
       measureMin: range.min,
       measureMax: range.max,
+      ...(settings.readFunction !== undefined
+        ? { readFunction: valueToString(settings.readFunction) }
+        : {}),
     };
   }
 

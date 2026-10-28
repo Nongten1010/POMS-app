@@ -19,6 +19,7 @@ import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/conne
 import { KWP_FORM_STATUSES, KWP_FORM_TYPES } from '../kwp-form-reports/kwp-form-reports.types';
 import { LAW_TYPES, LAW_TYPE_LABELS } from '../laws/laws.types';
 import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-point-forms.types';
+import { DEVICE_CONNECTION_PROTOCOL } from '../device-connections/device-connections.types';
 import {
   EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES,
   EDITABLE_PERMISSION_ACTIONS,
@@ -398,7 +399,7 @@ const kwpDateOrHourSchema = {
   nullable: true,
   description: 'วันที่จริงรูปแบบ YYYY-MM-DD หรือ local hour YYYY-MM-DDTHH:00:00',
 };
-const protocolValues = ['POMS_BOX', 'MODBUS_RTU', 'DCON_ASCII', 'MODBUS_TCP', 'MSSQL', 'MYSQL'];
+const protocolValues = Object.values(DEVICE_CONNECTION_PROTOCOL);
 const pomsFactoryEditRequestStatusValues = [
   'PENDING_REVIEW',
   'REVISION_REQUESTED',
@@ -4806,7 +4807,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       slaveId: {
         type: 'number',
         nullable: true,
-        description: 'Slave ID สำหรับ Modbus หรือ device address สำหรับ DCON_ASCII',
+        description: 'Slave ID สำหรับ Modbus หรือ device address สำหรับ DCON_ASCII / SERIAL_ASCII',
       },
       comPort: { type: 'number', nullable: true },
       baudRate: { type: 'number', nullable: true },

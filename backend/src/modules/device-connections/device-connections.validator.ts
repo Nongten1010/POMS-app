@@ -3,6 +3,7 @@ import { parameterKey } from '../poms-factories/poms-measurement-point-parameter
 import {
   DEVICE_CONNECTION_PARAMETER_STATUSES,
   DEVICE_CONNECTION_PROTOCOL,
+  MODBUS_READ_FUNCTIONS,
 } from './device-connections.types';
 import {
   isCanonicalStatusDateTime,
@@ -42,19 +43,21 @@ const nullableParameterStatus = z
   .optional()
   .default(null);
 
+const serialSettingsSchema = z
+  .object({
+    comPort: z.union([z.number(), z.string()]).nullable().optional(),
+    slaveId: z.number().nullable().optional(),
+    baudRate: z.number().nullable().optional(),
+    parity: z.string().nullable().optional(),
+    stopBits: z.number().nullable().optional(),
+    dataBits: z.number().nullable().optional(),
+    quantity: z.number().nullable().optional(),
+    valueRange: measurementRangeSchema.nullable().optional(),
+  })
+  .passthrough();
+const asciiSettingsSchema = defaultNullishObject(serialSettingsSchema);
 const modbusRtuSettingsSchema = defaultNullishObject(
-  z
-    .object({
-      comPort: z.union([z.number(), z.string()]).nullable().optional(),
-      slaveId: z.number().nullable().optional(),
-      baudRate: z.number().nullable().optional(),
-      parity: z.string().nullable().optional(),
-      stopBits: z.number().nullable().optional(),
-      dataBits: z.number().nullable().optional(),
-      quantity: z.number().nullable().optional(),
-      valueRange: measurementRangeSchema.nullable().optional(),
-    })
-    .passthrough(),
+  serialSettingsSchema.extend({ readFunction: z.enum(MODBUS_READ_FUNCTIONS).optional() }),
 );
 
 const modbusTcpSettingsSchema = defaultNullishObject(
@@ -64,6 +67,7 @@ const modbusTcpSettingsSchema = defaultNullishObject(
       slaveId: z.number().nullable().optional(),
       port: z.number().nullable().optional(),
       valueRange: measurementRangeSchema.nullable().optional(),
+      readFunction: z.enum(MODBUS_READ_FUNCTIONS).optional(),
     })
     .passthrough(),
 );
@@ -235,7 +239,14 @@ const deviceConnectionConfigSchema = z.discriminatedUnion('protocol', [
   baseDeviceConnectionSchema
     .extend({
       protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.DCON_ASCII),
-      settings: modbusRtuSettingsSchema,
+      settings: asciiSettingsSchema,
+      channels: configChannelsSchema,
+    })
+    .strict(),
+  baseDeviceConnectionSchema
+    .extend({
+      protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.SERIAL_ASCII),
+      settings: asciiSettingsSchema,
       channels: configChannelsSchema,
     })
     .strict(),

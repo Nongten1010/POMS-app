@@ -134,10 +134,10 @@ Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_r
 | Field | Type | Nullable | Description |
 | --- | --- | --- | --- |
 | `deviceCode` | string | No | รหัสอุปกรณ์; backend สร้าง display code จาก station และลำดับเมื่อ config ไม่มีค่า |
-| `protocol` | `POMS_BOX` \| `MODBUS_RTU` \| `DCON_ASCII` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | No | protocol ของอุปกรณ์ |
+| `protocol` | `POMS_BOX` \| `MODBUS_RTU` \| `DCON_ASCII` \| `SERIAL_ASCII` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | No | protocol ของอุปกรณ์; Serial ASCII แยกจาก DCON |
 | `hostIp` | string | Yes | host สำหรับ TCP/database |
 | `port` | number | Yes | port สำหรับ TCP/database |
-| `slaveId` | number | Yes | Slave ID สำหรับ Modbus หรือ device address สำหรับ `DCON_ASCII`; ใช้ key `slaveId` เดิม |
+| `slaveId` | number | Yes | Slave ID สำหรับ Modbus หรือ device address สำหรับ `DCON_ASCII` / `SERIAL_ASCII`; ใช้ key `slaveId` เดิม |
 | `comPort` | number | Yes | COM port สำหรับ `MODBUS_RTU` |
 | `baudRate` | number | Yes | baud rate สำหรับ `MODBUS_RTU` |
 | `parity` | string | Yes | parity สำหรับ `MODBUS_RTU` |
