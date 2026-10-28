@@ -60,7 +60,7 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/factories/factory-001/previous-request
 3. Backend เปลี่ยนสถานะเป็น `WAITING_CONNECTION` และออกรหัสเรียงตามลำดับจุดในคำขอ.
 4. Client ใช้ `measurementPoints[].pointCode` จาก response สำหรับตั้งค่าอุปกรณ์และเรียก API ที่ใช้ `stationId` ต่อไป.
 
-ข้อยกเว้นสำหรับ active point ที่ได้รับการยกเว้นทั้งหมด: ผู้ประกอบการส่ง `measurementPoints[].monitoringPointStatus = "ได้รับการยกเว้นทั้งหมด"` พร้อมรายการพารามิเตอร์ว่าง เมื่อเจ้าหน้าที่อนุมัติแบบ backend ออกรหัสจุดและเปลี่ยนคำขอเป็น `CONNECTED` พร้อมสร้าง current/live active point ทันที โดยไม่ผ่านขั้นตั้งค่าอุปกรณ์, confirm และ verify. จุดนี้ยังใช้ยื่นแบบ กวภ. และใช้ `pointCode` เดิมทำคำขอ `ADD_PARAMETER` เมื่อพร้อมติดตั้งในภายหลัง.
+ข้อยกเว้นสำหรับคำขอ `ADD_MEASUREMENT_POINT`: จุดที่ `monitoringPointStatus = "ได้รับการยกเว้นทั้งหมด"` และจุดที่ `monitoringPointStatus = "อยู่ระหว่างขยายเวลา"` พร้อมรายการพารามิเตอร์ว่าง ใช้ flow อนุมัติเดียวกัน เมื่อทุกจุดในคำขอเข้าเงื่อนไข เจ้าหน้าที่อนุมัติแล้ว Backend ออกรหัสจุด เปลี่ยนคำขอเป็น `CONNECTED` และสร้าง current/live active point ทันที โดยคงสถานะระดับจุดไว้ ข้ามขั้นตั้งค่าอุปกรณ์, confirm และ verify และไม่เริ่มกำหนดตั้งค่าอุปกรณ์ 30 วัน จุดนี้ใช้ `pointCode` เดิมทำคำขอ `ADD_PARAMETER` เมื่อพร้อมติดตั้งภายหลังได้ ดู [การส่งตัวเลือกยกเว้นทั้งหมดและขยายระยะเวลาทั้งปล่อง](./request-payloads-and-validation.md#whole-stack-options) สำหรับ mapping ชื่อบนหน้าจอ, payload และ response ที่ Frontend ต้องใช้
 
 ผู้ประกอบการอ่านรายชื่อโรงงานทั้งหมดที่ตนมีสิทธิ์ พร้อมสถานะว่าโรงงานเข้าข่ายหรือไม่:
 
@@ -826,7 +826,7 @@ Relevant response fields (`200 OK`):
 | Field                                              | Type           | Meaning                                                                           |
 | -------------------------------------------------- | -------------- | --------------------------------------------------------------------------------- |
 | `success`                                          | boolean        | สำเร็จเป็น `true`                                                                 |
-| `data.status`                                      | string         | ปกติเป็น `WAITING_CONNECTION`; เป็น `CONNECTED` เมื่อทุกจุดได้รับการยกเว้นทั้งหมด |
+| `data.status`                                      | string         | ปกติเป็น `WAITING_CONNECTION`; เป็น `CONNECTED` เมื่อทุกจุดยกเว้นทั้งหมดหรือขยายเวลาทั้งปล่องแบบไม่มีพารามิเตอร์ |
 | `data.systemType`                                  | string         | `CEMS` หรือ `WPMS`                                                                |
 | `data.measurementPoints[].pointCode`               | string         | รหัสที่ backend ออกให้หรือ reuse ตาม assignment ของแต่ละจุด                       |
 | `data.measurementPoints[].pointCodeAssignmentMode` | string \| null | `AUTO`, `MANUAL_LEGACY`, `OFFICER_DIRECT` หรือ `LEGACY_IMPORTED` ตามที่มา         |
@@ -852,7 +852,7 @@ Minimal response:
 }
 ```
 
-สำหรับจุดที่ `monitoringPointStatus = "ได้รับการยกเว้นทั้งหมด"` response หลังอนุมัติคืน `status: "CONNECTED"`, `verifiedAt` เป็นเวลาอนุมัติ, `measurementPoints[].parameters: []` และรหัสจุดที่ออกให้ตามกติกาเดิม. Active point ถูกบันทึกใน `cems_wpms_connected_measurement_points` พร้อม `monitoring_point_status` เพื่อให้ query และนับสถานะปัจจุบันได้โดยไม่อ่านประวัติคำขอ.
+กรณีทุกจุดเข้าเงื่อนไขยกเว้นทั้งหมดหรือขยายเวลาทั้งปล่องแบบไม่มีพารามิเตอร์ response หลังอนุมัติคืน `status: "CONNECTED"`, `verifiedAt` เป็นเวลาอนุมัติ, `measurementPoints[].parameters: []` และรหัสจุดตามกติกาเดิม Active point ถูกบันทึกใน `cems_wpms_connected_measurement_points` พร้อม `monitoring_point_status` เดิม โดยค่า `CONNECTED` ระบุว่าคำขอจบแล้วและมีจุดใน POMS; Frontend ต้องใช้ `monitoringPointStatus` แสดงเหตุผลที่ไม่มีอุปกรณ์ ดู [ตัวอย่าง request/response](./request-payloads-and-validation.md#whole-stack-options)
 
 ### Approve form status
 

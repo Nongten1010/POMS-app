@@ -1392,7 +1392,7 @@ export const connectionRequestsService = {
       );
     }
 
-    if (isFullyExemptedAddPointRequest(request)) {
+    if (isAddPointRequestWithoutDeviceSetup(request)) {
       return connectionRequestsRepository.updateStatus(
         id,
         CONNECTION_REQUEST_STATUS.CONNECTED,
@@ -2628,12 +2628,14 @@ function findCodeIssuedAt(request: ConnectionRequestDTO): string | null {
   return history?.changedAt ?? request.connectionDueAt ?? null;
 }
 
-function isFullyExemptedAddPointRequest(request: ConnectionRequestDTO): boolean {
+function isAddPointRequestWithoutDeviceSetup(request: ConnectionRequestDTO): boolean {
   return (
     request.requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT &&
     request.measurementPoints.length > 0 &&
     request.measurementPoints.every(
-      (point) => point.monitoringPointStatus === 'ได้รับการยกเว้นทั้งหมด',
+      (point) =>
+        point.monitoringPointStatus === 'ได้รับการยกเว้นทั้งหมด' ||
+        (point.monitoringPointStatus === 'อยู่ระหว่างขยายเวลา' && point.parameters.length === 0),
     )
   );
 }

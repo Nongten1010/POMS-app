@@ -1,5 +1,13 @@
 # API Breaking Changes
 
+<a id="whole-stack-extension-approval"></a>
+
+## 2026-10-28 — ขยายระยะเวลาทั้งปล่องใช้ flow อนุมัติเดียวกับยกเว้นทั้งหมด
+
+- **Affected canonical docs:** [คำขอเชื่อมต่อ](./menus/connection-requests/README.md), [payload และผลอนุมัติสำหรับ Frontend](./menus/connection-requests/request-payloads-and-validation.md#whole-stack-options)
+- **Impact:** `ADD_MEASUREMENT_POINT` ที่ทุกจุดยกเว้นทั้งหมด หรือเป็น `monitoringPointStatus = "อยู่ระหว่างขยายเวลา"` และไม่มีพารามิเตอร์ จะเปลี่ยนเป็น `CONNECTED` ทันทีเมื่อ `APPROVE_DESIGN`/`APPROVE_FORM` แทนการส่งจุดขยายเวลาไปรอ `WAITING_CONNECTION` พร้อมกำหนด 30 วัน สร้าง active point และคงสถานะขยายเวลา โดยข้าม device config, confirm และ verify กรณีขยายเวลาที่มีพารามิเตอร์จริงและ `ADD_PARAMETER` ใช้ flow เดิม
+- **Migration:** Frontend map ชื่อบนหน้าจอ “อยู่ระหว่างขยายระยะเวลาทั้งปล่อง” เป็น enum เดิม `อยู่ระหว่างขยายเวลา` ส่ง `details.requestedParameters: []` และ `measurementInstruments.parameters: []` แล้วอ่านสถานะคำขอจาก response หลังอนุมัติ หยุดนำคำขอ `CONNECTED` ไปตั้งค่าอุปกรณ์หรือแสดง countdown และใช้ `monitoringPointStatus` แสดงเหตุผลของจุดที่ไม่มีพารามิเตอร์ ไม่ต้อง migrate schema หรือแปลงประวัติคำขอที่อนุมัติแล้ว
+
 <a id="parameter-column-family-matching"></a>
 
 ## 2026-10-26 — จับคู่ค่ากับสถานะใน family เดียวกันและล้างครบทุกชุดที่ตรงหน่วย

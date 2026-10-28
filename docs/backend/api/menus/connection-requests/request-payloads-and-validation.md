@@ -120,7 +120,7 @@ curl --request POST \
 | `longitude`              | body     | No            | Yes                | number   | `-180..180`                                                                                                           |
 | `parameters`             | body     | No            | No after normalize | string[] | 1-50 entries เมื่อส่ง; trim ต่อ item; backend split comma, dedupe, และตัดค่า `ไม่มี`                                  |
 | `description`            | body     | No            | Yes                | string   | trim <=1000                                                                                                           |
-| `monitoringPointStatus`  | body     | No            | Yes                | enum     | สถานะระดับจุด 1 ใน 7 ค่าที่รองรับ; `ได้รับการยกเว้นทั้งหมด` ใช้กับ active point ที่ยังไม่มีพารามิเตอร์ได้             |
+| `monitoringPointStatus`  | body     | No            | Yes                | enum     | สถานะระดับจุด 1 ใน 7 ค่าที่รองรับ; `ได้รับการยกเว้นทั้งหมด` หรือ `อยู่ระหว่างขยายเวลา` ใช้กับ active point ที่ยังไม่มีพารามิเตอร์ได้             |
 | `details`                | body     | Flow-specific | Yes                | object   | schema เป็น generic JSON record; business validation อยู่ใน service/validator                                         |
 | `documentsAndImages`     | body     | Flow-specific | No after normalize | array    | สูงสุด 50; backend ตัด placeholder ที่ยังไม่มีไฟล์จริง                                                                |
 | `measurementInstruments` | body     | Flow-specific | Yes                | object   | required ใน add-point/add-parameter; direct-connection อนุญาต null                                                    |
@@ -289,7 +289,7 @@ criteria normalization สำคัญ
 | `measurementPoints[].measurementInstruments` | body     | Yes         | No       | object | ห้ามเป็น `null`                                                                                         |
 | `measurementPoints[].documentsAndImages`     | body     | Conditional | No       | array  | required เมื่อ `systemType = "CEMS"`; WPMS ส่งว่างได้                                                   |
 | `measurementPoints[].pointCode`              | body     | Conditional | Yes      | string | flow ปกติ backend clear ก่อนบันทึก; `CONNECT` ต้องมี exactly 1 point และ `pointCode`                    |
-| `measurementPoints[].monitoringPointStatus`  | body     | No          | Yes      | enum   | ถ้าเป็น `ได้รับการยกเว้นทั้งหมด` จุดยังถือเป็น active POMS point และส่งพารามิเตอร์ว่างได้               |
+| `measurementPoints[].monitoringPointStatus`  | body     | No          | Yes      | enum   | ถ้าเป็น `ได้รับการยกเว้นทั้งหมด` หรือ `อยู่ระหว่างขยายเวลา` ทั้งจุด ส่งพารามิเตอร์ว่างและใช้ flow อนุมัติเป็น active POMS point ได้               |
 
 ### Minimal Valid Request
 
@@ -397,9 +397,87 @@ criteria normalization สำคัญ
 - `submissionAction = "CONNECT"` ต้องมี effective permission `cems_wpms_requests:direct_connect` ล่าสุดโดยไม่จำกัด role หรือ `userType`, exactly 1 measurement point และ `measurementPoints[0].pointCode`; backend ตรวจ eligible-factory scope แล้วสร้างสถานะ `CONNECTED`
 - duplicate `pointName` และ duplicate `pointCode` ภายใน request เดียวถูก reject
 - `CEMS` ต้องมีเอกสารแนบอย่างน้อย 1 รายการต่อ point; `WPMS` ไม่บังคับ
-- ไม่มี conditional validation เพิ่มสำหรับสถานะ `ได้รับการยกเว้นทั้งหมด`; ช่องกฎหมาย/ประกาศใช้กติกาเดิม และ client ส่ง `requestedParameters: []` กับ `measurementInstruments.parameters: []` ได้
-- เมื่อคำขอ `ADD_MEASUREMENT_POINT` ทุกจุดมี `monitoringPointStatus = "ได้รับการยกเว้นทั้งหมด"`, การอนุมัติด้วย `APPROVE_DESIGN` หรือ `APPROVE_FORM` จะออกรหัสจุด, เปลี่ยนคำขอเป็น `CONNECTED`, บันทึกเวลาอนุมัติเป็น `verifiedAt` และสร้าง active row ใน `cems_wpms_connected_measurement_points` ทันทีโดยไม่ผ่าน `WAITING_CONNECTION`, device config, confirm หรือ verify flow
-- active point ที่ได้รับการยกเว้นทั้งหมดเก็บ `parameters: []` และเก็บ `monitoringPointStatus` แยกต่างหากเพื่อรองรับการนับและการยื่น `ADD_PARAMETER` ด้วย `pointCode` เดิมในภายหลัง
+- สถานะ `ได้รับการยกเว้นทั้งหมด` และการขยายเวลาทั้งจุดใช้ช่องกฎหมาย/ประกาศ เอกสาร สิทธิ์ และ validation ของฟอร์มเดิม โดยส่ง `details.requestedParameters: []` กับ `measurementInstruments.parameters: []`
+- คำขอ `ADD_MEASUREMENT_POINT` ที่ทุกจุดยกเว้นทั้งหมด หรืออยู่ระหว่างขยายเวลาโดยไม่มีพารามิเตอร์ ใช้ flow อนุมัติเดียวกัน รวมกรณีที่แต่ละจุดใช้คนละสถานะในสองค่านี้ การอนุมัติด้วย `APPROVE_DESIGN` หรือ `APPROVE_FORM` ออกรหัสจุด เปลี่ยนคำขอเป็น `CONNECTED` บันทึกเวลาอนุมัติเป็น `verifiedAt` และสร้าง active row ใน `cems_wpms_connected_measurement_points` ทันที โดยคง `monitoringPointStatus` เดิม
+- ไม่ผ่าน `WAITING_CONNECTION`, device config, confirm หรือ verify และไม่สร้างกำหนดตั้งค่าอุปกรณ์ 30 วัน; worker ยกเลิกเมื่อหมดเวลาจะไม่เลือกคำขอ `CONNECTED`
+- ถ้าจุดขยายเวลามีพารามิเตอร์จริง หรือมีจุดอื่นที่ไม่เข้าเงื่อนไขในคำขอเดียวกัน ใช้ flow ตั้งค่าอุปกรณ์ปกติ คำขอ `ADD_PARAMETER` ไม่ใช้ทางลัดนี้แม้ส่งสถานะขยายเวลามาด้วย
+- จุดที่อนุมัติแบบไม่มีพารามิเตอร์เก็บ `parameters: []` และสถานะระดับจุดแยกกัน ใช้ `pointCode` เดิมยื่น `ADD_PARAMETER` เมื่อต้องการเพิ่มพารามิเตอร์ภายหลังได้
+
+<a id="whole-stack-options"></a>
+
+### ตัวเลือกยกเว้นทั้งหมดและขยายระยะเวลาทั้งปล่อง
+
+Frontend ต้องแยกตัวเลือกสถานะทั้งจุดออกจากพารามิเตอร์ตรวจวัดจริง และให้เลือกเพียงตัวเดียวต่อจุด ไม่เลือกสองสถานะหรือเลือกร่วมกับพารามิเตอร์จริง ค่า API ใช้ enum เดิมตามตาราง ไม่เพิ่มชื่อบนหน้าจอเข้า enum:
+
+| ตัวเลือกบนหน้าจอ | `measurementPoints[].monitoringPointStatus` |
+| --- | --- |
+| ได้รับการยกเว้นทั้งหมด | `"ได้รับการยกเว้นทั้งหมด"` |
+| อยู่ระหว่างขยายระยะเวลาทั้งปล่อง | `"อยู่ระหว่างขยายเวลา"` |
+
+| Field | ค่าที่ส่ง/ได้รับ | กติกาสำหรับ Frontend |
+| --- | --- | --- |
+| `details.requestedParameters` | `[]` ใน request | ห้ามส่งข้อความตัวเลือกเป็นชื่อพารามิเตอร์ |
+| `measurementInstruments.parameters` | `[]` ใน request | ยังส่ง object เครื่องมือได้ โดยไม่มีรายการพารามิเตอร์ |
+| `parameters` ระดับจุด | ไม่ส่งใน request; response เป็น `[]` | Backend derive จากรายการที่ขอเชื่อมต่อ |
+| `measurementPoints[].pointCode` | ไม่ส่งในคำขอปกติ; อ่านค่าจาก response หลังอนุมัติ | ใช้รหัสเดิมเพิ่มพารามิเตอร์ภายหลัง |
+| `data.status` | `CONNECTED` หลังอนุมัติ | จบขั้นตอนคำขอโดยไม่เปิด flow ตั้งค่าอุปกรณ์ |
+| `data.verifiedAt` | เวลาอนุมัติ | ใช้กติกาเดียวกับยกเว้นทั้งหมด |
+| `data.measurementPoints[].monitoringPointStatus` | คงค่าที่ส่ง | แสดงว่าได้รับยกเว้นหรืออยู่ระหว่างขยายเวลา แม้คำขอเป็น `CONNECTED` |
+
+ตัวอย่างคำขอขั้นต่ำ `POST /api/v1/cems-wpms-requests/measurement-points` (สร้างเป็น `PENDING_DESIGN_REVIEW`):
+
+```json
+{
+  "factoryId": "F000123",
+  "factoryName": "โรงงานตัวอย่าง",
+  "factoryRegistrationNo": "น.60-1/2560",
+  "systemType": "CEMS",
+  "contactPersons": [{ "name": "ผู้ประสานงาน", "phone": "0812345678" }],
+  "measurementPoints": [{
+    "pointName": "ปล่องระบาย A",
+    "pointType": "STACK",
+    "monitoringPointStatus": "อยู่ระหว่างขยายเวลา",
+    "details": { "requestedParameters": [], "stackShape": "วงกลม", "stackDiameter": 1.2 },
+    "documentsAndImages": [{
+      "title": "ภาพถ่ายปล่อง",
+      "fileUrl": "https://example.com/uploads/stack-a.jpg",
+      "fileName": "stack-a.jpg",
+      "fileType": "image/jpeg",
+      "fileSize": 2048
+    }],
+    "measurementInstruments": { "parameters": [] }
+  }]
+}
+```
+
+เจ้าหน้าที่ใช้ `POST /api/v1/cems-wpms-requests/101/review` กับ `{ "decision": "APPROVE_DESIGN" }` หรือ `POST /api/v1/cems-wpms-requests/101/status` กับ `{ "action": "APPROVE_FORM" }` ด้วย `cems_wpms_requests:approve` และ scope เดิม คำขอยังต้องอยู่ `PENDING_DESIGN_REVIEW` หรือ `REVISED_PENDING_DESIGN_REVIEW` จึงอนุมัติได้
+
+ตัวอย่าง response หลังอนุมัติคำขอใหม่ (แสดงเฉพาะ field สำคัญ):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 101,
+    "requestType": "ADD_MEASUREMENT_POINT",
+    "status": "CONNECTED",
+    "connectionDueAt": null,
+    "confirmedAt": null,
+    "verifiedAt": "2026-10-28T03:00:00.000Z",
+    "measurementPoints": [{
+      "id": 201,
+      "pointName": "ปล่องระบาย A",
+      "pointCode": "S2001",
+      "monitoringPointStatus": "อยู่ระหว่างขยายเวลา",
+      "parameters": [],
+      "details": { "requestedParameters": [] },
+      "measurementInstruments": { "parameters": [] }
+    }]
+  }
+}
+```
+
+การส่ง `monitoringPointStatus = "อยู่ระหว่างขยายระยะเวลาทั้งปล่อง"` ตรง ๆ ไม่ใช่ค่า enum และตอบ `400 VALIDATION_ERROR` ต้อง map เป็น `อยู่ระหว่างขยายเวลา` ก่อนส่ง ไม่มี field วันสิ้นสุดหรือขั้นอนุมัติการขยายเวลาใหม่ใน change นี้
 
 คำขอ `WAITING_FACTORY_REVISION` ที่เจ้าหน้าที่สร้างสามารถให้ผู้ใช้ที่ได้รับมอบหมายโรงงานและมี `cems_wpms_requests:edit` แก้และส่งกลับได้ตาม [กติกา PUT form](#put-apiv1cems-wpms-requestsidform)
 

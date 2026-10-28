@@ -22,6 +22,9 @@ type EnumLabelMap = Record<string, string>;
 const canceledPointCodeReuseDescription =
   'รหัสเดิม เช่น P0267 จากคำขอ CANCELED ที่ยังไม่เคยเชื่อมต่อ ใช้กับคำขอใหม่ของโรงงานเดิมและ systemType เดิมได้. Backend ตรวจและเปลี่ยนเจ้าของการจองใน transaction ตอนกำหนดรหัส MANUAL_LEGACY หรือสร้าง direct connection โดยเก็บคำขอและจุดเดิมเป็นประวัติ; ใช้ได้กับคำขอที่ยกเลิกไว้ก่อน deploy ด้วย. ห้ามนำรหัสที่เคยเชื่อมต่อ รวมแถวที่เลิกใช้งานแล้ว รหัสที่มีจุดอื่นใช้อยู่หรือมี live device config กลับมาใช้; กรณีไม่เข้าเงื่อนไขยังตอบ 409 CONFLICT reason POINT_CODE_ALREADY_ASSIGNED. ช่วงรหัส legacy และการออกเลข AUTO ไม่เปลี่ยน';
 
+const noDeviceSetupApprovalDescription =
+  'คำขอ ADD_MEASUREMENT_POINT ที่ทุกจุดได้รับการยกเว้นทั้งหมด หรืออยู่ระหว่างขยายเวลาโดยไม่มีพารามิเตอร์ จะใช้ flow อนุมัติเดียวกัน: APPROVE_DESIGN/APPROVE_FORM ออกรหัสจุดและสร้าง active POMS point parameters = [] พร้อมเปลี่ยนคำขอเป็น CONNECTED และ verifiedAt เป็นเวลาอนุมัติ โดยคง monitoringPointStatus เดิม ไม่ผ่าน WAITING_CONNECTION, device config, confirm หรือ verify และไม่เริ่มกำหนดตั้งค่าอุปกรณ์ 30 วัน. ตัวเลือกหน้าจอ อยู่ระหว่างขยายระยะเวลาทั้งปล่อง ให้ส่ง monitoringPointStatus = อยู่ระหว่างขยายเวลา, details.requestedParameters = [] และ measurementInstruments.parameters = []; ไม่ส่งข้อความตัวเลือกเป็นชื่อพารามิเตอร์. สถานะขยายเวลาที่มีพารามิเตอร์จริงหรือคำขอ ADD_PARAMETER ยังใช้ flow ตั้งค่าอุปกรณ์ปกติ';
+
 interface OperationOptions {
   tag: string;
   summary: string;
@@ -857,6 +860,47 @@ const officerAddPointExample = {
   revisionReason: 'กรุณาตรวจสอบและแก้ไขรายละเอียดจุดตรวจวัด',
   officerNote: 'ตรวจสอบแบบฟอร์มโดยเจ้าหน้าที่แล้ว',
 };
+const wholeStackExtensionExample = {
+  ...addPointExample,
+  measurementPoints: [
+    {
+      ...addPointExample.measurementPoints[0],
+      monitoringPointStatus: 'อยู่ระหว่างขยายเวลา',
+      details: {
+        ...addPointExample.measurementPoints[0].details,
+        requestedParameters: [],
+      },
+      measurementInstruments: { converterBrand: null, converterModel: null, parameters: [] },
+    },
+  ],
+};
+const noDeviceSetupApprovalExamples = {
+  wholeStackExtension: {
+    summary: 'หลังอนุมัติขยายระยะเวลาทั้งปล่อง (แสดง field สำคัญ)',
+    value: {
+      success: true,
+      data: {
+        id: 101,
+        requestType: 'ADD_MEASUREMENT_POINT',
+        status: 'CONNECTED',
+        connectionDueAt: null,
+        confirmedAt: null,
+        verifiedAt: '2026-10-28T03:00:00.000Z',
+        measurementPoints: [
+          {
+            id: 201,
+            pointName: 'ปล่องระบาย A',
+            pointCode: 'S2001',
+            monitoringPointStatus: 'อยู่ระหว่างขยายเวลา',
+            parameters: [],
+            details: { requestedParameters: [] },
+            measurementInstruments: { parameters: [] },
+          },
+        ],
+      },
+    },
+  },
+};
 const addParameterExample = {
   factoryId: 'F000123',
   factoryName: 'โรงงานตัวอย่าง',
@@ -1431,7 +1475,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
                 },
                 parameters: { type: 'array', items: { type: 'string' } },
                 monitoringPointStatus: monitoringPointStatusSchema(
-                  'สถานะระดับจุด; จุดที่ได้รับการยกเว้นทั้งหมดยังเป็น active POMS point และมี parameters ว่างได้',
+                  'สถานะระดับจุด; จุดที่ได้รับการยกเว้นทั้งหมดหรืออยู่ระหว่างขยายเวลาทั้งปล่องยังเป็น active POMS point และมี parameters ว่างได้',
                 ),
               },
             },
@@ -2016,12 +2060,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
         minItems: 0,
         maxItems: 50,
         items: { type: 'string', minLength: 1, maxLength: 64 },
-        description: 'ส่ง [] ได้สำหรับจุดที่ monitoringPointStatus = ได้รับการยกเว้นทั้งหมด',
+        description:
+          'Response ส่ง [] ได้สำหรับจุดที่ monitoringPointStatus = ได้รับการยกเว้นทั้งหมด หรืออยู่ระหว่างขยายเวลา; request ใช้ details.requestedParameters: [] โดยไม่ส่ง parameters ที่ระดับจุด',
       },
       description: nullableString(1000, 'Optional'),
-      monitoringPointStatus: monitoringPointStatusSchema(
-        'เมื่อเป็น ได้รับการยกเว้นทั้งหมด เจ้าหน้าที่อนุมัติแล้วคำขอไป CONNECTED และสร้าง active point ที่ไม่มีพารามิเตอร์',
-      ),
+      monitoringPointStatus: monitoringPointStatusSchema(noDeviceSetupApprovalDescription),
       details: {
         allOf: [schemaRef('MeasurementPointDetails')],
         minProperties: 1,
@@ -2125,7 +2168,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
     description:
-      'ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. หากไม่ส่ง submissionAction จะสร้าง PENDING_DESIGN_REVIEW; officer/admin เลือก REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission, exactly 1 point และ pointCode. คำขอปกติที่ทุกจุดมี monitoringPointStatus = ได้รับการยกเว้นทั้งหมด จะไป CONNECTED ทันทีเมื่อเจ้าหน้าที่ APPROVE_DESIGN/APPROVE_FORM พร้อมสร้าง active point parameters = []',
+      'ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. หากไม่ส่ง submissionAction จะสร้าง PENDING_DESIGN_REVIEW; officer/admin เลือก REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission, exactly 1 point และ pointCode. ' +
+      noDeviceSetupApprovalDescription,
     example: officerAddPointExample,
   },
   AddParameterRequest: {
@@ -2983,7 +3027,21 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. default เป็น PENDING_DESIGN_REVIEW; ผู้มี effective permission ที่เกี่ยวข้องส่ง submissionAction=REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission เพิ่ม' +
         ' ' +
         measurementCleanupDescription,
-      requestBody: jsonRequestBody(schemaRef('AddMeasurementPointRequest'), officerAddPointExample),
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: schemaRef('AddMeasurementPointRequest'),
+            examples: {
+              officer: { summary: 'เจ้าหน้าที่ส่งให้โรงงานแก้ไข', value: officerAddPointExample },
+              wholeStackExtension: {
+                summary: 'อยู่ระหว่างขยายระยะเวลาทั้งปล่อง',
+                value: wholeStackExtensionExample,
+              },
+            },
+          },
+        },
+      },
       successStatus: '201',
       successDescription: 'สร้างคำขอเพิ่มจุดตรวจวัดแล้ว',
       successSchema: schemaRef('ConnectionRequestResponse'),
@@ -3321,6 +3379,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อนุมัติแบบหรือแจ้งแก้ไข',
       operationId: 'reviewConnectionRequest',
       description:
+        noDeviceSetupApprovalDescription +
+        '. ' +
         canceledPointCodeReuseDescription +
         ' ' +
         'Permission: cems_wpms_requests:approve พร้อม data scope. decision REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ล็อกคำขอและตรวจ approve scope ซ้ำก่อนบันทึก; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. คำสั่งอื่นคงข้อจำกัดสถานะเดิม; คำสั่งที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
@@ -3330,6 +3390,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         ' ' +
         measurementCleanupDescription,
       parameters: [idPathParameter],
+      successExamples: noDeviceSetupApprovalExamples,
       requestBody: jsonRequestBody(
         {
           oneOf: [
@@ -3403,6 +3464,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เปลี่ยนสถานะหรือแจ้งแก้ไข',
       operationId: 'changeConnectionRequestStatus',
       description:
+        noDeviceSetupApprovalDescription +
+        '. ' +
         canceledPointCodeReuseDescription +
         ' ' +
         'ล็อกคำขอและตรวจ approve scope ซ้ำก่อน REJECT; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. คำสั่งอื่นที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
@@ -3414,6 +3477,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         ' ' +
         measurementCleanupDescription,
       parameters: [idPathParameter],
+      successExamples: noDeviceSetupApprovalExamples,
       requestBody: jsonRequestBody(
         {
           oneOf: [
