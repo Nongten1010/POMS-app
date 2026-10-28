@@ -56,6 +56,7 @@ import {
   getStatusManagementSelection,
   getPomsDisplayStatus,
   normalizeOfficerNotificationEmails,
+  sortFactoryEditRequestRows,
 } from '../utils/masterData.mjs'
 
 const pomsFactoriesApiBaseUrl = window.location.hostname === 'localhost'
@@ -2338,6 +2339,10 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
   const isAdmin = [roleCode, ...roleCodes].some((role) => String(role).toLowerCase() === 'admin')
   const isOperator = String(userType).toLowerCase() === 'operator'
   const isOfficer = String(userType).toLowerCase() === 'officer'
+  const sortedRequestRows = useMemo(
+    () => sortFactoryEditRequestRows(requestRows, { isOfficer, isAdmin }),
+    [requestRows, isOfficer, isAdmin],
+  )
   const canViewRequests = isAdmin || isOperator || isOfficer
   const pendingRequestCount = accessToken
     ? countPendingFactoryEditRequests(requestRows, { isOperator, isOfficer, isAdmin })
@@ -2972,7 +2977,7 @@ function MasterDataPage({ userType = '', roleCode = '', roleCodes = [], accessTo
             </Alert>
           ) : null}
           <DataGrid
-            rows={effectiveSubMenu === 'factories' ? rows : requestRows}
+            rows={effectiveSubMenu === 'factories' ? rows : sortedRequestRows}
             columns={effectiveSubMenu === 'factories' ? columns : pageRequestColumns}
             getRowHeight={effectiveSubMenu === 'requests' ? getRequestRowHeight : undefined}
             loading={effectiveSubMenu === 'factories' ? loadingFactories || actionLoading : loadingRequests || actionLoading}

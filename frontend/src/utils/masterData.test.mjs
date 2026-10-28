@@ -18,7 +18,36 @@ import {
   getStatusManagementSelection,
   getPomsDisplayStatus,
   normalizeOfficerNotificationEmails,
+  sortFactoryEditRequestRows,
 } from './masterData.mjs'
+
+test('staff request lists group statuses then sort newest first without mutating API order', () => {
+  const rows = [
+    { id: 1, statusCode: 'REJECTED' },
+    { id: 2, statusCode: 'CANCELLED' },
+    { id: 3, statusCode: 'APPROVED', status: 'รอพิจารณา' },
+    { id: 4, statusCode: 'REVISION_REQUESTED' },
+    { id: 5, statusCode: 'PENDING_REVIEW', raw: { submittedAt: '2026-10-28T08:00:00Z' } },
+    { id: 6, statusCode: 'REVISED_PENDING_REVIEW', raw: { submittedAt: '2026-10-28T09:00:00Z' } },
+    { id: 7, statusCode: 'UNKNOWN' },
+  ]
+  for (const role of [{ isOfficer: true }, { isAdmin: true }]) {
+    assert.deepEqual(sortFactoryEditRequestRows(rows, role).map((row) => row.id), [6, 5, 4, 3, 2, 1, 7])
+  }
+  assert.equal(sortFactoryEditRequestRows(rows), rows)
+  assert.deepEqual(rows.map((row) => row.id), [1, 2, 3, 4, 5, 6, 7])
+})
+
+test('request sorting supports Thai labels and preserves ties and invalid dates', () => {
+  const rows = [
+    { id: 1, status: 'ไม่อนุมัติ' },
+    { id: 2, status: 'รอพิจารณา', submittedAt: 'invalid' },
+    { id: 3, status: 'แก้ไขแล้ว รอพิจารณา' },
+    { id: 4, status: 'ส่งกลับให้แก้ไข' },
+  ]
+  assert.deepEqual(sortFactoryEditRequestRows(rows, { isAdmin: true }).map((row) => row.id), [2, 3, 4, 1])
+  assert.deepEqual(sortFactoryEditRequestRows([], { isOfficer: true }), [])
+})
 
 test('request badge counts only the statuses actionable by each audience', () => {
   const rows = [

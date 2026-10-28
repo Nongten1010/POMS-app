@@ -28,6 +28,32 @@ export function canCancelFactoryEditRequest(status) {
   return CANCELLABLE_FACTORY_EDIT_REQUEST_STATUSES.includes(String(status ?? '').trim())
 }
 
+export function sortFactoryEditRequestRows(rows = [], { isOfficer = false, isAdmin = false } = {}) {
+  if (!isOfficer && !isAdmin) return rows
+
+  const priorities = [
+    ['PENDING_REVIEW', 'REVISED_PENDING_REVIEW', 'รอพิจารณา', 'แก้ไขแล้ว/รอพิจารณา'],
+    ['REVISION_REQUESTED', 'รอโรงงานแก้ไข'],
+    ['APPROVED', 'อนุมัติ'],
+    ['CANCELLED', 'CANCELED', 'ยกเลิก', 'ยกเลิกคำขอ'],
+    ['REJECTED', 'ไม่อนุมัติ', 'ไม่ผ่านการพิจารณา'],
+  ]
+  const priority = (row) => {
+    const status = String(row.statusCode || getFactoryEditRequestStatusLabel(row.status, row.statusLabel)).trim()
+    const index = priorities.findIndex((group) => group.includes(status))
+    return index === -1 ? priorities.length : index
+  }
+  const submittedTime = (row) => {
+    const time = Date.parse(row.submittedAt ?? row.raw?.submittedAt ?? '')
+    return Number.isNaN(time) ? 0 : time
+  }
+  return rows.map((row, index) => ({ row, index }))
+    .sort((a, b) => priority(a.row) - priority(b.row)
+      || submittedTime(b.row) - submittedTime(a.row)
+      || a.index - b.index)
+    .map(({ row }) => row)
+}
+
 export function countPendingFactoryEditRequests(rows, { isOperator = false, isOfficer = false, isAdmin = false } = {}) {
   const statuses = isAdmin || isOfficer
     ? ['PENDING_REVIEW', 'REVISED_PENDING_REVIEW']
