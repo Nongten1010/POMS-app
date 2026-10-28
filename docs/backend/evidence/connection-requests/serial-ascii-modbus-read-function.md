@@ -48,7 +48,7 @@ npm audit --omit=dev
 | ลิงก์เอกสารและ index | relative links ของ Markdown ที่แก้มีปลายทางจริง และ evidence ใหม่นี้ reachable จาก backend hub |
 | ขอบเขต diff | 19 ไฟล์: backend 15 และ canonical Markdown 4; ไม่มี frontend; รวมการแก้ runtime dependencies ที่ผู้ใช้ขอ |
 
-ผล SQL-generation test และ coverage ของ migration ไม่ยืนยันว่า SQL Server engine รัน migration ผ่าน ยังต้องตรวจตามหัวข้อถัดไปก่อนนำ migration ขึ้นใช้งาน ส่วน docs guard ใน repository มี specification แต่ยังไม่มี script สำหรับรัน จึงตรวจ links, reachability, placement และ declaration โดยตรง
+ผล SQL-generation test และ coverage ของ migration ไม่ยืนยันการทำงานของ SQL Server engine; deployment ด้านล่างยืนยันเฉพาะการรัน migration ขาขึ้นบน production ส่วน constraint/rollback suite ในฐาน SQL Server แยกยังถูกข้ามตามข้อจำกัดที่ระบุ ส่วน docs guard ใน repository มี specification แต่ยังไม่มี script สำหรับรัน จึงตรวจ links, reachability, placement และ declaration โดยตรง
 
 ### การแก้ช่องโหว่ runtime dependencies
 
@@ -96,6 +96,23 @@ npm test -- --runInBand tests/integration/serial-ascii-protocol.sql-server.test.
 ต้องรัน migration `0147_allow_serial_ascii_device_protocol` ก่อนรับ payload ใหม่ ชุดส่ง production แยกจาก workspace เดิมและประกอบจาก `origin/main` เพื่อรักษาการเปลี่ยนของทีม รวมเฉพาะ backend และ canonical Markdown รวม 19 ไฟล์ ไม่รวม frontend
 
 ส่งผ่าน Git และ Deploy POMS ตาม [คู่มือ production](../../guides/production-git-delivery.md); หลัง workflow สำเร็จต้องตรวจ migration, health, deploy marker และ `/api/v1/openapi.json` บน production แล้วบันทึก commit และ workflow run ที่ยืนยันผลจริง
+
+
+### ผล release ที่ตรวจจริง
+
+ส่ง [commit `b59b5b5a511e7ceb94ed1cac0b5c52641ab7f815`](https://github.com/Nongten1010/POMS-app/commit/b59b5b5a511e7ceb94ed1cac0b5c52641ab7f815) เข้า `main` และ [Deploy POMS run `40620043161`](https://github.com/Nongten1010/POMS-app/actions/runs/40620043161) จบด้วย `success`. ตรวจ production เมื่อ `2026-10-28T02:28:10Z` โดยอ่าน contract และ marker เท่านั้น ไม่สร้าง config หรือแก้ข้อมูลผู้ใช้เพื่อทดสอบ
+
+| หลักฐาน | ผล |
+| --- | --- |
+| Build และ tests บน production runner | ผ่าน 4,941 ข้อ; ข้าม 18 ข้อ; 368 suites ผ่าน |
+| Migration | `npm run db:migrate` ผ่าน; Batch 120 รัน 1 migration สำหรับชุดที่เพิ่ม `0147_allow_serial_ascii_device_protocol` |
+| Restart และ health | HTTP 200; `success: true`, `status: ok` ที่ `2026-10-28T02:27:32.676Z` |
+| Backend deploy marker | ขั้นตอน Write backend deploy marker ของ commit ข้างต้นผ่าน |
+| [Production OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) | HTTP 200; มี `SERIAL_ASCII` ใน request/response/Worker protocol enums และ `Serial ASCII` ใน form type |
+| Modbus contract | RTU/TCP มี enum `READ_INPUT` / `READ_HOLDING`, optional, non-nullable และไม่มี default; protocol settings refs, permission และ statuses ตรงกับ canonical docs |
+| Frontend | Build/Deploy frontend ถูกข้าม; public deploy marker คง SHA `bde8021d6169131d380c6ca31395a76a3d4a1941`, run `40521414225`, run number `698` และ deployed timestamp เดิม |
+
+การยืนยัน migration ขาขึ้นบน production ไม่แทนการทดสอบ `down` ในฐานแยก และไม่มีการ rollback production เพื่อทดสอบ เอกสารหลักฐานหลัง deploy ส่งเป็น commit เฉพาะ Markdown แยกจาก application release; backend marker จึงอ้างถึง application commit ข้างต้น
 
 ```text
 Docs impact: updated
