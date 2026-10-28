@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -34,6 +34,7 @@ test('DCON device settings preserve the RTU field shape and use DCON_ASCII on th
             buildDeviceConfigPayloadItem, buildDeviceConfigDeviceItem, buildStructuredDeviceConfigPayload,
             getDeviceConfigsApiUrl, getConnectedMeasurementPointDeviceConfigsApiUrl,
             getDeviceConfigParameterOptions, getDeviceConfigParameterMappings, mapParameterMappingRows,
+            buildDeviceConfigChannels,
           };`
         }
       },
@@ -114,6 +115,30 @@ test('DCON device settings preserve the RTU field shape and use DCON_ASCII on th
       assert.deepEqual(structured.config.channels, channels)
       assert.deepEqual(structured.config.statusManagement, statusManagement)
       assert.equal('deviceAddress' in structured.config.device[0].settings, false)
+    })
+
+    await t.test('single and multiple devices retain deviceCode on every channel', async () => {
+      const rows = [
+        { deviceCode: 'P0002/01', parameter: 'COD (mg/l)', addressId: '1' },
+        { deviceCode: 'P0002/01', parameter: 'BOD (mg/l)', addressId: '4' },
+        { deviceCode: 'P0002/02', parameter: 'Flow rate (m3/hr)', addressId: '2' },
+      ]
+      const channels = api.buildDeviceConfigChannels(rows.slice(0, 2), 'P0002/01')
+      const single = api.buildDeviceConfigPayloadItem({ form, stationId: 'P0002', deviceCode: 'P0002/01', channels, statusManagement: { schedules: [] } })
+      assert.equal(single.deviceCode, 'P0002/01')
+      assert.deepEqual(single.channels.map((channel) => channel.deviceCode), ['P0002/01', 'P0002/01'])
+      assert.deepEqual(single.channels.map((channel) => channel.addressId), [1, 4])
+      assert.equal(Object.hasOwn(single, 'config'), false)
+      const codes = ['P0002/01', 'P0002/02']
+      const multiple = api.buildStructuredDeviceConfigPayload({
+        stationId: 'P0002',
+        deviceItems: codes.map((code) => api.buildDeviceConfigDeviceItem(form, code)),
+        channelGroups: codes.map((code) => api.buildDeviceConfigChannels(rows.filter((row) => row.deviceCode === code), code)),
+        statusManagement: { schedules: [] },
+      })
+      assert.deepEqual(multiple.config.channels.map((channel) => channel.deviceCode), ['P0002/01', 'P0002/01', 'P0002/02'])
+      const source = await readFile(new URL('../pages/ConnectionRequestPage.jsx', import.meta.url), 'utf8')
+      assert.match(source, /return buildDeviceConfigChannels\(configRows, deviceCode\)/)
     })
 
     await t.test('GET responses refill DCON from both connectionForms and raw config without losing settings', () => {

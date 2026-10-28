@@ -5132,7 +5132,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
         ? parameterMappingRows.filter((row) => row.deviceCode === deviceCode)
         : parameterMappingRows
 
-      return buildDeviceConfigChannels(configRows, useConnectedPointDeviceConfigs || forms.length > 1 ? deviceCode : undefined)
+      return buildDeviceConfigChannels(configRows, deviceCode)
     })
 
     const requestBody = useConnectedPointDeviceConfigs || forms.length > 1
