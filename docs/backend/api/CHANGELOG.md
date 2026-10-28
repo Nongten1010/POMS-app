@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="request-device-station-replacement"></a>
+
+## 2026-10-28 — บันทึกอุปกรณ์ในคำขอแทนที่ทั้งชุดของ station
+
+- **Affected canonical docs:** [ตั้งค่าอุปกรณ์ในคำขอ](./menus/connection-requests/device-configs.md#request-station-replacement)
+- **Impact:** `POST /cems-wpms-requests/:id/device-configs` แทนที่ configs/channels/status schedules ทั้งชุดของแต่ละ `stationId` ที่ส่งมา ทั้ง config เดี่ยว, `configs[]` และ `config.device[]` อุปกรณ์ที่ไม่ส่งมาจะถูก soft-delete ทั้ง snapshot ของคำขอนี้และ current settings ใน transaction เดียวกัน เช่น ส่งเฉพาะ `P0002/01` หลังเคยมี `/01` และ `/02` จะเหลือ `/01` และ Worker ไม่คืน current device ที่ลบไปแล้ว
+- **Migration:** Client โหลดฟอร์มล่าสุดแล้วส่งอุปกรณ์/channels/schedules ที่ต้องการเก็บให้ครบต่อ station ใน request เดียว หยุดส่งทีละอุปกรณ์โดยคาดว่าจะเก็บอุปกรณ์อื่นไว้; ไม่ส่ง station อื่นเมื่อต้องการคงข้อมูลของ station นั้น ไม่ต้อง migrate ฐานข้อมูล Payload/response/auth/สถานะ `WAITING_CONNECTION` และ `201 Created` คงเดิม; arrays อุปกรณ์ว่างยังตอบ `400 VALIDATION_ERROR` และไม่ลบข้อมูล หลัง deploy ตรวจ `/api/v1/openapi.json` และทดสอบ POST → GET พร้อม Integration API ว่าอุปกรณ์ที่ลบไม่กลับมา
+- **Old contract:** แทนที่เฉพาะ device identity ที่ส่งมา จึงเก็บอุปกรณ์อื่นแม้ลบออกจากฟอร์ม
+- **New contract:** แทนที่รายการอุปกรณ์ทั้งหมดเฉพาะ station ที่ส่งมา พร้อมเก็บประวัติและ snapshot ของคำขออื่น; station ที่ไม่ได้ส่งมายังคงเดิม
+- **Breaking change:** yes — client ที่ส่งอุปกรณ์บางส่วนของ station ต้องเปลี่ยนเป็นส่งรายการทั้งหมดที่ต้องการเก็บ
+
 <a id="whole-stack-extension-approval"></a>
 
 ## 2026-10-28 — ขยายระยะเวลาทั้งปล่องใช้ flow อนุมัติเดียวกับยกเว้นทั้งหมด

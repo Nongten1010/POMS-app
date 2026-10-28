@@ -438,7 +438,27 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 
 ## `POST /api/v1/cems-wpms-requests/:id/device-configs`
 
-สร้าง config ที่ผูกกับ request ระหว่างสถานะ `WAITING_CONNECTION` และตอบ `201 Created`
+บันทึกอุปกรณ์แบบแทนที่ทั้งชุดของแต่ละ `stationId` ที่ส่งมา ระหว่างสถานะ `WAITING_CONNECTION` และตอบ `201 Created`
+
+<a id="request-station-replacement"></a>
+
+### การแทนที่รายการอุปกรณ์
+
+ส่งอุปกรณ์ทั้งหมดที่ต้องการเก็บไว้ของแต่ละ station ในครั้งเดียว กติกานี้ใช้เหมือนกันทั้ง config เดี่ยว, `{ "configs": [...] }` และ `{ "config": { "stationId", "device", "channels", "statusManagement" } }` แม้ส่งเหลือเพียงหนึ่งอุปกรณ์
+
+| ข้อมูลเดิมของ `P0002` | อุปกรณ์ที่ส่งมา | ผลหลังบันทึกและอ่านกลับ |
+| --- | --- | --- |
+| `P0002/01`, `P0002/02` | `P0002/01` | เหลือเฉพาะ `P0002/01` |
+| `P0002/01`, `P0002/02` | ทั้งสองอุปกรณ์ | เก็บทั้งสองอุปกรณ์ตามค่าชุดใหม่ |
+
+- Backend soft-delete configs เดิมและ channels ทั้งชุดเฉพาะ `requestId + stationId` ของคำขอนี้ พร้อมแทนที่ current settings ของ station เดียวกันใน transaction เดียว ไม่ลบประวัติจริงและไม่แก้ snapshot ของคำขออื่น
+- Batch หลาย station แทนที่แยกตาม `stationId` ที่ส่งมาเท่านั้น; station ที่ไม่ได้ส่งมายังคงข้อมูลเดิม
+- ต้องส่ง channels และ status schedules ที่ต้องการรักษาไว้ให้ครบด้วย; อุปกรณ์ที่มี `deviceCode: null` ยังอยู่ภายใต้กติกาการแทนที่เดียวกัน
+- หลังบันทึกสำเร็จ [Integration API สำหรับ Worker](../../integrations/device-configs/README.md) ไม่คืน current device, channels หรือ schedules ที่ถูกลบ และไม่ย้อนนำ snapshot เก่าของอุปกรณ์ที่ลบกลับมาใช้
+- `configs: []` และ `config.device: []` ไม่ใช่คำสั่งลบทั้งหมด; ตอบ `400 VALIDATION_ERROR` และคงข้อมูลเดิม
+- Validation และสิทธิ์ต้องผ่านก่อนเขียนข้อมูล; หากบันทึก snapshot/current/channels ไม่สำเร็จ rollback ทั้งชุด
+
+Client ที่เคยส่งทีละอุปกรณ์เพื่อเพิ่ม/แก้โดยเก็บอุปกรณ์อื่นอัตโนมัติ ต้องโหลดฟอร์มล่าสุดแล้วส่งรายการที่ต้องการเก็บให้ครบใน request เดียว ดู [การเปลี่ยนผ่าน](../../CHANGELOG.md#request-device-station-replacement)
 
 ### Authentication And Permission
 
@@ -827,6 +847,7 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - DCON OpenAPI tests: [`dcon-device-config.openapi.test.ts`](../../../../../backend/tests/unit/dcon-device-config.openapi.test.ts)
 - Serial ASCII migration: [`0147_allow_serial_ascii_device_protocol.ts`](../../../../../backend/src/db/migrations/0147_allow_serial_ascii_device_protocol.ts)
 - Serial ASCII / Modbus API และ OpenAPI: [`device-config-protocols.api.test.ts`](../../../../../backend/tests/unit/device-config-protocols.api.test.ts), [`device-config-protocols.openapi.api.test.ts`](../../../../../backend/tests/unit/device-config-protocols.openapi.api.test.ts)
+- การลบอุปกรณ์ระหว่างคำขอ, Worker, scope และ rollback: [`device-config-request-replacement.api.test.ts`](../../../../../backend/tests/unit/device-config-request-replacement.api.test.ts), [`device-config-request-replacement.openapi.test.ts`](../../../../../backend/tests/unit/device-config-request-replacement.openapi.test.ts)
 - Migration checks: [`serial-ascii-protocol.migration.test.ts`](../../../../../backend/tests/unit/serial-ascii-protocol.migration.test.ts), [`serial-ascii-protocol.sql-server.test.ts`](../../../../../backend/tests/integration/serial-ascii-protocol.sql-server.test.ts)
 - [หลักฐาน TDD และข้อจำกัดการตรวจ SQL Server](../../../evidence/connection-requests/serial-ascii-modbus-read-function.md)
 
