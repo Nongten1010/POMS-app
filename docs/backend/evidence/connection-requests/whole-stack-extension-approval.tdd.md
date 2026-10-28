@@ -99,3 +99,21 @@ Breaking change: yes
 | Security scan และ `git diff --check` | PASS |
 
 ไม่ได้ปรับรูปแบบ code เดิมของ main ที่อยู่นอก patch; logic อนุมัติและ OpenAPI เพิ่มเฉพาะ behavior ที่ขอ และไม่มี migration ใหม่
+
+## ผล production ที่ตรวจจริง
+
+ส่ง [application commit `383d3f563092befdbdc80e30909cf8af2ab3e910`](https://github.com/Nongten1010/POMS-app/commit/383d3f563092befdbdc80e30909cf8af2ab3e910) เข้า `main` และ [Deploy POMS run `40627978215`](https://github.com/Nongten1010/POMS-app/actions/runs/40627978215) จบด้วย `success` ตรวจ contract และ public marker เมื่อ `2026-10-28T10:47:01+07:00` (`Asia/Bangkok`)
+
+| หลักฐาน | ผล |
+| --- | --- |
+| Build และ tests บน production runner | PASS: 370 suites, 4,955 tests; ข้าม 2 suites / 18 tests |
+| Migrations | PASS: `Already up to date`; ไม่มี migration ใหม่ใน release นี้ |
+| Factory profile activation prerequisites | ขั้นตอนใน workflow ผ่านตาม mode ที่ production ตั้งไว้ |
+| Restart และ health | HTTP 200; `success: true`, `status: ok`, timestamp `2026-10-28T03:46:06.006Z` |
+| Backend deploy marker | ขั้นตอน `Write backend deploy marker` ของ application commit ข้างต้นผ่าน |
+| [Production OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) | HTTP 200; enum คง `อยู่ระหว่างขยายเวลา`, description แสดงชื่อ “อยู่ระหว่างขยายระยะเวลาทั้งปล่อง” และมีตัวอย่าง request ที่ส่งรายการพารามิเตอร์/เครื่องมือว่าง |
+| ผลอนุมัติใน runtime contract | ทั้ง `review` และ `status` มีตัวอย่าง `wholeStackExtension`: `CONNECTED`, `connectionDueAt: null`, สถานะจุดเดิม และ `parameters: []` |
+| [Production API Docs](https://d-poms.diw.go.th/api/v1/docs/) | HTTP 200 |
+| Frontend marker | คงข้อมูลทุก field จากก่อน release: SHA `bde8021d6169131d380c6ca31395a76a3d4a1941`, run `40521414225`, run number `698` และ timestamp เดิม; Build/Deploy frontend ถูกข้าม |
+
+การตรวจหลัง deploy เป็น read-only ผ่าน contract, public marker และผล workflow ไม่ได้สร้างคำขอจริงเพื่อทดสอบอนุมัติบน production หลักฐาน HTTP behavior อยู่ในชุดทดสอบที่ระบุข้างต้น เอกสารผล production ส่งเป็น commit เฉพาะ Markdown แยกจาก application release จึงไม่เปลี่ยน Backend deploy marker
