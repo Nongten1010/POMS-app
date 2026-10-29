@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from '@jest/globals';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pdfFixture, sizedPdfFixture } from '../helpers/pdf-fixture';
 import {
   getKwpAttachmentFileSizeLimit,
   KWP05_ATTACHMENT_FILE_SIZE_BYTES,
@@ -113,7 +114,7 @@ describe('KWP form attachment storage', () => {
       attachmentType: 'RATA_REPORT',
       fileName: 'rata-report.pdf',
       mimeType: 'application/pdf',
-      signature: Buffer.from('%PDF-1.7\n'),
+      signature: pdfFixture(),
     },
     {
       attachmentType: 'CALIBRATION_PHOTO',
@@ -178,7 +179,5 @@ async function createStorage(): Promise<LocalKwpAttachmentStorage> {
 }
 
 function pdfBuffer(size: number): Buffer {
-  const buffer = Buffer.alloc(size, 0x20);
-  buffer.write('%PDF-1.7\n');
-  return buffer;
+  return sizedPdfFixture(size);
 }

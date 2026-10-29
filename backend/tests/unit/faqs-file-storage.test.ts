@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, symlink, writeFile, mkdir } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { FaqFileStorage, validateFaqFile } from '../../src/modules/faqs/faqs-file-storage';
+import { pdfFixture } from '../helpers/pdf-fixture';
 
 let root: string;
 beforeEach(async () => {
@@ -25,11 +26,12 @@ function upload(name: string, contents: string | Buffer): Express.Multer.File {
 describe('FAQ file storage', () => {
   it('stores two independent files and returns their original content', async () => {
     const storage = new FaqFileStorage(root);
-    const first = await storage.save(upload('คู่มือ.pdf', '%PDF-first'));
+    const pdf = pdfFixture();
+    const first = await storage.save(upload('คู่มือ.pdf', pdf));
     const second = await storage.save(upload('notes.txt', 'plain text'));
     expect(first.id).not.toBe(second.id);
     expect(first.fileName).toBe('คู่มือ.pdf');
-    expect(await readFile(await storage.getPath(first), 'utf8')).toBe('%PDF-first');
+    expect(await readFile(await storage.getPath(first))).toEqual(pdf);
     expect(await readFile(await storage.getPath(second), 'utf8')).toBe('plain text');
     await storage.remove(first);
     await expect(storage.getPath(first)).rejects.toMatchObject({ statusCode: 404 });
@@ -54,12 +56,12 @@ describe('FAQ file storage', () => {
 
   it('does not read paths outside its private root, including symlinks', async () => {
     const storage = new FaqFileStorage(root);
-    const file = await storage.save(upload('file.pdf', '%PDF-test'));
+    const file = await storage.save(upload('file.pdf', pdfFixture()));
     await expect(storage.getPath({ ...file, storagePath: '../outside' })).rejects.toMatchObject({
       statusCode: 404,
     });
     const outside = path.join(root, 'outside.pdf');
-    await writeFile(outside, '%PDF-test');
+    await writeFile(outside, pdfFixture());
     await storage.remove(file);
     await symlink(outside, path.join(root, '.private', 'faqs', file.id));
     await expect(storage.getPath(file)).rejects.toMatchObject({ statusCode: 404 });
@@ -72,7 +74,7 @@ describe('FAQ file storage', () => {
     await mkdir(outside);
     await symlink(outside, path.join(uploadRoot, '.private', 'faqs'));
     await expect(
-      new FaqFileStorage(uploadRoot).save(upload('file.pdf', '%PDF-test')),
+      new FaqFileStorage(uploadRoot).save(upload('file.pdf', pdfFixture())),
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 });

@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
+import { pdfFixture } from '../helpers/pdf-fixture';
 import {
   LAW_MAX_FILE_SIZE_BYTES,
   LocalLawFileStorage,
@@ -162,7 +163,7 @@ async function temporaryDirectory(): Promise<string> {
 }
 
 function pdfBuffer(): Buffer {
-  return Buffer.from('%PDF-1.7\n%%EOF\n');
+  return pdfFixture();
 }
 
 function uploadedPdf(originalName: string, mimeType = 'application/pdf', buffer = pdfBuffer()) {

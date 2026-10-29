@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import archiveFixtures from '../fixtures/upload-archives.json';
+import { pdfFixture } from '../helpers/pdf-fixture';
 
 jest.mock('../../src/modules/faqs/faqs.repository', () => ({
   faqsRepository: {
@@ -181,7 +182,7 @@ describe('faqsService', () => {
 });
 
 function uploadedFile(): Express.Multer.File {
-  const buffer = Buffer.from('%PDF-test');
+  const buffer = pdfFixture();
   return {
     originalname: 'test.pdf',
     buffer,
