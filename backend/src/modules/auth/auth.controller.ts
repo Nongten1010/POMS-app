@@ -3,13 +3,17 @@ import { StatusCodes } from 'http-status-codes';
 import { loginSchema } from './auth.validator';
 import { authService } from './auth.service';
 import { UnauthorizedError } from '../../shared/errors/AppError';
+import { withAuthLoginDiagnostics } from './auth-login-diagnostics';
 
 export const authController = {
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const payload = loginSchema.parse(req.body);
-      const result = await authService.login(payload);
-      res.status(StatusCodes.OK).json(result);
+      await withAuthLoginDiagnostics(async (requestId) => {
+        res.setHeader('X-Request-Id', requestId);
+        const payload = loginSchema.parse(req.body);
+        const result = await authService.login(payload);
+        res.status(StatusCodes.OK).json(result);
+      });
     } catch (err) {
       next(err);
     }

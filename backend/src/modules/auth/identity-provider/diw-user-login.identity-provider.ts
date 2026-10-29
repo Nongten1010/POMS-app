@@ -1,4 +1,4 @@
-import { logger } from '../../../config/logger';
+import { recordAuthDecision } from '../auth-login-diagnostics';
 import {
   IdentityProvider,
   ExternalOfficerProfile,
@@ -109,14 +109,22 @@ export class DiwUserLoginIdentityProvider implements IdentityProvider {
     password: string,
     departmentID: string,
   ): Promise<ExternalOfficerProfile | null> {
-    const data = await this.postUserLogin(this.options.officerUrl, {
-      clientId: this.options.clientId,
-      username,
-      password,
-      departmentID,
-    });
+    const data = await this.postUserLogin(
+      this.options.officerUrl,
+      {
+        clientId: this.options.clientId,
+        username,
+        password,
+        departmentID,
+      },
+      'officer',
+    );
     if (!data) return null;
-    return parseDiwOfficerLoginResponse(data, username);
+    const profile = parseDiwOfficerLoginResponse(data, username);
+    recordAuthDecision('diw', profile ? 'diw_authenticated' : 'diw_rejected', {
+      userType: 'officer',
+    });
+    return profile;
   }
 
   async authenticateOperator(
@@ -126,13 +134,21 @@ export class DiwUserLoginIdentityProvider implements IdentityProvider {
     const externalId = username.trim();
     if (!isOperatorIdentity(externalId)) return null;
 
-    const data = await this.postUserLogin(this.options.operatorUrl, {
-      clientId: this.options.clientId,
-      username: externalId,
-      password,
-    });
+    const data = await this.postUserLogin(
+      this.options.operatorUrl,
+      {
+        clientId: this.options.clientId,
+        username: externalId,
+        password,
+      },
+      'operator',
+    );
     if (!data) return null;
-    return parseDiwOperatorLoginResponse(data, this.options.defaultProvinceId, externalId);
+    const profile = parseDiwOperatorLoginResponse(data, this.options.defaultProvinceId, externalId);
+    recordAuthDecision('diw', profile ? 'diw_authenticated' : 'diw_rejected', {
+      userType: 'operator',
+    });
+    return profile;
   }
 
   async authenticateCitizen(
@@ -142,7 +158,13 @@ export class DiwUserLoginIdentityProvider implements IdentityProvider {
     return null;
   }
 
-  private async postUserLogin(url: string, body: Record<string, string>): Promise<unknown | null> {
+  private async postUserLogin(
+    url: string,
+    body: Record<string, string>,
+    userType: 'officer' | 'operator',
+  ): Promise<unknown | null> {
+    const startedAt = Date.now();
+    let readingResponse = false;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs);
 
@@ -158,18 +180,27 @@ export class DiwUserLoginIdentityProvider implements IdentityProvider {
       });
 
       if (!response.ok) {
-        logger.warn('[auth] DIW UserLogin request failed', {
+        recordAuthDecision('diw', 'diw_http_error', {
+          userType,
           status: response.status,
-          statusText: response.statusText,
+          elapsedMs: Date.now() - startedAt,
         });
         return null;
       }
 
+      readingResponse = true;
       return (await response.json()) as unknown;
     } catch (err) {
-      const isAbort = err instanceof Error && err.name === 'AbortError';
-      logger.warn('[auth] DIW UserLogin request could not be completed', {
-        reason: isAbort ? 'timeout' : 'request_failed',
+      const isAbort =
+        controller.signal.aborted || (err instanceof Error && err.name === 'AbortError');
+      const reason = isAbort
+        ? 'diw_timeout'
+        : readingResponse
+          ? 'diw_invalid_response'
+          : 'diw_request_failed';
+      recordAuthDecision('diw', reason, {
+        userType,
+        elapsedMs: Date.now() - startedAt,
       });
       return null;
     } finally {

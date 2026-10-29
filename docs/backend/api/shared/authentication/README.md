@@ -29,9 +29,9 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 | -------------- | -------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
 | `userType`     | `officer \| operator \| citizen` | yes              | ประเภทผู้ใช้ที่ต้องการ login                                                  |
 | `username`     | `string`                         | yes              | External `operator` ใช้เลข 13 หลัก; `officer` ใช้ username ตาม provider       |
-| `password`     | `string`                         | yes              | ความยาว `1-128` ตัวอักษร                                                      |
+| `password`     | `string`                         | yes              | ความยาว `1-128` ตัวอักษร; รองรับ `*` และส่งค่าเดิมไปตรวจโดยไม่ตัดอักขระนี้        |
 | `departmentID` | `string`                         | officer API only | ต้องส่งเมื่อ external officer login                                           |
-| `accountType`  | `poms \| api`                    | no               | Legacy route hint; client ใหม่ควรละ field นี้เพื่อให้ backend resolve account |
+| `accountType`  | `poms \| api`                    | no               | `poms` ตรวจเฉพาะ local; `api` ยังคงตรวจ local ก่อนและไม่ข้ามบัญชี POMS; client ใหม่ควรละ field นี้ |
 | `provider`     | `local`                          | no               | Legacy local-only route hint                                                  |
 
 ### Response fields
@@ -79,7 +79,7 @@ Client เรียก `/auth/me` หลังแก้สิทธิ์หร�
 ### การยืนยันตัวตนและ provisioning
 
 1. ถ้า request ระบุ `accountType: "poms"` หรือ `provider: "local"` backend จะตรวจเฉพาะ local POMS account
-2. ถ้าไม่ระบุ route hint backend จะลอง local account ก่อน แล้วจึง fallback ไป external identity provider
+2. ถ้าไม่ระบุ route hint หรือส่ง `accountType: "api"` backend จะค้นหา `users.identity_provider = local` ด้วย username ก่อน โดยเลือกบัญชีที่ยังไม่ถูกลบก่อนแถวเก่าชื่อเดียวกัน ถ้าเหลือเฉพาะ soft-deleted ยังถือว่าพบ local ไป external identity provider เฉพาะเมื่อไม่พบบัญชี local เท่านั้น หากพบบัญชีแต่รหัสผ่านผิด ไม่มี password hash, inactive, ถูกลบ หรือ persona ไม่ตรง จะคืน generic `401` และไม่ส่ง credential ไป DIW บัญชี `i_industry` ที่เคย sync ไว้ไม่ใช่บัญชี local และต้องยืนยัน DIW ใหม่ทุกครั้ง
 3. External citizen/operator ต้องใช้ submitted username 13 หลัก และ `citizen_id` ที่ DIW ส่งกลับต้องตรงกันทุกหลัก มิฉะนั้นคืน generic `401`
 4. เมื่อ DIW ยืนยันสำเร็จครั้งแรก backend จะสร้าง provider-scoped identity ด้วย `identity_provider = i_industry`; operator persona จะ assign role `factory_operator` และ sync `operator_profiles`, `juristics`, `user_juristics` และ `factories` ใน transaction เดียว ส่วน citizen persona สร้าง/reuse เฉพาะ shared identity
 5. Login ซ้ำจะ update ข้อมูลเดิมแบบ idempotent ไม่สร้าง identity, role หรือ access row ซ้ำ
@@ -87,6 +87,19 @@ Client เรียก `/auth/me` หลังแก้สิทธิ์หร�
 7. วันที่ DIW แบบ `DD/MM/YYYY HH:mm:ss` จะถูก normalize เป็น SQL-safe ISO datetime ก่อนบันทึก
 
 สำหรับ external officer login คำนำหน้าภาษาไทยจาก DIW เช่น `ผู้ช่วยศาสตราจารย์ ดร.` รองรับได้ถึง 64 ตัวอักษร โดย provisioning ครั้งแรกและการ sync เมื่อล็อกอินซ้ำเก็บค่าเต็มใน `users.prename_th` และคืนใน `user.prenameTh` กับ `user.name.prenameTh` ของ login และ `/auth/me`
+
+| บัญชี POMS (`identity_provider = local`) | ผลการตรวจ | การเรียก DIW |
+| --- | --- | --- |
+| พบ | รหัสผ่านและสถานะผ่าน | ไม่เรียก; คืน `200` พร้อม `user.accountType: "poms"` |
+| พบ | รหัสผ่าน/สถานะ/persona ไม่ผ่าน | ไม่เรียก; คืน `401` |
+| ไม่พบ | ไม่ระบุ hint หรือส่ง `api` | เรียก provider ที่ตั้งค่าไว้; production ใช้ DIW |
+| ไม่พบ | ส่ง `poms` หรือ `provider: "local"` | ไม่เรียก; คืน `401` |
+
+การเปลี่ยนลำดับนี้มีผลกับบัญชีที่ใช้ username ซ้ำระหว่าง local และ DIW ดู [ผลกระทบและการย้าย client](../../CHANGELOG.md#auth-local-identity-precedence)
+
+### Response header สำหรับติดตาม login
+
+`200` และ `401` ที่ประมวลผลโดย login controller มี `X-Request-Id` เป็น UUID ที่ backend สร้างใหม่ ใช้แจ้งผู้ดูแลเพื่อตาม log ของคำขอเดียวกัน ค่านี้ไม่ระบุบัญชีหรือเหตุผลที่ปฏิเสธ และไม่ใช้ค่าที่ client ส่งมาแทน UUID ของ backend การปฏิเสธก่อนถึง controller เช่น rate limit อาจไม่มี header นี้
 
 ### Success response (`200 OK`)
 
@@ -154,6 +167,8 @@ Client เรียก `/auth/me` หลังแก้สิทธิ์หร�
 
 Backend ตั้งใจเก็บ `401` เป็นข้อความกลาง Client ต้องไม่อนุมานว่าล้มเหลวจาก local lookup, upstream authentication, identity mismatch, inactive/deleted account หรือ provider collision
 
+DIW ที่ตอบ HTTP `200` แต่ `status: false`/`"false"` ยังถือว่ายืนยันไม่ผ่านและคืน `401` เช่นเดียวกับ provider timeout/HTTP error การเข้าเว็บ i-Industry NEXT สำเร็จไม่ได้ยืนยันว่า DIW UserLogin จะยอมรับ credential เดียวกัน การแก้ routing นี้ไม่เพิ่มการเรียก NEXT API แทน DIW
+
 ## GET `/api/v1/auth/me`
 
 ### Request headers
@@ -192,11 +207,25 @@ Endpoint นี้ตรวจว่า user row ยัง active และไ�
 
 ## Maintainer links
 
+### ตรวจ log ของ login
+
+ค้น `[auth] Login decision` ด้วย `requestId` จาก `X-Request-Id` โดยอ่าน `provider` และ `reason`:
+
+- `local_identity_not_found`: ไม่พบบัญชี local; เรียก provider ต่อได้เมื่อ request ไม่ใช่ local-only
+- `local_authenticated`, `local_credentials_rejected`, `local_inactive`, `local_deleted`, `local_password_missing`, `local_failed`: ผลการตรวจบัญชี local; ไม่มีการ fallback เมื่อพบบัญชี
+- `diw_authenticated`, `diw_rejected`: ผลยืนยันตัวตนจาก payload ที่ DIW ส่งกลับ; การออก token ยังต้องผ่านสถานะบัญชีและ provisioning ของ POMS
+- `diw_http_error`, `diw_timeout`, `diw_request_failed`, `diw_invalid_response`: HTTP ไม่สำเร็จ, เกินเวลา, การเรียกต้นทางล้มเหลว หรืออ่าน JSON ไม่ได้ ตามลำดับ; HTTP failure มี `status` และ transport failures มี `elapsedMs`
+
+Log ชุดนี้จำกัด field เป็น `requestId`, `provider`, `reason`, `userType`, `status`, `elapsedMs` ไม่บันทึก username, password, Client ID, token, raw response, status text หรือข้อความ exception จากต้นทาง
+
 - [Routes](../../../../../backend/src/modules/auth/auth.routes.ts) และ [controller](../../../../../backend/src/modules/auth/auth.controller.ts)
 - [Service](../../../../../backend/src/modules/auth/auth.service.ts)
 - [Authentication middleware](../../../../../backend/src/shared/middlewares/authenticate.ts) และ [ตัวคำนวณสิทธิ์](../../../../../backend/src/modules/auth/permissions.ts)
 - [Repository provisioning](../../../../../backend/src/modules/auth/auth.repository.ts)
 - [DIW identity mapping](../../../../../backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts)
 - คำนำหน้า 64 ตัวอักษร: [migration 0135](../../../../../backend/src/db/migrations/0135_expand_user_prename.ts) และ [migration regression](../../../../../backend/tests/unit/user-prename-migration.test.ts)
+
+- [Login diagnostics](../../../../../backend/src/modules/auth/auth-login-diagnostics.ts)
+- Tests ผ่านขอบเขตจริง: [HTTP login กับฐานข้อมูลจำลอง](../../../../../backend/tests/unit/auth.login-routing.api.test.ts), [DIW HTTP และ safe logs](../../../../../backend/tests/unit/diw-login.diagnostics.test.ts)
 - Tests: [route persona](../../../../../backend/tests/unit/auth.login-personas.route.test.ts), [service](../../../../../backend/tests/unit/auth.service.test.ts), [repository](../../../../../backend/tests/unit/auth.repository.test.ts), [provider](../../../../../backend/tests/unit/diw-user-login.identity-provider.test.ts)
 - Tests สำหรับ Chat: [เปรียบเทียบ login, me และรายละเอียดผู้ใช้](../../../../../backend/tests/unit/auth.chat-ask-response.test.ts), [OpenAPI contract](../../../../../backend/tests/unit/auth.chat-ask.openapi.test.ts)

@@ -7,6 +7,7 @@ import {
 
 jest.mock('../../src/config/logger', () => ({
   logger: {
+    info: jest.fn(),
     warn: jest.fn(),
   },
 }));

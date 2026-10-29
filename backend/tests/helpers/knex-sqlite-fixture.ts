@@ -33,6 +33,7 @@ export async function createKnexSqliteFixture(
     locateFile: () => require.resolve('sql.js/dist/sql-wasm.wasm'),
   });
   const sqlite = new SQL.Database();
+  sqlite.create_function('SYSDATETIME', () => new Date().toISOString());
   try {
     for (const table of new Set([...Object.keys(tables), ...Object.keys(schemas)])) {
       const rows = tables[table] ?? [];

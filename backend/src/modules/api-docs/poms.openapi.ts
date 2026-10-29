@@ -1478,12 +1478,22 @@ const componentSchemas: Record<string, OpenApiObject> = {
     additionalProperties: false,
     required: ['userType', 'username', 'password'],
     properties: {
-      accountType: { type: 'string', enum: ['poms', 'api'] },
+      accountType: {
+        type: 'string',
+        enum: ['poms', 'api'],
+        description:
+          'poms ตรวจเฉพาะ local; api ยังคงตรวจ local ก่อน และไป DIW เฉพาะเมื่อไม่พบ local identity; client ใหม่ควรละ field นี้',
+      },
       userType: { type: 'string', enum: ['officer', 'operator', 'citizen'] },
-      provider: { type: 'string', enum: ['local'] },
+      provider: { type: 'string', enum: ['local'], description: 'ตรวจเฉพาะบัญชี local POMS' },
       username: { type: 'string', minLength: 1, maxLength: 64 },
       departmentID: { type: 'string', minLength: 1, maxLength: 32 },
-      password: { type: 'string', minLength: 1, maxLength: 128 },
+      password: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 128,
+        description: 'รองรับอักขระ *; ส่งค่ารหัสผ่านเดิมไปตรวจโดยไม่ตัดอักขระนี้',
+      },
     },
     description:
       'accountType=api + userType=officer ต้องมี departmentID และ username ต้องเป็นเลข 13 หลักหรือขึ้นต้น U',
@@ -5593,9 +5603,36 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Authentication',
       summary: 'Login',
       operationId: 'login',
+      description:
+        'ตรวจ users.identity_provider=local ก่อน แม้ส่ง accountType=api; เลือกบัญชีที่ยังไม่ลบก่อนแถวเก่าชื่อเดียวกัน และรวมบัญชี soft-deleted เมื่อไม่พบแถวปัจจุบัน; ' +
+        'ถ้าพบ local แต่รหัสผ่าน/สถานะ/persona ไม่ผ่าน คืน generic 401 และไม่เรียก DIW. ' +
+        'ไป provider ที่ตั้งค่าไว้เฉพาะเมื่อไม่พบ local identity; accountType=poms หรือ provider=local ยังคง local-only. ' +
+        'บัญชี i_industry ที่ sync ไว้ต้องยืนยัน DIW ใหม่ทุกครั้ง. DIW HTTP 200 ที่ status=false ยังคืน 401; ' +
+        'ไม่เรียก NEXT API แทน DIW. ส่ง X-Request-Id ที่ backend สร้างให้ใช้ติดตาม safe auth logs.',
       requestBody: jsonRequestBody(schemaRef('LoginRequest'), loginExample),
       successSchema: schemaRef('AuthSessionResponse'),
       extraResponses: {
+        '200': {
+          ...successResponse('ยืนยันตัวตนสำเร็จ', schemaRef('AuthSessionResponse')),
+          headers: {
+            'X-Request-Id': {
+              description: 'UUID ที่ backend สร้างใหม่สำหรับติดตาม log ของคำขอ login',
+              schema: { type: 'string', format: 'uuid' },
+            },
+          },
+        },
+        '401': {
+          ...errorResponse('Credential, สถานะบัญชี หรือ identity ไม่ผ่าน; ไม่เปิดเผยสาเหตุเฉพาะ', {
+            success: false,
+            error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' },
+          }),
+          headers: {
+            'X-Request-Id': {
+              description: 'UUID ที่ backend สร้างใหม่สำหรับติดตาม log ของคำขอ login',
+              schema: { type: 'string', format: 'uuid' },
+            },
+          },
+        },
         '429': { $ref: '#/components/responses/TooManyRequests' },
       },
     }),
