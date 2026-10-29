@@ -35,6 +35,7 @@ test('DCON device settings preserve the RTU field shape and use DCON_ASCII on th
             getDeviceConfigsApiUrl, getConnectedMeasurementPointDeviceConfigsApiUrl,
             getDeviceConfigParameterOptions, getDeviceConfigParameterMappings, mapParameterMappingRows,
             buildDeviceConfigChannels,
+            createEmptyParameterMappingRow, ConnectionParameterTable,
           };`
         }
       },
@@ -115,6 +116,30 @@ test('DCON device settings preserve the RTU field shape and use DCON_ASCII on th
       assert.deepEqual(structured.config.channels, channels)
       assert.deepEqual(structured.config.statusManagement, statusManagement)
       assert.equal('deviceAddress' in structured.config.device[0].settings, false)
+    })
+
+    await t.test('16bit scaling and TCP quantity round trip including zero, negatives and empty values', () => {
+      const [row] = api.mapParameterMappingRows([{ dataType: 'COD (mg/l)', valueFormat: '16bit', scaleMin: -1.5, scaleMax: 0, gain: 0.25 }])
+      assert.equal(row.valueFormat, '16 bit Resolution')
+      const [channel] = api.buildDeviceConfigChannels([row], 'P0002/01')
+      assert.equal(channel.valueFormat, '16bit')
+      assert.equal(channel.scaleMin, -1.5)
+      assert.equal(channel.scaleMax, 0)
+      assert.equal(channel.gain, 0.25)
+      for (const empty of [api.createEmptyParameterMappingRow('COD (mg/l)', 0), ...api.mapParameterMappingRows([{ dataType: 'COD (mg/l)', scaleMin: null, scaleMax: null, gain: null }])]) {
+        const [result] = api.buildDeviceConfigChannels([empty], 'P0002/01')
+        for (const field of ['scaleMin', 'scaleMax', 'gain']) assert.equal(result[field], null)
+      }
+      for (const quantity of ['', '0', '4']) {
+        const settings = api.buildConnectionSettings({ type: 'Modbus TCP', values: { quantity } })
+        assert.equal(settings.quantity, quantity === '' ? null : Number(quantity))
+        const [restored] = api.mapConnectionForms([{ protocol: 'MODBUS_TCP', settings }])
+        assert.equal(api.buildConnectionSettings(restored).quantity, settings.quantity)
+      }
+      const html = renderToStaticMarkup(api.ConnectionParameterTable({ deviceCodeOptions: [], rows: [row], setRows: () => {} }))
+      assert.ok(html.indexOf('Scale min') > html.indexOf('รูปแบบค่าข้อมูลตรวจวัด'))
+      assert.ok(html.indexOf('ค่า Offset') > html.indexOf('ค่า Gain'))
+      assert.match(html, /step="any"/)
     })
 
     await t.test('single and multiple devices retain deviceCode on every channel', async () => {

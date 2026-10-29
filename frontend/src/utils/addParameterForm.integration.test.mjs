@@ -76,7 +76,7 @@ test('add-parameter form and payload preserve live groups without affecting othe
         }
         const html = renderToStaticMarkup(React.createElement(ConnectionFormFields, { connectionType: type, value: getDefaultConnectionForm(type), onChange: () => {} }))
         assert.ok(html.indexOf('ฟังก์ชันการอ่านข้อมูล') > html.indexOf(type === 'Modbus RTU' ? 'Quantity' : 'Port'))
-        if (type === 'Modbus TCP') assert.ok(!html.includes('Quantity'))
+        if (type === 'Modbus TCP') assert.ok(html.indexOf('Quantity') > html.indexOf('ฟังก์ชันการอ่านข้อมูล'))
       }
       for (const type of ['DCON', 'Serial ASCII']) {
         const html = renderToStaticMarkup(React.createElement(ConnectionFormFields, { connectionType: type, value: getDefaultConnectionForm(type), onChange: () => {} }))

@@ -447,7 +447,7 @@ const baudRateOptions = ['2400', '4800', '9600', '14400', '19200', '38400']
 const parityOptions = ['Even', 'Odd', 'None']
 const stopBitsOptions = ['1', '2']
 const dataBitsOptions = ['7', '8']
-const dataValueFormatOptions = ['ค่าข้อมูลตรวจวัด', 'ค่ากระแสไฟฟ้า', 'ค่าแรงดันไฟฟ้า']
+const dataValueFormatOptions = ['ค่าข้อมูลตรวจวัด', 'ค่ากระแสไฟฟ้า', 'ค่าแรงดันไฟฟ้า', '16 bit Resolution']
 const connectionParameterStatusOptions = [
   'Normal',
   'Calibration',
@@ -633,6 +633,7 @@ function getDefaultConnectionForm(type) {
       hostIp: '',
       port: '',
       readFunction: '',
+      quantity: '',
     }
   }
   if (type === 'Microsoft SQL') {
@@ -3772,6 +3773,9 @@ function ConnectionFormFields({ connectionType, value, onChange }) {
           <PositiveNumberField label="Port" value={value.port} onChange={(nextValue) => updateField('port', nextValue)} />
         </Grid>
         {readFunctionField}
+        <Grid size={{ xs: 12, md: 3 }}>
+          <PositiveNumberField label="Quantity" value={value.quantity ?? ''} onChange={(nextValue) => updateField('quantity', nextValue)} />
+        </Grid>
       </Grid>
     )
   }
@@ -3836,6 +3840,9 @@ function createEmptyParameterMappingRow(parameter, index) {
     alertLow: '',
     alertHigh: '',
     valueFormat: '',
+    scaleMin: '',
+    scaleMax: '',
+    gain: '',
     offset: '',
     encodingData: '',
     status: '',
@@ -3867,6 +3874,9 @@ function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) 
       alertLow: mapping.alertLow ?? mapping.alert_low ?? alertRange.low ?? alertRange.min ?? '',
       alertHigh: mapping.alertHigh ?? mapping.alert_high ?? alertRange.high ?? alertRange.max ?? '',
       valueFormat: valueFormatLabelMap[valueFormat] ?? valueFormat,
+      scaleMin: mapping.scaleMin ?? '',
+      scaleMax: mapping.scaleMax ?? '',
+      gain: mapping.gain ?? '',
       offset: mapping.offset ?? '',
       encodingData: encodingLabelMap[encodingData] ?? encodingData,
       status: mapping.status ?? '',
@@ -3910,6 +3920,9 @@ function ConnectionParameterTable({ deviceCodeOptions, connectionForms = [], row
     { label: 'Alert(Low)', width: 118 },
     { label: 'Alert(High)', width: 118 },
     { label: 'รูปแบบค่าข้อมูลตรวจวัด', width: 220 },
+    { label: 'Scale min', width: 108 },
+    { label: 'Scale max', width: 108 },
+    { label: 'ค่า Gain', width: 108 },
     { label: 'ค่า Offset', width: 108 },
     { label: 'Encoding data', width: 230 },
   ]
@@ -3920,7 +3933,7 @@ function ConnectionParameterTable({ deviceCodeOptions, connectionForms = [], row
         การเชื่อมต่อพารามิเตอร์
       </Typography>
       <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-        <Table size="small" sx={{ minWidth: 1650, ...borderedTableSx }}>
+        <Table size="small" sx={{ minWidth: 1974, ...borderedTableSx }}>
           <TableHead>
             <TableRow>
               {columns.map((column) => (
@@ -4043,6 +4056,18 @@ function ConnectionParameterTable({ deviceCodeOptions, connectionForms = [], row
                       ))}
                     </TextField>
                   </TableCell>
+                  {['scaleMin', 'scaleMax', 'gain'].map((field, fieldIndex) => (
+                    <TableCell key={field} sx={{ minWidth: 108 }}>
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={row[field] ?? ''}
+                        onChange={(event) => updateRow(index, field, event.target.value)}
+                        slotProps={{ htmlInput: { step: 'any', 'aria-label': ['Scale min', 'Scale max', 'ค่า Gain'][fieldIndex] } }}
+                        fullWidth
+                      />
+                    </TableCell>
+                  ))}
                   <TableCell sx={{ minWidth: 108 }}>
                     <TextField
                       type="number"
@@ -4592,12 +4617,14 @@ const parityCodeMap = {
 }
 
 const valueFormatCodeMap = {
+  '16 bit Resolution': '16bit',
   ค่าข้อมูลตรวจวัด: 'MEASUREMENT_VALUE',
   ค่ากระแสไฟฟ้า: 'CURRENT',
   ค่าแรงดันไฟฟ้า: 'VOLTAGE',
 }
 
 const valueFormatLabelMap = {
+  '16bit': '16 bit Resolution',
   MEASUREMENT_VALUE: 'ค่าข้อมูลตรวจวัด',
   CURRENT: 'ค่ากระแสไฟฟ้า',
   CURRENT_VALUE: 'ค่ากระแสไฟฟ้า',
@@ -4829,6 +4856,7 @@ function buildConnectionSettings(form) {
       port: toNumberOrNull(values.port),
       valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
       ...(values.readFunction ? { readFunction: values.readFunction } : {}),
+      quantity: toNumberOrNull(values.quantity),
     }
   }
 
@@ -4869,6 +4897,9 @@ function buildDeviceConfigChannels(rows, deviceCode) {
       // Test mode is retired; parameter status remains independent.
       testMode: false,
       valueFormat: nullIfBlank(valueFormatCodeMap[row.valueFormat] ?? row.valueFormat),
+      scaleMin: toNumberOrNull(row.scaleMin),
+      scaleMax: toNumberOrNull(row.scaleMax),
+      gain: toNumberOrNull(row.gain),
       offset: toNumberOrNull(row.offset),
       encoding: nullIfBlank(encodingCodeMap[row.encodingData] ?? row.encodingData),
       status: nullIfBlank(row.status),
