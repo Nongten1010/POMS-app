@@ -71,6 +71,25 @@ test('master-data point edits keep the selected live point identity through pref
       }
     })
 
+    await t.test('creation and resubmission forward contacts without changing emails or point data', () => {
+      for (const __isResubmission of [false, true]) {
+        const initial = { ...makeMasterDataInitialRequest(normalize()), __isResubmission }
+        const input = { measurementPoints: [point], notificationEmails: ['factory@example.com'], officerNotificationEmails: ['officer@example.com'] }
+        const baseline = buildMeasurementPointsPayload(input, initial)
+        assert.equal(Object.hasOwn(baseline, 'contactPersons'), false)
+        for (const contactPersons of [[], [
+          { name: 'Test Contact', phone: '0800000000', email: 'contact@example.com', position: 'Engineer' },
+          { name: 'Second Contact', phone: '0810000000', email: null, position: null },
+        ]]) {
+          const payload = buildMeasurementPointsPayload({ ...input, contactPersons }, initial)
+          assert.deepEqual(payload, { ...baseline, contactPersons })
+          assert.notEqual(payload.contactPersons, contactPersons)
+          if (contactPersons.length) assert.notEqual(payload.contactPersons[0], contactPersons[0])
+          assert.equal(Object.hasOwn(payload.measurementPoints[0], 'contactPersons'), false)
+        }
+      }
+    })
+
     await t.test('CEMS does not inherit the first WPMS ID despite identical point names', () => {
       for (const measurementPoints of [[wpms, cems], [cems, wpms]]) {
         const initial = normalize(form, { ...factory, measurementPoints })

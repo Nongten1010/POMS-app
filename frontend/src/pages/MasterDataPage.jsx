@@ -2291,6 +2291,9 @@ function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}
   return {
     formType: 'MEASUREMENT_POINTS',
     ...factoryProfilePatch,
+    ...(requestBody?.contactPersons !== undefined
+      ? { contactPersons: requestBody.contactPersons.map((contact) => ({ ...contact })) }
+      : {}),
     ...(requestBody?.notificationEmails !== undefined
       ? { notificationEmails: [...requestBody.notificationEmails] }
       : {}),
