@@ -116,14 +116,18 @@ const MANUAL_OPERATOR_FACTORY_ACCESS: Readonly<Record<string, readonly string[]>
 };
 
 export const authRepository = {
-  findUserByProviderAndExternalId(
+  async findUserByProviderAndExternalId(
     provider: string,
     externalId: string,
+    options: { includeDeleted?: boolean } = {},
   ): Promise<UserRow | undefined> {
-    return db<UserRow>('users')
-      .where({ identity_provider: provider, external_id: externalId })
-      .whereNull('deleted_at')
-      .first();
+    const identity = {
+      identity_provider: provider,
+      external_id: externalId,
+    };
+    const currentUser = await db<UserRow>('users').where(identity).whereNull('deleted_at').first();
+    if (currentUser || !options.includeDeleted) return currentUser;
+    return db<UserRow>('users').where(identity).first();
   },
 
   findUserById(userId: number): Promise<UserRow | undefined> {

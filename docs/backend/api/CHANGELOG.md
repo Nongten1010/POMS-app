@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="auth-local-identity-precedence"></a>
+
+## 2026-10-29 — ไป DIW เฉพาะเมื่อไม่พบบัญชี POMS
+
+- **Affected canonical docs:** [การยืนยันตัวตน](./shared/authentication/README.md#การยืนยันตัวตนและ-provisioning)
+- **Impact:** `POST /auth/login` ให้บัญชี `identity_provider = local` มีลำดับก่อนเสมอ รวม request ที่ส่ง `accountType: "api"` ถ้าพบบัญชีแต่รหัสผ่าน/สถานะ/persona ไม่ผ่าน คืน generic `401` โดยไม่เรียก DIW; บัญชี soft-deleted ยังถือว่าพบ local การซิงก์ `i_industry` เดิมไม่กันการเรียก DIW
+- **Migration:** Client ใหม่ละ route hint ได้ และต้องไม่ใช้ `accountType: "api"` เพื่อข้ามบัญชี local หาก username ซ้ำระหว่างสองระบบ ให้ผู้ดูแลตรวจบัญชี POMS และแก้ความขัดแย้งตามขั้นตอนจัดการบัญชี ไม่แก้โดยเปลี่ยน hint ไม่มี schema migration รูปแบบ JSON และ error เดิมคงอยู่; เพิ่ม `X-Request-Id` สำหรับ `200`/`401` ที่ถึง login controller หลัง deploy ตรวจ `/api/v1/openapi.json` และทดสอบ local password ผิดว่าไม่เรียก DIW
+- **Old contract:** เมื่อไม่ระบุ hint รหัสผ่าน local ผิดอาจไป DIW ต่อ; `accountType: "api"` ข้าม local lookup และบัญชี local ที่ถูกลบถูกมองว่าไม่พบ
+- **New contract:** เรียก DIW เฉพาะเมื่อไม่มี local identity; local-only hints ยังคงไม่เรียก DIW การที่ NEXT เข้าได้แต่ DIW คืน `status: false` ยังต้องแก้กับผู้ดูแล DIW และไม่ได้รับการแก้จาก routing นี้
+- **Breaking change:** yes — บัญชีที่เคยผ่านด้วย credential DIW ทั้งที่มี local identity ชื่อเดียวกันจะต้องผ่านบัญชี local ก่อน
+
 <a id="request-device-station-replacement"></a>
 
 ## 2026-10-28 — บันทึกอุปกรณ์ในคำขอแทนที่ทั้งชุดของ station

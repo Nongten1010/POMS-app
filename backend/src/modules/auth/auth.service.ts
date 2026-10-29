@@ -5,6 +5,7 @@ import { signAccessToken } from '../../shared/utils/jwt';
 import { verifyPassword, bufferToHashString } from '../../shared/utils/password';
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
+import { recordAuthDecision, type AuthDiagnosticReason } from './auth-login-diagnostics';
 import { flattenPermissionScopes, groupAuthPermissions } from './permissions';
 import type { PermissionDataScope, PermissionMode, PermissionScopeDetails } from './permissions';
 import type { AuthenticatedUser } from '../../shared/types/express';
@@ -27,10 +28,8 @@ export const authService = {
       return this.loginLocal(payload);
     }
 
-    if (payload.accountType === undefined) {
-      const localResponse = await this.tryLoginLocalFirst(payload);
-      if (localResponse) return localResponse;
-    }
+    const localResponse = await this.tryLoginLocalFirst(payload);
+    if (localResponse) return localResponse;
 
     const provider = getIdentityProvider();
 
@@ -78,23 +77,26 @@ export const authService = {
   },
 
   async tryLoginLocalFirst(payload: LoginRequest): Promise<LoginResponse | null> {
-    const user = await authRepository.findUserByProviderAndExternalId('local', payload.username);
-    if (!user) return null;
-
-    try {
-      return await completeLocalLogin(payload, user);
-    } catch (error) {
-      if (error instanceof UnauthorizedError) return null;
-      throw error;
+    const user = await authRepository.findUserByProviderAndExternalId('local', payload.username, {
+      includeDeleted: true,
+    });
+    if (!user) {
+      recordAuthDecision('local', 'local_identity_not_found', { userType: payload.userType });
+      return null;
     }
+
+    return completeLocalLoginWithDiagnostics(payload, user);
   },
 
   async loginLocal(payload: LoginRequest): Promise<LoginResponse> {
-    const user = await authRepository.findUserByProviderAndExternalId('local', payload.username);
+    const user = await authRepository.findUserByProviderAndExternalId('local', payload.username, {
+      includeDeleted: true,
+    });
     if (!user) {
+      recordAuthDecision('local', 'local_identity_not_found', { userType: payload.userType });
       throw new UnauthorizedError('Invalid credentials');
     }
-    return completeLocalLogin(payload, user);
+    return completeLocalLoginWithDiagnostics(payload, user);
   },
 
   async completeLoginAsOfficer(
@@ -313,6 +315,30 @@ function ensureLoginUserAvailable(
       userId: user.id,
     });
     throw new UnauthorizedError('Invalid credentials');
+  }
+}
+
+async function completeLocalLoginWithDiagnostics(
+  payload: LoginRequest,
+  user: UserRow,
+): Promise<LoginResponse> {
+  try {
+    const response = await completeLocalLogin(payload, user);
+    recordAuthDecision('local', 'local_authenticated', { userType: payload.userType });
+    return response;
+  } catch (error) {
+    let reason: AuthDiagnosticReason = 'local_failed';
+    if (error instanceof UnauthorizedError) {
+      reason = user.deleted_at
+        ? 'local_deleted'
+        : !Boolean(user.is_active)
+          ? 'local_inactive'
+          : !user.password_hash
+            ? 'local_password_missing'
+            : 'local_credentials_rejected';
+    }
+    recordAuthDecision('local', reason, { userType: payload.userType });
+    throw error;
   }
 }
 

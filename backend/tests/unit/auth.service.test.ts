@@ -199,6 +199,7 @@ describe('authService login completion', () => {
     expect(mockedAuthRepository.findUserByProviderAndExternalId).toHaveBeenCalledWith(
       'local',
       'shared_login',
+      { includeDeleted: true },
     );
     expect(result.user).toMatchObject({
       accountType: 'poms',
@@ -285,7 +286,7 @@ describe('authService login completion', () => {
     expect(mockedSignAccessToken).not.toHaveBeenCalled();
   });
 
-  it('never falls back to a local account for an explicit API login', async () => {
+  it('checks local identity precedence even for an explicit API login', async () => {
     await expect(
       authService.login({
         accountType: 'api',
@@ -296,13 +297,14 @@ describe('authService login completion', () => {
       } as never),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
 
-    expect(mockedAuthRepository.findUserByProviderAndExternalId).not.toHaveBeenCalledWith(
+    expect(mockedAuthRepository.findUserByProviderAndExternalId).toHaveBeenCalledWith(
       'local',
       'U100',
+      { includeDeleted: true },
     );
   });
 
-  it('falls back to an API account when an accountType-less local password does not match', async () => {
+  it('rejects a wrong local password even when DIW could authenticate the same username', async () => {
     const externalProfile = {
       identity_provider: 'officer_dpis' as const,
       external_id: 'U100',
@@ -388,20 +390,18 @@ describe('authService login completion', () => {
       scopes: {},
     });
 
-    const result = await authService.login({
-      userType: 'officer',
-      username: 'U100',
-      departmentID: '2',
-      [passwordField]: 'api-valid-password',
-    });
+    await expect(
+      authService.login({
+        userType: 'officer',
+        username: 'U100',
+        departmentID: '2',
+        [passwordField]: 'api-valid-password',
+      }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
 
-    expect(authenticateOfficer).toHaveBeenCalledWith('U100', 'api-valid-password', '2');
-    expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(52);
-    expect(result.user).toMatchObject({
-      accountType: 'api',
-      username: 'U100',
-      roleCodes: ['diw_central'],
-    });
+    expect(authenticateOfficer).not.toHaveBeenCalled();
+    expect(mockedAuthRepository.updateLastLogin).not.toHaveBeenCalled();
+    expect(mockedSignAccessToken).not.toHaveBeenCalled();
   });
 
   it('uses a generic unauthorized error when an authenticated officer is not provisioned', async () => {
