@@ -19,7 +19,7 @@ import { integrationDeviceConfigsService } from '../../src/modules/integrations/
 const mockedRepository = jest.mocked(integrationDeviceConfigsRepository);
 const mockedDeviceConnectionsService = jest.mocked(deviceConnectionsService);
 
-const serialProtocols = ['MODBUS_RTU', 'DCON_ASCII'] as const;
+const serialProtocols = ['MODBUS_RTU', 'DCON_ASCII', 'SERIAL_ASCII'] as const;
 
 describe('integrationDeviceConfigsService', () => {
   beforeEach(() => {
@@ -147,6 +147,7 @@ describe('integrationDeviceConfigsService', () => {
           stopBits: null,
           dataBits: null,
           quantity: null,
+          readFunction: null,
           dbUser: null,
           dbPass: null,
           dbName: null,
@@ -168,6 +169,7 @@ describe('integrationDeviceConfigsService', () => {
           stopBits: 1,
           dataBits: 8,
           quantity: 1,
+          readFunction: null,
           dbUser: null,
           dbPass: null,
           dbName: null,
@@ -190,6 +192,9 @@ describe('integrationDeviceConfigsService', () => {
           alertHigh: 180,
           testMode: false,
           valueFormat: 'MEASUREMENT_VALUE',
+          scaleMin: null,
+          scaleMax: null,
+          gain: null,
           offset: 0,
           encoding: 'UNSIGNED16_BIG_ENDIAN',
           standardCriteria: 120,
@@ -210,6 +215,9 @@ describe('integrationDeviceConfigsService', () => {
           alertLow: null,
           alertHigh: null,
           valueFormat: 'MEASUREMENT_VALUE',
+          scaleMin: null,
+          scaleMax: null,
+          gain: null,
           offset: 0,
           encoding: 'UNSIGNED16_BIG_ENDIAN',
           standardCriteria: 300,

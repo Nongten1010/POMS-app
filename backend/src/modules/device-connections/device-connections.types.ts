@@ -32,7 +32,7 @@ export interface DeviceConnectionAccessContext {
   regionalAccess?: RegionalAccessDTO | null;
 }
 
-export type DataValueFormat = 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE';
+export type DataValueFormat = 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE' | '16bit';
 export type ModbusParity = 'EVEN' | 'ODD' | 'NONE';
 export const MODBUS_READ_FUNCTIONS = ['READ_INPUT', 'READ_HOLDING'] as const;
 export type ModbusReadFunction = (typeof MODBUS_READ_FUNCTIONS)[number];
@@ -68,6 +68,9 @@ export interface DeviceMeasurementChannelInput {
   alertLow?: number | null;
   alertHigh?: number | null;
   valueFormat?: string | null;
+  scaleMin?: number | null;
+  scaleMax?: number | null;
+  gain?: number | null;
   offset: number | null;
   encoding?: string | null;
   status?: string | null;
@@ -92,6 +95,7 @@ export interface ModbusTcpConnectionSettingsInput extends Record<string, unknown
   hostIp?: string | null;
   slaveId?: number | null;
   port?: number | null;
+  quantity?: number | null;
   valueRange?: MeasurementRangeInput | null;
   readFunction?: ModbusReadFunction;
 }

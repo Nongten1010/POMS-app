@@ -85,12 +85,14 @@ const deviceConfigFormNormalizationDescription =
   'ฟอร์มตัดข้อมูลเก่าที่ซ้ำก่อนสร้าง connectionForms, deviceCodeOptions, parameterMappings และ rawConfigs: คำขอที่มี measurementInstruments.parameters ใช้รายชื่อนั้นกรอง channel โดยเปรียบเทียบชื่อพร้อมหน่วยหลัง Unicode NFKC, trim, ยุบช่องว่างต่อเนื่อง และไม่แยกตัวพิมพ์ใหญ่เล็ก แล้วคืน label ตามรายชื่อก่อนตัดข้อมูลซ้ำ; หน่วยต่างกันยังเป็นคนละพารามิเตอร์. ภายใน station/request/device เดียวกันเลือก config ที่ updatedAt ล่าสุด แล้วใช้ id มากสุดเมื่อเวลาเท่ากัน; deviceCode null ยังคงแยก protocol. Channel ที่ชื่อพร้อมหน่วยซ้ำเลือกแถวที่มี addressId ก่อน ตามด้วยแถวที่มีค่าตั้งค่ามากกว่า และแถวแรกที่บันทึกเมื่อเท่ากัน โดยใช้ทั้งแถว ไม่ผสมค่า. GET ไม่แก้ฐานข้อมูล';
 const serialAndReadFunctionDescription =
   'SERIAL_ASCII แยกจาก DCON_ASCII และใช้ serial settings เดิม; device address ใช้ settings.slaveId. MODBUS_RTU / MODBUS_TCP รองรับ settings.readFunction = READ_INPUT หรือ READ_HOLDING แบบ optional; ไม่รับ null/สตริงว่าง ไม่มี default และละ property เมื่อไม่เลือก. GET คืน values.readFunction เมื่อบันทึกไว้และไม่เพิ่มให้ protocol อื่น. ต้องรัน migration 0147_allow_serial_ascii_device_protocol ก่อนใช้งาน';
-const deviceConfigWriteDescription = `${deviceConfigIdentityDescription}. ${deviceChannelUniquenessDescription}. ${retiredTestModeDescription}. ${serialAndReadFunctionDescription}. settings.dbPass = ******** รักษารหัสจริงได้เฉพาะ active config ที่ stationId + protocol + deviceCode ตรงกัน; เมื่อเปลี่ยน protocol แล้วไม่มีรหัสที่ตรงกัน ต้องกรอกรหัสจริงใหม่ มิฉะนั้นตอบ 400 BAD_REQUEST`;
+const deviceScalingDescription =
+  'valueFormat รองรับ 16bit โดยคงตัวเลือกเดิม; scaleMin, scaleMax, gain เป็น number/null แบบ optional สำหรับทุกรูปแบบค่า รับทศนิยมและค่าติดลบ รักษา 0 และไม่ส่งจะเก็บ null. MODBUS_TCP รองรับ settings.quantity เป็น number/null เช่นเดียวกับ RTU. เก็บ/คืนค่าโดยไม่คำนวณ Scale/Gain; ต้องรัน migration 0148_add_device_channel_scale_and_gain ก่อนใช้งาน';
+const deviceConfigWriteDescription = `${deviceConfigIdentityDescription}. ${deviceChannelUniquenessDescription}. ${retiredTestModeDescription}. ${serialAndReadFunctionDescription}. ${deviceScalingDescription}. settings.dbPass = ******** รักษารหัสจริงได้เฉพาะ active config ที่ stationId + protocol + deviceCode ตรงกัน; เมื่อเปลี่ยน protocol แล้วไม่มีรหัสที่ตรงกัน ต้องกรอกรหัสจริงใหม่ มิฉะนั้นตอบ 400 BAD_REQUEST`;
 const requestDeviceConfigReplacementDescription =
   'แทนที่อุปกรณ์ทั้งหมดของแต่ละ stationId ที่ส่งมา ทั้ง config เดี่ยว, configs[] และ config.device[]; ต้องส่งอุปกรณ์/channels/schedules ที่ต้องการเก็บให้ครบทุกครั้ง. อุปกรณ์ที่ไม่ส่งมาจะถูก soft delete พร้อม channels ทั้ง request snapshot ของคำขอนี้และ current settings ใน transaction เดียวกัน; ไม่แก้ snapshot ของคำขออื่นหรือ station ที่ไม่ส่งมา. ส่ง P0002/01 ตัวเดียวหลังเคยมี P0002/01 และ P0002/02 จะเหลือเฉพาะ P0002/01; Worker ไม่คืน current config ที่ลบไปแล้ว. configs: [] หรือ config.device: [] ตอบ 400 VALIDATION_ERROR และไม่ลบข้อมูล';
 const deviceConfigBadRequestResponse: OpenApiObject = {
   description:
-    '400 VALIDATION_ERROR เมื่อพารามิเตอร์ซ้ำภายในอุปกรณ์, readFunction ของ Modbus ไม่ใช่ READ_INPUT/READ_HOLDING (รวม null/สตริงว่าง) หรือโครงสร้าง payload ไม่ถูกต้อง; 400 BAD_REQUEST เมื่อ identity อุปกรณ์ซ้ำใน batch, station/parameter ไม่อยู่ในขอบเขตคำขอ หรือไม่มีรหัสฐานข้อมูลจริงให้รักษา',
+    '400 VALIDATION_ERROR เมื่อพารามิเตอร์ซ้ำภายในอุปกรณ์, readFunction ของ Modbus ไม่ใช่ READ_INPUT/READ_HOLDING (รวม null/สตริงว่าง), scaleMin/scaleMax/gain หรือ quantity ของ Modbus ไม่ใช่ number/null หรือโครงสร้าง payload ไม่ถูกต้อง; 400 BAD_REQUEST เมื่อ identity อุปกรณ์ซ้ำใน batch, station/parameter ไม่อยู่ในขอบเขตคำขอ หรือไม่มีรหัสฐานข้อมูลจริงให้รักษา',
   content: {
     'application/json': {
       schema: schemaRef('ErrorEnvelope'),
@@ -165,9 +167,16 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
               values: {
                 type: 'object',
                 additionalProperties: { type: 'string' },
-                properties: { readFunction: modbusReadFunctionSchema },
+                properties: {
+                  readFunction: modbusReadFunctionSchema,
+                  quantity: {
+                    type: 'string',
+                    description: 'Quantity ของ serial / Modbus TCP; 0 คืน "0", null/ไม่ส่งคืน ""',
+                    example: '4',
+                  },
+                },
                 description:
-                  'DCON / Serial ASCII ใช้ comport, slaveId, baudRate, parity, stopBits, dataBits, quantity, measureMin, measureMax เช่นเดียวกับ Modbus RTU; null แสดงเป็นสตริงว่าง. readFunction คืนเฉพาะ Modbus RTU/TCP เมื่อมีค่าที่บันทึก; ข้อมูลเดิมที่ไม่มี field นี้ยังคงไม่มี ไม่เติม default',
+                  'DCON / Serial ASCII ใช้ comport, slaveId, baudRate, parity, stopBits, dataBits, quantity, measureMin, measureMax เช่นเดียวกับ Modbus RTU; Modbus TCP คืน quantity ด้วย. null แสดงเป็นสตริงว่าง. readFunction คืนเฉพาะ Modbus RTU/TCP เมื่อมีค่าที่บันทึก; ข้อมูลเดิมที่ไม่มี field นี้ยังคงไม่มี ไม่เติม default',
                 example: { comport: 'COM3', slaveId: '7', measureMin: '0', measureMax: '' },
               },
             },
@@ -199,6 +208,27 @@ const currentDeviceConfigFormSchema: OpenApiObject = {
               deviceCode: { type: 'string' },
               parameter: { type: 'string' },
               testMode: testModeResponseField,
+              valueFormat: {
+                type: 'string',
+                description:
+                  '16bit คืน "16bit" ให้ frontend แสดง 16 bit Resolution; label เดิมคงเดิม',
+                example: '16bit',
+              },
+              scaleMin: {
+                type: 'string',
+                description: 'null/ไม่ส่งคืน ""; 0 คืน "0"',
+                example: '-1.5',
+              },
+              scaleMax: {
+                type: 'string',
+                description: 'null/ไม่ส่งคืน ""; 0 คืน "0"',
+                example: '100',
+              },
+              gain: {
+                type: 'string',
+                description: 'null/ไม่ส่งคืน ""; 0 คืน "0"',
+                example: '0.25',
+              },
               addressId: {
                 type: 'string',
                 description:
@@ -1040,8 +1070,16 @@ const protocolExamples: Record<string, OpenApiObject> = {
     stationId: 'S2001',
     deviceCode: 'S2001/01',
     protocol: 'MODBUS_TCP',
-    settings: { hostIp: '192.0.2.1', slaveId: 1, port: 502, readFunction: 'READ_HOLDING' },
-    channels: [],
+    settings: {
+      hostIp: '192.0.2.1',
+      slaveId: 1,
+      port: 502,
+      readFunction: 'READ_HOLDING',
+      quantity: 4,
+    },
+    channels: [
+      { dataType: 'CO (ppm)', valueFormat: '16bit', scaleMin: -1.5, scaleMax: 100, gain: 0.25 },
+    ],
   },
 };
 const deviceProtocolSettingsSchema = {
@@ -2443,6 +2481,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
       hostIp: { type: 'string', nullable: true },
       slaveId: { type: 'number', nullable: true },
       port: { type: 'number', nullable: true },
+      quantity: {
+        type: 'number',
+        nullable: true,
+        description: 'Quantity; ว่างส่ง null และรักษา 0',
+      },
       valueRange: nullableRef('DeviceConnectionRange'),
       readFunction: modbusReadFunctionSchema,
     },
@@ -2469,7 +2512,33 @@ const componentSchemas: Record<string, OpenApiObject> = {
         description:
           'คง field เพื่อรองรับ client เดิม; รับ boolean true/false หรือ null และ normalize ค่าที่ใช้งานและบันทึกใหม่เป็น false เสมอ เพราะเลิกใช้ Test mode',
       },
-      valueFormat: { type: 'string', nullable: true },
+      valueFormat: {
+        type: 'string',
+        nullable: true,
+        description: 'เช่น MEASUREMENT_VALUE, CURRENT, VOLTAGE, 16bit; ไม่จำกัด enum',
+        example: '16bit',
+      },
+      scaleMin: {
+        type: 'number',
+        nullable: true,
+        default: null,
+        description: 'Scale min; ทุก valueFormat',
+        example: -1.5,
+      },
+      scaleMax: {
+        type: 'number',
+        nullable: true,
+        default: null,
+        description: 'Scale max; ทุก valueFormat',
+        example: 100,
+      },
+      gain: {
+        type: 'number',
+        nullable: true,
+        default: null,
+        description: 'ค่า Gain; ทุก valueFormat',
+        example: 0.25,
+      },
       offset: { type: 'number', nullable: true },
       encoding: { type: 'string', nullable: true },
       status: {
@@ -2572,7 +2641,10 @@ const componentSchemas: Record<string, OpenApiObject> = {
       valueRange: nullableRef('DeviceConnectionRange'),
       alertLow: { type: 'number', nullable: true },
       alertHigh: { type: 'number', nullable: true },
-      valueFormat: { type: 'string', nullable: true },
+      valueFormat: { type: 'string', nullable: true, example: '16bit' },
+      scaleMin: { type: 'number', nullable: true, example: -1.5 },
+      scaleMax: { type: 'number', nullable: true, example: 100 },
+      gain: { type: 'number', nullable: true, example: 0.25 },
       offset: { type: 'number', nullable: true },
       encoding: { type: 'string', nullable: true },
       status: { type: 'string', nullable: true },

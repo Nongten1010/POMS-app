@@ -67,9 +67,9 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | `MODBUS_RTU` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
 | `DCON_ASCII` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
 | `SERIAL_ASCII` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
-| `MODBUS_TCP` | `hostIp`, `slaveId`, `port`, `valueRange` |
+| `MODBUS_TCP` | `hostIp`, `slaveId`, `port`, `quantity`, `valueRange` |
 
-Modbus RTU/TCP ยังรับ `readFunction` แบบ optional และ non-nullable ตามตารางถัดไป; TCP ไม่เพิ่ม `quantity` เป็น field ของ contract
+Modbus RTU/TCP ยังรับ `readFunction` แบบ optional และ non-nullable ตามตารางถัดไป; `quantity` ของ TCP รับ `number`/`null` เช่นเดียวกับ RTU ไม่บังคับกรอก ช่องว่างส่ง `null` และรักษาค่า `0`. GET คืน `connectionForms[].values.quantity` เป็น string (`"0"` สำหรับ 0, `""` สำหรับ null/ไม่ส่ง) ส่วน `rawConfigs.device[].settings.quantity` รักษา number/null หรือไม่มี property ตามที่ส่ง
 
 ### ฟังก์ชันการอ่านข้อมูลของ Modbus
 
@@ -155,7 +155,7 @@ GET ทั้งสอง endpoint คืน `connectionForms[].type: "Serial AS
 
 ต้องรัน migration [`0147_allow_serial_ascii_device_protocol`](../../../../../backend/src/db/migrations/0147_allow_serial_ascii_device_protocol.ts) ก่อนใช้งาน เพื่อขยาย protocol constraint ของ `device_connection_configs`. Settings เก็บใน JSON เดิม จึงไม่เพิ่ม column สำหรับ `readFunction`. Rollback จะปฏิเสธเมื่อยังมีแถว `SERIAL_ASCII` รวมแถว soft-deleted เพื่อรักษาประวัติ; ห้ามลบประวัติเพื่อฝืน rollback
 
-การเปลี่ยนนี้รองรับการบันทึก/อ่าน config ไม่เพิ่ม driver สื่อสารกับอุปกรณ์จริงหรือเปลี่ยนสิทธิ์และสถานะคำขอ การทดสอบ transport แบบ mock ยังคงเป็น `MOCK`; [connection-test](./parameter-values.md#get-apiv1parameter-valuesconnection-test) คงกติกาเลือกตารางเดิม (`SERIAL_ASCII` อยู่กลุ่ม fallback `1m`). Integration Worker ใช้ [สัญญาของตนเอง](../../integrations/device-configs/README.md); การเพิ่ม `readFunction` ในฟอร์มไม่ได้เพิ่ม field นี้ใน flattened Worker response
+การเปลี่ยนนี้รองรับการบันทึก/อ่าน config ไม่เพิ่ม driver สื่อสารกับอุปกรณ์จริงหรือเปลี่ยนสิทธิ์และสถานะคำขอ การทดสอบ transport แบบ mock ยังคงเป็น `MOCK`; [connection-test](./parameter-values.md#get-apiv1parameter-valuesconnection-test) คงกติกาเลือกตารางเดิม (`SERIAL_ASCII` อยู่กลุ่ม fallback `1m`). Integration Worker ใช้ [สัญญาของตนเอง](../../integrations/device-configs/README.md) ซึ่งส่ง `deviceConfigs[].readFunction` ของ Modbus เป็น code ที่บันทึกหรือ `null` เมื่อไม่ได้ตั้งค่า โดยไม่มี default
 
 ### DCON: device address
 
@@ -242,10 +242,60 @@ GET ทั้งสอง endpoint คืน `connectionForms[].type: "DCON"`, `
 | `alertLow` | number | No | Yes | ค่าแจ้งเตือนต่ำ |
 | `alertHigh` | number | No | Yes | ค่าแจ้งเตือนสูง |
 | `testMode` | boolean | No | Yes | คง field เพื่อรองรับ client เดิม; รับ `true`/`false`/`null` หรือไม่ส่งตามเดิม แต่ backend normalize ค่าที่ใช้งานและบันทึกใหม่เป็น `false` เสมอ เพราะเลิกใช้ Test mode |
-| `valueFormat` | string | No | Yes | รูปแบบค่า เช่น `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE`; backend ไม่ตรวจ enum เชิง business |
+| `valueFormat` | string | No | Yes | รูปแบบค่า เช่น `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE`, `16bit`; frontend แสดง `16bit` เป็น `16 bit Resolution`; backend ไม่ตรวจ enum เชิง business |
+| `scaleMin` | number | No | Yes | Scale min; รับทศนิยมและค่าติดลบ ไม่ส่งเก็บ `null` และรักษา `0` |
+| `scaleMax` | number | No | Yes | Scale max; รับทศนิยมและค่าติดลบ ไม่ส่งเก็บ `null` และรักษา `0` |
+| `gain` | number | No | Yes | ค่า Gain; รับทศนิยมและค่าติดลบ ไม่ส่งเก็บ `null` และรักษา `0` |
 | `offset` | number | No | Yes | offset ของค่าที่อ่าน |
 | `encoding` | string | No | Yes | รูปแบบ encoding; backend ไม่ตรวจ enum เชิง business |
 | `status` | enum string | No | Yes | `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `No Discharge`, `Turnaround` หรือ `Etc.` |
+
+### 16 bit Resolution, Scale และ Gain
+
+`scaleMin`, `scaleMax`, `gain` ใช้ได้กับทุก `valueFormat` และทุก protocol ไม่ได้จำกัดเฉพาะ `16bit`. ช่องว่างให้ส่ง `null`; ไม่รับ numeric string, สตริงว่าง, boolean, object, array หรือค่าที่ไม่ใช่ finite number. `quantity` ของ Modbus TCP ใช้กติกาชนิดข้อมูลเดียวกันกับ RTU. ค่าผิดชนิดตอบ `400 VALIDATION_ERROR` ก่อนแทนที่ข้อมูลเดิม
+
+config เดี่ยวใช้ `channels[]` และ `settings.quantity` ที่ root; หลายอุปกรณ์หรือจุดที่เชื่อมต่อแล้วใช้ `config.channels[]` จับคู่ด้วย `deviceCode` และ `config.device[].settings.quantity`. Batch `configs[]` ใช้ field ชุดเดียวกันในแต่ละ config. การบันทึกเป็นการแทนที่ค่าเดิม: ส่ง `null` หรือไม่ส่ง Scale/Gain จะล้างเป็น `null` ไม่รักษาค่าเดิมให้อัตโนมัติ
+
+ตัวอย่าง config เดี่ยวสำหรับ POST ทั้งสอง endpoint (พารามิเตอร์ต้องอยู่ในรายชื่อที่อนุญาตของจุดจริง):
+
+```json
+{
+  "stationId": "P0002",
+  "deviceCode": "P0002/01",
+  "protocol": "MODBUS_TCP",
+  "settings": { "quantity": 4 },
+  "channels": [
+    {
+      "deviceCode": "P0002/01",
+      "dataType": "COD (mg/l)",
+      "valueFormat": "16bit",
+      "scaleMin": -1.5,
+      "scaleMax": 100,
+      "gain": 0.25
+    }
+  ]
+}
+```
+
+GET ทั้งสอง endpoint คืน `parameterMappings[].valueFormat: "16bit"` ให้ frontend แปลง label เอง และคืน Scale/Gain เป็น string ตามรูปแบบ prefill เดิม (`null`/ไม่มีค่าเป็น `""`, 0 เป็น `"0"`). `rawConfigs.channels[]` และ `channels[]` ในผล POST คืน Scale/Gain เป็น number/null โดยใช้ชื่อ field เดียวกัน หลังบันทึก frontend เรียก GET โหลดค่าล่าสุดตามเดิม
+
+ตัวอย่างเฉพาะส่วน response ของ GET:
+
+```json
+{
+  "parameterMappings": [
+    { "valueFormat": "16bit", "scaleMin": "-1.5", "scaleMax": "100", "gain": "0.25" }
+  ],
+  "connectionForms": [{ "protocol": "MODBUS_TCP", "values": { "quantity": "4" } }],
+  "rawConfigs": {
+    "channels": [{ "valueFormat": "16bit", "scaleMin": -1.5, "scaleMax": 100, "gain": 0.25 }]
+  }
+}
+```
+
+การเปลี่ยนนี้เก็บ/คืนค่า config ไม่มีการคำนวณ Scale/Gain และไม่เปลี่ยนผลทดสอบ สิทธิ์ สถานะคำขอ หรือ endpoint. ต้องรัน [migration 0148](../../../../../backend/src/db/migrations/0148_add_device_channel_scale_and_gain.ts) ก่อนใช้งาน เพิ่ม `scale_min`, `scale_max`, `gain` แบบ nullable `DECIMAL(18,6)` ใน `device_measurement_channels` (ความละเอียดการเก็บ 6 ตำแหน่งเช่นเดียวกับ Offset); ข้อมูลเก่าเป็น `null`. การ rollback ปฏิเสธหากยังมีค่าใดไม่เป็น `null` รวม `0` และแถวประวัติ เพื่อป้องกันข้อมูลสูญหาย; production ใช้ forward migration เมื่อจำเป็นต้องปรับ schema อีกครั้ง
+
+Implementation: [validator](../../../../../backend/src/modules/device-connections/device-connections.validator.ts), [repository](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [form response](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts), [runtime OpenAPI](../../../../../backend/src/modules/api-docs/connection-requests.openapi.ts). Tests: [POST/GET roundtrip](../../../../../backend/tests/unit/device-config-scaling.api.test.ts), [validation](../../../../../backend/tests/unit/device-config-scaling.validator.test.ts), [OpenAPI](../../../../../backend/tests/unit/device-config-scaling.openapi.test.ts), [migration](../../../../../backend/tests/unit/device-channel-scaling.migration.test.ts)
 
 ### Status-management Fields
 
@@ -334,6 +384,8 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 | `data.connectionForms[].values` | object | No | ค่า `settings` ในรูปแบบ string สำหรับ form; ค่า `null` แสดงเป็น `""` |
 | `data.parameterMappings` | object[] | No | ค่า prefill ของ channel; ค่า nullable แสดงเป็น `""` |
 | `data.parameterMappings[].testMode` | boolean | No | คืน `false` เสมอ รวม config เก่าที่เคยเก็บ `true` |
+| `data.parameterMappings[].valueFormat` | string | No | `16bit` คืน code เดิมให้ frontend แสดง `16 bit Resolution`; label ของตัวเลือกเดิมไม่เปลี่ยน |
+| `data.parameterMappings[].scaleMin`, `scaleMax`, `gain` | string | No | ตัวเลขเป็น string; 0 เป็น `"0"` และ null/ไม่มีค่าเป็น `""` |
 | `data.statusManagement` | object | No | ค่า prefill สถานะ; ใช้ default `Normal` เมื่อไม่มีค่าที่บันทึก |
 | `data.rawConfigs` | object | No | config รูปแบบ machine-readable ซึ่งรักษา `null` ไว้ |
 | `data.rawConfigs.channels[].testMode` | boolean | No | คืน `false` เสมอใน machine-readable config |

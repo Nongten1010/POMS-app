@@ -145,12 +145,17 @@ function toDeviceConfig(
     hostIp: readString(settings.hostIp),
     port: readNumber(settings.port),
     slaveId: readNumber(settings.slaveId),
-    comPort: readNumber(settings.comPort),
+    comPort: readNumber(settings.comPort) ?? readString(settings.comPort),
     baudRate: readNumber(settings.baudRate),
     parity: readString(settings.parity),
     stopBits: readNumber(settings.stopBits),
     dataBits: readNumber(settings.dataBits),
     quantity: readNumber(settings.quantity),
+    readFunction:
+      (config.protocol === 'MODBUS_RTU' || config.protocol === 'MODBUS_TCP') &&
+      (settings.readFunction === 'READ_INPUT' || settings.readFunction === 'READ_HOLDING')
+        ? settings.readFunction
+        : null,
     dbUser: readString(settings.dbUser),
     dbPass: readString(settings.dbPass),
     dbName: readString(settings.dbName),
@@ -179,6 +184,9 @@ function toParameterConfig(
     alertHigh: channel.alertHigh ?? null,
     testMode: false,
     valueFormat: channel.valueFormat ?? null,
+    scaleMin: channel.scaleMin ?? null,
+    scaleMax: channel.scaleMax ?? null,
+    gain: channel.gain ?? null,
     offset: channel.offset,
     encoding: channel.encoding ?? null,
     standardCriteria: metadata?.standardCriteria ?? null,

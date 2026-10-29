@@ -30,7 +30,7 @@
 
 ## Integrations
 
-- [คู่มือการเชื่อมโยง Integration Device Config API (PDF)](./integrations/integration-device-config-api-user-guide.pdf)
+- [คู่มือการเชื่อมโยง Integration Device Config API (PDF)](./integrations/integration-device-config-api-user-guide.pdf) — สำหรับโปรแกรมส่งค่า; รวม `16bit`, Scale/Gain, Modbus read function/Quantity, Serial ASCII และกติกาสถานะคำขอ; อ้างอิง [contract หลัก](../api/integrations/device-configs/README.md)
 - [คู่มือการเชื่อมโยง Integration Alert Events API และผลทดสอบ Production (PDF)](./integrations/integration-alert-events-production-test-guide.pdf)
 
 ## Notifications

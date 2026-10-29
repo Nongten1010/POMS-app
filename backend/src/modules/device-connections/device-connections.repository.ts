@@ -50,6 +50,9 @@ interface DeviceMeasurementChannelRow {
   alert_low: number | string | null;
   alert_high: number | string | null;
   value_format: string | null;
+  scale_min: number | string | null;
+  scale_max: number | string | null;
+  gain: number | string | null;
   offset_value: number | string | null;
   encoding: string | null;
   parameter_status: string | null;
@@ -692,6 +695,9 @@ async function insertChannels(
       alert_low: channel.alertLow ?? null,
       alert_high: channel.alertHigh ?? null,
       value_format: channel.valueFormat ?? null,
+      scale_min: channel.scaleMin ?? null,
+      scale_max: channel.scaleMax ?? null,
+      gain: channel.gain ?? null,
       offset_value: channel.offset,
       encoding: channel.encoding ?? null,
       parameter_status: channel.status ?? null,
@@ -711,6 +717,9 @@ function toChannelDTO(row: DeviceMeasurementChannelRow): DeviceMeasurementChanne
     alertLow: toNullableNumber(row.alert_low),
     alertHigh: toNullableNumber(row.alert_high),
     valueFormat: row.value_format ?? null,
+    scaleMin: toNullableNumber(row.scale_min),
+    scaleMax: toNullableNumber(row.scale_max),
+    gain: toNullableNumber(row.gain),
     offset: toNullableNumber(row.offset_value),
     encoding: row.encoding ?? null,
     status: row.parameter_status ?? null,

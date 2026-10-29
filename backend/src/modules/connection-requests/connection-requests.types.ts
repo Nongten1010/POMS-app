@@ -808,6 +808,9 @@ export interface DeviceConfigFormParameterMappingDTO {
   alertLow: string;
   alertHigh: string;
   valueFormat: string;
+  scaleMin: string;
+  scaleMax: string;
+  gain: string;
   offset: string;
   encodingData: string;
   status: string;

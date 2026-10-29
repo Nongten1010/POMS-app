@@ -132,7 +132,9 @@ const integrationDeviceConfigDescription =
   'ข้อมูลเก่าที่ไม่รู้ต้นทางและมีประวัติคำขอที่ยกเลิก/ลบของอุปกรณ์เดียวกัน ใช้เฉพาะ snapshot ที่ยืนยันต้นทางได้; ' +
   'ไม่คืนอุปกรณ์ที่ถูกลบจากชุดปัจจุบัน. จุดที่ยังใช้ได้แต่ไม่มี config ตอบ 200 พร้อม arrays ว่าง; ' +
   'ไม่พบจุดหรือพบเฉพาะคำขอ CANCELED ตอบ 404 NOT_FOUND. ใช้ scoped X-API-Key และ Cache-Control: no-store; ' +
-  'response อาจมี dbPass จริง ห้ามบันทึก response หรือ credentials ลง log.';
+  'response อาจมี dbPass จริง ห้ามบันทึก response หรือ credentials ลง log. ' +
+  'deviceConfigs ส่ง quantity ของ Modbus TCP/serial และ readFunction ของ Modbus (READ_INPUT/READ_HOLDING หรือ null เมื่อไม่ตั้งค่า; ไม่มี default); comPort รักษาทั้ง number และ string เช่น COM3. ' +
+  'parameterConfigs ส่ง valueFormat รวม 16bit และ scaleMin, scaleMax, gain เป็น number/null สำหรับทุกรูปแบบค่า รักษา 0/ค่าติดลบ; testMode เป็น false เสมอ. ส่งค่าตั้งค่าเท่านั้น ไม่คำนวณ Scale/Gain';
 
 const integrationDeviceConfigNotFound = errorResponse(
   'ไม่พบจุดตรวจวัดที่ใช้ได้ หรือมีเฉพาะคำขอ CANCELED/ข้อมูลที่ถูกลบ',
@@ -3400,7 +3402,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
         description:
           'คง field เพื่อรองรับ client เดิม; รับ boolean true/false หรือ null และ normalize ค่าที่ใช้งานและบันทึกใหม่เป็น false เสมอ เพราะเลิกใช้ Test mode',
       },
-      valueFormat: { type: 'string', nullable: true },
+      valueFormat: {
+        type: 'string',
+        nullable: true,
+        description: 'เช่น MEASUREMENT_VALUE, CURRENT, VOLTAGE, 16bit; ไม่จำกัด enum',
+        example: '16bit',
+      },
+      scaleMin: { type: 'number', nullable: true, default: null },
+      scaleMax: { type: 'number', nullable: true, default: null },
+      gain: { type: 'number', nullable: true, default: null },
       offset: { type: 'number', nullable: true },
       encoding: { type: 'string', nullable: true },
       status: { type: 'string', enum: parameterStatusValues, nullable: true },
@@ -4800,6 +4810,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'stopBits',
       'dataBits',
       'quantity',
+      'readFunction',
       'dbUser',
       'dbPass',
       'dbName',
@@ -4819,12 +4830,27 @@ const componentSchemas: Record<string, OpenApiObject> = {
         nullable: true,
         description: 'Slave ID สำหรับ Modbus หรือ device address สำหรับ DCON_ASCII / SERIAL_ASCII',
       },
-      comPort: { type: 'number', nullable: true },
+      comPort: {
+        oneOf: [{ type: 'number' }, { type: 'string' }],
+        nullable: true,
+        description: 'COM port สำหรับ serial protocols; รักษา number หรือ string เช่น COM3',
+      },
       baudRate: { type: 'number', nullable: true },
       parity: { type: 'string', nullable: true },
       stopBits: { type: 'number', nullable: true },
       dataBits: { type: 'number', nullable: true },
-      quantity: { type: 'number', nullable: true },
+      quantity: {
+        type: 'number',
+        nullable: true,
+        description: 'Quantity สำหรับ MODBUS_TCP และ serial protocols; รักษา 0',
+      },
+      readFunction: {
+        type: 'string',
+        enum: ['READ_INPUT', 'READ_HOLDING'],
+        nullable: true,
+        description:
+          'เฉพาะ MODBUS_RTU/MODBUS_TCP; ไม่ตั้งค่าหรือ protocol อื่นคืน null โดยไม่มี default',
+      },
       dbUser: { type: 'string', nullable: true },
       dbPass: {
         type: 'string',
@@ -4853,6 +4879,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'alertLow',
       'alertHigh',
       'valueFormat',
+      'scaleMin',
+      'scaleMax',
+      'gain',
       'offset',
       'encoding',
       'standardCriteria',
@@ -4890,7 +4919,30 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       alertLow: { type: 'number', nullable: true },
       alertHigh: { type: 'number', nullable: true },
-      valueFormat: { type: 'string', nullable: true },
+      valueFormat: {
+        type: 'string',
+        nullable: true,
+        example: '16bit',
+        description: 'เช่น 16bit, MEASUREMENT_VALUE, CURRENT, VOLTAGE; คง code ตามที่บันทึก',
+      },
+      scaleMin: {
+        type: 'number',
+        nullable: true,
+        example: -1.5,
+        description: 'Scale min; ทุก valueFormat; ไม่มีค่าคืน null',
+      },
+      scaleMax: {
+        type: 'number',
+        nullable: true,
+        example: 100,
+        description: 'Scale max; ทุก valueFormat; ไม่มีค่าคืน null',
+      },
+      gain: {
+        type: 'number',
+        nullable: true,
+        example: 0.25,
+        description: 'ค่า Gain; ทุก valueFormat; ไม่มีค่าคืน null',
+      },
       offset: { type: 'number', nullable: true },
       encoding: { type: 'string', nullable: true },
       standardCriteria: {

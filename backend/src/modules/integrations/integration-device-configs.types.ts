@@ -1,6 +1,7 @@
 import type {
   DeviceConnectionConfigDTO,
   DeviceConnectionProtocol,
+  ModbusReadFunction,
 } from '../device-connections/device-connections.types';
 import type {
   ConnectionSystemType,
@@ -25,12 +26,13 @@ export interface IntegrationDeviceConfigDTO {
   hostIp: string | null;
   port: number | null;
   slaveId: number | null;
-  comPort: number | null;
+  comPort: number | string | null;
   baudRate: number | null;
   parity: string | null;
   stopBits: number | null;
   dataBits: number | null;
   quantity: number | null;
+  readFunction: ModbusReadFunction | null;
   dbUser: string | null;
   dbPass: string | null;
   dbName: string | null;
@@ -52,6 +54,9 @@ export interface IntegrationParameterConfigDTO {
   alertHigh: number | null;
   testMode: boolean;
   valueFormat: string | null;
+  scaleMin: number | null;
+  scaleMax: number | null;
+  gain: number | null;
   offset: number | null;
   encoding: string | null;
   standardCriteria: number | string | null;

@@ -1,8 +1,10 @@
-# Integration Device Config
+# ตั้งค่าอุปกรณ์สำหรับโปรแกรมส่งค่า (Integration Device Config)
 
 [กลับไป Integration API Index](../README.md)
 
 API read-only สำหรับอุปกรณ์ worker หรือระบบภายนอกดึง device, parameter และ status config ที่บันทึกแล้วได้ทุกสถานะคำขอ ยกเว้น `CANCELED` รวมช่วงก่อนเชื่อมต่อสำเร็จ
+
+[คู่มือสำหรับผู้พัฒนาโปรแกรมส่งค่า (PDF)](../../../guides/integrations/integration-device-config-api-user-guide.pdf) สร้างจาก contract หน้านี้; ตัวอย่างใช้ placeholder เท่านั้น ไม่มี API key หรือรหัสผ่านจริง
 
 ## Quick Start
 
@@ -138,12 +140,13 @@ Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_r
 | `hostIp` | string | Yes | host สำหรับ TCP/database |
 | `port` | number | Yes | port สำหรับ TCP/database |
 | `slaveId` | number | Yes | Slave ID สำหรับ Modbus หรือ device address สำหรับ `DCON_ASCII` / `SERIAL_ASCII`; ใช้ key `slaveId` เดิม |
-| `comPort` | number | Yes | COM port สำหรับ `MODBUS_RTU` |
-| `baudRate` | number | Yes | baud rate สำหรับ `MODBUS_RTU` |
-| `parity` | string | Yes | parity สำหรับ `MODBUS_RTU` |
-| `stopBits` | number | Yes | stop bits สำหรับ `MODBUS_RTU` |
-| `dataBits` | number | Yes | data bits สำหรับ `MODBUS_RTU` |
-| `quantity` | number | Yes | quantity สำหรับ `MODBUS_RTU` |
+| `comPort` | number \| string | Yes | COM port สำหรับ `MODBUS_RTU`, `DCON_ASCII`, `SERIAL_ASCII`; รักษาทั้งเลข เช่น `3` และชื่อพอร์ต เช่น `"COM3"` |
+| `baudRate` | number | Yes | baud rate สำหรับ serial protocols ทั้งสามชนิด |
+| `parity` | string | Yes | parity สำหรับ serial protocols ทั้งสามชนิด |
+| `stopBits` | number | Yes | stop bits สำหรับ serial protocols ทั้งสามชนิด |
+| `dataBits` | number | Yes | data bits สำหรับ serial protocols ทั้งสามชนิด |
+| `quantity` | number | Yes | Quantity สำหรับ `MODBUS_TCP`, `MODBUS_RTU`, `DCON_ASCII`, `SERIAL_ASCII`; รักษา `0`; ไม่มีค่าเป็น `null` |
+| `readFunction` | `READ_INPUT` \| `READ_HOLDING` | Yes | ฟังก์ชันอ่านข้อมูลของ `MODBUS_RTU` / `MODBUS_TCP`; ไม่ตั้งค่า, ค่าเก่าไม่ถูกต้อง หรือ protocol อื่นคืน `null` โดยไม่เติม default |
 | `dbUser` | string | Yes | database username สำหรับ `MSSQL`/`MYSQL` |
 | `dbPass` | string | Yes | database password จริงสำหรับ Worker; เป็น `null` เมื่อไม่ได้ตั้ง ถือเป็นข้อมูลลับและห้าม log |
 | `dbName` | string | Yes | ชื่อฐานข้อมูล |
@@ -168,7 +171,10 @@ Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_r
 | `alertLow` | number | Yes | ค่า Alert(Low) |
 | `alertHigh` | number | Yes | ค่า Alert(High) |
 | `testMode` | boolean | No | คืน `false` เสมอเพราะเลิกใช้ Test mode รวม config เก่าที่เคยเก็บ `true`; คง field และชนิด boolean เดิม |
-| `valueFormat` | string | Yes | รูปแบบค่าที่บันทึกใน channel |
+| `valueFormat` | string | Yes | รูปแบบค่าที่บันทึกใน channel รวม `16bit` (`16 bit Resolution`), `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE`; คืน code เดิม ไม่แปลง label |
+| `scaleMin` | number | Yes | Scale min; ใช้ได้ทุก `valueFormat`/protocol รับค่าติดลบและทศนิยม รักษา `0`; ไม่ตั้งค่าเป็น `null` |
+| `scaleMax` | number | Yes | Scale max; ใช้ได้ทุก `valueFormat`/protocol รับค่าติดลบและทศนิยม รักษา `0`; ไม่ตั้งค่าเป็น `null` |
+| `gain` | number | Yes | ค่า Gain; ใช้ได้ทุก `valueFormat`/protocol รับค่าติดลบและทศนิยม รักษา `0`; ไม่ตั้งค่าเป็น `null` |
 | `offset` | number | Yes | offset; storage รองรับ `null` |
 | `encoding` | string | Yes | encoding ของ channel |
 | `standardCriteria` | number \| string | Yes | `standardValue` ตามประกาศ อก.; แปลงเป็น number เมื่อทำได้ |
@@ -211,6 +217,7 @@ Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_r
         "stopBits": null,
         "dataBits": null,
         "quantity": null,
+        "readFunction": null,
         "dbUser": null,
         "dbPass": "<DATABASE_PASSWORD>",
         "dbName": null,
@@ -236,6 +243,9 @@ Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_r
         "alertHigh": null,
         "testMode": false,
         "valueFormat": null,
+        "scaleMin": null,
+        "scaleMax": null,
+        "gain": null,
         "offset": null,
         "encoding": null,
         "standardCriteria": 120,
@@ -278,7 +288,7 @@ Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_r
 - settings ที่ไม่มีค่าแปลงเป็น `null`; `minuteTableName`, `fiveMinuteTableName` และ `hourlyTableName` มีค่ากับ `MSSQL`/`MYSQL` เมื่อบันทึกไว้
 - `dbPass` คืนค่าจริงเฉพาะ endpoint integration นี้; device-config endpoint สำหรับ UI และระบบภายในอื่นยังคง mask เป็น `********`
 - success response กำหนด `Cache-Control: no-store`; client ต้องไม่ cache response และห้ามบันทึก `X-API-Key` หรือ response body ลง log
-- `parameterConfigs.addressId`, `offset`, `valueRange.min` และ `valueRange.max` รักษา `null` ตาม storage contract
+- `parameterConfigs.addressId`, `offset`, `valueRange.min`, `valueRange.max`, `scaleMin`, `scaleMax` และ `gain` รักษา `null` ตาม storage contract; ค่า `0` ไม่ถูกแปลงเป็น `null`. Scale/Gain เก็บด้วย `DECIMAL(18,6)` เช่นเดียวกับ Offset
 - `parameterConfigs.testMode` คืน `false` เสมอ รวมข้อมูลเก่าที่เคยเป็น `true`; Worker ต้องโหลด config ใหม่และเลิกใช้ flag เก่าที่ cache ไว้ จึงจะหยุดเขียนข้อมูลใหม่เข้า `_data_test` ได้. API นี้ส่ง config ไม่รับค่าตรวจวัดเข้า ดู [การเลิกใช้ Test mode และ migration](../../CHANGELOG.md#test-mode-retired). การอ่านข้อมูลทดสอบใช้ `real`/`1m` ตาม protocol ตาม [สัญญา connection-test](../../menus/connection-requests/parameter-values.md#get-apiv1parameter-valuesconnection-test)
 - `parameterName` และ `parameterUnit` แยกจากวงเล็บท้าย `parameter`; client ควรใช้ `parameter` เป็น display label ที่มีชื่อพร้อมหน่วย
 - `standardCriteria`, `eiaCriteria`, `standardCondition`, `dryBasis` และ `oxygenOrExcessAir` จับคู่กับเครื่องมือของ connected point ด้วยชื่อพารามิเตอร์พร้อมหน่วยก่อน หากต้อง fallback แบบไม่รวมหน่วยจะใช้เฉพาะกรณีที่ตรงเพียงรายการเดียว
@@ -288,6 +298,31 @@ Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_r
 - `statusSchedules` เรียงตามเวลา `startAt`, parameter, `endAt` และ status อย่างแน่นอน; schedule legacy ที่ไม่มีเวลาเรียงไว้ท้ายรายการ
 - จุดตรวจวัดหนึ่งจุดตั้งเวลาได้หลายช่วง และพารามิเตอร์เดียวกันมีช่วงต่อเนื่องกันได้ โดยช่วงเวลาที่ backend รับเข้าใช้ขอบเขตแบบ `[startAt, endAt)`
 - ข้อมูลใหม่ใช้ `startAt` และ `endAt` รูปแบบ `YYYY-MM-DD HH:mm:ss` โดยไม่มี timezone และ `endAt` ต้องมากกว่า `startAt`; ค่า `null` ใน response มีไว้รองรับข้อมูล legacy เท่านั้น
+
+### แนวทางสำหรับโปรแกรมส่งค่า
+
+- ใช้ `deviceConfigs[].deviceCode` จับคู่กับ `parameterConfigs[].deviceCode`; แยก protocol ตาม code จริง รวม `SERIAL_ASCII` ซึ่งเป็นคนละ protocol กับ `DCON_ASCII`
+- Modbus TCP อ่าน `quantity` และ `readFunction` จากระดับอุปกรณ์ ส่วน `valueFormat`, `scaleMin`, `scaleMax`, `gain`, `offset` และ `encoding` อยู่ระดับพารามิเตอร์. `readFunction: null` หมายถึงยังไม่ได้ตั้งค่า API ไม่เลือก `READ_INPUT` หรือ `READ_HOLDING` ให้อัตโนมัติ
+- `valueFormat: "16bit"` คือรูปแบบ 16 bit Resolution; อ่าน encoding ที่บันทึกคู่กัน และไม่อนุมาน signedness/endian จากชื่อ `16bit` เพียงอย่างเดียว
+- Scale/Gain เป็นค่าตั้งค่าที่ส่งต่อจากระบบ API นี้ไม่คำนวณค่าตรวจวัดและยังไม่กำหนดสูตรการแปลงจากชื่อ field; ไม่ใช้ `null` แทน `0` และไม่สมมติ `gain = 1` เมื่อไม่มีค่า
+- เมื่อเริ่มงานใหม่หรือ config เปลี่ยน ให้โหลด config ล่าสุดตามรอบที่ตกลงกับระบบ; ไม่ใช้ cached config เก่าของ Test mode หรือคำขอที่ยกเลิกต่อ. พบ `404` ให้หยุดใช้ config เดิมของจุดนั้นและตรวจสถานะ; `200` พร้อม arrays ว่างหมายถึงจุดยังใช้ได้แต่ไม่มี config ที่ใช้งานได้
+- `testMode` คืน `false` เสมอ; โปรแกรมส่งค่าต้องเลิกใช้ cached flag เดิมที่นำค่าใหม่ไป `_data_test`. API นี้เป็นการดึง config แบบ `GET` และไม่มี body สำหรับส่งค่าตรวจวัดเข้า
+- Consumer เดิมที่กำหนด `comPort` เป็น number/null ต้องรองรับชื่อพอร์ตแบบ string ก่อนใช้ serial config ใหม่ ดู [การเปลี่ยนผ่านของ COM port](../../CHANGELOG.md#integration-device-config-serial-port)
+
+ตัวอย่างเฉพาะส่วนของ Modbus TCP เมื่ออ่านกลับผ่าน API (ตัด field อื่นออก):
+
+```json
+{
+  "deviceConfigs": [
+    { "deviceCode": "P0002/01", "protocol": "MODBUS_TCP", "quantity": 4, "readFunction": "READ_HOLDING" }
+  ],
+  "parameterConfigs": [
+    { "deviceCode": "P0002/01", "parameter": "COD (mg/l)", "valueFormat": "16bit", "scaleMin": -1.5, "scaleMax": 100, "gain": 0.25, "testMode": false }
+  ]
+}
+```
+
+กติกานี้ใช้กับทั้ง `/api/v1/integrations/device-configs/:stationId` และ annual path `/api/v1/integrations/device-configs/:stationId/:buddhistYear` ซึ่งอ่าน contract เดียวกัน เช่น `WEMS-0003/2571`. ต้องรัน migrations ที่ยังไม่เคยใช้ตามลำดับ โดยเฉพาะ `0144_track_device_config_request_source`, `0146_retire_device_channel_test_mode`, `0147_allow_serial_ascii_device_protocol` และ `0148_add_device_channel_scale_and_gain` ก่อนเปิด backend รุ่นนี้ ดูรายละเอียดการบันทึกที่ [สัญญาตั้งค่าอุปกรณ์](../../menus/connection-requests/device-configs.md)
 
 ### Errors
 
@@ -309,6 +344,7 @@ Migration `0144_track_device_config_request_source.ts` เพิ่ม `source_r
 - Service and repository: [`integration-device-configs.service.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.service.ts), [`integration-device-configs.repository.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.repository.ts)
 - Device config storage: [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts), [`0087_allow_poms_box_device_protocol.ts`](../../../../../backend/src/db/migrations/0087_allow_poms_box_device_protocol.ts)
 - Tests: [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts), [`integration-device-configs.service.test.ts`](../../../../../backend/tests/unit/integration-device-configs.service.test.ts)
+- Config roundtrip and served OpenAPI: [`integration-device-configs.scaling.api.test.ts`](../../../../../backend/tests/unit/integration-device-configs.scaling.api.test.ts), [`integration-device-configs.openapi.test.ts`](../../../../../backend/tests/unit/integration-device-configs.openapi.test.ts)
 - Request-status regression: [`integration-device-configs.request-status.test.ts`](../../../../../backend/tests/unit/integration-device-configs.request-status.test.ts)
 - Migration: [`0144_track_device_config_request_source.ts`](../../../../../backend/src/db/migrations/0144_track_device_config_request_source.ts) ต้องรันก่อนเริ่ม backend เวอร์ชันนี้; ไม่รัน migration หรือแก้ข้อมูล production ผ่าน GET
 - Evidence: [การรายงานค่าต่อพารามิเตอร์](../../../evidence/integrations/device-config-parameter-reporting.tdd.md), [ประเภทจุดตรวจวัด](../../../evidence/integrations/device-config-point-types.tdd.md)

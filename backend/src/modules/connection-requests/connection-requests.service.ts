@@ -2355,6 +2355,9 @@ function toDeviceConfigParameterMapping(
     alertLow: channel.alertLow == null ? '' : String(channel.alertLow),
     alertHigh: channel.alertHigh == null ? '' : String(channel.alertHigh),
     valueFormat: valueFormatToThai(channel.valueFormat ?? null),
+    scaleMin: valueToString(channel.scaleMin),
+    scaleMax: valueToString(channel.scaleMax),
+    gain: valueToString(channel.gain),
     offset: valueToString(channel.offset),
     encodingData: encodingToFormLabel(channel.encoding ?? null),
     status: channel.status ?? '',
@@ -2383,6 +2386,9 @@ function toDeviceConfigRawConfig(
         alertLow: channel.alertLow ?? null,
         alertHigh: channel.alertHigh ?? null,
         valueFormat: channel.valueFormat ?? null,
+        scaleMin: channel.scaleMin ?? null,
+        scaleMax: channel.scaleMax ?? null,
+        gain: channel.gain ?? null,
         offset: channel.offset,
         encoding: channel.encoding ?? null,
         status: channel.status ?? null,
@@ -2493,6 +2499,7 @@ function settingsToFormValues(
       port: valueToString(settings.port),
       measureMin: range.min,
       measureMax: range.max,
+      quantity: valueToString(settings.quantity),
       ...(settings.readFunction !== undefined
         ? { readFunction: valueToString(settings.readFunction) }
         : {}),

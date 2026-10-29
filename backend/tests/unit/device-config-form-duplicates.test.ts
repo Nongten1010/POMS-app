@@ -47,6 +47,22 @@ async function form(
 }
 
 describe('duplicate device config form recovery', () => {
+  it.each(['scaleMin', 'scaleMax', 'gain'] as const)(
+    'keeps a duplicate with a populated %s, including zero',
+    async (field) => {
+      const result = await form([
+        config({
+          channels: [
+            { dataType: 'CO (ppm)', addressId: 3, offset: null },
+            { dataType: 'CO (ppm)', addressId: 3, offset: null, [field]: 0 },
+          ],
+        }),
+      ]);
+      expect(result.rawConfigs.channels).toEqual([expect.objectContaining({ [field]: 0 })]);
+      expect(result.parameterMappings).toEqual([expect.objectContaining({ [field]: '0' })]);
+    },
+  );
+
   it('does not prefer a conflicting duplicate because it has a retired test flag', async () => {
     const result = await form([
       config({

@@ -66,6 +66,7 @@ const modbusTcpSettingsSchema = defaultNullishObject(
       hostIp: z.string().nullable().optional(),
       slaveId: z.number().nullable().optional(),
       port: z.number().nullable().optional(),
+      quantity: z.number().nullable().optional(),
       valueRange: measurementRangeSchema.nullable().optional(),
       readFunction: z.enum(MODBUS_READ_FUNCTIONS).optional(),
     })
@@ -100,6 +101,9 @@ const configChannelSchema = z
     alertLow: nullableNumber,
     alertHigh: nullableNumber,
     valueFormat: nullableString,
+    scaleMin: nullableNumber,
+    scaleMax: nullableNumber,
+    gain: nullableNumber,
     offset: nullableNumber,
     encoding: nullableString,
     status: nullableParameterStatus,

@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="integration-device-config-serial-port"></a>
+
+## 2026-10-29 — รักษาชื่อ COM port ใน config สำหรับ Worker
+
+- **Affected canonical docs:** [Integration Device Config](./integrations/device-configs/README.md#deviceconfigs), [ตั้งค่าอุปกรณ์](./menus/connection-requests/device-configs.md)
+- **Impact:** `GET /integrations/device-configs/:stationId` และ annual path คืน `deviceConfigs[].comPort` เป็น number/string/null ตามค่าที่บันทึก รวมชื่อพอร์ต `COM3` ของ `MODBUS_RTU`, `DCON_ASCII`, `SERIAL_ASCII`; เลขเดิมและ `null` ยังคงชนิดเดิม. เพิ่ม `readFunction` แบบ nullable และ Scale/Gain แบบ number/null พร้อมคง `valueFormat: "16bit"`; การเพิ่ม field เหล่านี้เป็น additive
+- **Migration:** ปรับ Worker ที่รับ `comPort` เฉพาะ number/null ให้รองรับ string และใช้ชื่อพอร์ตตามที่บันทึก ก่อนโหลด serial config ใหม่; ไม่ cast ชื่อ `COM3` เป็นตัวเลข. โหลด config ใหม่หลัง deploy และรัน migrations ที่ยังค้างตามลำดับ รวม `0148_add_device_channel_scale_and_gain`; ตรวจ `/api/v1/openapi.json` และทั้งสองเส้นทาง config. Endpoint นี้ส่ง config และไม่เปลี่ยนวิธีส่งค่าตรวจวัดเข้า
+- **Old contract:** `comPort` เป็น number/null; ชื่อพอร์ตแบบ string ที่ฟอร์มยอมรับถูกแปลงเป็น `null` ใน Worker response
+- **New contract:** `comPort` เป็น number/string/null และรักษาชื่อพอร์ตที่บันทึก ไม่ทิ้งข้อมูลระหว่างส่งให้ Worker
+- **Breaking change:** yes — consumer ที่ validate/parse `comPort` เป็น number/null เท่านั้นต้องรองรับ string
+
 <a id="pdf-structure-upload-validation"></a>
 
 ## 2026-10-29 — ตรวจ PDF ตามโครงสร้างแทนการค้นคำในข้อมูลรูปภาพ
