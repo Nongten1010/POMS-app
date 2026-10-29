@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fromBuffer, type Entry, type ZipFile } from 'yauzl';
 import { BadRequestError } from '../errors/AppError';
+import { validatePdfUpload } from './pdf-upload-policy';
 
 // This is a risk filter, not an antivirus verdict. Never execute uploaded content.
 const blockedExtensions = new Set(
@@ -100,7 +101,7 @@ export async function validateGeneralUpload(
     );
   }
   const extension = validateUploadFileMetadata(file.originalName, file.mimeType);
-  inspectContent(file.buffer, extension);
+  await inspectContent(file.buffer, extension);
   if (isZip(file.buffer)) {
     await inspectZip(file.buffer, { entries: 0, bytes: 0 }, 0);
   } else if (officeMimeTypes[extension] || extension === '.zip') {
@@ -110,7 +111,7 @@ export async function validateGeneralUpload(
   return officeMimeTypes[extension] ?? ordinaryMimeTypes[extension] ?? 'application/octet-stream';
 }
 
-function inspectContent(buffer: Buffer, extension: string): void {
+async function inspectContent(buffer: Buffer, extension: string): Promise<void> {
   const hex = buffer.subarray(0, 8).toString('hex');
   if (
     buffer.subarray(0, 2).toString('ascii') === 'MZ' ||
@@ -123,6 +124,7 @@ function inspectContent(buffer: Buffer, extension: string): void {
       'Executable, legacy Office or uninspectable archive content is not allowed',
     );
   }
+  const isPdf = buffer.subarray(0, 1024).includes(Buffer.from('%PDF-'));
   // Also recognise UTF-16 scripts, including files renamed to ordinary text extensions.
   const head = buffer.subarray(0, 65536);
   const text = (
@@ -132,16 +134,17 @@ function inspectContent(buffer: Buffer, extension: string): void {
     .replace(/^\uFEFF/, '')
     .trimStart();
   if (
-    /^(#!|<\?php\b|<\?=|<!doctype\s+html\b|<html\b|<svg\b|@echo\s+off\b)/i.test(text) ||
-    /<(?:[\w.-]+:)?(?:script|svg)\b/i.test(text) ||
-    /^(?:["']use strict["']\s*;|(?:const|let|var)\s+\w+\s*=|(?:def|function)\s+\w+\s*\(|(?:import|from)\s+[\w.]+\s+(?:import|as)|(?:console|document|window|process)\s*\.|(?:alert|eval|require)\s*\()/i.test(
-      text,
-    )
+    !isPdf &&
+    (/^(#!|<\?php\b|<\?=|<!doctype\s+html\b|<html\b|<svg\b|@echo\s+off\b)/i.test(text) ||
+      /<(?:[\w.-]+:)?(?:script|svg)\b/i.test(text) ||
+      /^(?:["']use strict["']\s*;|(?:const|let|var)\s+\w+\s*=|(?:def|function)\s+\w+\s*\(|(?:import|from)\s+[\w.]+\s+(?:import|as)|(?:console|document|window|process)\s*\.|(?:alert|eval|require)\s*\()/i.test(
+        text,
+      ))
   ) {
     throw new BadRequestError('Script or active web content is not allowed');
   }
   const signatures: Record<string, boolean> = {
-    '.pdf': buffer.subarray(0, 1024).includes(Buffer.from('%PDF-')),
+    '.pdf': isPdf,
     '.png': hex === '89504e470d0a1a0a',
     '.jpg': hex.startsWith('ffd8ff'),
     '.jpeg': hex.startsWith('ffd8ff'),
@@ -161,12 +164,7 @@ function inspectContent(buffer: Buffer, extension: string): void {
     }
     if (buffer.includes(0)) throw new BadRequestError('TXT files must contain text');
   }
-  if (
-    buffer.subarray(0, 1024).includes(Buffer.from('%PDF-')) &&
-    /\/(?:JavaScript|JS|Launch|EmbeddedFile|RichMedia)\b/i.test(buffer.toString('latin1'))
-  ) {
-    throw new BadRequestError('PDF active content or embedded files are not allowed');
-  }
+  if (isPdf) await validatePdfUpload(buffer);
 }
 
 function isZip(buffer: Buffer): boolean {
@@ -292,7 +290,7 @@ async function inspectZipEntry(
       stream.on('end', () => resolve(Buffer.concat(chunks)));
     });
   });
-  inspectContent(contents, extension);
+  await inspectContent(contents, extension);
   if (
     /macroenabled|vnd\.ms-office\.vbaproject|vnd\.ms-excel\.(?:macrosheet|intlmacrosheet)/i.test(
       contents.toString('latin1').replace(/\0/g, ''),

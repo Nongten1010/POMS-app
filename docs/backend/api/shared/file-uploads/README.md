@@ -38,6 +38,7 @@ curl --request POST \
 | รายการ | กติกา |
 | --- | --- |
 | ไฟล์ทั่วไป | รับ PDF, รูปภาพ, DOCX/XLSX/PPTX, ODT/ODS/ODP, TXT/CSV/JSON/XML, เสียง/วิดีโอ, ZIP และนามสกุลอื่นที่ไม่อยู่ในกลุ่มบล็อก |
+| PDF | ตรวจโครงสร้างออบเจ็กต์ รวมชื่อแบบ `#xx` และออบเจ็กต์บีบอัด; รับข้อความ/comment/ข้อมูลรูปภาพที่มีคำคล้าย `/JS` แต่บล็อก JavaScript, Launch, RichMedia และไฟล์ฝังจริง; ไม่รับ PDF ที่เสีย เข้ารหัส หรืออ่านตรวจไม่ได้ ดู [การตรวจ PDF](#การตรวจ-pdf) |
 | ชื่อไฟล์ | ต้องมีนามสกุลตัวอักษรอังกฤษ/ตัวเลข 1–16 ตัว; ชื่อส่วน basename ไม่เกิน 1024 ตัวอักษร; ชื่อที่คืนใน metadata ใช้ข้อจำกัดเดิมของเมนู ไม่รับ control characters, `:`, จุด/ช่องว่างท้ายชื่อ; ตรวจ suffix ทุกส่วน เช่น `payload.exe.txt` ถูกปฏิเสธ |
 | โปรแกรมและสคริปต์ | บล็อกกลุ่ม EXE/DLL/MSI/COM/APK/JAR/WASM, BAT/CMD/PS1/SH/JS/PHP/PY และกลุ่มที่เทียบเท่า รวม HTML/SVG, shortcut และ config ที่รันคำสั่งได้; ตรวจ MIME เสี่ยง ลายเซ็นโปรแกรม และ script/active-content markers ที่รู้จักด้วย |
 | Macro | บล็อกนามสกุล macro เช่น DOCM/XLSM/XLSB/PPTM และตรวจเนื้อหา ZIP/Office ที่ซ่อน `vbaProject`, macro-enabled content types, Excel macro sheets, Scripts/Basic หรือ embedded objects แม้เปลี่ยนชื่อเป็น DOCX/XLSX |
@@ -67,11 +68,42 @@ curl --request POST \
 
 รูปแบบ response และ error envelope ไม่เปลี่ยน: validation ใช้ `400 BAD_REQUEST` ใน upload ทั่วไป และ `400 VALIDATION_ERROR` พร้อม field details ในกฎหมาย/FAQ; multipart limits ใช้ `UPLOAD_ERROR` หรือ `FILE_UPLOAD_FAILED` ตามเมนู ดู [shared errors](../common-api/README.md)
 
+## การตรวจ PDF
+
+Backend อ่านโครงสร้าง PDF ก่อนจัดเก็บ โดยไม่รัน JavaScript และไม่แก้หรือเขียน PDF ใหม่ การตรวจใช้กับ PDF ที่พบจากเนื้อหาแม้เปลี่ยนนามสกุล รวมถึง PDF ภายใน ZIP ที่อนุญาต เพดานขนาด จำนวนไฟล์ สิทธิ์ และรูปแบบ multipart ของแต่ละเมนูคงเดิม
+
+ข้อความใน literal/hex string, comment และข้อมูลใน image/font/content stream ไม่ถูกตีความเป็นชื่อคำสั่ง PDF เช่น ลำดับไบต์ `/Js` ในรูปภาพไม่ทำให้ถูกปฏิเสธ การตรวจออบเจ็กต์ครอบคลุม indirect objects, ชื่อที่เขียนแบบ escape และ compressed object streams; ส่วนที่ parser อ่านตรวจไม่ได้จะถูกปฏิเสธ และจำกัดจำนวนออบเจ็กต์ที่ตรวจไม่เกิน 100,000 รายการ
+
+ฟอร์ม AcroForm ที่ไม่มีสคริปต์ยังรับได้ แต่ปฏิเสธฟอร์ม XFA ทั้งหมดเพราะอาจมีสคริปต์ใน XML packets ที่ตัวตรวจนี้ยังอ่านตรวจไม่ได้ และบล็อก JavaScript ของ 3D ผ่าน `OnInstantiate` ตาม [Adobe 3D stream reference](https://opensource.adobe.com/dc-acrobat-sdk-docs/library/plugin/Plugins_3D_samples.html)
+
+| ผลตรวจ | HTTP | ข้อความจากตัวตรวจ |
+| --- | --- | --- |
+| พบโครงสร้าง JavaScript, Launch, RichMedia หรือไฟล์ฝัง เช่น `/JS`, `/S /JavaScript`, `/OnInstantiate`, `/Type /EmbeddedFile`, `/EmbeddedFiles`, `/EF` | `400` | `PDF active content or embedded files are not allowed` |
+| PDF เสีย เข้ารหัส ไม่มี catalog มีฟอร์ม XFA หรือมีโครงสร้างที่อ่านตรวจไม่ได้/เกินเพดานตรวจ | `400` | `Invalid, encrypted or unsupported PDF file` |
+
+FAQ ใช้ `VALIDATION_ERROR` และ `details.files` ตามเดิม ตัวอย่างเมื่อพบ active content:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "PDF active content or embedded files are not allowed",
+    "details": {
+      "files": "PDF active content or embedded files are not allowed"
+    }
+  }
+}
+```
+
+สำหรับ upload ทั่วไปใช้ `BAD_REQUEST`; กฎหมายยังใช้ validation envelope ของเมนู การตรวจนี้เป็น risk filter ตามข้อจำกัดข้างต้น ไม่ใช่ผลตรวจ antivirus
+
 ## สำหรับ Backend Maintainer
 
 | ส่วน | Implementation / Tests |
 | --- | --- |
 | กฎและรายการบล็อกที่ใช้จริง | [upload-file-policy.ts](../../../../../backend/src/shared/utils/upload-file-policy.ts) |
+| ตรวจโครงสร้าง PDF และ regression ของข้อมูลรูปภาพ/JavaScript/ไฟล์ฝัง | [pdf-upload-policy.ts](../../../../../backend/src/shared/utils/pdf-upload-policy.ts), [pdf-upload-policy.test.ts](../../../../../backend/tests/unit/pdf-upload-policy.test.ts) |
 | ทดสอบการเปลี่ยนชื่อ สคริปต์ macro และ ZIP limits | [upload-file-policy.test.ts](../../../../../backend/tests/unit/upload-file-policy.test.ts) |
 | Runtime OpenAPI | [upload-policy.openapi.ts](../../../../../backend/src/modules/api-docs/upload-policy.openapi.ts), [poms.openapi.ts](../../../../../backend/src/modules/api-docs/poms.openapi.ts) |
 | ฐานข้อมูล | [0137_allow_general_attachment_file_types.ts](../../../../../backend/src/db/migrations/0137_allow_general_attachment_file_types.ts) |

@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="pdf-structure-upload-validation"></a>
+
+## 2026-10-29 — ตรวจ PDF ตามโครงสร้างแทนการค้นคำในข้อมูลรูปภาพ
+
+- **Affected canonical docs:** [นโยบายอัปโหลด PDF](./shared/file-uploads/README.md#การตรวจ-pdf), [FAQ](./menus/faqs/README.md#หลายไฟล์และหลาย-url)
+- **Impact:** upload endpoints ที่ใช้นโยบายร่วมรับ PDF ปกติที่มีลำดับไบต์คล้าย `/JS` ในรูปภาพ/ข้อความ และบล็อก JavaScript/ไฟล์ฝังในโครงสร้างจริง รวมชื่อแบบ escape, compressed object streams และ JavaScript ของ 3D; PDF ที่เสีย เข้ารหัส มีฟอร์ม XFA หรืออ่านตรวจไม่ได้ถูกปฏิเสธด้วย `400` และข้อความ `Invalid, encrypted or unsupported PDF file` โดยคง error envelope ของแต่ละเมนู
+- **Migration:** ใช้ PDF ที่เปิดอ่านโครงสร้างได้และไม่เข้ารหัส/ไม่มี active content หรือไฟล์ฝัง หากเป็น XFA ให้เจ้าของเอกสาร export เป็น PDF ปกติก่อนอัปโหลด; ฟอร์ม AcroForm ที่ไม่มีสคริปต์ยังรับได้ client ส่ง multipart, สิทธิ์, ขนาดและจำนวนไฟล์ตามเดิม ไม่ต้องย้ายฐานข้อมูล Backend ต้องติดตั้ง dependency ตาม lockfile และหลัง deploy ตรวจ `/api/v1/openapi.json` ว่ามีกติกา PDF และข้อความ error ตรงกับเอกสาร
+- **Old contract:** ค้น marker ในไบต์ดิบทั้งไฟล์ จึงปฏิเสธ PDF ปกติบางไฟล์ และไม่สามารถตรวจชื่อ escape/ออบเจ็กต์บีบอัดได้ครบ
+- **New contract:** ตรวจออบเจ็กต์ PDF ด้วย parser โดยไม่แก้ไฟล์ และปฏิเสธเมื่ออ่านตรวจไม่ได้; PDF ปกติไม่ถูกบล็อกเพราะ marker ในข้อมูลรูปภาพเพียงอย่างเดียว
+- **Breaking change:** yes — PDF ที่เคยผ่านเพียงเพราะมี header แต่เสีย เข้ารหัส เป็น XFA หรือมี active content ที่ซ่อนไว้ จะไม่ผ่านการอัปโหลดอีก
+
 <a id="auth-local-identity-precedence"></a>
 
 ## 2026-10-29 — ไป DIW เฉพาะเมื่อไม่พบบัญชี POMS

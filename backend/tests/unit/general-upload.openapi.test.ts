@@ -43,6 +43,10 @@ describe('general upload runtime contract', () => {
     const schemas = JSON.stringify(document.components.schemas);
     expect(operation.requestBody).toBeDefined();
     expect(operation.description).toContain('ยังไม่มี antivirus');
+    expect(operation.description).toContain('PDF ตรวจโครงสร้างออบเจ็กต์');
+    expect(operation.description).toContain('PDF active content or embedded files are not allowed');
+    expect(operation.description).toContain('Invalid, encrypted or unsupported PDF file');
+    expect(operation.description).toContain('details.files');
     expect(schemas).toContain('ZIP');
   });
 });
