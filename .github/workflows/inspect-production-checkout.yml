@@ -75,76 +75,107 @@ jobs:
           }
           (async () => {
            try {
-            await query('clock', `SELECT CONVERT(VARCHAR(33), SYSDATETIME(), 126) AS server_time,
-              CONVERT(VARCHAR(33), SYSUTCDATETIME(), 126) AS server_utc,
-              CONVERT(VARCHAR(32), SERVERPROPERTY('ProductVersion')) AS sql_version, @@SPID AS audit_session_id`);
-            const sessions = await query('identity', `SELECT s.session_id, s.status, s.program_name, s.host_process_id,
-              s.open_transaction_count, s.transaction_isolation_level,
-              CONVERT(VARCHAR(33), s.login_time, 126) AS login_time,
-              CONVERT(VARCHAR(33), s.last_request_start_time, 126) AS last_request_start_time,
+            await query('followup-clock', `SELECT CONVERT(VARCHAR(33), SYSDATETIME(), 126) AS server_time,
+              CONVERT(VARCHAR(33), SYSUTCDATETIME(), 126) AS server_utc`);
+            await query('backend-sessions', `SELECT s.session_id, s.status, s.program_name, s.host_process_id,
+              s.open_transaction_count, CONVERT(VARCHAR(33), s.login_time, 126) AS login_time,
               CONVERT(VARCHAR(33), s.last_request_end_time, 126) AS last_request_end_time,
-              CONVERT(VARCHAR(33), c.connect_time, 126) AS connect_time
-              FROM sys.dm_exec_sessions s LEFT JOIN sys.dm_exec_connections c ON c.session_id=s.session_id
-              WHERE s.session_id=?`, [sessionId]);
-            if (!sessions?.length) { output('conclusion', { sessionExists: false }); return; }
-            await query('transactions', `SELECT st.session_id, CONVERT(VARCHAR(32), st.transaction_id) AS transaction_id,
-              st.is_user_transaction, st.is_local, st.enlist_count, t.name AS transaction_name,
+              CONVERT(VARCHAR(32), st.transaction_id) AS transaction_id,
               CONVERT(VARCHAR(33), t.transaction_begin_time, 126) AS transaction_begin_time,
-              t.transaction_type, t.transaction_state, dt.database_id,
-              CASE WHEN dt.database_id=DB_ID() THEN 1 ELSE 0 END AS current_database,
-              dt.database_transaction_state, dt.database_transaction_log_record_count,
-              dt.database_transaction_log_bytes_used, dt.database_transaction_log_bytes_reserved,
-              CONVERT(VARCHAR(64), dt.database_transaction_begin_lsn) AS database_transaction_begin_lsn
-              FROM sys.dm_tran_session_transactions st
+              t.transaction_state, dt.database_id, dt.database_transaction_log_record_count
+              FROM sys.dm_exec_sessions s
+              LEFT JOIN sys.dm_tran_session_transactions st ON st.session_id=s.session_id
               LEFT JOIN sys.dm_tran_active_transactions t ON t.transaction_id=st.transaction_id
               LEFT JOIN sys.dm_tran_database_transactions dt ON dt.transaction_id=st.transaction_id
-              WHERE st.session_id=?`, [sessionId]);
-            for (const [stage, sql] of [
-              ['input', `SELECT event_type, parameters, event_info FROM sys.dm_exec_input_buffer(?, NULL)`],
-              ['recent', `SELECT text AS event_info FROM sys.dm_exec_connections c
-                CROSS APPLY sys.dm_exec_sql_text(c.most_recent_sql_handle) txt WHERE c.session_id=?`],
-            ]) {
+              WHERE s.host_process_id=? AND s.program_name='knex'`, [5036]);
+            await query('old-transaction-still-present', `SELECT CONVERT(VARCHAR(32), t.transaction_id) AS transaction_id,
+              CONVERT(VARCHAR(33), t.transaction_begin_time, 126) AS transaction_begin_time, t.transaction_state,
+              st.session_id, s.host_process_id, s.program_name
+              FROM sys.dm_tran_active_transactions t LEFT JOIN sys.dm_tran_session_transactions st ON st.transaction_id=t.transaction_id
+              LEFT JOIN sys.dm_exec_sessions s ON s.session_id=st.session_id
+              WHERE t.transaction_begin_time=CONVERT(DATETIME, ?)`, ['2026-10-30T15:16:59.940']);
+            await query('current-blockers', `SELECT r.session_id, r.command, r.status, r.blocking_session_id,
+              r.wait_type, r.wait_time, r.wait_resource, s.host_process_id, s.program_name
+              FROM sys.dm_exec_requests r JOIN sys.dm_exec_sessions s ON s.session_id=r.session_id
+              WHERE r.database_id=DB_ID() AND r.blocking_session_id>0`);
+            const oldResource = await query('old-resource-index', `SELECT SCHEMA_NAME(o.schema_id) AS schema_name,
+              o.name AS object_name, i.name AS index_name, i.index_id, p.hobt_id
+              FROM sys.partitions p JOIN sys.objects o ON o.object_id=p.object_id
+              JOIN sys.indexes i ON i.object_id=p.object_id AND i.index_id=p.index_id
+              WHERE p.hobt_id=CONVERT(BIGINT, ?)`, ['72057594050052096']);
+            const tables = ['eligible_factories','factory_profiles','cems_wpms_connected_measurement_points',
+              'factory_monitoring_point_forms','current_eligible_factories','current_connected_measurement_points',
+              'current_factory_monitoring_point_forms','cems_wpms_connection_requests','cems_wpms_request_factory_snapshots'];
+            const candidates = ['id','eligible_factory_id','request_id','factory_id','factory_registration_no_new',
+              'factory_registration_no','request_no','request_number','factory_name','status','deleted_at',
+              'created_at','updated_at','address','factory_address','district_name','subdistrict_name'];
+            const columns = await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA','dbo').whereIn('TABLE_NAME',tables)
+              .select('TABLE_NAME','COLUMN_NAME').timeout(10000);
+            const byTable = new Map(tables.map(table => [table,new Set(columns.filter(x => x.TABLE_NAME===table).map(x => x.COLUMN_NAME))]));
+            const broad = /(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15|\u0e15\.|\u0e2d\.)\s*[:.\-]?\s*[0-9\u0e50-\u0e59]+/u;
+            const numericName = /^\s*[0-9\u0e50-\u0e59]+\s*$/u;
+            const records = new Map();
+            const scan=[];
+            for (const table of tables) {
+              const selected=candidates.filter(column=>byTable.get(table).has(column));
+              if (!selected.length) { scan.push({table,missing:true}); continue; }
               try {
-                const rows = await db.raw(sql, [sessionId]).timeout(10000);
-                output(stage, rows.map(row => ({ event_type: row.event_type || null, parameters: row.parameters ?? null,
-                  summary: statementSummary(row.event_info) })));
-              } catch (error) { output(stage, { error: error.code || error.name }); }
+                const rows=await db(table).select(selected).timeout(15000);
+                records.set(table,rows);
+                const issues=rows.flatMap(row=>['address','factory_address','district_name','subdistrict_name']
+                  .filter(field => row[field]!=null && (broad.test(String(row[field])) || (field.endsWith('_name') && numericName.test(String(row[field])))))
+                  .map(field=>({id:row.id,field,status:row.status||null,deleted:row.deleted_at!=null})));
+                scan.push({table,rows:rows.length,readPast:false,numericIssues:issues});
+              } catch(error) { scan.push({table,error:error.code||error.name}); }
             }
-            const locks = await query('locks', `SELECT l.resource_type, l.resource_database_id,
-              CONVERT(VARCHAR(64), l.resource_associated_entity_id) AS resource_associated_entity_id,
-              l.resource_description, l.request_mode, l.request_status, l.request_owner_type,
-              CONVERT(VARCHAR(64), l.request_owner_id) AS request_owner_id,
-              SCHEMA_NAME(o.schema_id) AS schema_name, o.name AS object_name, i.name AS index_name,
-              i.index_id, p.partition_number
-              FROM sys.dm_tran_locks l
-              LEFT JOIN sys.partitions p ON l.resource_database_id=DB_ID() AND p.hobt_id=l.resource_associated_entity_id
-              LEFT JOIN sys.objects o ON l.resource_database_id=DB_ID() AND o.object_id=
-                CASE WHEN l.resource_type='OBJECT' THEN l.resource_associated_entity_id ELSE p.object_id END
-              LEFT JOIN sys.indexes i ON i.object_id=p.object_id AND i.index_id=p.index_id
-              WHERE l.request_session_id=? ORDER BY object_name, l.resource_type, l.resource_description`, [sessionId]);
-            await query('blocked', `SELECT session_id, status, command, blocking_session_id, wait_type, wait_time,
-              wait_resource, open_transaction_count FROM sys.dm_exec_requests
-              WHERE blocking_session_id=? OR session_id=?`, [sessionId, sessionId]);
-            const tables = [...new Set((locks || []).map(x => x.object_name).filter(Boolean))];
-            if (tables.length) {
-              const fk = await db('sys.foreign_keys AS fk')
-                .join('sys.tables AS child', 'child.object_id', 'fk.parent_object_id')
-                .join('sys.tables AS parent', 'parent.object_id', 'fk.referenced_object_id')
-                .where(builder => builder.whereIn('child.name', tables).orWhereIn('parent.name', tables))
-                .select('fk.name', 'child.name AS child_table', 'parent.name AS parent_table',
-                  'fk.delete_referential_action_desc', 'fk.update_referential_action_desc', 'fk.is_disabled').timeout(10000);
-              output('foreign-keys', fk);
-              const columns = await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA', 'dbo').whereIn('TABLE_NAME', tables)
-                .select('TABLE_NAME','COLUMN_NAME','DATA_TYPE').timeout(10000);
-              output('identity-columns', columns.filter(x => /(^id$|_id$|registration|request_no|request_number|factory_name|status|deleted_at|created_at|updated_at|district|subdistrict)/iu.test(x.COLUMN_NAME)));
+            output('committed-scan',scan);
+            for (const resource of oldResource || []) {
+              if (!tables.includes(resource.object_name) || resource.schema_name!=='dbo') continue;
+              const selected=candidates.filter(column=>byTable.get(resource.object_name).has(column));
+              try {
+                const matches=await db.fromRaw('?? WITH (INDEX(??))',[resource.schema_name+'.'+resource.object_name,resource.index_name])
+                  .select(selected).select(db.raw('%%lockres%% AS lock_resource'))
+                  .whereRaw('%%lockres%% = ?',['(29825665d988)']).timeout(15000);
+                output('old-key-current-matches', {table:resource.object_name,index:resource.index_name,matches});
+                const requestIds=matches.map(row => resource.object_name==='cems_wpms_connection_requests'?String(row.id):String(row.request_id||''));
+                if (requestIds.length) {
+                  output('old-key-related-requests',(records.get('cems_wpms_connection_requests')||[]).filter(row=>requestIds.includes(String(row.id))));
+                  output('old-key-related-snapshots',(records.get('cems_wpms_request_factory_snapshots')||[]).filter(row=>requestIds.includes(String(row.request_id))));
+                  const histories=await db('cems_wpms_request_status_history').whereIn('request_id',requestIds)
+                    .select('id','request_id','status','changed_at').orderBy('changed_at','asc').timeout(10000);
+                  output('old-key-history',histories);
+                }
+              } catch(error) { output('old-key-current-matches',{error:error.code||error.name,number:error.number||error.originalError?.info?.number||null}); }
             }
-            await query('identity-end', `SELECT s.session_id, s.host_process_id, s.open_transaction_count,
-              CONVERT(VARCHAR(33), s.login_time, 126) AS login_time,
-              CONVERT(VARCHAR(33), t.transaction_begin_time, 126) AS transaction_begin_time,
-              CONVERT(VARCHAR(32), st.transaction_id) AS transaction_id
-              FROM sys.dm_exec_sessions s LEFT JOIN sys.dm_tran_session_transactions st ON st.session_id=s.session_id
-              LEFT JOIN sys.dm_tran_active_transactions t ON t.transaction_id=st.transaction_id WHERE s.session_id=?`, [sessionId]);
-           } finally { clearTimeout(guard); await db.destroy(); }
-          })().catch(error => { output('failure', { code: error.code || error.name, number: error.number || error.originalError?.info?.number || null }); process.exitCode=1; });
+            await query('history-capabilities', `SELECT actual_state_desc, desired_state_desc FROM sys.database_query_store_options`);
+            const fs = require('fs'); const path = require('path');
+            const logRoot = path.resolve('logs');
+            if (fs.existsSync(logRoot)) {
+              const files=fs.readdirSync(logRoot).filter(name=>/^(?:app|error)-2026-10-30[^/\\]*\.log$/u.test(name));
+              const evidence=[];
+              for (const name of files.slice(-6)) {
+                const file=path.join(logRoot,name); const stat=fs.statSync(file); const size=Math.min(stat.size,4*1024*1024);
+                const fd=fs.openSync(file,'r'); const buf=Buffer.alloc(size); fs.readSync(fd,buf,0,size,stat.size-size); fs.closeSync(fd);
+                const lines=buf.toString('utf8').split(/\r?\n/u); const signals=[];
+                for (const line of lines) {
+                  let row; try {row=JSON.parse(line);} catch {continue;}
+                  const stamp=String(row.timestamp||'');
+                  if (stamp<'2026-10-30T08:16:00' || stamp>'2026-10-30T09:19:00') continue;
+                  const message=String(row.message||'');
+                  const categories=[];
+                  if (/transaction/iu.test(message)) categories.push('transaction');
+                  if (/deadlock|lock request|LCK_M|ETIMEOUT|request timeout/iu.test(message)) categories.push('lock-or-timeout');
+                  if (/connection.*(?:closed|lost|reset)|ECONNRESET/iu.test(message)) categories.push('connection-ended');
+                  const match=/\b(GET|PUT|POST|DELETE|PATCH)\s+(\/api\/v1\/cems-wpms-requests(?:\/\d+)?(?:\/[a-z-]+)?)(?:[?\s]|$)/u.exec(message);
+                  if (categories.length || match) signals.push({timestamp:stamp,level:row.level,
+                    categories,...(match?{method:match[1],path:match[2]}:{}),
+                    ...(Number.isSafeInteger(Number(row.requestId))?{requestId:Number(row.requestId)}:{})});
+                }
+                evidence.push({name,bytes:stat.size,tailBytes:size,truncated:stat.size>size,signals:signals.slice(-50)});
+              }
+              output('application-log-signals',evidence);
+            } else output('application-log-signals',{logDirectoryPresent:false});
+           } finally {clearTimeout(guard);await db.destroy();}
+          })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
           '@ | node
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
