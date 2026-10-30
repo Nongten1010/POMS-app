@@ -345,6 +345,14 @@ Minimal response (`200 OK`):
 }
 ```
 
+### ชื่ออำเภอและตำบลในที่อยู่
+
+`GET /poms-factories` (`address`), `GET /poms-factories/:factoryId` (`factoryAddress`), `GET /poms-factories/:factoryId/form` และ `GET /poms-factories/edit-requests/:id/form` (`address`) แปลงรหัสพื้นที่เก่าเป็นชื่อในทั้ง `legacy` และ `canonical` ตาม [กติกาการแปลงชื่อพื้นที่ร่วมกับโรงงานเข้าข่าย](../eligible-factories/README.md#ชื่ออำเภอและตำบลในที่อยู่). Client แสดงค่าที่ API คืนได้โดยตรง ไม่ต้องนำเลขรหัสในที่อยู่ไป lookup เอง
+
+ตัวอย่าง `7/507 หมู่ 6 ตำบล5 อำเภอ6 จังหวัดระยอง 21140` คืนเป็น `7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140`. เมื่อยืนยันชื่อไม่ได้ ให้ละเฉพาะป้ายตัวเลขใน response; ที่อยู่ที่ล้างเป็น `null` และชื่อที่อ่านได้เดิมคงเดิม. `GET` ไม่บันทึกการแก้กลับฐานข้อมูล ส่วน snapshot ประวัติคำขอคงค่าที่บันทึก ณ เวลานั้น ไม่ถือเป็น current/live
+
+การซ่อมข้อมูลที่เก็บถาวรและ canonical revision/event ดู [การแก้ข้อมูลพื้นที่เก่า](../../../evidence/master-data/factory-address-area-names.md)
+
 ### `GET /api/v1/poms-factories/:factoryId/form`
 
 คืน prefill โดยให้ข้อมูลโรงงานและจุดตรวจวัดมาจาก current/live POMS ใช้ field ของ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) และเพิ่ม `measurementPoints[].connectedPointId` เพื่อระบุจุดตรวจวัดแต่ละรายการ โดยไม่คืน wrapper `formDefaults`, workflow metadata, `factoryAddress`, `systemTypes` หรือ `sourceMeasurementPointId`

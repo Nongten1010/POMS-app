@@ -8,7 +8,12 @@ import {
   diwAdministrativeAreaKey,
   formatFacImportAddress,
 } from './fac-import.mapper';
-import { withProvinceInFactoryAddress } from './factory-address';
+import {
+  hasNumericFactoryAddressAreas,
+  replaceNumericFactoryAddressAreas,
+  withoutNumericFactoryAddressAreas,
+  withProvinceInFactoryAddress,
+} from './factory-address';
 
 interface FactorySourceHydrationRow {
   FID: string | null;
@@ -42,7 +47,6 @@ interface AdministrativeAreaRow {
 
 const EXTERNAL_LOOKUP_TIMEOUT_MS = 300000;
 const FACTORY_SOURCE_LOOKUP_CHUNK_SIZE = 500;
-const LEGACY_AREA_CODE_PATTERN = /(?:ตำบล|อำเภอ)\s*\d+(?:\s|$)/u;
 
 interface EligibleFactoryAddressStorageInput {
   sourceFactoryId: string | null;
@@ -54,6 +58,56 @@ interface EligibleFactoryAddressStorageInput {
 interface EligibleFactoryIndustrialEstateStorageInput {
   sourceFactoryId: string | null;
   factoryRegistrationNoNew: string;
+}
+
+export interface FactoryAddressNamesInput {
+  sourceFactoryId: string | null;
+  factoryRegistrationNoNew: string;
+  address: string | null;
+  provinceName?: string | null;
+}
+
+/** Read-only enrichment in either profile mode; a strict caller can prepare a data repair. */
+export async function resolveLegacyFactoryAddressNames<T extends FactoryAddressNamesInput>(
+  rows: T[],
+  options: { strict?: boolean } = {},
+): Promise<T[]> {
+  const pending = rows.filter((row) => hasNumericFactoryAddressAreas(row.address));
+  if (pending.length === 0) return rows;
+  let sources: FactorySourceHydrationRow[] = [];
+  let names = new Map<string, AdministrativeAreaNames>();
+  try {
+    const keys = uniqueNonEmpty(
+      pending.flatMap((row) => [row.sourceFactoryId, row.factoryRegistrationNoNew]),
+    );
+    if (keys.length > 0) {
+      sources = await loadFactorySourceRows(keys);
+      names = await loadAdministrativeAreaNames(sources);
+    }
+  } catch (error) {
+    if (options.strict) throw error;
+    logger.warn('[factory-address] Failed to resolve legacy area names', { error });
+  }
+  return rows.map((row) => {
+    if (!row.address || !hasNumericFactoryAddressAreas(row.address)) return row;
+    const source = findSourceRowForFactory(
+      sources,
+      row.sourceFactoryId,
+      row.factoryRegistrationNoNew,
+    );
+    const key = source ? diwAdministrativeAreaKey(source.PROV, source.AMP, source.TUMBOL) : null;
+    const areaNames = key ? names.get(key) : undefined;
+    const resolved =
+      source && areaNames
+        ? replaceNumericFactoryAddressAreas(row.address, areaNames, source)
+        : null;
+    if (resolved === null && options.strict) {
+      throw new Error(
+        'Cannot safely resolve a legacy factory address; verify Fac60k identity and TUMBOL master before retrying',
+      );
+    }
+    return { ...row, address: resolved ?? withoutNumericFactoryAddressAreas(row.address) };
+  });
 }
 
 export async function hydrateEligibleFactoriesFromSource(
@@ -70,11 +124,7 @@ export async function hydrateEligibleFactoriesFromSource(
       ...new Set([...sourceFactoryIds, ...registrationNumbers]),
     ]);
     const administrativeAreaNamesByCode = await loadAdministrativeAreaNames(sourceRows);
-    const sourceRowByFactoryKey = indexSourceRows(sourceRows);
-
-    return rows.map((row) =>
-      hydrateFactoryRow(row, sourceRowByFactoryKey, administrativeAreaNamesByCode),
-    );
+    return rows.map((row) => hydrateFactoryRow(row, sourceRows, administrativeAreaNamesByCode));
   } catch (error) {
     logger.warn('[eligible-factories] Failed to hydrate selected factory data from source DB', {
       error,
@@ -84,20 +134,25 @@ export async function hydrateEligibleFactoriesFromSource(
 }
 
 function normalizeStoredFactoryAddresses(rows: EligibleFactoryDTO[]): EligibleFactoryDTO[] {
-  if (isCanonicalFactoryProfilesEnabled()) return rows;
-  return rows.map((row) => ({
-    ...row,
-    address: withProvinceInFactoryAddress(row.address, row.provinceName) ?? null,
-  }));
+  return rows.map((row) => {
+    const address =
+      row.address && hasNumericFactoryAddressAreas(row.address)
+        ? withoutNumericFactoryAddressAreas(row.address)
+        : row.address;
+    return {
+      ...row,
+      address: isCanonicalFactoryProfilesEnabled()
+        ? address
+        : (withProvinceInFactoryAddress(address, row.provinceName) ?? null),
+    };
+  });
 }
 
 export async function resolveEligibleFactoryAddressForStorage(
   input: EligibleFactoryAddressStorageInput,
 ): Promise<string | null | undefined> {
   const storedAddress = input.address;
-  const containsLegacyCodes = Boolean(
-    storedAddress && LEGACY_AREA_CODE_PATTERN.test(storedAddress),
-  );
+  const containsLegacyCodes = hasNumericFactoryAddressAreas(storedAddress);
   if (storedAddress !== null && storedAddress !== undefined && !containsLegacyCodes) {
     return withProvinceInFactoryAddress(storedAddress, input.provinceName);
   }
@@ -128,9 +183,8 @@ export async function resolveEligibleFactoryAddressForStorage(
     }
 
     if (containsLegacyCodes && storedAddress) {
-      const resolvedAddress = storedAddress
-        .replace(/ตำบล\s*\d+(?=\s|$)/u, `ตำบล${names.subdistrictName}`)
-        .replace(/อำเภอ\s*\d+(?=\s|$)/u, `อำเภอ${names.districtName}`);
+      const resolvedAddress = replaceNumericFactoryAddressAreas(storedAddress, names, sourceRow);
+      if (resolvedAddress === null) return undefined;
       return withProvinceInFactoryAddress(resolvedAddress, input.provinceName);
     }
 
@@ -235,19 +289,6 @@ async function loadAdministrativeAreaNames(
   }
 }
 
-function indexSourceRows(
-  rows: FactorySourceHydrationRow[],
-): Map<string, FactorySourceHydrationRow> {
-  const sourceRowByFactoryKey = new Map<string, FactorySourceHydrationRow>();
-  for (const row of rows) {
-    for (const key of [row.FID, row.DISPFACREG, row.FACREG]) {
-      const normalizedKey = normalizeText(key);
-      if (normalizedKey) sourceRowByFactoryKey.set(normalizedKey, row);
-    }
-  }
-  return sourceRowByFactoryKey;
-}
-
 function findSourceRowForFactory(
   rows: FactorySourceHydrationRow[],
   sourceFactoryId: string | null,
@@ -274,16 +315,17 @@ function findSourceRowForFactory(
 
 function hydrateFactoryRow(
   row: EligibleFactoryDTO,
-  sourceRowByFactoryKey: Map<string, FactorySourceHydrationRow>,
+  sourceRows: FactorySourceHydrationRow[],
   administrativeAreaNamesByCode: Map<string, AdministrativeAreaNames>,
 ): EligibleFactoryDTO {
-  const sourceKey = normalizeText(row.sourceFactoryId);
-  const registrationKey = normalizeText(row.factoryRegistrationNoNew);
-  const sourceRow =
-    (sourceKey ? sourceRowByFactoryKey.get(sourceKey) : undefined) ??
-    (registrationKey ? sourceRowByFactoryKey.get(registrationKey) : undefined);
-  if (!sourceRow) return row;
-  if (isCanonicalFactoryProfilesEnabled()) {
+  const sourceRow = findSourceRowForFactory(
+    sourceRows,
+    row.sourceFactoryId,
+    row.factoryRegistrationNoNew,
+  );
+  if (!sourceRow) return normalizeStoredFactoryAddresses([row])[0];
+  const numericAddress = hasNumericFactoryAddressAreas(row.address);
+  if (isCanonicalFactoryProfilesEnabled() && !numericAddress) {
     return {
       ...row,
       machineryHorsepower:
@@ -296,6 +338,22 @@ function hydrateFactoryRow(
     sourceRow.AMP,
     sourceRow.TUMBOL,
   );
+  if (numericAddress && row.address) {
+    const names = administrativeAreaKey
+      ? administrativeAreaNamesByCode.get(administrativeAreaKey)
+      : undefined;
+    const address =
+      (names ? replaceNumericFactoryAddressAreas(row.address, names, sourceRow) : null) ??
+      withoutNumericFactoryAddressAreas(row.address);
+    return {
+      ...row,
+      machineryHorsepower:
+        row.machineryHorsepower ?? firstNullableNumber(sourceRow.HP2, sourceRow.HP),
+      address: isCanonicalFactoryProfilesEnabled()
+        ? address
+        : (withProvinceInFactoryAddress(address, row.provinceName) ?? null),
+    };
+  }
   const resolvedAddress =
     withProvinceInFactoryAddress(
       formatFacImportAddress(
@@ -322,7 +380,7 @@ function hydrateFactoryRow(
 }
 
 function shouldHydrateAddress(address: string | null): boolean {
-  return address === null || LEGACY_AREA_CODE_PATTERN.test(address);
+  return address === null || hasNumericFactoryAddressAreas(address);
 }
 
 function uniqueNonEmpty(values: Array<string | null>): string[] {

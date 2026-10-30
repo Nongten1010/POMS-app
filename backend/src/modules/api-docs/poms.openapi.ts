@@ -37,6 +37,8 @@ import {
 type OpenApiObject = Record<string, unknown>;
 
 const baseDocument = connectionRequestsOpenApiDocument as OpenApiObject;
+const factoryAddressNamesDescription =
+  'ที่อยู่ current/live ใน legacy และ canonical mode แปลงเฉพาะตำบล/อำเภอที่ค้างเป็นเลขรหัส โดยจับคู่โรงงานจาก FID/เลขทะเบียน และชื่อจาก TUMBOL ด้วย PROV+AMP+TUMBOL; รักษารายละเอียดที่อยู่และชื่อที่อ่านได้เดิม. ถ้าตรวจชื่อไม่ได้ ให้ละเฉพาะป้ายพื้นที่ตัวเลขในการแสดงผล ไม่เดาชื่อและไม่เขียนฐานข้อมูลจาก GET. canonical null ยังคง null. ข้อมูลเก่าซ่อมด้วย migrations 0149/0150 พร้อม backup และ canonical revision/event; snapshot ประวัติคำขอคงค่าตามเวลาที่บันทึก';
 
 interface OperationOptions {
   tag: string;
@@ -2199,6 +2201,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
           required: ['id', 'factoryId', 'factoryRegistrationNo'],
           properties: {
             id: { type: 'integer', minimum: 1 },
+            address: {
+              ...nullableStringSchema(1000),
+              description: factoryAddressNamesDescription,
+              example: '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140',
+            },
             factoryId: {
               type: 'string',
               description:
@@ -2970,7 +2977,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
         description:
           'การประกอบกิจการจาก eligible_factories.business_activity ใน legacy mode หรือข้อมูลทั่วไปหลักร่วมกับเข้าข่ายใน canonical mode',
       },
-      factoryAddress: nullableStringSchema(1000),
+      factoryAddress: {
+        ...nullableStringSchema(1000),
+        description: factoryAddressNamesDescription,
+        example: '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140',
+      },
       provinceName: nullableStringSchema(128),
       industrialEstateName: nullableStringSchema(255),
       latitude: { type: 'number', minimum: -90, maximum: 90, nullable: true },
@@ -6302,6 +6313,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Master Data',
       summary: 'List current/live POMS factories',
       operationId: 'listPomsFactories',
+      successDescription: factoryAddressNamesDescription,
       description:
         'คืนเฉพาะโรงงานที่มี active row ใน cems_wpms_connected_measurement_points ภายใต้ data scope ของ factories:view โดยใช้ response schema เดียวกับ GET /cems-wpms-requests/operator-factories แต่ข้อมูลของแต่ละ row มาจาก current/live connected POMS เท่านั้น ไม่ใช้ snapshot จากคำขอเชื่อมต่อ ฟิลด์ที่ derive/fixed จากการเป็นโรงงานที่เชื่อมต่อแล้วคือ requestStatusCode="CONNECTED", isEligible=true, eligibilityStatus="เข้าข่าย", eligibilityRequest=null, canRequestEligibility=false; officerNotificationEmails รวมอีเมล current ของ active points แบบไม่ซ้ำ; status อ่านสถานะที่ Admin บันทึกเป็น แสดง/ซ่อน/ยกเลิกการเชื่อมต่อ โดยโรงงานเดิมที่ยังไม่ตั้งค่าคือ แสดง',
       parameters: [
@@ -6320,6 +6332,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Master Data',
       summary: 'Get current/live POMS factory and measurement points',
       operationId: 'getPomsFactoryDetail',
+      successDescription: factoryAddressNamesDescription,
       description:
         'คืนข้อมูลโรงงานและ active measurement points. canonical mode ข้อมูลทั่วไปใช้แหล่งหลักร่วมกับโรงงานเข้าข่าย โดยทะเบียนต้นทาง Fac60k คงเป็น read-only ตามเดิม. measurementPoints ใช้ทั้งสำหรับแสดงผลและเป็นฐานของฟอร์ม MEASUREMENT_POINTS; resource นอก data scope ตอบ 404',
       parameters: [factoryIdParameter],
@@ -7834,6 +7847,7 @@ const editRequestFormSchemas: Record<string, OpenApiObject> = {
     example: pomsFormExample,
     properties: {
       ...baseFormProperties,
+      address: { ...baseFormProperties.address, description: factoryAddressNamesDescription },
       measurementPoints: {
         ...baseFormPoints,
         minItems: 1,
@@ -7867,6 +7881,7 @@ const editRequestFormSchemas: Record<string, OpenApiObject> = {
       'ฟอร์ม proposed values เปิดด้วย edit-request ID; ต้องมีจุดตรวจวัดอย่างน้อยหนึ่งจุดเสมอ และ systemType เป็น null เฉพาะเมื่อครอบคลุมหลายระบบ',
     properties: {
       ...baseFormProperties,
+      address: { ...baseFormProperties.address, description: factoryAddressNamesDescription },
       systemType: { type: 'string', nullable: true, enum: ['CEMS', 'WPMS', null] },
       measurementPoints: {
         ...baseFormPoints,

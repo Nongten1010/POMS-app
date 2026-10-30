@@ -1,4 +1,38 @@
 const STANDALONE_EXPLICIT_PROVINCE_PATTERN = /(?:^|\s+)จังหวัด\s*[ก-๙]+(?=\s|$)/u;
+const NUMERIC_AREA_PATTERN = /(?:ตำบล|อำเภอ)\s*\d+(?=\s|$)/u;
+
+export function hasNumericFactoryAddressAreas(address: string | null | undefined): boolean {
+  return Boolean(address && NUMERIC_AREA_PATTERN.test(address));
+}
+
+/** Replace only legacy labels, never rebuild a reviewed street address from Fac60k. */
+export function replaceNumericFactoryAddressAreas(
+  address: string,
+  names: { subdistrictName: string | null; districtName: string | null },
+  codes: { TUMBOL: string | number | null; AMP: string | number | null },
+): string | null {
+  let unresolved = false;
+  const resolved = address.replace(/(ตำบล|อำเภอ)\s*(\d+)(?=\s|$)/gu, (label, area, code) => {
+    const name = area === 'ตำบล' ? names.subdistrictName : names.districtName;
+    const sourceCode = area === 'ตำบล' ? codes.TUMBOL : codes.AMP;
+    if (
+      !name ||
+      !/[ก-๙]/u.test(name) ||
+      sourceCode == null ||
+      Number(code) !== Number(sourceCode)
+    ) {
+      unresolved = true;
+      return label;
+    }
+    return `${area}${name.trim()}`;
+  });
+  return unresolved ? null : resolved;
+}
+
+/** Display fallback only; unresolved codes must never be persisted as place names. */
+export function withoutNumericFactoryAddressAreas(address: string): string {
+  return address.replace(/(?:ตำบล|อำเภอ)\s*\d+(?:\s+|$)/gu, '').trim();
+}
 
 interface FactoryAddressPlacementOptions {
   postalCode?: string | number | null;

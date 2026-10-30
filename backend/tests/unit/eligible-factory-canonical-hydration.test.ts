@@ -30,9 +30,13 @@ jest.mock('../../src/config/factory-source-database', () => ({
 import { hydrateEligibleFactoriesFromSource } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 
 describe('canonical profile address is authoritative during selected factory hydration', () => {
-  it.each([null, 'Office address', 'ตำบล1 อำเภอ1'])(
-    'keeps approved address %s unchanged while retaining horsepower fallback',
-    async (address) => {
+  it.each([
+    [null, null],
+    ['Office address', 'Office address'],
+    ['ตำบล1 อำเภอ1', 'ตำบลทดสอบ อำเภอทดสอบ'],
+  ])(
+    'preserves readable or cleared address %s and repairs numeric labels with horsepower fallback',
+    async (address, expectedAddress) => {
       const [row] = await hydrateEligibleFactoriesFromSource([
         {
           sourceFactoryId: 'REG-TEST',
@@ -42,7 +46,7 @@ describe('canonical profile address is authoritative during selected factory hyd
           machineryHorsepower: null,
         } as never,
       ]);
-      expect(row?.address).toBe(address);
+      expect(row?.address).toBe(expectedAddress);
       expect(row?.machineryHorsepower).toBe(50);
     },
   );
