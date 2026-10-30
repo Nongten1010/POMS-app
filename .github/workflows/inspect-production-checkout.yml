@@ -111,6 +111,15 @@ jobs:
             output('manifest-before',before);
             if(before.length!==18||before.some(x=>!x.originalMatches&&!x.resolvedMatches))throw new Error('STALE_MANIFEST');
             output('preflight',{manifestRows:before.length,originalRows:before.filter(x=>x.originalMatches).length,resolvedRows:before.filter(x=>x.resolvedMatches).length});
+            const extraTable='eligible_factory_add_requests';
+            const extraColumns=await db('INFORMATION_SCHEMA.COLUMNS').where({TABLE_SCHEMA:'dbo',TABLE_NAME:extraTable}).select('COLUMN_NAME').timeout(10000);
+            const extraFields=['id','address','status','deleted_at','factory_registration_no','factory_id'].filter(x=>extraColumns.some(c=>c.COLUMN_NAME===x));
+            if(extraFields.includes('address')){
+             const rows=await db(extraTable).select(extraFields).timeout(15000);
+             const pattern=/(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15|\u0e15\.|\u0e2d\.)\s*[:.\-]?\s*[0-9\u0e50-\u0e59]+/u;
+             output('additional-address-scan',{table:extraTable,rows:rows.length,issues:rows.filter(x=>x.address&&pattern.test(x.address))});
+            }
+          
            }finally{clearTimeout(guard);await db.destroy();}
           })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
           '@ | node
