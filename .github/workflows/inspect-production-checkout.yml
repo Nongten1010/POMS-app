@@ -29,6 +29,8 @@ jobs:
       - name: Read the deployed database and form services for one factory
         run: |
           $ErrorActionPreference = 'Stop'
+          $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           Set-Location 'C:\apps\POMS-app\backend'
           @'
           const assert = require('node:assert/strict');
@@ -85,15 +87,15 @@ jobs:
               };
               console.log('[factory-address-production-audit] ' + JSON.stringify(report));
               assert.equal(migrations.length, 2, 'AUDIT_MIGRATIONS_MISSING');
-              assert.equal(areas.TUMNAME.trim(), 'มาบยางพร', 'AUDIT_WRONG_SUBDISTRICT');
-              assert.equal(areas.AMPNAME.trim(), 'ปลวกแดง', 'AUDIT_WRONG_DISTRICT');
+              assert.equal(areas.TUMNAME.trim(), '\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23', 'AUDIT_WRONG_SUBDISTRICT');
+              assert.equal(areas.AMPNAME.trim(), '\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07', 'AUDIT_WRONG_DISTRICT');
               const addresses = [factory.address, ...connected.map(x => x.factory_address),
                 ...profiles.map(x => x.address), ...forms.map(x => x.address), ...requests.map(x => x.address),
                 ...(apiForm ? [apiForm.detailAddress, apiForm.formAddress] : [])];
               for (const address of addresses) {
                 if (address == null) continue;
-                assert.ok(address.includes('ตำบลมาบยางพร') && address.includes('อำเภอปลวกแดง'), 'AUDIT_ADDRESS_NAMES_MISSING');
-                assert.ok(!/(?:ตำบล|อำเภอ)\s*\d+(?:\s|$)/u.test(address), 'AUDIT_NUMERIC_AREA_LABEL');
+                assert.ok(address.includes('\u0e15\u0e33\u0e1a\u0e25\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23') && address.includes('\u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07'), 'AUDIT_ADDRESS_NAMES_MISSING');
+                assert.ok(!/(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d)\s*\d+(?:\s|$)/u.test(address), 'AUDIT_NUMERIC_AREA_LABEL');
               }
               console.log('[factory-address-production-audit] PASS: stored addresses and live form use the verified Thai area names.');
             } finally {
