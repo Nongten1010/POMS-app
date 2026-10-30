@@ -2,84 +2,109 @@ name: Inspect production checkout
 
 on:
   workflow_dispatch:
+    inputs:
+      factory_registration_no:
+        description: Factory registration number for the read-only address verification
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: poms-prod-deploy
+  group: poms-prod-readonly-address-audit
   cancel-in-progress: false
 
 jobs:
   inspect:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/backend/verify-factory-address-production'
     runs-on: [self-hosted, poms, windows, prod]
     timeout-minutes: 5
+    env:
+      TARGET_FACTORY_REGISTRATION: ${{ inputs.factory_registration_no }}
     defaults:
       run:
         shell: powershell
     steps:
-      - name: Snapshot the six reviewed source files without changing production
-        id: snapshot
+      - name: Read the deployed database and form services for one factory
         run: |
           $ErrorActionPreference = 'Stop'
-          $env:GIT_OPTIONAL_LOCKS = '0'
-          $repo = 'C:\apps\POMS-app'
-          $destination = Join-Path $env:RUNNER_TEMP "poms-source-audit-${{ github.run_id }}-${{ github.run_attempt }}"
-          $files = @(
-            'backend/src/modules/api-docs/poms.openapi.ts',
-            'backend/src/modules/device-connections/device-connections.repository.ts',
-            'backend/src/modules/integrations/integration-device-configs.controller.ts',
-            'backend/src/modules/integrations/integration-device-configs.repository.ts',
-            'backend/src/modules/integrations/integration-device-configs.service.ts',
-            'backend/src/db/migrations/0144_track_device_config_request_source.ts'
-          )
-          New-Item -ItemType Directory -Path $destination | Out-Null
-          Push-Location $repo
-          try {
-            $head = git rev-parse HEAD
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the production checkout.' }
-            $changed = @(git diff --name-only HEAD)
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect tracked changes.' }
-            $status = @(git status --short --untracked-files=all -- $files)
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect reviewed source paths.' }
-            $hashes = @()
-            foreach ($file in $files) {
-              $source = Join-Path $repo $file
-              if (!(Test-Path -LiteralPath $source -PathType Leaf)) {
-                throw "Reviewed source is missing: $file"
+          Set-Location 'C:\apps\POMS-app\backend'
+          @'
+          const assert = require('node:assert/strict');
+          const registration = process.env.TARGET_FACTORY_REGISTRATION;
+          if (!/^\d{14}$/.test(registration || '')) throw new Error('AUDIT_INVALID_REGISTRATION');
+          const { env } = require('./dist/config/env');
+          const { db } = require('./dist/config/database');
+          const { factorySourceDb, factorySourceTableName } = require('./dist/config/factory-source-database');
+          (async () => {
+            try {
+              const migrationNames = [
+                '0149_create_factory_address_names_repair_backup.ts',
+                '0150_repair_factory_address_names.ts',
+              ];
+              const migrations = await db('knex_migrations').whereIn('name', migrationNames).select('name', 'batch');
+              const eligible = await db('eligible_factories').whereNull('deleted_at')
+                .where(q => q.where('source_factory_id', registration).orWhere('factory_registration_no_new', registration))
+                .select('id', 'factory_name', 'address', 'province_name', 'source_factory_id', 'factory_registration_no_new', 'monitoring_point_form_id');
+              assert.equal(eligible.length, 1, 'AUDIT_TARGET_NOT_UNIQUE');
+              const factory = eligible[0];
+              const connected = await db('cems_wpms_connected_measurement_points')
+                .where('eligible_factory_id', factory.id).whereNull('deleted_at')
+                .select('id', 'factory_id', 'factory_name', 'factory_address', 'system_type');
+              const profiles = await db('factory_profiles').where('eligible_factory_id', factory.id)
+                .select('id', 'factory_name', 'address', 'revision');
+              const forms = factory.monitoring_point_form_id == null ? []
+                : await db('factory_monitoring_point_forms').where('id', factory.monitoring_point_form_id)
+                  .whereNull('deleted_at').select('id', 'factory_name', 'address');
+              const requests = await db('cems_wpms_connection_requests')
+                .where('eligible_factory_id', factory.id).whereNull('deleted_at')
+                .whereNotIn('status', ['CANCELED', 'REJECTED'])
+                .select('id', 'request_no', 'factory_name', 'address', 'status');
+              const source = await factorySourceDb(factorySourceTableName())
+                .where('FID', factory.source_factory_id || registration).timeout(30000)
+                .first('FID', 'FNAME', 'PROV', 'AMP', 'TUMBOL');
+              assert.ok(source, 'AUDIT_SOURCE_NOT_FOUND');
+              const areas = await factorySourceDb(`${env.FACTORY_DB_SCHEMA}.TUMBOL`)
+                .where({ PROV: source.PROV, AMP: source.AMP, TUMBOL: source.TUMBOL }).timeout(30000)
+                .first('TUMNAME', 'AMPNAME');
+              let apiForm = null;
+              if (connected.length) {
+                // Internal read services run under the trusted production operator; no token or user is created.
+                const { pomsFactoriesService } = require('./dist/modules/poms-factories/poms-factories.service');
+                const detail = await pomsFactoriesService.getFactoryDetail(connected[0].factory_id, 0, 'ALL');
+                const form = await pomsFactoriesService.getFactoryForm(connected[0].factory_id, 0, 'ALL', { systemType: connected[0].system_type });
+                apiForm = { factoryId: detail.factoryId, factoryName: form.factoryName, detailAddress: detail.factoryAddress, formAddress: form.address };
               }
-              $text = [System.IO.File]::ReadAllText($source)
-              if ($text -match '(?:ghp_|github_pat_|sk-)[A-Za-z0-9_]{20,}|BEGIN [A-Z ]*PRIVATE KEY') {
-                throw "Potential credential in reviewed source; snapshot stopped: $file"
+              const backupCount = await db('factory_address_names_repair_backup_0149').count({ count: '*' }).first();
+              const report = {
+                registration, mode: env.FACTORY_PROFILE_MODE, migrations,
+                eligible, connected, profiles, forms, requests, source, areas, apiForm,
+                backedUpRows: Number(backupCount.count),
+                fullFactoryNameMatchesSource: factory.factory_name.trim() === source.FNAME.trim(),
+              };
+              console.log('[factory-address-production-audit] ' + JSON.stringify(report));
+              assert.equal(migrations.length, 2, 'AUDIT_MIGRATIONS_MISSING');
+              assert.equal(areas.TUMNAME.trim(), 'มาบยางพร', 'AUDIT_WRONG_SUBDISTRICT');
+              assert.equal(areas.AMPNAME.trim(), 'ปลวกแดง', 'AUDIT_WRONG_DISTRICT');
+              const addresses = [factory.address, ...connected.map(x => x.factory_address),
+                ...profiles.map(x => x.address), ...forms.map(x => x.address), ...requests.map(x => x.address),
+                ...(apiForm ? [apiForm.detailAddress, apiForm.formAddress] : [])];
+              for (const address of addresses) {
+                if (address == null) continue;
+                assert.ok(address.includes('ตำบลมาบยางพร') && address.includes('อำเภอปลวกแดง'), 'AUDIT_ADDRESS_NAMES_MISSING');
+                assert.ok(!/(?:ตำบล|อำเภอ)\s*\d+(?:\s|$)/u.test(address), 'AUDIT_NUMERIC_AREA_LABEL');
               }
-              $target = Join-Path $destination $file
-              New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
-              Copy-Item -LiteralPath $source -Destination $target
-              $hashes += [ordered]@{
-                path = $file
-                sha256 = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
-              }
+              console.log('[factory-address-production-audit] PASS: stored addresses and live form use the verified Thai area names.');
+            } finally {
+              await Promise.allSettled([db.destroy(), factorySourceDb.destroy()]);
             }
-            $patch = Join-Path $destination 'tracked-server-changes.patch'
-            git diff --binary --output="$patch" HEAD -- $files
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot snapshot the reviewed source diff.' }
-            [ordered]@{
-              head = $head
-              trackedChanges = $changed
-              reviewedStatus = $status
-              files = $hashes
-            } | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $destination 'manifest.json') -Encoding UTF8
-            "folder=$destination" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-            Write-Host 'Reviewed source snapshot complete; checkout, database and service unchanged.'
-          } finally {
-            Pop-Location
-          }
-
-      - name: Preserve reviewed source for reconciliation into Git
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: production-source-audit-${{ github.run_attempt }}
-          path: ${{ steps.snapshot.outputs.folder }}
-          if-no-files-found: error
-          retention-days: 3
+          })().catch(error => {
+            console.error('[factory-address-production-audit] FAILED ' + JSON.stringify({
+              code: error.code || error.name,
+              check: String(error.message || '').startsWith('AUDIT_') ? error.message : 'Inspect the read-only audit output',
+            }));
+            process.exitCode = 1;
+          });
+          '@ | node
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
