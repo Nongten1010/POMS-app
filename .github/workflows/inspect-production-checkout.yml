@@ -92,7 +92,7 @@ jobs:
                 const selected = candidates.filter(x => available.has(x));
                 console.log('[factory-address-all-audit-stage] reading ' + table);
                 let rows;
-                try { rows = await db(table).select(selected).timeout(15000, { cancel: true }); }
+                try { rows = await db(table).select(selected).timeout(15000); }
                 catch (error) {
                   tables.push({ table, incomplete: true, code: error.code || error.name });
                   console.log('[factory-address-all-audit-table] ' + JSON.stringify(tables[tables.length - 1]));
