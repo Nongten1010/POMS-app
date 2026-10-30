@@ -1,6 +1,7 @@
 import { contactSnapshot, contactsChanged } from './poms-factory-contacts';
 import { deriveCurrentParameterDetails as deriveCurrentPomsParameterDetails } from '../../shared/utils/current-parameter-details';
 import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
+import { resolveLegacyFactoryAddressNames } from '../eligible-factories/eligible-factory-source-hydration';
 import {
   AppError,
   BadRequestError,
@@ -54,10 +55,19 @@ export const pomsFactoriesService = {
     search?: string,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<{ data: OperatorFactoryTableRowDTO[]; meta: { total: number } }> {
-    const data = await pomsFactoriesRepository.listFactories(
+    const rows = await pomsFactoriesRepository.listFactories(
       { actorUserId, scope: viewScope, regionalAccess },
       search,
     );
+    const addresses = await resolveLegacyFactoryAddressNames(
+      rows.map((row) => ({
+        sourceFactoryId: row.factoryId,
+        factoryRegistrationNoNew: row.newRegistrationNo ?? row.oldRegistrationNo ?? row.factoryId,
+        address: row.address,
+        provinceName: row.province,
+      })),
+    );
+    const data = rows.map((row, index) => ({ ...row, address: addresses[index].address }));
     return { data, meta: { total: data.length } };
   },
 
@@ -67,13 +77,21 @@ export const pomsFactoriesService = {
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PomsFactoryDetailDTO> {
-    const detail = await pomsFactoriesRepository.findFactoryDetail(factoryId, {
+    const detail = await requireCurrentFactoryDetail(
+      factoryId,
       actorUserId,
-      scope: viewScope,
+      viewScope,
       regionalAccess,
-    });
-    if (!detail) throw new NotFoundError('POMS factory not found');
-    return detail;
+    );
+    const [resolved] = await resolveLegacyFactoryAddressNames([
+      {
+        sourceFactoryId: detail.factoryId,
+        factoryRegistrationNoNew: detail.factoryRegistrationNo,
+        address: detail.factoryAddress,
+        provinceName: detail.provinceName,
+      },
+    ]);
+    return { ...detail, factoryAddress: resolved.address };
   },
 
   async getFactoryForm(
@@ -106,7 +124,12 @@ export const pomsFactoriesService = {
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PomsFactoryEditRequestDTO> {
-    const current = await this.getFactoryDetail(factoryId, actorUserId, viewScope, regionalAccess);
+    const current = await requireCurrentFactoryDetail(
+      factoryId,
+      actorUserId,
+      viewScope,
+      regionalAccess,
+    );
     const requestedFormType = isMeasurementPointsRequest(input)
       ? POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
       : POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO;
@@ -334,7 +357,7 @@ export const pomsFactoriesService = {
       );
     }
 
-    const current = await this.getFactoryDetail(
+    const current = await requireCurrentFactoryDetail(
       request.factoryId,
       actorUserId,
       viewScope,
@@ -441,6 +464,22 @@ export const pomsFactoriesService = {
     };
   },
 };
+
+/** Write workflows compare raw persisted snapshots; display enrichment must not alter them. */
+async function requireCurrentFactoryDetail(
+  factoryId: string,
+  actorUserId: number,
+  viewScope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): Promise<PomsFactoryDetailDTO> {
+  const detail = await pomsFactoriesRepository.findFactoryDetail(factoryId, {
+    actorUserId,
+    scope: viewScope,
+    regionalAccess,
+  });
+  if (!detail) throw new NotFoundError('POMS factory not found');
+  return detail;
+}
 
 function invalidCancellationTransition(
   id: number,

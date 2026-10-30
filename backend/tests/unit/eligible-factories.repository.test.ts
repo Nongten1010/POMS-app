@@ -436,14 +436,14 @@ describe('eligibleFactoriesRepository.list', () => {
     expect(result.rows[0]?.address).not.toContain('อำเภอ4');
   });
 
-  it('falls back to the stored row when FAC_IMPORT cannot be queried', async () => {
+  it('keeps stored street details but omits numeric area labels when FAC_IMPORT cannot be queried', async () => {
     mockFactorySourceDb.mockImplementation(() => {
       throw new Error('FAC_IMPORT is unavailable');
     });
 
     const result = await eligibleFactoriesRepository.list({});
 
-    expect(result.rows[0]?.address).toBe('197 หมู่ 5 ตำบล7 อำเภอ4 จังหวัดชัยนาท 17150');
+    expect(result.rows[0]?.address).toBe('197 หมู่ 5 จังหวัดชัยนาท 17150');
   });
 
   it('resolves legacy numeric labels before persisting a form address', async () => {

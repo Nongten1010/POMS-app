@@ -39,6 +39,23 @@ function jsonResponseSchema(path: string, method: string, status: string): JsonO
 }
 
 describe('POMS factory master-data OpenAPI contract', () => {
+  it('documents readable administrative names in both modes and the unresolved display fallback', () => {
+    for (const [schemaName, field] of [
+      ['PomsFactoryProfile', 'factoryAddress'],
+      ['PomsFactoryForm', 'address'],
+      ['PomsFactoryEditRequestForm', 'address'],
+    ]) {
+      const properties = asObject(
+        asObject(schemas()[schemaName], schemaName).properties,
+        'properties',
+      );
+      const description = String(asObject(properties[field], field).description);
+      for (const expected of ['legacy', 'canonical', 'PROV+AMP+TUMBOL', 'GET', '0149/0150']) {
+        expect(description).toContain(expected);
+      }
+    }
+  });
+
   it('documents request-scoped detail snapshots and the unknown legacy target case', () => {
     const detail = asObject(schemas().PomsFactoryEditRequestDetail, 'detail');
     const properties = asObject(detail.properties, 'detail properties');

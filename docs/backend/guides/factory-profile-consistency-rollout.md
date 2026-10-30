@@ -52,6 +52,12 @@
 7. ทดสอบด้วยบัญชี/โรงงานทดสอบที่อนุญาต: อ่าน eligible เทียบ POMS; อนุมัติข้อมูลทั่วไปแล้วอ่านทั้งคู่; ล้างค่า; แก้จุดอย่างเดียวแล้วตรวจ profile/eligible คงเดิม; คำขอเก่าต้องไม่ย้อนค่า; ส่งสองคำขอแข่งกันต้องไม่เกิด lost update; ตรวจสิทธิ์จังหวัด/นิคม/โรงงานเจ้าของ, เลขรายงานใหม่ และ integration. ยืนยันทะเบียนต้นทางและประวัติเดิมไม่เปลี่ยน.
 8. ตรวจ `/api/v1/openapi.json` ของ release ที่ deploy ว่าสอดคล้องกับ source contract แล้วเก็บผลทดสอบและ deployment identity ใน evidence.
 
+## แก้ที่อยู่เก่าที่เก็บอำเภอ/ตำบลเป็นตัวเลข
+
+ใช้ migrations `0149_create_factory_address_names_repair_backup` (สร้าง backup) และ `0150_repair_factory_address_names` (แก้ข้อมูล) ได้ทั้งก่อนและหลังเปิด `canonical`. ตรวจบนฐานทดสอบก่อนใช้ขั้นตอน deploy/migration ปกติ; migration ใช้ตารางจริงของทั้งสองโหมด ไม่อาศัยค่าจาก view. ต้องเข้าถึง Fac60k และทะเบียน `TUMBOL` ได้ และรหัสพื้นที่เดิมต้องตรงต้นทาง หากมีรายการที่ยืนยันไม่ได้ migration หยุดก่อนเริ่มแก้ข้อมูล จึงต้องแก้สาเหตุแล้วรันใหม่
+
+ค่าที่แก้และรายละเอียดเดิมเก็บใน `factory_address_names_repair_backup_0149`; profile ที่แก้เพิ่ม revision และบันทึก event. ห้าม rollback กลับเป็นชื่อพื้นที่ตัวเลขหรือย้อน revision; ใช้ forward migration ที่ตรวจแล้วเมื่อต้องแก้กลับ. หลัง deploy ตรวจโรงงานตัวอย่างจากรายการ รายละเอียด และฟอร์มทั้งสองโหมด รวมถึง OpenAPI บนระบบจริงตาม [ขอบเขตและหลักฐานการทดสอบ](../evidence/master-data/factory-address-area-names.md)
+
 ## การคืนระบบและข้อจำกัด
 
 ก่อนเปิด writers สามารถคง legacy mode ไว้ได้ หากต้องคืนระบบหลัง canonical เขียนข้อมูลแล้ว ให้หยุด writers ตรวจว่า compatibility projections ตรงกับ profile และตรวจคำขอค้างก่อนเลือกแผนคืนระบบ โดยต้องรักษา profile/events ไว้ การสลับ config กลับ legacy อย่างเดียวไม่รับประกันว่าจะนำกลับเข้า canonical ได้โดยไม่มี drift.
