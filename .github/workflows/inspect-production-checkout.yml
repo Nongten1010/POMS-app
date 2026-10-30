@@ -73,59 +73,58 @@ jobs:
             try { const rows = await db.raw(sql, bindings).timeout(15000); output(stage, rows); return rows; }
             catch (error) { output(stage, { error: error.code || error.name, number: error.number || error.originalError?.info?.number || null }); return null; }
           }
-          (async () => {
-           try {
-            await query('history-clock', `SELECT CONVERT(VARCHAR(33), SYSDATETIME(), 126) AS server_time,
-              CONVERT(VARCHAR(33), SYSUTCDATETIME(), 126) AS server_utc`);
-            const fs=require('fs');const path=require('path');
-            const root=path.resolve('logs');
-            for (const name of ['app-2026-10-30.log','error-2026-10-30.log']) {
-              const file=path.join(root,name);if(!fs.existsSync(file))continue;
-              const stat=fs.statSync(file);if(stat.size>5*1024*1024){output('target-error',{name,skipped:'FILE_OVER_5MB'});continue;}
-              for (const line of fs.readFileSync(file,'utf8').split(/\r?\n/u)) {
-                let row;try{row=JSON.parse(line);}catch{continue;}
-                if(row.timestamp!=='2026-10-30T08:17:00.060Z')continue;
-                const message=String(row.message||'');
-                const recognized=[];
-                for (const pattern of [
-                  /(?:The )?(?:DELETE|UPDATE|INSERT) statement conflicted with (?:the )?(?:REFERENCE|FOREIGN KEY|CHECK|UNIQUE)[^.]*\./giu,
-                  /The current transaction cannot be committed and cannot support operations that write to the log file/giu,
-                  /Transaction count after EXECUTE indicates a mismatching number of BEGIN and COMMIT statements[^.]*\./giu,
-                  /Transaction query already complete/giu,
-                  /Transaction has been aborted/giu,
-                  /The ROLLBACK TRANSACTION request has no corresponding BEGIN TRANSACTION/giu,
-                  /Cannot insert duplicate key[^.]*\./giu,
-                  /String or binary data would be truncated[^.]*\./giu,
-                ]) for(const match of message.matchAll(pattern)) recognized.push(match[0].replace(/N?'(?:''|[^'])*'/giu,"'<REDACTED>'"));
-                const summary=statementSummary(message);
-                const stack=String(row.stack||'').split(/\r?\n/u).filter(x=>/^\s*at /u.test(x)).slice(0,10);
-                output('target-error',{name,timestamp:row.timestamp,level:row.level,keys:Object.keys(row),
-                  code:typeof row.code==='string'?row.code:null,number:typeof row.number==='number'?row.number:null,
-                  recognized,statement:{operations:summary.operations,tables:summary.tables,predicates:summary.predicates,numericIdentityBindings:summary.numericIdentityBindings},stack});
-              }
-            }
-            try{
-              const rows=await db.raw(`SELECT TOP(30) q.query_id, p.plan_id, qt.query_sql_text,
-                MIN(rs.first_execution_time) AS first_execution_time, MAX(rs.last_execution_time) AS last_execution_time,
-                SUM(rs.count_executions) AS count_executions, MAX(rs.last_rowcount) AS last_rowcount
-                FROM sys.query_store_query q JOIN sys.query_store_query_text qt ON qt.query_text_id=q.query_text_id
-                JOIN sys.query_store_plan p ON p.query_id=q.query_id
-                JOIN sys.query_store_runtime_stats rs ON rs.plan_id=p.plan_id
-                WHERE rs.last_execution_time>=CONVERT(DATETIMEOFFSET, ?) AND rs.first_execution_time<=CONVERT(DATETIMEOFFSET, ?)
-                AND (qt.query_sql_text LIKE '%cems_wpms_connection_requests%' OR qt.query_sql_text LIKE '%cems_wpms_request_factory_snapshots%')
-                AND (qt.query_sql_text LIKE '%delete %' OR qt.query_sql_text LIKE '%update %' OR qt.query_sql_text LIKE '%insert %')
-                GROUP BY q.query_id,p.plan_id,qt.query_sql_text ORDER BY MAX(rs.last_execution_time) DESC`,
-                ['2026-10-30T15:16:00+07:00','2026-10-30T16:18:00+07:00']).timeout(15000);
-              output('query-store-candidates',rows.map(row=>({query_id:row.query_id,plan_id:row.plan_id,
-                first_execution_time:row.first_execution_time,last_execution_time:row.last_execution_time,
-                count_executions:row.count_executions,last_rowcount:row.last_rowcount,summary:statementSummary(row.query_sql_text)})));
-            }catch(error){output('query-store-candidates',{error:error.code||error.name,number:error.number||error.originalError?.info?.number||null});}
-            await query('audit-capabilities', `SELECT name, is_tracked_by_cdc, temporal_type_desc FROM sys.tables
-              WHERE name IN ('cems_wpms_connection_requests','cems_wpms_request_factory_snapshots');`);
-            await query('configured-database-audits', `SELECT name,is_state_enabled FROM sys.database_audit_specifications`);
-            await query('log-summary', `SELECT recovery_model,total_log_size_mb,active_log_size_mb,log_min_lsn,log_end_lsn,
-              log_truncation_holdup_reason FROM sys.dm_db_log_stats(DB_ID())`);
+          function safeError(value, location = 'error', depth = 0) {
+           if (!value || depth>3) return null;
+           if (typeof value==='string') value={message:value};
+           if(typeof value!=='object')return null;
+           const result={location,keys:Object.keys(value)};
+           for(const key of ['name','code','number','state','class','lineNumber']) {
+             const item=value[key];
+             if(typeof item==='number' || (typeof item==='string' && /^[A-Za-z_0-9-]{1,64}$/u.test(item)))result[key]=item;
+           }
+           const text=String(value.message||value.sql||value.query||'');
+           const http=/\b(GET|PUT|POST|DELETE|PATCH)\s+(\/api\/v1\/cems-wpms-requests(?:\/\d+)?(?:\/[a-z-]+)?)(?=[?\]\s]|$)/u.exec(text);
+           if(http)result.http={method:http[1],path:http[2]};
+           const known=[
+             ["Can't rollback transaction. There is a request in progress",'ROLLBACK_REJECTED_REQUEST_IN_PROGRESS'],
+             ['Transaction query already complete','TRANSACTION_ALREADY_COMPLETE'],
+             ['Transaction has been aborted','TRANSACTION_ABORTED'],
+             ['The current transaction cannot be committed','TRANSACTION_UNCOMMITTABLE'],
+             ['The DELETE statement conflicted','DELETE_CONSTRAINT_CONFLICT'],
+             ['The UPDATE statement conflicted','UPDATE_CONSTRAINT_CONFLICT'],
+             ['Cannot insert duplicate key','DUPLICATE_KEY'],
+             ['String or binary data would be truncated','VALUE_TRUNCATION'],
+             ['Request failed to complete','REQUEST_TIMEOUT'],
+             ['cancelled','REQUEST_CANCELLED'],
+             ['canceled','REQUEST_CANCELLED'],
+           ];
+           result.signatures=known.filter(([needle])=>text.includes(needle)).map(([,name])=>name);
+           const summary=statementSummary(text);
+           result.statement={operations:summary.operations,tables:summary.tables,predicates:summary.predicates,numericIdentityBindings:summary.numericIdentityBindings};
+           if(Array.isArray(value.bindings))for(const predicate of summary.predicates){
+             const match=/^@p(\d+)$/iu.exec(predicate.value);if(!match)continue;
+             const binding=value.bindings[Number(match[1])];
+             if(/^[0-9]{1,20}$/u.test(String(binding)))result.statement.numericIdentityBindings.push({column:predicate.column,parameter:predicate.value,value:String(binding),origin:'error-bindings'});
+           }
+           for(const key of ['originalError','cause','info','parent','errors','precedingErrors']) {
+             const nested=value[key];if(!nested)continue;
+             result[key]=Array.isArray(nested)?nested.slice(0,5).map((x,i)=>safeError(x,location+'.'+key+'.'+i,depth+1)):safeError(nested,location+'.'+key,depth+1);
+           }
+           return result;
+          }
+          (async()=>{
+           try{
+             const fs=require('fs');const path=require('path');
+             for(const name of ['app-2026-10-30.log','error-2026-10-30.log']){
+               const file=path.resolve('logs',name);if(!fs.existsSync(file))continue;
+               const stat=fs.statSync(file);if(stat.size>5*1024*1024){output('safe-error-detail',{name,skipped:'FILE_OVER_5MB'});continue;}
+               for(const line of fs.readFileSync(file,'utf8').split(/\r?\n/u)){
+                 let row;try{row=JSON.parse(line);}catch{continue;}
+                 if(row.timestamp!=='2026-10-30T08:17:00.060Z')continue;
+                 output('safe-error-detail',{name,timestamp:row.timestamp,error:safeError(row)});
+               }
+             }
            }finally{clearTimeout(guard);await db.destroy();}
-          })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
+          })().catch(error=>{output('failure',{code:error.code||error.name});process.exitCode=1;});
           '@ | node
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
