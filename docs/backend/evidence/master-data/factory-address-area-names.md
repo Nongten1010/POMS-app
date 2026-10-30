@@ -2,6 +2,8 @@
 
 สัญญาปัจจุบัน: [โรงงานเข้าข่าย](../../api/menus/eligible-factories/README.md#ชื่ออำเภอและตำบลในที่อยู่) และ [ข้อมูล current/live และฟอร์ม POMS](../../api/menus/master-data/factory-edit-requests.md#ชื่ออำเภอและตำบลในที่อยู่)
 
+ผล production ล่าสุดวันที่ 30 ตุลาคม 2026: deploy การป้องกันข้อมูลใหม่และรัน `0151/0152` ซ่อมข้อมูลประวัติครบ 18 แถวแล้ว พร้อม backup. ผลตรวจเวลา 17:58:28 น. `Asia/Bangkok` ไม่พบชื่อพื้นที่เป็นตัวเลขทั้งรายการ active และประวัติในขอบเขตที่ตรวจ และยืนยันที่อยู่โรงงาน `82250600225587` เป็น **ตำบลมาบยางพร อำเภอปลวกแดง** จากฐานและ deployed service; ไม่ใช่การยืนยันหน้าจอ browser. ดู [deployment สำเร็จ](https://github.com/Nongten1010/POMS-app/actions/runs/41043404448) และ [ผลตรวจฐานจริงหลัง deploy](https://github.com/Nongten1010/POMS-app/actions/runs/41044627551)
+
 ## สาเหตุและการแก้
 
 โหมด `canonical` ข้ามการ hydrate ที่อยู่ทั้งหมด ส่วน POMS คืน `factory_address` ที่เก็บไว้โดยตรง จึงยังแสดง `ตำบล5 อำเภอ6` แม้มีชื่อในทะเบียนพื้นที่. โหมดเดิมยังสร้างที่อยู่ใหม่จากต้นทางจนรายละเอียดเพิ่มเติม เช่น `(ประตู 2)` หาย
@@ -99,11 +101,46 @@ Migrations [0151](../../../../backend/src/db/migrations/0151_create_historical_a
 
 Tests ของ migration: [historical-factory-address-repair.test.ts](../../../../backend/tests/unit/historical-factory-address-repair.test.ts) ตรวจทั้งสองโหมด การคงสถานะเดิม การเปลี่ยนพร้อมกัน การรันซ้ำ และการหยุดก่อนเขียนเมื่อชื่อพื้นที่ไม่ตรงทะเบียน
 
-## ป้องกันข้อมูลใหม่และการตรวจ release รอบถัดไป
+## ป้องกันข้อมูลใหม่และผล release 0151/0152
 
 แพตช์รอบนี้เพิ่ม shared normalization ก่อนบันทึกข้อมูลทั่วไปที่แก้ไขได้ และก่อนแสดง address/ชื่อพื้นที่ ทั้ง `legacy` และ `canonical`. แปลงเฉพาะป้ายหรือช่องชื่อที่เป็นตัวเลขเมื่อจับคู่จังหวัด+อำเภอ+ตำบลกับ `TUMBOL` ได้อย่างไม่กำกวม; รักษาเลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์ ช่องรหัส ชื่อที่อ่านได้ และ null ตาม contract เดิม. รหัสไม่ตรง/ไม่พอระบุชื่อให้หยุดก่อนเขียนด้วย `400 BAD_REQUEST`, `details.reason = UNRESOLVED_ADMINISTRATIVE_AREA`; แหล่งทะเบียนขัดข้องตอบ `503 FACTORY_AREA_LOOKUP_UNAVAILABLE`. GET ไม่เขียนกลับฐานหรือประวัติ ส่วน POMS edit snapshots ที่กำหนดอ่านอย่างเดียวคงกติกาเดิม ดู [contract ร่วม](../../api/menus/eligible-factories/README.md#ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่)
 
-สถานะหลักฐานของ release รอบนี้ยังเป็นก่อน deploy: migrations `0151/0152` และการป้องกันก่อนบันทึกยังต้องผ่านชุดตรวจ final release และยืนยัน migration batch/backup 18 แถว, health, runtime OpenAPI, การสแกน committed ทั้งระบบ และ deployed API ของโรงงานทะเบียน `82250600225587` หลัง deploy. ผล production ในหัวข้อก่อนหน้ายืนยันเฉพาะ release `0149/0150`; ไม่ใช้ผลทดสอบใน workspace อ้างว่า `0151/0152` รันบนฐานจริงแล้ว
+Release SHA `167679a69b0cea9f0e6c54f58f2be4b9d3727379` จาก [PR #36](https://github.com/Nongten1010/POMS-app/pull/36) และ [PR #38](https://github.com/Nongten1010/POMS-app/pull/38) deploy สำเร็จผ่าน [run 41043404448](https://github.com/Nongten1010/POMS-app/actions/runs/41043404448). Windows runner ผ่าน tests ทั้ง backend 388 suites / 5,222 tests โดยข้าม 18 integration tests ที่ต้องเปิดใช้แยก; service health เป็น `ok` เวลา 17:54:51 น. `Asia/Bangkok`
+
+[Preflight](https://github.com/Nongten1010/POMS-app/actions/runs/41039452892) และ [การตรวจยืนยันก่อน deploy](https://github.com/Nongten1010/POMS-app/actions/runs/41039935122) รวม [preflight รอบสุดท้ายก่อนปล่อย](https://github.com/Nongten1010/POMS-app/actions/runs/41043260595) ยืนยัน manifest เดิม 18/18 แถวและไม่พบ open Knex transaction/blocking request. Migrations `0151_create_historical_address_repair_backup.ts` และ `0152_repair_historical_factory_address_names.ts` รันสำเร็จใน batch `123` เวลา 17:54:37 และ 17:54:38 น. ตามลำดับ
+
+[Read-only verification run 41044627551](https://github.com/Nongten1010/POMS-app/actions/runs/41044627551) เวลา 17:58:28 น. ยืนยัน:
+
+- `factory_address_history_repair_backup_0151` มี 18 แถวพอดี: `eligible_factories` 10, `factory_monitoring_point_forms` 6 และ `cems_wpms_connection_requests` 2. ที่อยู่หลังแก้ตรงกับ manifest ทุกแถว
+- เปรียบเทียบ SHA-256 ของทุกคอลัมน์ที่ไม่ใช่ `address` ก่อน/หลังทั้ง 18 แถว ไม่พบค่าต่าง; ตรวจ `DATETIME2` ของ `deleted_at` แบบเต็มความละเอียดและสถานะเดิมตรงกัน. แถวที่ถูกลบยังถูกลบ และคำขอที่ยกเลิกยังเป็น `CANCELED`
+- สแกน 9 ตาราง/views ที่จำเป็นและ `eligible_factory_add_requests` เพิ่มเติมด้วย committed read ปกติ ไม่ใช้ `READPAST`/`NOLOCK`: พบป้าย/ช่องชื่อพื้นที่ที่เป็นตัวเลข **0 active / 0 historical**. ตรวจทั้งป้ายเต็ม รูปย่อ เลขไทย และช่องชื่อที่มีใน schema
+
+จำนวนแถว ณ เวลาสแกนหลัง deploy:
+
+| แหล่งข้อมูล | แถวทั้งหมด | Active | ชื่อพื้นที่เป็นตัวเลข active / historical |
+| --- | --- | --- | --- |
+| `eligible_factories` | 956 | 934 | 0 / 0 |
+| `factory_profiles` | 0 | 0 | 0 / 0 |
+| `cems_wpms_connected_measurement_points` | 37 | 37 | 0 / 0 |
+| `factory_monitoring_point_forms` | 938 | 924 | 0 / 0 |
+| `current_eligible_factories` | 956 | 934 | 0 / 0 |
+| `current_connected_measurement_points` | 37 | 37 | 0 / 0 |
+| `current_factory_monitoring_point_forms` | 938 | 924 | 0 / 0 |
+| `cems_wpms_connection_requests` | 388 | 318 | 0 / 0 |
+| `cems_wpms_request_factory_snapshots` | 664 | 318 | 0 / 0 |
+| `eligible_factory_add_requests` | 7 | 7 | 0 / 0 |
+
+Current views เป็นมุมอ่านของข้อมูลเดียวกับ base tables จึงไม่รวมเป็นจำนวนแถวที่ซ่อมซ้ำ. ผลนี้ตรวจปัญหาชื่อพื้นที่ที่เป็นตัวเลข ไม่ใช่การตรวจความถูกต้องทางภูมิศาสตร์ของข้อความที่อยู่ทุกแถว
+
+สำหรับโรงงานทะเบียน `82250600225587`, `eligible_factories.id=430`, แบบฟอร์ม `426` และคำขอ `10345`, `10346`, `10376`, `10377` เก็บชื่อโรงงานเต็ม `บริษัท อมตะ บี.กริม เพาเวอร์ (ระยอง) 5 จำกัด` และที่อยู่ `7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140` ถูกต้อง. สถานะคำขอ `10345/10346` ยังคง `CANCELED`; `10376/10377` ยังคง `WAITING_CONNECTION`
+
+Deployed `connectionRequestsService.getForm` ของ `10376/10377` คืนชื่อโรงงานเต็มและ `address` ดังกล่าวทั้ง `legacy` และ `canonical` ใน audit process. ช่องแยก `districtName` และ `subdistrictName` ของ snapshot คำขอเก่าเหล่านี้ยังเป็น `null` ตามเดิม; ไม่ได้เติมชื่อให้ช่อง null และไม่อ้างว่าช่องดังกล่าวถูก backfill. Config production ยังคง `legacy`; เปลี่ยน mode เฉพาะใน process ตรวจสอบ ไม่ได้สลับบริการจริงหรือยืนยันหน้าจอด้วย browser
+
+เรียก deployed [shared normalizer](../../../../backend/src/modules/eligible-factories/factory-area-names.ts) แบบไม่บันทึกข้อมูลด้วยตัวอย่างป้าย/ช่องชื่อที่เป็นรหัส: ได้ `ปลวกแดง` / `มาบยางพร` ทั้งสองโหมด โดยรักษา internal `provinceCode=1021`; รหัส `999` ถูกปฏิเสธด้วย `400 BAD_REQUEST`, `reason = UNRESOLVED_ADMINISTRATIVE_AREA`. การตรวจหลัง deploy ไม่มี database mutation เพิ่มเติม. [Runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) ตอบ `200` และตรวจพบ 400/503 contract ของ 10 write operations พร้อมคำอธิบายการรักษาเลขบ้าน/ถนนตรง source
+
+[Deployment รอบแรก 41041800714](https://github.com/Nongten1010/POMS-app/actions/runs/41041800714) ถูกยกเลิกก่อนหยุดบริการหรือรัน migrations เพื่อแก้ขอบเขตคำบนชื่อถนนใน PR #38. [Audit รอบแรก 41044239342](https://github.com/Nongten1010/POMS-app/actions/runs/41044239342) ล้มเพราะข้อความไทยใน PowerShell ของชุดตรวจถูกแปลงอักขระ; แก้เฉพาะชุดตรวจเป็น ASCII escapes แล้วรันซ้ำสำเร็จ ไม่ใช่การแก้แอปหรือข้อมูล production เพิ่มเติม
+
+Tests เพิ่มเติม: [shared normalization](../../../../backend/tests/unit/factory-area-names.test.ts), [request writes](../../../../backend/tests/unit/connection-request-area-writes.test.ts), [request reads](../../../../backend/tests/unit/connection-request-area-reads.test.ts) และ [runtime OpenAPI](../../../../backend/tests/unit/factory-area-names.openapi.test.ts) ตรวจค่าตัวเลข รหัสผิด การอ่านทะเบียนไม่ได้ การรักษาข้อความที่อยู่/ช่องรหัส และ error schemas ทั้งกรณีใหม่และ measurement cleanup เดิม
 
 ## การแสดงชื่อโรงงานบนหน้าจอ
 
