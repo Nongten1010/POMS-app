@@ -30,6 +30,9 @@ jobs:
           $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           Set-Location 'C:\apps\POMS-app\backend'
+          $service = Get-CimInstance Win32_Service -Filter "Name='poms-app-backend'" | Select-Object Name, ProcessId, State
+          $nodes = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Select-Object ProcessId, ParentProcessId, CreationDate)
+          Write-Host ('[factory-address-process-audit] ' + (@{ service=$service; nodes=$nodes } | ConvertTo-Json -Compress -Depth 4))
           @'
           const { env } = require('./dist/config/env');
           const knex = require('knex');
@@ -38,6 +41,14 @@ jobs:
               password: env.DB_PASSWORD, database: env.DB_NAME, connectionTimeout: 10000,
               requestTimeout: 20000, options: { encrypt: env.DB_ENCRYPT,
                 trustServerCertificate: env.DB_TRUST_SERVER_CERTIFICATE } },
+            pool: { min: 0, max: 1 },
+          });
+          const sourceDb = knex({ client: 'mssql', acquireConnectionTimeout: 15000,
+            connection: { server: env.FACTORY_DB_HOST || env.DB_HOST, port: env.FACTORY_DB_PORT || env.DB_PORT,
+              user: env.FACTORY_DB_USER || env.DB_USER, password: env.FACTORY_DB_PASSWORD || env.DB_PASSWORD,
+              database: env.FACTORY_DB_NAME, connectionTimeout: 10000, requestTimeout: 20000,
+              options: { encrypt: env.FACTORY_DB_ENCRYPT ?? env.DB_ENCRYPT,
+                trustServerCertificate: env.FACTORY_DB_TRUST_SERVER_CERTIFICATE ?? env.DB_TRUST_SERVER_CERTIFICATE } },
             pool: { min: 0, max: 1 },
           });
           const guard = setTimeout(() => { console.error('[factory-address-all-audit] TIME_LIMIT'); process.exit(1); }, 180000);
@@ -99,7 +110,7 @@ jobs:
               const activeRequests = new Set();
               const candidates = ['id', 'eligible_factory_id', 'request_id', 'factory_id', 'source_factory_id',
                 'factory_registration_no_new', 'factory_registration_no_old', 'factory_registration_no',
-                'monitoring_point_form_id', 'factory_name', 'deleted_at', 'status', 'revision',
+                'monitoring_point_form_id', 'factory_name', 'province_name', 'deleted_at', 'status', 'revision',
                 'address', 'factory_address', 'district_name', 'subdistrict_name', 'name_th'];
               for (const [table, addressField] of configs) {
                 const available = byTable.get(table);
@@ -175,7 +186,35 @@ jobs:
                   factoryName: factory.factory_name, address: factory.address,
                 });
               }
-              const report = { mode: env.FACTORY_PROFILE_MODE, complete: !tables.some(x => x.missing || x.incomplete || x.skippedLockedRows > 0), tables, issues,
+              const { diwProvinceCodeFromName } = require('./dist/modules/eligible-factories/fac-import.mapper');
+              const { replaceNumericFactoryAddressAreas } = require('./dist/modules/eligible-factories/factory-address');
+              const historicalPlan = issues.filter(x => !x.active && !x.table.startsWith('current_')).map(issue => {
+                const row = records.get(issue.table).get(String(issue.id));
+                const parent = row.eligible_factory_id == null ? null : eligible.get(String(row.eligible_factory_id));
+                const provinceName = row.province_name || parent?.province_name
+                  || /\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\s*([\u0e01-\u0e59]+)/u.exec(issue.value)?.[1]
+                  || (issue.value.includes('\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23') ? '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23' : null);
+                return { table: issue.table, id: issue.id, registration: issue.registration,
+                  originalAddress: issue.value, provinceName,
+                  provinceCode: provinceName ? diwProvinceCodeFromName(provinceName.trim()) : null,
+                  districtCode: /\u0e2d\u0e33\u0e40\u0e20\u0e2d\s*(\d+)/u.exec(issue.value)?.[1] || null,
+                  subdistrictCode: /\u0e15\u0e33\u0e1a\u0e25\s*(\d+)/u.exec(issue.value)?.[1] || null,
+                  status: row.status || null, deleted: row.deleted_at != null,
+                };
+              });
+              const provinceCodes = [...new Set(historicalPlan.map(x => x.provinceCode).filter(Boolean))];
+              const masterRows = provinceCodes.length ? await sourceDb(`${env.FACTORY_DB_SCHEMA}.TUMBOL`)
+                .whereIn('PROV', provinceCodes).select('PROV', 'AMP', 'TUMBOL', 'TUMNAME', 'AMPNAME').timeout(20000) : [];
+              const master = new Map(masterRows.map(x => [`${Number(x.PROV)}:${Number(x.AMP)}:${Number(x.TUMBOL)}`, x]));
+              for (const item of historicalPlan) {
+                const area = master.get(`${Number(item.provinceCode)}:${Number(item.districtCode)}:${Number(item.subdistrictCode)}`);
+                item.districtName = area?.AMPNAME?.trim() || null;
+                item.subdistrictName = area?.TUMNAME?.trim() || null;
+                item.resolvedAddress = area ? replaceNumericFactoryAddressAreas(item.originalAddress,
+                  { districtName: item.districtName, subdistrictName: item.subdistrictName },
+                  { AMP: item.districtCode, TUMBOL: item.subdistrictCode }) : null;
+              }
+              const report = { mode: env.FACTORY_PROFILE_MODE, complete: !tables.some(x => x.missing || x.incomplete || x.skippedLockedRows > 0), tables, issues, historicalPlan,
                 backupSummary, repairedFactories: [...repairedFactories.values()],
                 activeIssues: issues.filter(x => x.active).length,
                 historicalIssues: issues.filter(x => !x.active).length,
@@ -183,7 +222,7 @@ jobs:
                   canonical: tables.filter(x => (x.table.startsWith('current_') || x.table === 'factory_profiles') && !x.missing).map(x => x.table) },
               };
               console.log('[factory-address-all-audit] ' + JSON.stringify(report));
-            } finally { clearTimeout(guard); await db.destroy(); }
+            } finally { clearTimeout(guard); await Promise.allSettled([db.destroy(), sourceDb.destroy()]); }
           })().catch(error => {
             console.error('[factory-address-all-audit] FAILED ' + JSON.stringify({ code: error.code || error.name }));
             process.exitCode = 1;
