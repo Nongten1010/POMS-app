@@ -1,6 +1,6 @@
 const STANDALONE_EXPLICIT_PROVINCE_PATTERN = /(?:^|\s+)จังหวัด\s*[ก-๙]+(?=\s|$)/u;
 const NUMERIC_AREA_PATTERN_SOURCE =
-  '(ตำบล|อำเภอ|แขวง|เขต|(?<![ก-ฮa-zA-Z])ต\\.|(?<![ก-ฮa-zA-Z])อ\\.)\\s*[:.\\-]?\\s*([0-9๐-๙]+)(?=\\s|$|[,;()]|ตำบล|อำเภอ|แขวง|เขต|จังหวัด|กรุงเทพมหานคร|ต\\.|อ\\.)';
+  '(ตำบล|อำเภอ|แขวง|เขต|(?<![ก-์a-zA-Z])ต\\.|(?<![ก-์a-zA-Z])อ\\.)\\s*[:.\\-]?\\s*([0-9๐-๙]+)(?=\\s|$|[,;()]|ตำบล|อำเภอ|แขวง|เขต|จังหวัด|กรุงเทพมหานคร|ต\\.|อ\\.)';
 
 export function normalizedFactoryAreaCode(
   value: string | number | null | undefined,

@@ -329,3 +329,31 @@ it('does not confuse house numbers, postal codes or road names with area codes',
   expect(hasNumericFactoryAddressAreas('ตำบลชื่อจริง อำเภอชื่อจริง')).toBe(false);
   expect(withoutNumericFactoryAddressAreas('7/507 ต.๕ อ.๖ 21140')).toBe('7/507 21140');
 });
+
+describe.each(['legacy', 'canonical'])('street word boundaries in %s mode', (mode) => {
+  beforeEach(() => {
+    mockEnv.FACTORY_PROFILE_MODE = mode;
+  });
+
+  it('preserves Thai vowels inside street names without a master lookup', async () => {
+    const input = { address: '7/507 ซอยเอ.6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140' };
+    expect(hasNumericFactoryAddressAreas(input.address)).toBe(false);
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toBe(input);
+    expect(mockSourceDb).not.toHaveBeenCalled();
+  });
+
+  it('repairs genuine adjacent Thai-digit labels while preserving the street name', async () => {
+    const input = { address: '7/507 ซอยเอ.6 ต.๕อ.๖ จังหวัดระยอง 21140', provinceName: 'ระยอง' };
+    const result = await normalizeFactoryAreaNamesForWrite(input);
+    expect(result.address).toBe('7/507 ซอยเอ.6 ต.มาบยางพรอ.ปลวกแดง จังหวัดระยอง 21140');
+    expect(input.address).toBe('7/507 ซอยเอ.6 ต.๕อ.๖ จังหวัดระยอง 21140');
+  });
+
+  it('preserves the street name when suppressing unresolved numeric administrative labels', async () => {
+    failure = true;
+    const [result] = await normalizeFactoryAreaNamesForRead([
+      { address: '7/507 ซอยเอ.6 ต.5 อ.6 จังหวัดระยอง 21140', provinceName: 'ระยอง' },
+    ]);
+    expect(result.address).toBe('7/507 ซอยเอ.6 จังหวัดระยอง 21140');
+  });
+});
