@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       factory_registration_no:
-        description: Factory registration number for the read-only address verification
+        description: Reference registration; this audit scans all factory address records
         required: true
         type: string
 
@@ -20,114 +20,121 @@ jobs:
     if: github.ref == 'refs/heads/backend/verify-factory-address-production'
     runs-on: [self-hosted, poms, windows, prod]
     timeout-minutes: 5
-    env:
-      TARGET_FACTORY_REGISTRATION: ${{ inputs.factory_registration_no }}
     defaults:
       run:
         shell: powershell
     steps:
-      - name: Read the deployed database and form services for one factory
+      - name: Audit administrative area names across all factory records and both profile modes
         run: |
           $ErrorActionPreference = 'Stop'
           $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           Set-Location 'C:\apps\POMS-app\backend'
           @'
-          const assert = require('node:assert/strict');
-          const registration = process.env.TARGET_FACTORY_REGISTRATION;
-          if (!/^\d{14}$/.test(registration || '')) throw new Error('AUDIT_INVALID_REGISTRATION');
           const { env } = require('./dist/config/env');
           const { db } = require('./dist/config/database');
-          const { factorySourceDb, factorySourceTableName } = require('./dist/config/factory-source-database');
+          const full = /(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d)\s*\d+(?:\s|$)/u;
+          const broad = /(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15|\u0e15\.|\u0e2d\.)\s*[:.\-]?\s*[0-9\u0e50-\u0e59]+/u;
+          const numericName = /^\s*[0-9\u0e50-\u0e59]+\s*$/u;
+          const configs = [
+            ['eligible_factories', 'address'],
+            ['factory_profiles', 'address'],
+            ['cems_wpms_connected_measurement_points', 'factory_address'],
+            ['factory_monitoring_point_forms', 'address'],
+            ['cems_wpms_connection_requests', 'address'],
+            ['current_eligible_factories', 'address'],
+            ['current_connected_measurement_points', 'factory_address'],
+            ['current_factory_monitoring_point_forms', 'address'],
+            ['cems_wpms_request_factory_snapshots', null],
+            ['districts', null],
+            ['subdistricts', null],
+          ];
           (async () => {
             try {
-              const migrationNames = [
-                '0149_create_factory_address_names_repair_backup.ts',
-                '0150_repair_factory_address_names.ts',
-              ];
-              const migrations = await db('knex_migrations').whereIn('name', migrationNames).select('name', 'batch');
-              const eligible = await db('eligible_factories').whereNull('deleted_at')
-                .where(q => q.where('source_factory_id', registration).orWhere('factory_registration_no_new', registration))
-                .select('id', 'factory_name', 'address', 'province_name', 'source_factory_id', 'factory_registration_no_new', 'monitoring_point_form_id');
-              assert.equal(eligible.length, 1, 'AUDIT_TARGET_NOT_UNIQUE');
-              const factory = eligible[0];
-              const connected = await db('cems_wpms_connected_measurement_points')
-                .where('eligible_factory_id', factory.id).whereNull('deleted_at')
-                .select('id', 'factory_id', 'factory_name', 'factory_address', 'system_type');
-              const profiles = await db('factory_profiles').where('eligible_factory_id', factory.id)
-                .select('id', 'factory_name', 'address', 'revision');
-              const forms = factory.monitoring_point_form_id == null ? []
-                : await db('factory_monitoring_point_forms').where('id', factory.monitoring_point_form_id)
-                  .whereNull('deleted_at').select('id', 'factory_name', 'address');
-              const requests = await db('cems_wpms_connection_requests')
-                .where('eligible_factory_id', factory.id).whereNull('deleted_at')
-                .whereNotIn('status', ['CANCELED', 'REJECTED'])
-                .select('id', 'request_no', 'factory_name', 'address', 'status');
-              const source = await factorySourceDb(factorySourceTableName())
-                .where('FID', factory.source_factory_id || registration).timeout(30000)
-                .first('FID', 'FNAME', 'PROV', 'AMP', 'TUMBOL');
-              assert.ok(source, 'AUDIT_SOURCE_NOT_FOUND');
-              const areas = await factorySourceDb(`${env.FACTORY_DB_SCHEMA}.TUMBOL`)
-                .where({ PROV: source.PROV, AMP: source.AMP, TUMBOL: source.TUMBOL }).timeout(30000)
-                .first('TUMNAME', 'AMPNAME');
-              let apiForm = null;
-              if (connected.length) {
-                // Internal read services run under the trusted production operator; no token or user is created.
-                const { pomsFactoriesService } = require('./dist/modules/poms-factories/poms-factories.service');
-                const detail = await pomsFactoriesService.getFactoryDetail(connected[0].factory_id, 0, 'ALL');
-                const form = await pomsFactoriesService.getFactoryForm(connected[0].factory_id, 0, 'ALL', { systemType: connected[0].system_type });
-                apiForm = { factoryId: detail.factoryId, factoryName: form.factoryName, detailAddress: detail.factoryAddress, formAddress: form.address };
+              const columns = await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA', 'dbo')
+                .whereIn('TABLE_NAME', configs.map(x => x[0])).select('TABLE_NAME', 'COLUMN_NAME');
+              const byTable = new Map();
+              for (const x of columns) {
+                if (!byTable.has(x.TABLE_NAME)) byTable.set(x.TABLE_NAME, new Set());
+                byTable.get(x.TABLE_NAME).add(x.COLUMN_NAME);
               }
-              const connectionForms = [];
-              const { connectionRequestsService } = require('./dist/modules/connection-requests/connection-requests.service');
-              for (const request of requests) {
-                const form = await connectionRequestsService.getForm(Number(request.id), 0, 'ALL');
-                connectionForms.push({ requestId: request.id, requestNo: request.request_no,
-                  factoryName: form.factoryName, address: form.address });
+              const records = new Map();
+              const tables = [];
+              const issues = [];
+              const activeEligible = new Set();
+              const activeRequests = new Set();
+              const candidates = ['id', 'eligible_factory_id', 'request_id', 'factory_id', 'source_factory_id',
+                'factory_registration_no_new', 'factory_registration_no_old', 'factory_registration_no',
+                'monitoring_point_form_id', 'factory_name', 'deleted_at', 'status', 'revision',
+                'address', 'factory_address', 'district_name', 'subdistrict_name', 'name_th'];
+              for (const [table, addressField] of configs) {
+                const available = byTable.get(table);
+                if (!available) { tables.push({ table, missing: true }); continue; }
+                const selected = candidates.filter(x => available.has(x));
+                const rows = await db(table).select(selected);
+                records.set(table, new Map(rows.map(x => [String(x.id), x])));
+                if (table === 'eligible_factories') for (const row of rows) {
+                  if (row.deleted_at == null) activeEligible.add(String(row.id));
+                }
+                if (table === 'cems_wpms_connection_requests') for (const row of rows) {
+                  if (row.deleted_at == null && !['CANCELED', 'REJECTED'].includes(row.status)) activeRequests.add(String(row.id));
+                }
+                let activeRows = 0, activeIssues = 0, historicalIssues = 0, exactPatternIssues = 0;
+                for (const row of rows) {
+                  let active = row.deleted_at == null;
+                  if (table === 'factory_profiles') active = active && activeEligible.has(String(row.eligible_factory_id));
+                  if (table === 'cems_wpms_connection_requests') active = active && activeRequests.has(String(row.id));
+                  if (table === 'cems_wpms_request_factory_snapshots') active = active && activeRequests.has(String(row.request_id));
+                  if (active) activeRows++;
+                  for (const field of selected) {
+                    const isName = ['district_name', 'subdistrict_name'].includes(field)
+                      || (['districts', 'subdistricts'].includes(table) && field === 'name_th');
+                    if (field !== addressField && !isName) continue;
+                    const value = row[field];
+                    if (value == null) continue;
+                    const text = String(value);
+                    if (!(isName ? numericName.test(text) || broad.test(text) : broad.test(text))) continue;
+                    const exact = !isName && full.test(text);
+                    if (exact) exactPatternIssues++;
+                    if (active) activeIssues++; else historicalIssues++;
+                    issues.push({ table, id: row.id, field, active, exactPattern: exact,
+                      registration: row.factory_registration_no_new || row.source_factory_id || row.factory_id || row.factory_registration_no || null,
+                      eligibleFactoryId: row.eligible_factory_id || (table === 'eligible_factories' ? row.id : null),
+                      value: text, status: row.status || null,
+                    });
+                  }
+                }
+                tables.push({ table, rows: rows.length, activeRows, activeIssues, historicalIssues, exactPatternIssues });
               }
-              const targetBackups = [];
-              const targets = [
-                ['eligible_factories', factory.id],
-                ...connected.map(x => ['cems_wpms_connected_measurement_points', x.id]),
-                ...profiles.map(x => ['factory_profiles', x.id]),
-                ...forms.map(x => ['factory_monitoring_point_forms', x.id]),
-                ...requests.map(x => ['cems_wpms_connection_requests', x.id]),
-              ];
-              for (const [table, id] of targets) {
-                const backup = await db('factory_address_names_repair_backup_0149')
-                  .where({ target_table: table, entity_id: id })
-                  .first('target_table', 'entity_id', 'original_address', 'resolved_address');
-                if (backup) targetBackups.push(backup);
+              const backups = await db('factory_address_names_repair_backup_0149')
+                .select('target_table', 'entity_id');
+              const backupSummary = {};
+              const repairedFactories = new Map();
+              const eligible = records.get('eligible_factories');
+              const byForm = new Map([...eligible.values()].filter(x => x.monitoring_point_form_id != null)
+                .map(x => [String(x.monitoring_point_form_id), x]));
+              for (const backup of backups) {
+                backupSummary[backup.target_table] = (backupSummary[backup.target_table] || 0) + 1;
+                const row = records.get(backup.target_table)?.get(String(backup.entity_id));
+                const factory = backup.target_table === 'eligible_factories' ? row
+                  : backup.target_table === 'factory_monitoring_point_forms' ? byForm.get(String(backup.entity_id))
+                  : row?.eligible_factory_id != null ? eligible.get(String(row.eligible_factory_id)) : null;
+                if (factory) repairedFactories.set(String(factory.id), {
+                  id: factory.id, registration: factory.factory_registration_no_new,
+                  factoryName: factory.factory_name, address: factory.address,
+                });
               }
-              const backupCount = await db('factory_address_names_repair_backup_0149').count({ count: '*' }).first();
-              const report = {
-                registration, mode: env.FACTORY_PROFILE_MODE, migrations,
-                eligible, connected, profiles, forms, requests, source, areas, apiForm, connectionForms, targetBackups,
-                backedUpRows: Number(backupCount.count),
-                fullFactoryNameMatchesSource: factory.factory_name.trim() === source.FNAME.trim(),
+              const report = { mode: env.FACTORY_PROFILE_MODE, tables, issues,
+                backupSummary, repairedFactories: [...repairedFactories.values()],
+                activeIssues: issues.filter(x => x.active).length,
+                historicalIssues: issues.filter(x => !x.active).length,
+                modeCoverage: { legacy: tables.filter(x => !x.table.startsWith('current_') && !x.missing).map(x => x.table),
+                  canonical: tables.filter(x => (x.table.startsWith('current_') || x.table === 'factory_profiles') && !x.missing).map(x => x.table) },
               };
-              console.log('[factory-address-production-audit] ' + JSON.stringify(report));
-              assert.equal(migrations.length, 2, 'AUDIT_MIGRATIONS_MISSING');
-              assert.equal(areas.TUMNAME.trim(), '\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23', 'AUDIT_WRONG_SUBDISTRICT');
-              assert.equal(areas.AMPNAME.trim(), '\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07', 'AUDIT_WRONG_DISTRICT');
-              const addresses = [factory.address, ...connected.map(x => x.factory_address),
-                ...profiles.map(x => x.address), ...forms.map(x => x.address), ...requests.map(x => x.address),
-                ...connectionForms.map(x => x.address),
-                ...(apiForm ? [apiForm.detailAddress, apiForm.formAddress] : [])];
-              for (const address of addresses) {
-                if (address == null) continue;
-                assert.ok(address.includes('\u0e15\u0e33\u0e1a\u0e25\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23') && address.includes('\u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07'), 'AUDIT_ADDRESS_NAMES_MISSING');
-                assert.ok(!/(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d)\s*\d+(?:\s|$)/u.test(address), 'AUDIT_NUMERIC_AREA_LABEL');
-              }
-              console.log('[factory-address-production-audit] PASS: stored addresses and available form services use the verified Thai area names.');
-            } finally {
-              await Promise.allSettled([db.destroy(), factorySourceDb.destroy()]);
-            }
+              console.log('[factory-address-all-audit] ' + JSON.stringify(report));
+            } finally { await db.destroy(); }
           })().catch(error => {
-            console.error('[factory-address-production-audit] FAILED ' + JSON.stringify({
-              code: error.code || error.name,
-              check: String(error.message || '').startsWith('AUDIT_') ? error.message : 'Inspect the read-only audit output',
-            }));
+            console.error('[factory-address-all-audit] FAILED ' + JSON.stringify({ code: error.code || error.name }));
             process.exitCode = 1;
           });
           '@ | node
