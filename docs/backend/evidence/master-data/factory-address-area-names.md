@@ -42,6 +42,32 @@ npm test -- --runInBand tests/unit/factory-address-names.test.ts tests/unit/fact
 
 [Production checkout inspection](https://github.com/Nongten1010/POMS-app/actions/runs/41012971099) ยืนยัน server HEAD เดียวกับฐาน release และ `trackedChanges=[]` ก่อน deploy โดยยังไม่เขียนฐานข้อมูลหรือ restart service
 
-ผลนี้ไม่แทนการรัน migration บน SQL Server จริงหรือการตรวจข้อมูล production. ยังไม่ได้ deploy, รัน migrations กับฐานจริง หรือยืนยัน `/api/v1/openapi.json` ของ release นี้บน production
+## ผลยืนยันบน production
+
+Deploy สำเร็จวันที่ 30 ตุลาคม 2026 เวลา 13:27 น. (`Asia/Bangkok`) ผ่าน [PR #34](https://github.com/Nongten1010/POMS-app/pull/34), release SHA `a21d02ea89ebdb4c4e05eaaae7ae4407d41b611c` และ [deployment run 41013533178](https://github.com/Nongten1010/POMS-app/actions/runs/41013533178). Tests บน Windows production runner ผ่าน 382 suites / 5,107 tests และข้าม 18 integration tests; migration batch `122` รันเฉพาะ `0149` และ `0150` สำเร็จ 2 รายการ. Service health เป็น `ok`; `/api/v1/openapi.json` ตอบ `200` และ field descriptions ใน `PomsFactoryProfile`, `PomsFactoryForm` และ `PomsFactoryEditRequestForm` ตรงกับ source ของ release
+
+[Read-only production verification run 41014579726](https://github.com/Nongten1010/POMS-app/actions/runs/41014579726) ตรวจทะเบียน `82250600225587` บนฐานและ deployed service จริง โดยไม่สร้างบัญชีหรือ token และไม่แก้ข้อมูลเพิ่มเติม:
+
+| รายการ | ผลที่ยืนยัน |
+| --- | --- |
+| ชื่อโรงงาน | `บริษัท อมตะ บี.กริม เพาเวอร์ (ระยอง) 5 จำกัด` ตรงกับ `Fac60k.FNAME` และชื่อที่คืนใน service ฟอร์มคำขอทั้งสองรายการ |
+| ทะเบียนพื้นที่ | `PROV=21`, `AMP=6`, `TUMBOL=5` คืน `AMPNAME=ปลวกแดง`, `TUMNAME=มาบยางพร` |
+| โรงงานเข้าข่าย | `eligible_factories.id=430` เก็บที่อยู่ชื่อจริงแล้ว |
+| แบบฟอร์มข้อมูลจุดตรวจวัด | `factory_monitoring_point_forms.id=426` เก็บที่อยู่ชื่อจริงแล้ว |
+| ฟอร์มคำขอ CEMS | `10376` / `CEMS-0254/2569` และ `10377` / `CEMS-0255/2569` ทั้งค่าที่จัดเก็บและ `connectionRequestsService.getForm` คืนชื่อพื้นที่ถูกต้อง |
+| Backup | สำรองก่อนแก้รวม 16 แถวทั้ง migration; สำหรับโรงงานนี้มี 4 แถวที่ยืนยัน before/after ตรงกัน |
+| Mode จริง | `legacy`; `canonical` ผ่าน regression tests โดยไม่ได้เปลี่ยน config production |
+
+ที่อยู่ที่ยืนยันตรงกันทุกจุดข้างต้น:
+
+```text
+7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140
+```
+
+โรงงานนี้ยังมีคำขอสถานะ `WAITING_CONNECTION`, ไม่มี active `cems_wpms_connected_measurement_points` และยังไม่มี `factory_profiles` ของตัวเอง จึงตรวจ service ฟอร์มคำขอจริงแทนการอ้างว่าได้ทดสอบ POMS connected form สำหรับโรงงานนี้. ไม่ได้ยืนยันหน้าจอฟอร์มด้วยบัญชี browser เพราะบัญชีที่มีอยู่ไม่แสดงเมนูโรงงาน; หลักฐานข้างต้นเป็น database values, backups และ deployed internal read service เดียวกับ controller ของ endpoint
+
+## ชื่อโรงงานที่ดูไม่เต็มบนหน้าจอ
+
+ข้อมูลและ service ของโรงงานเป้าหมายมีชื่อเต็มตรงทะเบียนต้นทาง ไม่พบการตัดชื่อใน backend mapper. หน้าแผนที่ใช้ `whiteSpace: nowrap`, `overflow: hidden` และ `textOverflow: ellipsis` สำหรับชื่อรายการ จึงแสดง `...` ตามความกว้าง ส่วนฟอร์มคำขอใช้ช่องชื่อแบบบรรทัดเดียว. งานนี้ตรวจหาสาเหตุและไม่ได้แก้ frontend
 
 Implementation: [formatter](../../../../backend/src/modules/eligible-factories/factory-address.ts), [source lookup](../../../../backend/src/modules/eligible-factories/eligible-factory-source-hydration.ts), [POMS service](../../../../backend/src/modules/poms-factories/poms-factories.service.ts), [migration](../../../../backend/src/db/migrations/0150_repair_factory_address_names.ts), [regression tests](../../../../backend/tests/unit/factory-address-names.test.ts), [migration tests](../../../../backend/tests/unit/factory-address-names.migration.test.ts)
