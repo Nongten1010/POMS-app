@@ -78,10 +78,31 @@ jobs:
                 const form = await pomsFactoriesService.getFactoryForm(connected[0].factory_id, 0, 'ALL', { systemType: connected[0].system_type });
                 apiForm = { factoryId: detail.factoryId, factoryName: form.factoryName, detailAddress: detail.factoryAddress, formAddress: form.address };
               }
+              const connectionForms = [];
+              const { connectionRequestsService } = require('./dist/modules/connection-requests/connection-requests.service');
+              for (const request of requests) {
+                const form = await connectionRequestsService.getForm(Number(request.id), 0, 'ALL');
+                connectionForms.push({ requestId: request.id, requestNo: request.request_no,
+                  factoryName: form.factoryName, address: form.address });
+              }
+              const targetBackups = [];
+              const targets = [
+                ['eligible_factories', factory.id],
+                ...connected.map(x => ['cems_wpms_connected_measurement_points', x.id]),
+                ...profiles.map(x => ['factory_profiles', x.id]),
+                ...forms.map(x => ['factory_monitoring_point_forms', x.id]),
+                ...requests.map(x => ['cems_wpms_connection_requests', x.id]),
+              ];
+              for (const [table, id] of targets) {
+                const backup = await db('factory_address_names_repair_backup_0149')
+                  .where({ target_table: table, entity_id: id })
+                  .first('target_table', 'entity_id', 'original_address', 'resolved_address');
+                if (backup) targetBackups.push(backup);
+              }
               const backupCount = await db('factory_address_names_repair_backup_0149').count({ count: '*' }).first();
               const report = {
                 registration, mode: env.FACTORY_PROFILE_MODE, migrations,
-                eligible, connected, profiles, forms, requests, source, areas, apiForm,
+                eligible, connected, profiles, forms, requests, source, areas, apiForm, connectionForms, targetBackups,
                 backedUpRows: Number(backupCount.count),
                 fullFactoryNameMatchesSource: factory.factory_name.trim() === source.FNAME.trim(),
               };
@@ -91,13 +112,14 @@ jobs:
               assert.equal(areas.AMPNAME.trim(), '\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07', 'AUDIT_WRONG_DISTRICT');
               const addresses = [factory.address, ...connected.map(x => x.factory_address),
                 ...profiles.map(x => x.address), ...forms.map(x => x.address), ...requests.map(x => x.address),
+                ...connectionForms.map(x => x.address),
                 ...(apiForm ? [apiForm.detailAddress, apiForm.formAddress] : [])];
               for (const address of addresses) {
                 if (address == null) continue;
                 assert.ok(address.includes('\u0e15\u0e33\u0e1a\u0e25\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23') && address.includes('\u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07'), 'AUDIT_ADDRESS_NAMES_MISSING');
                 assert.ok(!/(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d)\s*\d+(?:\s|$)/u.test(address), 'AUDIT_NUMERIC_AREA_LABEL');
               }
-              console.log('[factory-address-production-audit] PASS: stored addresses and live form use the verified Thai area names.');
+              console.log('[factory-address-production-audit] PASS: stored addresses and available form services use the verified Thai area names.');
             } finally {
               await Promise.allSettled([db.destroy(), factorySourceDb.destroy()]);
             }
