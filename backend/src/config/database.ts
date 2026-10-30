@@ -1,6 +1,7 @@
 import knex, { Knex } from 'knex';
 import { env } from './env';
 import { logger } from './logger';
+import { guardMssqlPool } from './mssql-pool-guard';
 
 const config: Knex.Config = {
   client: 'mssql',
@@ -22,6 +23,7 @@ const config: Knex.Config = {
 };
 
 export const db: Knex = knex(config);
+guardMssqlPool(db);
 
 export async function pingDatabase(): Promise<void> {
   try {

@@ -3325,37 +3325,40 @@ async function hydrate(
 ): Promise<ConnectionRequestDTO> {
   const executor = trx ?? db;
   const requestId = Number(row.id);
-  const [pointRows, historyRows, snapshotRow] = await Promise.all([
-    executor<MeasurementPointRow>('cems_wpms_measurement_points')
-      .where('request_id', requestId)
-      .whereNull('deleted_at')
-      .orderBy('id', 'asc'),
-    executor<StatusHistoryRow>('cems_wpms_request_status_history')
-      .leftJoin(
-        'users as changed_by_user',
-        'changed_by_user.id',
-        'cems_wpms_request_status_history.changed_by',
-      )
-      .where('request_id', requestId)
-      .select(
-        'cems_wpms_request_status_history.id',
-        'cems_wpms_request_status_history.request_id',
-        'cems_wpms_request_status_history.status',
-        'cems_wpms_request_status_history.note',
-        'cems_wpms_request_status_history.changed_by',
-        'cems_wpms_request_status_history.changed_at',
-        'changed_by_user.username as changed_by_username',
-        'changed_by_user.prename_th as changed_by_prename_th',
-        'changed_by_user.first_name as changed_by_first_name',
-        'changed_by_user.last_name as changed_by_last_name',
-      )
-      .orderBy('cems_wpms_request_status_history.changed_at', 'asc')
-      .orderBy('cems_wpms_request_status_history.id', 'asc'),
-    executor<RequestFactorySnapshotRow>('cems_wpms_request_factory_snapshots')
-      .where('request_id', requestId)
-      .whereNull('deleted_at')
-      .first(),
-  ]);
+  const pointQuery = executor<MeasurementPointRow>('cems_wpms_measurement_points')
+    .where('request_id', requestId)
+    .whereNull('deleted_at')
+    .orderBy('id', 'asc');
+  const historyQuery = executor<StatusHistoryRow>('cems_wpms_request_status_history')
+    .leftJoin(
+      'users as changed_by_user',
+      'changed_by_user.id',
+      'cems_wpms_request_status_history.changed_by',
+    )
+    .where('request_id', requestId)
+    .select(
+      'cems_wpms_request_status_history.id',
+      'cems_wpms_request_status_history.request_id',
+      'cems_wpms_request_status_history.status',
+      'cems_wpms_request_status_history.note',
+      'cems_wpms_request_status_history.changed_by',
+      'cems_wpms_request_status_history.changed_at',
+      'changed_by_user.username as changed_by_username',
+      'changed_by_user.prename_th as changed_by_prename_th',
+      'changed_by_user.first_name as changed_by_first_name',
+      'changed_by_user.last_name as changed_by_last_name',
+    )
+    .orderBy('cems_wpms_request_status_history.changed_at', 'asc')
+    .orderBy('cems_wpms_request_status_history.id', 'asc');
+  const snapshotQuery = executor<RequestFactorySnapshotRow>('cems_wpms_request_factory_snapshots')
+    .where('request_id', requestId)
+    .whereNull('deleted_at')
+    .first();
+  // One MSSQL transaction shares one connection. Parallel reads can leave a
+  // sibling request running when a failed read triggers rollback, leaking locks.
+  const [pointRows, historyRows, snapshotRow] = trx
+    ? ([await pointQuery, await historyQuery, await snapshotQuery] as const)
+    : await Promise.all([pointQuery, historyQuery, snapshotQuery]);
 
   return toConnectionRequestDTO(row, pointRows, historyRows, snapshotRow ?? null);
 }
