@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       factory_registration_no:
-        description: Reference registration; this audit scans all factory address records
+        description: Reference only; inspect session 87 without changing database data
         required: true
         type: string
 
@@ -24,7 +24,7 @@ jobs:
       run:
         shell: powershell
     steps:
-      - name: Audit administrative area names across all factory records and both profile modes
+      - name: Inspect session 87 transaction and affected resources without changing data
         run: |
           $ErrorActionPreference = 'Stop'
           $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -32,200 +32,119 @@ jobs:
           Set-Location 'C:\apps\POMS-app\backend'
           $service = Get-CimInstance Win32_Service -Filter "Name='poms-app-backend'" | Select-Object Name, ProcessId, State
           $nodes = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Select-Object ProcessId, ParentProcessId, CreationDate)
-          Write-Host ('[factory-address-process-audit] ' + (@{ service=$service; nodes=$nodes } | ConvertTo-Json -Compress -Depth 4))
+          Write-Host ('[session87-readonly-process] ' + (@{ service=$service; nodes=$nodes } | ConvertTo-Json -Compress -Depth 4))
           @'
           const { env } = require('./dist/config/env');
           const knex = require('knex');
-          const db = knex({ client: 'mssql', acquireConnectionTimeout: 15000,
+          const db = knex({ client: 'mssql', acquireConnectionTimeout: 10000,
             connection: { server: env.DB_HOST, port: env.DB_PORT, user: env.DB_USER,
               password: env.DB_PASSWORD, database: env.DB_NAME, connectionTimeout: 10000,
-              requestTimeout: 20000, options: { encrypt: env.DB_ENCRYPT,
+              requestTimeout: 15000, options: { encrypt: env.DB_ENCRYPT,
                 trustServerCertificate: env.DB_TRUST_SERVER_CERTIFICATE } },
             pool: { min: 0, max: 1 },
           });
-          const sourceDb = knex({ client: 'mssql', acquireConnectionTimeout: 15000,
-            connection: { server: env.FACTORY_DB_HOST || env.DB_HOST, port: env.FACTORY_DB_PORT || env.DB_PORT,
-              user: env.FACTORY_DB_USER || env.DB_USER, password: env.FACTORY_DB_PASSWORD || env.DB_PASSWORD,
-              database: env.FACTORY_DB_NAME, connectionTimeout: 10000, requestTimeout: 20000,
-              options: { encrypt: env.FACTORY_DB_ENCRYPT ?? env.DB_ENCRYPT,
-                trustServerCertificate: env.FACTORY_DB_TRUST_SERVER_CERTIFICATE ?? env.DB_TRUST_SERVER_CERTIFICATE } },
-            pool: { min: 0, max: 1 },
-          });
-          const guard = setTimeout(() => { console.error('[factory-address-all-audit] TIME_LIMIT'); process.exit(1); }, 180000);
+          const sessionId = 87;
+          const output = (stage, value) => console.log('[session87-readonly-' + stage + '] ' + JSON.stringify(value));
+          const guard = setTimeout(() => { output('failure', { code: 'TIME_LIMIT' }); process.exit(1); }, 150000);
           guard.unref();
-          const full = /(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d)\s*\d+(?:\s|$)/u;
-          const broad = /(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15|\u0e15\.|\u0e2d\.)\s*[:.\-]?\s*[0-9\u0e50-\u0e59]+/u;
-          const numericName = /^\s*[0-9\u0e50-\u0e59]+\s*$/u;
-          const configs = [
-            ['eligible_factories', 'address'],
-            ['factory_profiles', 'address'],
-            ['cems_wpms_connected_measurement_points', 'factory_address'],
-            ['factory_monitoring_point_forms', 'address'],
-            ['current_eligible_factories', 'address'],
-            ['current_connected_measurement_points', 'factory_address'],
-            ['current_factory_monitoring_point_forms', 'address'],
-            ['cems_wpms_connection_requests', 'address'],
-            ['cems_wpms_request_factory_snapshots', null],
-            ['districts', null],
-            ['subdistricts', null],
-          ];
+          function statementSummary(text) {
+            const original = String(text || '');
+            let sql = original;
+            const wrapped = /sp_executesql\s+N?'((?:''|[^'])*)'/iu.exec(sql);
+            if (wrapped) sql = wrapped[1].replace(/''/gu, "'");
+            const noComments = sql.replace(/\/\*[\s\S]*?\*\//gu, ' ').replace(/--[^\r\n]*/gu, ' ');
+            const withoutLiterals = noComments.replace(/N?'(?:''|[^'])*'/giu, "'<REDACTED>'")
+              .replace(/0x[\da-f]+/giu, '<BINARY>');
+            const operations = [...new Set((withoutLiterals.match(/\b(?:DELETE|UPDATE|INSERT|SELECT|MERGE|COMMIT|ROLLBACK)\b/giu) || []).map(x => x.toUpperCase()))];
+            const tables = [...new Set([...withoutLiterals.matchAll(/\b(?:from|join|update|into)\s+((?:\[?[a-z_][\w]*\]?\.)?\[?[a-z_][\w]*\]?)/giu)].map(x => x[1]))];
+            const predicates = [...noComments.matchAll(/\[?(id|request_id|eligible_factory_id|source_request_id|source_measurement_point_id|factory_registration_no|factory_id)\]?\s*=\s*(@[\w]+|N?'\d+'|\d+)/giu)]
+              .map(x => ({ column: x[1], value: x[2] }));
+            const bindings = [];
+            for (const predicate of predicates) {
+              if (!predicate.value.startsWith('@')) continue;
+              const name = predicate.value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+              const value = new RegExp(name + "\\s*=\\s*N?'?(\\d+)'?(?=\\s*(?:,|;|$))", 'iu').exec(original)?.[1];
+              if (value) bindings.push({ column: predicate.column, parameter: predicate.value, value });
+            }
+            return { operations, tables, predicates, numericIdentityBindings: bindings,
+              queryShape: withoutLiterals.replace(/\b\d+(?:\.\d+)?\b/gu, '?').replace(/\s+/gu, ' ').slice(0, 2200) };
+          }
+          async function query(stage, sql, bindings = []) {
+            try { const rows = await db.raw(sql, bindings).timeout(15000); output(stage, rows); return rows; }
+            catch (error) { output(stage, { error: error.code || error.name, number: error.number || error.originalError?.info?.number || null }); return null; }
+          }
           (async () => {
-            try {
+           try {
+            await query('clock', `SELECT CONVERT(VARCHAR(33), SYSDATETIME(), 126) AS server_time,
+              CONVERT(VARCHAR(33), SYSUTCDATETIME(), 126) AS server_utc,
+              CONVERT(VARCHAR(32), SERVERPROPERTY('ProductVersion')) AS sql_version, @@SPID AS audit_session_id`);
+            const sessions = await query('identity', `SELECT s.session_id, s.status, s.program_name, s.host_process_id,
+              s.open_transaction_count, s.transaction_isolation_level,
+              CONVERT(VARCHAR(33), s.login_time, 126) AS login_time,
+              CONVERT(VARCHAR(33), s.last_request_start_time, 126) AS last_request_start_time,
+              CONVERT(VARCHAR(33), s.last_request_end_time, 126) AS last_request_end_time,
+              CONVERT(VARCHAR(33), c.connect_time, 126) AS connect_time
+              FROM sys.dm_exec_sessions s LEFT JOIN sys.dm_exec_connections c ON c.session_id=s.session_id
+              WHERE s.session_id=?`, [sessionId]);
+            if (!sessions?.length) { output('conclusion', { sessionExists: false }); return; }
+            await query('transactions', `SELECT st.session_id, CONVERT(VARCHAR(32), st.transaction_id) AS transaction_id,
+              st.is_user_transaction, st.is_local, st.enlist_count, t.name AS transaction_name,
+              CONVERT(VARCHAR(33), t.transaction_begin_time, 126) AS transaction_begin_time,
+              t.transaction_type, t.transaction_state, dt.database_id,
+              CASE WHEN dt.database_id=DB_ID() THEN 1 ELSE 0 END AS current_database,
+              dt.database_transaction_state, dt.database_transaction_log_record_count,
+              dt.database_transaction_log_bytes_used, dt.database_transaction_log_bytes_reserved,
+              CONVERT(VARCHAR(64), dt.database_transaction_begin_lsn) AS database_transaction_begin_lsn
+              FROM sys.dm_tran_session_transactions st
+              LEFT JOIN sys.dm_tran_active_transactions t ON t.transaction_id=st.transaction_id
+              LEFT JOIN sys.dm_tran_database_transactions dt ON dt.transaction_id=st.transaction_id
+              WHERE st.session_id=?`, [sessionId]);
+            for (const [stage, sql] of [
+              ['input', `SELECT event_type, parameters, event_info FROM sys.dm_exec_input_buffer(?, NULL)`],
+              ['recent', `SELECT text AS event_info FROM sys.dm_exec_connections c
+                CROSS APPLY sys.dm_exec_sql_text(c.most_recent_sql_handle) txt WHERE c.session_id=?`],
+            ]) {
               try {
-                const versioning = await db.raw('SELECT is_read_committed_snapshot_on, snapshot_isolation_state_desc FROM sys.databases WHERE database_id = DB_ID()').timeout(10000);
-                console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ versioning }));
-                const waits = await db.raw(`SELECT r.session_id, r.blocking_session_id, r.wait_type, r.wait_time, r.wait_resource,
-                  r.open_transaction_count, r.command, s.program_name, s.transaction_isolation_level
-                  FROM sys.dm_exec_requests r JOIN sys.dm_exec_sessions s ON s.session_id=r.session_id
-                  WHERE r.database_id=DB_ID() AND r.session_id<>@@SPID`).timeout(10000);
-                console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ waits }));
-                const blockers = await db.raw(`SELECT s.session_id, s.status, s.program_name, s.host_process_id,
-                  s.open_transaction_count, s.last_request_start_time, s.last_request_end_time,
-                  t.transaction_begin_time, t.transaction_state,
-                  CASE WHEN ib.event_info LIKE '%UPDATE%' THEN 'UPDATE'
-                    WHEN ib.event_info LIKE '%INSERT%' THEN 'INSERT'
-                    WHEN ib.event_info LIKE '%DELETE%' THEN 'DELETE'
-                    WHEN ib.event_info LIKE '%SELECT%' THEN 'SELECT' ELSE 'OTHER' END AS last_statement_kind
-                  FROM sys.dm_exec_sessions s
-                  LEFT JOIN sys.dm_tran_session_transactions st ON st.session_id=s.session_id
-                  LEFT JOIN sys.dm_tran_active_transactions t ON t.transaction_id=st.transaction_id
-                  OUTER APPLY sys.dm_exec_input_buffer(s.session_id, NULL) ib
-                  WHERE s.session_id IN (SELECT blocking_session_id FROM sys.dm_exec_requests
-                    WHERE database_id=DB_ID() AND blocking_session_id>0)`).timeout(10000);
-                console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ blockers }));
-
-              } catch (error) { console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ code: error.code || error.name })); }
-              console.log('[factory-address-all-audit-stage] metadata');
-              const columns = await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA', 'dbo')
-                .whereIn('TABLE_NAME', configs.map(x => x[0])).select('TABLE_NAME', 'COLUMN_NAME').timeout(20000);
-              const byTable = new Map();
-              for (const x of columns) {
-                if (!byTable.has(x.TABLE_NAME)) byTable.set(x.TABLE_NAME, new Set());
-                byTable.get(x.TABLE_NAME).add(x.COLUMN_NAME);
-              }
-              const records = new Map();
-              const tables = [];
-              const issues = [];
-              const activeEligible = new Set();
-              const activeRequests = new Set();
-              const candidates = ['id', 'eligible_factory_id', 'request_id', 'factory_id', 'source_factory_id',
-                'factory_registration_no_new', 'factory_registration_no_old', 'factory_registration_no',
-                'monitoring_point_form_id', 'factory_name', 'province_name', 'deleted_at', 'status', 'revision',
-                'address', 'factory_address', 'district_name', 'subdistrict_name', 'name_th'];
-              for (const [table, addressField] of configs) {
-                const available = byTable.get(table);
-                if (!available) { tables.push({ table, missing: true }); continue; }
-                const selected = candidates.filter(x => available.has(x));
-                console.log('[factory-address-all-audit-stage] reading ' + table);
-                let rows;
-                const readPast = ['cems_wpms_connection_requests', 'cems_wpms_request_factory_snapshots'].includes(table);
-                try { rows = await (readPast ? db.fromRaw('?? WITH (READPAST)', [table]) : db(table))
-                  .select(selected).timeout(15000); }
-                catch (error) {
-                  tables.push({ table, incomplete: true, code: error.code || error.name });
-                  console.log('[factory-address-all-audit-table] ' + JSON.stringify(tables[tables.length - 1]));
-                  continue;
-                }
-                console.log('[factory-address-all-audit-stage] read ' + table + ': ' + rows.length);
-                records.set(table, new Map(rows.map(x => [String(x.id), x])));
-                if (table === 'eligible_factories') for (const row of rows) {
-                  if (row.deleted_at == null) activeEligible.add(String(row.id));
-                }
-                if (table === 'cems_wpms_connection_requests') for (const row of rows) {
-                  if (row.deleted_at == null && !['CANCELED', 'REJECTED'].includes(row.status)) activeRequests.add(String(row.id));
-                }
-                let activeRows = 0, activeIssues = 0, historicalIssues = 0, exactPatternIssues = 0;
-                for (const row of rows) {
-                  let active = row.deleted_at == null;
-                  if (table === 'factory_profiles') active = active && activeEligible.has(String(row.eligible_factory_id));
-                  if (table === 'cems_wpms_connection_requests') active = active && activeRequests.has(String(row.id));
-                  if (table === 'cems_wpms_request_factory_snapshots') active = active && activeRequests.has(String(row.request_id));
-                  if (active) activeRows++;
-                  for (const field of selected) {
-                    const isName = ['district_name', 'subdistrict_name'].includes(field)
-                      || (['districts', 'subdistricts'].includes(table) && field === 'name_th');
-                    if (field !== addressField && !isName) continue;
-                    const value = row[field];
-                    if (value == null) continue;
-                    const text = String(value);
-                    if (!(isName ? numericName.test(text) || broad.test(text) : broad.test(text))) continue;
-                    const exact = !isName && full.test(text);
-                    if (exact) exactPatternIssues++;
-                    if (active) activeIssues++; else historicalIssues++;
-                    issues.push({ table, id: row.id, field, active, exactPattern: exact,
-                      registration: row.factory_registration_no_new || row.source_factory_id || row.factory_id || row.factory_registration_no || null,
-                      eligibleFactoryId: row.eligible_factory_id || (table === 'eligible_factories' ? row.id : null),
-                      value: text, status: row.status || null,
-                    });
-                  }
-                }
-                let expectedRows = rows.length;
-                if (readPast) {
-                  const estimate = await db.raw('SELECT SUM(row_count) AS total FROM sys.dm_db_partition_stats WHERE object_id=OBJECT_ID(?) AND index_id IN (0,1)', [table]).timeout(10000);
-                  expectedRows = Number(estimate[0].total);
-                }
-                tables.push({ table, rows: rows.length, expectedRows, skippedLockedRows: Math.max(0, expectedRows - rows.length), readPast,
-                  activeRows, activeIssues, historicalIssues, exactPatternIssues });
-                console.log('[factory-address-all-audit-table] ' + JSON.stringify(tables[tables.length - 1]));
-              }
-              const backups = await db('factory_address_names_repair_backup_0149')
-                .select('target_table', 'entity_id').timeout(20000);
-              const backupSummary = {};
-              const repairedFactories = new Map();
-              const eligible = records.get('eligible_factories');
-              const byForm = new Map([...eligible.values()].filter(x => x.monitoring_point_form_id != null)
-                .map(x => [String(x.monitoring_point_form_id), x]));
-              for (const backup of backups) {
-                backupSummary[backup.target_table] = (backupSummary[backup.target_table] || 0) + 1;
-                const row = records.get(backup.target_table)?.get(String(backup.entity_id));
-                const factory = backup.target_table === 'eligible_factories' ? row
-                  : backup.target_table === 'factory_monitoring_point_forms' ? byForm.get(String(backup.entity_id))
-                  : row?.eligible_factory_id != null ? eligible.get(String(row.eligible_factory_id)) : null;
-                if (factory) repairedFactories.set(String(factory.id), {
-                  id: factory.id, registration: factory.factory_registration_no_new,
-                  factoryName: factory.factory_name, address: factory.address,
-                });
-              }
-              const { diwProvinceCodeFromName } = require('./dist/modules/eligible-factories/fac-import.mapper');
-              const { replaceNumericFactoryAddressAreas } = require('./dist/modules/eligible-factories/factory-address');
-              const historicalPlan = issues.filter(x => !x.active && !x.table.startsWith('current_')).map(issue => {
-                const row = records.get(issue.table).get(String(issue.id));
-                const parent = row.eligible_factory_id == null ? null : eligible.get(String(row.eligible_factory_id));
-                const provinceName = row.province_name || parent?.province_name
-                  || /\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\s*([\u0e01-\u0e59]+)/u.exec(issue.value)?.[1]
-                  || (issue.value.includes('\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23') ? '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23' : null);
-                return { table: issue.table, id: issue.id, registration: issue.registration,
-                  originalAddress: issue.value, provinceName,
-                  provinceCode: provinceName ? diwProvinceCodeFromName(provinceName.trim()) : null,
-                  districtCode: /\u0e2d\u0e33\u0e40\u0e20\u0e2d\s*(\d+)/u.exec(issue.value)?.[1] || null,
-                  subdistrictCode: /\u0e15\u0e33\u0e1a\u0e25\s*(\d+)/u.exec(issue.value)?.[1] || null,
-                  status: row.status || null, deleted: row.deleted_at != null,
-                };
-              });
-              const provinceCodes = [...new Set(historicalPlan.map(x => x.provinceCode).filter(Boolean))];
-              const masterRows = provinceCodes.length ? await sourceDb(`${env.FACTORY_DB_SCHEMA}.TUMBOL`)
-                .whereIn('PROV', provinceCodes).select('PROV', 'AMP', 'TUMBOL', 'TUMNAME', 'AMPNAME').timeout(20000) : [];
-              const master = new Map(masterRows.map(x => [`${Number(x.PROV)}:${Number(x.AMP)}:${Number(x.TUMBOL)}`, x]));
-              for (const item of historicalPlan) {
-                const area = master.get(`${Number(item.provinceCode)}:${Number(item.districtCode)}:${Number(item.subdistrictCode)}`);
-                item.districtName = area?.AMPNAME?.trim() || null;
-                item.subdistrictName = area?.TUMNAME?.trim() || null;
-                item.resolvedAddress = area ? replaceNumericFactoryAddressAreas(item.originalAddress,
-                  { districtName: item.districtName, subdistrictName: item.subdistrictName },
-                  { AMP: item.districtCode, TUMBOL: item.subdistrictCode }) : null;
-              }
-              const report = { mode: env.FACTORY_PROFILE_MODE, complete: !tables.some(x => x.missing || x.incomplete || x.skippedLockedRows > 0), tables, issues, historicalPlan,
-                backupSummary, repairedFactories: [...repairedFactories.values()],
-                activeIssues: issues.filter(x => x.active).length,
-                historicalIssues: issues.filter(x => !x.active).length,
-                modeCoverage: { legacy: tables.filter(x => !x.table.startsWith('current_') && !x.missing).map(x => x.table),
-                  canonical: tables.filter(x => (x.table.startsWith('current_') || x.table === 'factory_profiles') && !x.missing).map(x => x.table) },
-              };
-              console.log('[factory-address-all-audit] ' + JSON.stringify(report));
-            } finally { clearTimeout(guard); await Promise.allSettled([db.destroy(), sourceDb.destroy()]); }
-          })().catch(error => {
-            console.error('[factory-address-all-audit] FAILED ' + JSON.stringify({ code: error.code || error.name }));
-            process.exitCode = 1;
-          });
+                const rows = await db.raw(sql, [sessionId]).timeout(10000);
+                output(stage, rows.map(row => ({ event_type: row.event_type || null, parameters: row.parameters ?? null,
+                  summary: statementSummary(row.event_info) })));
+              } catch (error) { output(stage, { error: error.code || error.name }); }
+            }
+            const locks = await query('locks', `SELECT l.resource_type, l.resource_database_id,
+              CONVERT(VARCHAR(64), l.resource_associated_entity_id) AS resource_associated_entity_id,
+              l.resource_description, l.request_mode, l.request_status, l.request_owner_type,
+              CONVERT(VARCHAR(64), l.request_owner_id) AS request_owner_id,
+              SCHEMA_NAME(o.schema_id) AS schema_name, o.name AS object_name, i.name AS index_name,
+              i.index_id, p.partition_number
+              FROM sys.dm_tran_locks l
+              LEFT JOIN sys.partitions p ON l.resource_database_id=DB_ID() AND p.hobt_id=l.resource_associated_entity_id
+              LEFT JOIN sys.objects o ON l.resource_database_id=DB_ID() AND o.object_id=
+                CASE WHEN l.resource_type='OBJECT' THEN l.resource_associated_entity_id ELSE p.object_id END
+              LEFT JOIN sys.indexes i ON i.object_id=p.object_id AND i.index_id=p.index_id
+              WHERE l.request_session_id=? ORDER BY object_name, l.resource_type, l.resource_description`, [sessionId]);
+            await query('blocked', `SELECT session_id, status, command, blocking_session_id, wait_type, wait_time,
+              wait_resource, open_transaction_count FROM sys.dm_exec_requests
+              WHERE blocking_session_id=? OR session_id=?`, [sessionId, sessionId]);
+            const tables = [...new Set((locks || []).map(x => x.object_name).filter(Boolean))];
+            if (tables.length) {
+              const fk = await db('sys.foreign_keys AS fk')
+                .join('sys.tables AS child', 'child.object_id', 'fk.parent_object_id')
+                .join('sys.tables AS parent', 'parent.object_id', 'fk.referenced_object_id')
+                .where(builder => builder.whereIn('child.name', tables).orWhereIn('parent.name', tables))
+                .select('fk.name', 'child.name AS child_table', 'parent.name AS parent_table',
+                  'fk.delete_referential_action_desc', 'fk.update_referential_action_desc', 'fk.is_disabled').timeout(10000);
+              output('foreign-keys', fk);
+              const columns = await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA', 'dbo').whereIn('TABLE_NAME', tables)
+                .select('TABLE_NAME','COLUMN_NAME','DATA_TYPE').timeout(10000);
+              output('identity-columns', columns.filter(x => /(^id$|_id$|registration|request_no|request_number|factory_name|status|deleted_at|created_at|updated_at|district|subdistrict)/iu.test(x.COLUMN_NAME)));
+            }
+            await query('identity-end', `SELECT s.session_id, s.host_process_id, s.open_transaction_count,
+              CONVERT(VARCHAR(33), s.login_time, 126) AS login_time,
+              CONVERT(VARCHAR(33), t.transaction_begin_time, 126) AS transaction_begin_time,
+              CONVERT(VARCHAR(32), st.transaction_id) AS transaction_id
+              FROM sys.dm_exec_sessions s LEFT JOIN sys.dm_tran_session_transactions st ON st.session_id=s.session_id
+              LEFT JOIN sys.dm_tran_active_transactions t ON t.transaction_id=st.transaction_id WHERE s.session_id=?`, [sessionId]);
+           } finally { clearTimeout(guard); await db.destroy(); }
+          })().catch(error => { output('failure', { code: error.code || error.name, number: error.number || error.originalError?.info?.number || null }); process.exitCode=1; });
           '@ | node
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
