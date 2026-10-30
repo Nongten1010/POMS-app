@@ -68,6 +68,21 @@ jobs:
                   FROM sys.dm_exec_requests r JOIN sys.dm_exec_sessions s ON s.session_id=r.session_id
                   WHERE r.database_id=DB_ID() AND r.session_id<>@@SPID`).timeout(10000);
                 console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ waits }));
+                const blockers = await db.raw(`SELECT s.session_id, s.status, s.program_name, s.host_process_id,
+                  s.open_transaction_count, s.last_request_start_time, s.last_request_end_time,
+                  t.transaction_begin_time, t.transaction_state,
+                  CASE WHEN ib.event_info LIKE '%UPDATE%' THEN 'UPDATE'
+                    WHEN ib.event_info LIKE '%INSERT%' THEN 'INSERT'
+                    WHEN ib.event_info LIKE '%DELETE%' THEN 'DELETE'
+                    WHEN ib.event_info LIKE '%SELECT%' THEN 'SELECT' ELSE 'OTHER' END AS last_statement_kind
+                  FROM sys.dm_exec_sessions s
+                  LEFT JOIN sys.dm_tran_session_transactions st ON st.session_id=s.session_id
+                  LEFT JOIN sys.dm_tran_active_transactions t ON t.transaction_id=st.transaction_id
+                  OUTER APPLY sys.dm_exec_input_buffer(s.session_id, NULL) ib
+                  WHERE s.session_id IN (SELECT blocking_session_id FROM sys.dm_exec_requests
+                    WHERE database_id=DB_ID() AND blocking_session_id>0)`).timeout(10000);
+                console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ blockers }));
+
               } catch (error) { console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ code: error.code || error.name })); }
               console.log('[factory-address-all-audit-stage] metadata');
               const columns = await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA', 'dbo')
@@ -92,7 +107,9 @@ jobs:
                 const selected = candidates.filter(x => available.has(x));
                 console.log('[factory-address-all-audit-stage] reading ' + table);
                 let rows;
-                try { rows = await db(table).select(selected).timeout(15000); }
+                const readPast = ['cems_wpms_connection_requests', 'cems_wpms_request_factory_snapshots'].includes(table);
+                try { rows = await (readPast ? db.fromRaw('?? WITH (READPAST)', [table]) : db(table))
+                  .select(selected).timeout(15000); }
                 catch (error) {
                   tables.push({ table, incomplete: true, code: error.code || error.name });
                   console.log('[factory-address-all-audit-table] ' + JSON.stringify(tables[tables.length - 1]));
@@ -131,7 +148,13 @@ jobs:
                     });
                   }
                 }
-                tables.push({ table, rows: rows.length, activeRows, activeIssues, historicalIssues, exactPatternIssues });
+                let expectedRows = rows.length;
+                if (readPast) {
+                  const estimate = await db.raw('SELECT SUM(row_count) AS total FROM sys.dm_db_partition_stats WHERE object_id=OBJECT_ID(?) AND index_id IN (0,1)', [table]).timeout(10000);
+                  expectedRows = Number(estimate[0].total);
+                }
+                tables.push({ table, rows: rows.length, expectedRows, skippedLockedRows: Math.max(0, expectedRows - rows.length), readPast,
+                  activeRows, activeIssues, historicalIssues, exactPatternIssues });
                 console.log('[factory-address-all-audit-table] ' + JSON.stringify(tables[tables.length - 1]));
               }
               const backups = await db('factory_address_names_repair_backup_0149')
@@ -152,7 +175,7 @@ jobs:
                   factoryName: factory.factory_name, address: factory.address,
                 });
               }
-              const report = { mode: env.FACTORY_PROFILE_MODE, complete: !tables.some(x => x.missing || x.incomplete), tables, issues,
+              const report = { mode: env.FACTORY_PROFILE_MODE, complete: !tables.some(x => x.missing || x.incomplete || x.skippedLockedRows > 0), tables, issues,
                 backupSummary, repairedFactories: [...repairedFactories.values()],
                 activeIssues: issues.filter(x => x.active).length,
                 historicalIssues: issues.filter(x => !x.active).length,
