@@ -1,0 +1,331 @@
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+
+const mockEnv = { FACTORY_DB_SCHEMA: 'dbo', FACTORY_PROFILE_MODE: 'legacy' };
+const mockSourceDb = jest.fn();
+jest.mock('../../src/config/env', () => ({ env: mockEnv }));
+jest.mock('../../src/config/factory-source-database', () => ({
+  factorySourceDb: mockSourceDb,
+  factorySourceTableName: () => 'dbo.fac_import',
+}));
+
+import {
+  normalizeFactoryAreaNamesForRead,
+  normalizeFactoryAreaNamesForWrite,
+} from '../../src/modules/eligible-factories/factory-area-names';
+import {
+  hasNumericFactoryAddressAreas,
+  withoutNumericFactoryAddressAreas,
+} from '../../src/modules/eligible-factories/factory-address';
+
+const numericAddress = '7/507 หมู่ 6 ตำบล5 อำเภอ6 จังหวัดระยอง 21140 (ประตู 2)';
+const readableAddress = '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140 (ประตู 2)';
+const master = { PROV: 21, AMP: 6, TUMBOL: 5, TUMNAME: 'มาบยางพร', AMPNAME: 'ปลวกแดง' };
+const factory = {
+  FID: '82250600225587',
+  FACREG: '82250600225587',
+  DISPFACREG: 'น.88',
+  PROV: 21,
+  AMP: 6,
+  TUMBOL: 5,
+};
+let areas: unknown[];
+let sources: unknown[];
+let failure: boolean;
+function query(rows: unknown[]) {
+  return {
+    where: jest.fn().mockReturnThis(),
+    whereIn: jest.fn().mockReturnThis(),
+    timeout: jest.fn().mockReturnThis(),
+    select: jest.fn(async () => {
+      if (failure) throw new Error('source unavailable');
+      return rows;
+    }),
+  };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  areas = [master];
+  sources = [factory];
+  failure = false;
+  mockSourceDb.mockImplementation((table) =>
+    query(String(table).endsWith('.TUMBOL') ? areas : sources),
+  );
+});
+
+describe.each(['legacy', 'canonical'])('shared area names in %s mode', (mode) => {
+  beforeEach(() => {
+    mockEnv.FACTORY_PROFILE_MODE = mode;
+  });
+
+  it('normalizes numeric labels and name fields, preserving street details and code fields', async () => {
+    const input = {
+      address: numericAddress,
+      provinceName: 'ระยอง',
+      districtCode: '6',
+      districtName: '6',
+      subdistrictCode: '5',
+      subdistrictName: '5',
+      custom: 123,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      address: readableAddress,
+      districtName: 'ปลวกแดง',
+      subdistrictName: 'มาบยางพร',
+    });
+    expect(mockSourceDb).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves readable text and canonical nulls without querying a source', async () => {
+    const input = {
+      address: readableAddress,
+      districtCode: '6',
+      subdistrictCode: '5',
+      districtName: 'ปลวกแดง',
+      subdistrictName: 'มาบยางพร',
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toBe(input);
+    expect(
+      await normalizeFactoryAreaNamesForWrite({
+        address: null,
+        districtName: null,
+        subdistrictName: null,
+      }),
+    ).toEqual({ address: null, districtName: null, subdistrictName: null });
+    expect(mockSourceDb).not.toHaveBeenCalled();
+  });
+
+  it('uses recorded codes rather than the current location of a moved factory', async () => {
+    sources = [{ ...factory, PROV: 10, AMP: 1, TUMBOL: 1 }];
+    const input = { factoryId: factory.FID, address: numericAddress, provinceName: 'ระยอง' };
+    expect((await normalizeFactoryAreaNamesForWrite(input)).address).toBe(readableAddress);
+    expect(mockSourceDb).toHaveBeenCalledTimes(1);
+    expect(mockSourceDb).toHaveBeenCalledWith('dbo.TUMBOL');
+  });
+
+  it('preserves internal POMS province IDs while resolving by the recorded province name', async () => {
+    const input = {
+      address: numericAddress,
+      provinceCode: '1021',
+      provinceName: 'ระยอง',
+      districtName: '6',
+      subdistrictName: '5',
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      address: readableAddress,
+      districtName: 'ปลวกแดง',
+      subdistrictName: 'มาบยางพร',
+    });
+    expect((await normalizeFactoryAreaNamesForRead([input]))[0].provinceCode).toBe('1021');
+  });
+
+  it('resolves missing province context from the exact factory identity', async () => {
+    const input = { factoryId: factory.FID, address: '7/507 หมู่ 6 ตำบล5 อำเภอ6 21140' };
+    expect((await normalizeFactoryAreaNamesForWrite(input)).address).toBe(
+      '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง 21140',
+    );
+    expect(mockSourceDb).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not mistake a stale source ID for another factory registration number', async () => {
+    sources = [{ ...factory, FID: 'other-factory', FACREG: 'stale-fid', PROV: 10 }, factory];
+    const result = await normalizeFactoryAreaNamesForWrite({
+      sourceFactoryId: 'stale-fid',
+      factoryRegistrationNoNew: factory.FID,
+      address: 'ตำบล5 อำเภอ6',
+    });
+    expect(result.address).toBe('ตำบลมาบยางพร อำเภอปลวกแดง');
+  });
+
+  it('rejects conflicting strong source identity and registration instead of choosing either factory', async () => {
+    sources = [
+      factory,
+      { ...factory, FID: 'different-factory', FACREG: 'different-registration', PROV: 10 },
+    ];
+    await expect(
+      normalizeFactoryAreaNamesForWrite({
+        sourceFactoryId: factory.FID,
+        factoryRegistrationNoNew: 'different-registration',
+        address: 'ตำบล5 อำเภอ6',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('rejects embedded readable-name conflicts and corrupt numeric master labels', async () => {
+    await expect(
+      normalizeFactoryAreaNamesForWrite({
+        address: 'ตำบล5 อำเภอเมืองระยอง จังหวัดระยอง',
+        districtCode: '6',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(
+      (
+        await normalizeFactoryAreaNamesForRead([
+          { address: 'ตำบล5 อำเภอเมืองระยอง จังหวัดระยอง', districtCode: '6' },
+        ])
+      )[0].address,
+    ).toBe('อำเภอเมืองระยอง จังหวัดระยอง');
+    expect(
+      (await normalizeFactoryAreaNamesForWrite({ address: 'ตำบล5 อำเภอปลวกแดง จังหวัดระยอง' }))
+        .address,
+    ).toBe('ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง');
+    areas = [{ ...master, TUMNAME: 'ตำบล5' }];
+    await expect(
+      normalizeFactoryAreaNamesForWrite({ address: numericAddress }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('rejects mismatched area codes instead of guessing another district', async () => {
+    await expect(
+      normalizeFactoryAreaNamesForWrite({
+        address: numericAddress,
+        provinceName: 'ระยอง',
+        districtCode: '9',
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+      details: { path: 'address', reason: 'UNRESOLVED_ADMINISTRATIVE_AREA' },
+    });
+  });
+
+  it('rejects unknown and ambiguous master names', async () => {
+    areas = [];
+    await expect(
+      normalizeFactoryAreaNamesForWrite({ address: numericAddress }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    areas = [master, { ...master, TUMNAME: 'ชื่อขัดแย้ง' }];
+    await expect(
+      normalizeFactoryAreaNamesForWrite({ address: numericAddress }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('never accepts Thai digits as human-readable master names', async () => {
+    areas = [{ ...master, AMPNAME: '๖', TUMNAME: '๕' }];
+    await expect(
+      normalizeFactoryAreaNamesForWrite({ address: numericAddress }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect((await normalizeFactoryAreaNamesForRead([{ address: numericAddress }]))[0].address).toBe(
+      '7/507 หมู่ 6 จังหวัดระยอง 21140 (ประตู 2)',
+    );
+  });
+
+  it('rejects source outages before a write and suppresses numeric display names on reads', async () => {
+    failure = true;
+    const input = {
+      address: numericAddress,
+      provinceName: 'ระยอง',
+      districtName: '6',
+      subdistrictName: '5',
+    };
+    await expect(normalizeFactoryAreaNamesForWrite(input)).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'FACTORY_AREA_LOOKUP_UNAVAILABLE',
+    });
+    expect(await normalizeFactoryAreaNamesForRead([input])).toEqual([
+      {
+        ...input,
+        address: '7/507 หมู่ 6 จังหวัดระยอง 21140 (ประตู 2)',
+        districtName: null,
+        subdistrictName: null,
+      },
+    ]);
+  });
+
+  it('normalizes Thai digits, abbreviated labels, Bangkok labels, and full administrative codes', async () => {
+    const input = {
+      address: '7/507 หมู่ ๖ ต.๕ อ.๖ จังหวัดระยอง 21140 (ประตู 2)',
+      districtName: '๖',
+      subdistrictName: '๕',
+    };
+    expect((await normalizeFactoryAreaNamesForWrite(input)).address).toBe(
+      '7/507 หมู่ ๖ ต.มาบยางพร อ.ปลวกแดง จังหวัดระยอง 21140 (ประตู 2)',
+    );
+    expect(
+      (await normalizeFactoryAreaNamesForWrite({ address: 'ตำบล210605 อำเภอ2106 จังหวัดระยอง' }))
+        .address,
+    ).toBe('ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง');
+    areas = [{ PROV: 10, AMP: 9, TUMBOL: 10, AMPNAME: 'พระโขนง', TUMNAME: 'พระโขนงใต้' }];
+    expect(
+      (
+        await normalizeFactoryAreaNamesForWrite({
+          address: '210 หมู่ 1 แขวง๑๐ เขต๙ กรุงเทพมหานคร 10260',
+        })
+      ).address,
+    ).toBe('210 หมู่ 1 แขวงพระโขนงใต้ เขตพระโขนง กรุงเทพมหานคร 10260');
+  });
+
+  it('normalizes prefixed numeric names and adjacent administrative labels', async () => {
+    expect(
+      await normalizeFactoryAreaNamesForWrite({
+        provinceName: 'ระยอง',
+        districtName: 'อำเภอ๖',
+        subdistrictName: 'ตำบล๕',
+      }),
+    ).toEqual({ provinceName: 'ระยอง', districtName: 'ปลวกแดง', subdistrictName: 'มาบยางพร' });
+    expect(
+      (await normalizeFactoryAreaNamesForWrite({ address: 'ตำบล5อำเภอ6จังหวัดระยอง21140' }))
+        .address,
+    ).toBe('ตำบลมาบยางพรอำเภอปลวกแดงจังหวัดระยอง21140');
+    expect(
+      (await normalizeFactoryAreaNamesForWrite({ address: 'ต.๕อ.๖จังหวัดระยอง21140' })).address,
+    ).toBe('ต.มาบยางพรอ.ปลวกแดงจังหวัดระยอง21140');
+    await expect(
+      normalizeFactoryAreaNamesForWrite({ provinceName: 'ระยอง', districtName: 'ตำบล5' }),
+    ).rejects.toMatchObject({ statusCode: 400, details: { path: 'districtName' } });
+  });
+
+  it('resolves a numeric district field alone without guessing any subdistrict field', async () => {
+    areas = [master, { ...master, TUMBOL: 6, TUMNAME: 'ตำบลอื่น' }];
+    expect(
+      await normalizeFactoryAreaNamesForWrite({ provinceName: 'ระยอง', districtName: '6' }),
+    ).toEqual({ provinceName: 'ระยอง', districtName: 'ปลวกแดง' });
+  });
+
+  it('rejects conflicting province/name context and readable names conflicting with numeric labels', async () => {
+    await expect(
+      normalizeFactoryAreaNamesForWrite({ address: numericAddress, provinceName: 'น่าน' }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(
+      normalizeFactoryAreaNamesForWrite({ address: numericAddress, districtName: 'เมืองระยอง' }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('batches rows into one master lookup without modifying numeric codes', async () => {
+    const inputs = Array.from({ length: 20 }, (_, id) => ({
+      id,
+      address: numericAddress,
+      districtCode: '6',
+      subdistrictCode: '5',
+    }));
+    const result = await normalizeFactoryAreaNamesForRead(inputs);
+    expect(result).toHaveLength(20);
+    expect(
+      result.every(
+        (x) => x.address === readableAddress && x.districtCode === '6' && x.subdistrictCode === '5',
+      ),
+    ).toBe(true);
+    expect(mockSourceDb).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not return a numeric-only name when identity and location cannot be verified', async () => {
+    const input = { districtName: '6', subdistrictName: '5', address: '7/507 หมู่ 6 21140' };
+    await expect(normalizeFactoryAreaNamesForWrite(input)).rejects.toMatchObject({
+      statusCode: 400,
+      details: { path: 'districtName' },
+    });
+    expect(await normalizeFactoryAreaNamesForRead([input])).toEqual([
+      { ...input, districtName: null, subdistrictName: null },
+    ]);
+  });
+});
+
+it('does not confuse house numbers, postal codes or road names with area codes', () => {
+  expect(hasNumericFactoryAddressAreas('7/507 หมู่ 6 ซอย 5 ถนน 6 ระยอง 21140 (ประตู 2)')).toBe(
+    false,
+  );
+  expect(hasNumericFactoryAddressAreas('ตำบลชื่อจริง อำเภอชื่อจริง')).toBe(false);
+  expect(withoutNumericFactoryAddressAreas('7/507 ต.๕ อ.๖ 21140')).toBe('7/507 21140');
+});

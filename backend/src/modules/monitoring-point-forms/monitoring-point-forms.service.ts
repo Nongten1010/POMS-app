@@ -9,6 +9,10 @@ import {
   resolveEligibleFactoryIndustrialEstateForStorage,
 } from '../eligible-factories/eligible-factory-source-hydration';
 import { withProvinceInFactoryAddress } from '../eligible-factories/factory-address';
+import {
+  normalizeFactoryAreaNamesForRead,
+  normalizeFactoryAreaNamesForWrite,
+} from '../eligible-factories/factory-area-names';
 import { joinFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import {
   CONNECTION_REQUEST_EIA_ASSESSMENTS,
@@ -63,7 +67,8 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     query: ListMonitoringPointFormsQuery,
     access?: MonitoringPointFormAccessContext,
   ): Promise<MonitoringPointFormSummaryDTO[]> {
-    return monitoringPointFormsRepository.list(query, access);
+    const forms = await monitoringPointFormsRepository.list(query, access);
+    return normalizeFormAddressesForRead(forms);
   },
 
   async getById(
@@ -72,7 +77,8 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
   ): Promise<MonitoringPointFormDTO> {
     const form = await monitoringPointFormsRepository.findById(id, access);
     if (!form) throw new NotFoundError('Monitoring point form not found');
-    return form;
+    const [resolved] = await normalizeFormAddressesForRead([form]);
+    return resolved;
   },
 
   async create(
@@ -80,7 +86,7 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     actorUserId: number,
     access?: MonitoringPointFormAccessContext,
   ): Promise<MonitoringPointFormDTO> {
-    const normalizedInput = normalizeMonitoringPointFormAddress(input);
+    let normalizedInput = normalizeMonitoringPointFormAddress(input);
     if (
       access &&
       !(await monitoringPointFormsRepository.canAccessFactory(normalizedInput.factory, access))
@@ -107,7 +113,11 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     if (isCanonicalFactoryProfilesEnabled() && normalizedInput.factory.factoryRegistrationNoNew) {
       assertCanonicalFactoryEia(normalizedInput.factory.eiaInfo);
     }
-    return db.transaction(async (trx) => {
+    normalizedInput = {
+      ...normalizedInput,
+      factory: await normalizeFactoryAreaNamesForWrite(normalizedInput.factory),
+    };
+    const saved = await db.transaction(async (trx) => {
       const created = await monitoringPointFormsRepository.create(
         normalizedInput,
         actorUserId,
@@ -124,6 +134,8 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
       if (!current) throw new Error('Created monitoring point form could not be loaded');
       return current;
     });
+    const [resolved] = await normalizeFormAddressesForRead([saved]);
+    return resolved;
   },
 
   async update(
@@ -132,7 +144,7 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     actorUserId: number,
     access?: MonitoringPointFormAccessContext,
   ): Promise<MonitoringPointFormDTO> {
-    const normalizedInput = normalizeMonitoringPointFormAddress(input);
+    let normalizedInput = normalizeMonitoringPointFormAddress(input);
     if (access && !(await monitoringPointFormsRepository.findById(id, access))) {
       throw new NotFoundError('Monitoring point form not found');
     }
@@ -142,7 +154,11 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     ) {
       throw new NotFoundError('Monitoring point form not found');
     }
-    return db.transaction(async (trx) => {
+    normalizedInput = {
+      ...normalizedInput,
+      factory: await normalizeFactoryAreaNamesForWrite(normalizedInput.factory),
+    };
+    const saved = await db.transaction(async (trx) => {
       if (isCanonicalFactoryProfilesEnabled()) {
         const selected = await eligibleFactoriesRepository.findByMonitoringPointFormId(id, trx);
         if (selected && !normalizedInput.factory.factoryRegistrationNoNew?.trim()) {
@@ -178,6 +194,8 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
       if (!current) throw new Error('Updated monitoring point form could not be loaded');
       return current;
     });
+    const [resolved] = await normalizeFormAddressesForRead([saved]);
+    return resolved;
   },
 
   async selectEligible(
@@ -185,7 +203,7 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     actorUserId: number,
     access?: MonitoringPointFormAccessContext,
   ): Promise<EligibleFactoryDTO> {
-    return db.transaction(async (trx) => {
+    const selected = await db.transaction(async (trx) => {
       let form = await monitoringPointFormsRepository.findById(id, access, trx);
       if (!form) throw new NotFoundError('Monitoring point form not found');
       if (isCanonicalFactoryProfilesEnabled()) {
@@ -211,8 +229,19 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
       if (!selected) throw new Error('Eligible factory selection could not be synchronized');
       return selected;
     });
+    const [resolved] = await normalizeFactoryAreaNamesForRead([selected]);
+    return resolved;
   },
 };
+
+async function normalizeFormAddressesForRead<
+  T extends { factory: MonitoringPointFormFactoryInput },
+>(forms: T[]): Promise<T[]> {
+  const factories = await normalizeFactoryAreaNamesForRead(forms.map((form) => form.factory));
+  return forms.map((form, index) =>
+    factories[index] === form.factory ? form : { ...form, factory: factories[index] },
+  );
+}
 
 function normalizeMonitoringPointFormAddress(
   input: SaveMonitoringPointFormInput,
@@ -232,8 +261,9 @@ async function syncEligibleFactoryFromForm(
   options: SyncEligibleFactoryOptions,
   trx: Knex.Transaction,
 ): Promise<EligibleFactoryDTO | null> {
-  const rawInput = buildEligibleFactoryInput(form, options);
-  if (!rawInput) return null;
+  const builtInput = buildEligibleFactoryInput(form, options);
+  if (!builtInput) return null;
+  const rawInput = await normalizeFactoryAreaNamesForWrite(builtInput);
   const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(
     form.id,
     trx,

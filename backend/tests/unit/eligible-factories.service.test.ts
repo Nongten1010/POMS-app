@@ -37,13 +37,21 @@ jest.mock('../../src/modules/eligible-factories/eligible-factory-source-hydratio
     async (input: { address?: string | null }) => input.address,
   ),
 }));
+jest.mock('../../src/modules/eligible-factories/factory-area-names', () => ({
+  normalizeFactoryAreaNamesForWrite: jest.fn(async (input: unknown) => input),
+  normalizeFactoryAreaNamesForRead: jest.fn(async (rows: unknown[]) => rows),
+}));
 
-import { ConflictError } from '../../src/shared/errors/AppError';
+import { BadRequestError, ConflictError } from '../../src/shared/errors/AppError';
 import { eligibleFactoryCandidatesRepository } from '../../src/modules/eligible-factories/eligible-factory-candidates.repository';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
 import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
 import { resolveEligibleFactoryAddressForStorage } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
+import {
+  normalizeFactoryAreaNamesForRead,
+  normalizeFactoryAreaNamesForWrite,
+} from '../../src/modules/eligible-factories/factory-area-names';
 import type { CreateEligibleFactoryInput } from '../../src/modules/eligible-factories/eligible-factories.types';
 import { createEligibleFactorySchema } from '../../src/modules/eligible-factories/eligible-factories.validator';
 
@@ -51,6 +59,8 @@ const mockedRepository = jest.mocked(eligibleFactoriesRepository);
 const mockedCandidatesRepository = jest.mocked(eligibleFactoryCandidatesRepository);
 const mockedConnectionRequestsRepository = jest.mocked(connectionRequestsRepository);
 const mockedResolveAddress = jest.mocked(resolveEligibleFactoryAddressForStorage);
+const mockedNormalizeAreasWrite = jest.mocked(normalizeFactoryAreaNamesForWrite);
+const mockedNormalizeAreasRead = jest.mocked(normalizeFactoryAreaNamesForRead);
 
 describe('eligibleFactoriesService', () => {
   const payload: CreateEligibleFactoryInput = {
@@ -197,6 +207,10 @@ describe('eligibleFactoriesService', () => {
     };
     mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
     mockedRepository.canAccessInput.mockResolvedValue(true);
+    mockedNormalizeAreasWrite.mockResolvedValueOnce({
+      ...numericPayload,
+      address: resolvedAddress,
+    });
     mockedResolveAddress.mockResolvedValueOnce(resolvedAddress);
     mockedRepository.create.mockResolvedValue({ address: resolvedAddress } as never);
 
@@ -208,7 +222,7 @@ describe('eligibleFactoriesService', () => {
     );
   });
 
-  it('does not persist unresolved numeric labels from direct eligible-factory create', async () => {
+  it('rejects unresolved numeric labels before direct eligible-factory create', async () => {
     const numericPayload = {
       ...payload,
       sourceFactoryId: '10240000325407',
@@ -217,12 +231,41 @@ describe('eligibleFactoriesService', () => {
     };
     mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
     mockedRepository.canAccessInput.mockResolvedValue(true);
-    mockedResolveAddress.mockResolvedValueOnce(undefined);
-    mockedRepository.create.mockResolvedValue({ address: null } as never);
+    mockedNormalizeAreasWrite.mockRejectedValueOnce(
+      new BadRequestError('Cannot resolve administrative area names', {
+        path: 'address',
+        reason: 'UNRESOLVED_ADMINISTRATIVE_AREA',
+      }),
+    );
+    await expect(eligibleFactoriesService.create(numericPayload, 42)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      details: { path: 'address', reason: 'UNRESOLVED_ADMINISTRATIVE_AREA' },
+    });
+    expect(mockedRepository.create).not.toHaveBeenCalled();
+    expect(mockedResolveAddress).not.toHaveBeenCalled();
+  });
 
-    await eligibleFactoriesService.create(numericPayload, 42);
+  it('normalizes selected factory addresses for display without changing stored rows', async () => {
+    const stored = { ...payload, id: 1, address: 'ตำบล5 อำเภอ6', factoryTypeSequence: null };
+    mockedRepository.list.mockResolvedValue({ rows: [stored as never], total: 1 });
+    mockedNormalizeAreasRead.mockResolvedValueOnce([
+      { ...stored, address: 'ตำบลมาบยางพร อำเภอปลวกแดง' },
+    ]);
+    const result = await eligibleFactoriesService.list({});
+    expect(result.data[0].address).toBe('ตำบลมาบยางพร อำเภอปลวกแดง');
+    expect(stored.address).toBe('ตำบล5 อำเภอ6');
+  });
 
-    expect(mockedRepository.create.mock.calls[0]?.[0].address).toBeUndefined();
+  it('checks access before resolving numeric input', async () => {
+    mockedRepository.canAccessInput.mockResolvedValue(false);
+    await expect(
+      eligibleFactoriesService.create({ ...payload, address: 'ตำบล5 อำเภอ6' }, 42, {
+        actorUserId: 42,
+        scope: 'ALL',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockedNormalizeAreasWrite).not.toHaveBeenCalled();
+    expect(mockedRepository.create).not.toHaveBeenCalled();
   });
 
   it('removes an eligible factory selection by id with the actor user id', async () => {
@@ -637,6 +680,28 @@ describe('eligibleFactoriesService', () => {
       expect(result.status).toBe('PENDING_REVIEW');
     },
   );
+
+  it('rejects an unresolved numeric factory snapshot before creating an add-factory request', async () => {
+    const factory = { ...ownedFactorySummary(), address: 'ตำบล5 อำเภอ6' };
+    mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(factory);
+    mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue(null);
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
+    mockedNormalizeAreasWrite.mockRejectedValueOnce(
+      new BadRequestError('Cannot resolve administrative area names'),
+    );
+    await expect(
+      eligibleFactoriesService.createAddRequest(
+        {
+          factoryId: factory.factoryId,
+          reason: 'ขอเพิ่มโรงงาน',
+        },
+        42,
+        addRequestAccess(),
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockedRepository.createAddRequest).not.toHaveBeenCalled();
+  });
 
   it('returns not found when the factory is outside either required scope', async () => {
     mockedConnectionRequestsRepository.findFactorySummaryForAccess

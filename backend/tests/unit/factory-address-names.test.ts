@@ -195,7 +195,7 @@ describe.each(['legacy', 'canonical'])('factory address names in %s mode', (mode
     mockListFactories.mockImplementation(async () => rows);
     const { data } = await pomsFactoriesService.listFactories(1, 'ALL');
     expect(data.map((row) => row.address)).toEqual(Array(3).fill(readableAddress));
-    expect(mockSourceDb).toHaveBeenCalledTimes(2);
+    expect(mockSourceDb).toHaveBeenCalledTimes(1);
   });
 
   it('does not expose numeric area labels when the source cannot be reached', async () => {

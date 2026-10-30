@@ -1,37 +1,94 @@
 const STANDALONE_EXPLICIT_PROVINCE_PATTERN = /(?:^|\s+)จังหวัด\s*[ก-๙]+(?=\s|$)/u;
-const NUMERIC_AREA_PATTERN = /(?:ตำบล|อำเภอ)\s*\d+(?=\s|$)/u;
+const NUMERIC_AREA_PATTERN_SOURCE =
+  '(ตำบล|อำเภอ|แขวง|เขต|(?<![ก-ฮa-zA-Z])ต\\.|(?<![ก-ฮa-zA-Z])อ\\.)\\s*[:.\\-]?\\s*([0-9๐-๙]+)(?=\\s|$|[,;()]|ตำบล|อำเภอ|แขวง|เขต|จังหวัด|กรุงเทพมหานคร|ต\\.|อ\\.)';
 
-export function hasNumericFactoryAddressAreas(address: string | null | undefined): boolean {
-  return Boolean(address && NUMERIC_AREA_PATTERN.test(address));
+export function normalizedFactoryAreaCode(
+  value: string | number | null | undefined,
+): string | null {
+  const text = String(value ?? '')
+    .trim()
+    .replace(/[๐-๙]/gu, (digit) => String(digit.charCodeAt(0) - 0x0e50));
+  return /^\d+$/u.test(text) ? String(Number(text)) : null;
 }
 
-/** Replace only legacy labels, never rebuild a reviewed street address from Fac60k. */
+export function numericFactoryAddressAreaCodes(address: string | null | undefined): {
+  district: string[];
+  subdistrict: string[];
+} {
+  const result: { district: string[]; subdistrict: string[] } = { district: [], subdistrict: [] };
+  for (const match of String(address ?? '').matchAll(
+    new RegExp(NUMERIC_AREA_PATTERN_SOURCE, 'gu'),
+  )) {
+    const code = normalizedFactoryAreaCode(match[2]);
+    if (code != null) result[isSubdistrictLabel(match[1]) ? 'subdistrict' : 'district'].push(code);
+  }
+  return result;
+}
+
+export function hasNumericFactoryAddressAreas(address: string | null | undefined): boolean {
+  return Boolean(address && new RegExp(NUMERIC_AREA_PATTERN_SOURCE, 'u').test(address));
+}
+
+/** Replace only numeric area labels, never rebuild a reviewed street address from Fac60k. */
 export function replaceNumericFactoryAddressAreas(
   address: string,
   names: { subdistrictName: string | null; districtName: string | null },
-  codes: { TUMBOL: string | number | null; AMP: string | number | null },
+  codes: {
+    PROV?: string | number | null;
+    TUMBOL: string | number | null;
+    AMP: string | number | null;
+  },
 ): string | null {
   let unresolved = false;
-  const resolved = address.replace(/(ตำบล|อำเภอ)\s*(\d+)(?=\s|$)/gu, (label, area, code) => {
-    const name = area === 'ตำบล' ? names.subdistrictName : names.districtName;
-    const sourceCode = area === 'ตำบล' ? codes.TUMBOL : codes.AMP;
-    if (
-      !name ||
-      !/[ก-๙]/u.test(name) ||
-      sourceCode == null ||
-      Number(code) !== Number(sourceCode)
-    ) {
-      unresolved = true;
-      return label;
-    }
-    return `${area}${name.trim()}`;
-  });
+  const resolved = address.replace(
+    new RegExp(NUMERIC_AREA_PATTERN_SOURCE, 'gu'),
+    (label, area: string, code: string) => {
+      const subdistrict = isSubdistrictLabel(area);
+      const name = subdistrict ? names.subdistrictName : names.districtName;
+      if (
+        !name ||
+        !/[ก-ฮ]/u.test(name) ||
+        hasNumericFactoryAddressAreas(name) ||
+        !factoryAreaCodeMatches(code, codes, subdistrict)
+      ) {
+        unresolved = true;
+        return label;
+      }
+      return `${area}${name.trim()}`;
+    },
+  );
   return unresolved ? null : resolved;
+}
+
+export function factoryAreaCodeMatches(
+  value: string | number | null | undefined,
+  codes: {
+    PROV?: string | number | null;
+    AMP: string | number | null;
+    TUMBOL: string | number | null;
+  },
+  subdistrict: boolean,
+): boolean {
+  const code = normalizedFactoryAreaCode(value);
+  const local = normalizedFactoryAreaCode(subdistrict ? codes.TUMBOL : codes.AMP);
+  if (code == null || local == null) return false;
+  if (code === local) return true;
+  const province = normalizedFactoryAreaCode(codes.PROV);
+  const district = normalizedFactoryAreaCode(codes.AMP);
+  if (!province || !district) return false;
+  const full = subdistrict
+    ? `${province.padStart(2, '0')}${district.padStart(2, '0')}${local.padStart(2, '0')}`
+    : `${province.padStart(2, '0')}${local.padStart(2, '0')}`;
+  return code === full;
+}
+
+function isSubdistrictLabel(label: string): boolean {
+  return label === 'ตำบล' || label === 'แขวง' || label === 'ต.';
 }
 
 /** Display fallback only; unresolved codes must never be persisted as place names. */
 export function withoutNumericFactoryAddressAreas(address: string): string {
-  return address.replace(/(?:ตำบล|อำเภอ)\s*\d+(?:\s+|$)/gu, '').trim();
+  return address.replace(new RegExp(`${NUMERIC_AREA_PATTERN_SOURCE}\\s*`, 'gu'), '').trim();
 }
 
 interface FactoryAddressPlacementOptions {

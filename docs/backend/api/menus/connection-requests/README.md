@@ -16,10 +16,20 @@ permission code, grouped response alias และ scope keyword ที่อ้�
 
 เมื่อเลือกโรงงานสำหรับคำขอใหม่ เรียก [โหลดข้อมูลจากคำขอก่อนหน้า](./previous-request.md) เพื่อรับข้อมูลทั่วไป รูปหน้าโรงงาน โลโก้ ผู้ติดต่อ และอีเมลแจ้งเตือนจากคำขอล่าสุดที่อ่านได้ หาก `data.hasPreviousRequest = false` ให้เริ่มกรอกฟอร์มว่าง
 
+ที่อยู่ตัวเลขในคำขอที่ยังใช้งานซ่อมด้วย migrations `0149/0150`; migrations `0151/0152` เพิ่มการซ่อม `address` ของคำขอ `CANCELED` ที่ตรวจยืนยันไว้ 2 รายการ โดยคงสถานะยกเลิกและ timestamp เดิม. ฟอร์มประวัติที่อ่านได้จึงคืนชื่อพื้นที่ที่แก้แล้วใน `address` ส่วน snapshot JSON และ events คงค่าตามเวลาที่บันทึก ดู [กติกาและขอบเขตร่วม](../eligible-factories/README.md#ชื่ออำเภอและตำบลในที่อยู่) และ [หลักฐานการตรวจทั้งระบบ](../../../evidence/master-data/factory-address-area-names.md)
+
 ```bash
 curl "$BASE_URL/api/v1/cems-wpms-requests/factories/factory-001/previous-request" \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
+
+### ชื่ออำเภอและตำบลก่อนบันทึกและเมื่ออ่านฟอร์ม
+
+`POST /cems-wpms-requests`, `/measurement-points`, `/direct-connections`, `/parameters` และ `PUT /cems-wpms-requests/:id/form` ตรวจ `address`, `districtName` และ `subdistrictName` ที่เป็นรหัสตัวเลขก่อนบันทึกคำขอหรือ snapshot ใหม่. ใช้จังหวัด+อำเภอ+ตำบลเทียบทะเบียนเดียวกันทั้งโหมดเดิมและ `canonical`; เก็บเลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์และช่องรหัสเดิม. ค่าที่อ่านเป็นชื่ออยู่แล้วและ `null` คงตาม contract เดิม
+
+รหัสไม่ตรง หาชื่อไม่ได้หรือกำกวมตอบ `400 BAD_REQUEST` พร้อม `details.path` และ `details.reason = UNRESOLVED_ADMINISTRATIVE_AREA`; อ่านทะเบียนสำหรับค่าตัวเลขไม่ได้ชั่วคราวตอบ `503 FACTORY_AREA_LOOKUP_UNAVAILABLE`. Client ต้องแก้ข้อมูลหรือรอลองใหม่ โดยไม่ถือว่าคำขอถูกบันทึกสำเร็จ ดู field rules และตัวอย่าง error ใน [กติกาชื่อพื้นที่ร่วม](../eligible-factories/README.md#ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่)
+
+รายการ รายละเอียด ฟอร์ม และข้อมูลจากคำขอก่อนหน้าจะคืนชื่อแทนค่าตัวเลขเมื่อยืนยันได้. หากยืนยันไม่ได้ ให้ละป้ายพื้นที่ตัวเลขใน `address` และคืน `null` ในช่องชื่อที่เป็นตัวเลข โดยไม่เปลี่ยนช่องรหัสหรือเขียนข้อมูลเก่าระหว่าง `GET`; snapshot JSON และ event history ในฐานยังคงเดิม
 
 ### หน้าเว็บทดสอบ API
 
@@ -1008,7 +1018,7 @@ Frontend ใช้ `statusHistory[].note` ได้โดยตรง และ�
 | `data.factoryId`, `data.factoryName`, `data.factoryRegistrationNo` | string | no | identity โรงงานที่ใช้ในฟอร์ม |
 | `data.industryMainOrder`, `data.industryMainOrderLabel`, `data.industrySubOrder`, `data.businessActivity` | string | yes | กลุ่มอุตสาหกรรมและลักษณะกิจการ |
 | `data.eia`, `data.eiaOther`, `data.hasEia`, `data.projectName` | string/boolean | yes | ข้อมูล EIA และชื่อโครงการ |
-| `data.address` | string | yes | ชื่อ canonical ของที่อยู่; form response ไม่คืน `factoryAddress` |
+| `data.address` | string | yes | ที่อยู่ที่แปลงป้ายพื้นที่ตัวเลขตามกติกาชื่อพื้นที่ร่วม; form response ไม่คืน `factoryAddress` |
 | `data.regionCode`, `data.regionName`, `data.provinceCode`, `data.provinceName`, `data.districtCode`, `data.districtName`, `data.subdistrictCode`, `data.subdistrictName`, `data.industrialEstateCode`, `data.industrialEstateName` | string | yes | รหัสและชื่อพื้นที่ |
 | `data.latitude`, `data.longitude` | number | yes | พิกัดโรงงาน |
 | `data.systemType` | `CEMS` \| `WPMS` | no | ระบบของฟอร์มนี้ |

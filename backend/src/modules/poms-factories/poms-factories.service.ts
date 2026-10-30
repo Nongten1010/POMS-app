@@ -1,7 +1,7 @@
 import { contactSnapshot, contactsChanged } from './poms-factory-contacts';
 import { deriveCurrentParameterDetails as deriveCurrentPomsParameterDetails } from '../../shared/utils/current-parameter-details';
 import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
-import { resolveLegacyFactoryAddressNames } from '../eligible-factories/eligible-factory-source-hydration';
+import { normalizeFactoryAreaNamesForRead } from '../eligible-factories/factory-area-names';
 import {
   AppError,
   BadRequestError,
@@ -59,7 +59,7 @@ export const pomsFactoriesService = {
       { actorUserId, scope: viewScope, regionalAccess },
       search,
     );
-    const addresses = await resolveLegacyFactoryAddressNames(
+    const addresses = await normalizeFactoryAreaNamesForRead(
       rows.map((row) => ({
         sourceFactoryId: row.factoryId,
         factoryRegistrationNoNew: row.newRegistrationNo ?? row.oldRegistrationNo ?? row.factoryId,
@@ -83,7 +83,7 @@ export const pomsFactoriesService = {
       viewScope,
       regionalAccess,
     );
-    const [resolved] = await resolveLegacyFactoryAddressNames([
+    const [resolved] = await normalizeFactoryAreaNamesForRead([
       {
         sourceFactoryId: detail.factoryId,
         factoryRegistrationNoNew: detail.factoryRegistrationNo,
