@@ -24,7 +24,12 @@ import {
   EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES,
   EDITABLE_PERMISSION_ACTIONS,
 } from '../auth/permissions';
-import { connectionRequestsOpenApiDocument } from './connection-requests.openapi';
+import {
+  connectionRequestsOpenApiDocument,
+  describeFactoryAreaWriteOperation,
+  factoryAreaReadDescription,
+  factoryAreaWriteDescription,
+} from './connection-requests.openapi';
 import { MENU_TAGS } from './openapi.shared';
 import { decorateWriteRequestValidationDocs } from './request-validation-docs';
 import { extendKwpHandoffSchemas } from './kwp-handoff.openapi';
@@ -37,8 +42,7 @@ import {
 type OpenApiObject = Record<string, unknown>;
 
 const baseDocument = connectionRequestsOpenApiDocument as OpenApiObject;
-const factoryAddressNamesDescription =
-  'ที่อยู่ current/live ใน legacy และ canonical mode แปลงเฉพาะตำบล/อำเภอที่ค้างเป็นเลขรหัส โดยจับคู่โรงงานจาก FID/เลขทะเบียน และชื่อจาก TUMBOL ด้วย PROV+AMP+TUMBOL; รักษารายละเอียดที่อยู่และชื่อที่อ่านได้เดิม. ถ้าตรวจชื่อไม่ได้ ให้ละเฉพาะป้ายพื้นที่ตัวเลขในการแสดงผล ไม่เดาชื่อและไม่เขียนฐานข้อมูลจาก GET. canonical null ยังคง null. ข้อมูลเก่าซ่อมด้วย migrations 0149/0150 พร้อม backup และ canonical revision/event. Migrations 0151/0152 ซ่อม address ของแถวที่ถูกลบและคำขอ CANCELED ตาม manifest ที่ตรวจแล้วโดยรักษาสถานะเดิม; snapshot JSON และ event history คงค่าตามเวลาที่บันทึก';
+const factoryAddressNamesDescription = `${factoryAreaReadDescription}. ข้อมูลเก่าซ่อมด้วย migrations 0149/0150 พร้อม backup และ canonical revision/event. Migrations 0151/0152 ซ่อม address ของแถวที่ถูกลบและคำขอ CANCELED ตาม manifest ที่ตรวจแล้วโดยรักษาสถานะและ timestamp เดิม; snapshot JSON และ event history คงค่าตามเวลาที่บันทึก`;
 
 interface OperationOptions {
   tag: string;
@@ -2133,7 +2137,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       factoryClass: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       factorySubclass: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
-      address: { type: 'string', minLength: 1, maxLength: 1000, nullable: true },
+      address: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        nullable: true,
+        description: factoryAreaWriteDescription,
+      },
       provinceName: { type: 'string', minLength: 1, maxLength: 128 },
       industrialEstateName: { type: 'string', minLength: 1, maxLength: 255, nullable: true },
       longitude: { type: 'number', minimum: -180, maximum: 180, nullable: true },
@@ -2266,7 +2276,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       factoryClass: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
       factorySubclass: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
-      address: { type: 'string', minLength: 1, maxLength: 1000, nullable: true },
+      address: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        nullable: true,
+        description: factoryAreaWriteDescription,
+      },
       provinceName: { type: 'string', minLength: 1, maxLength: 128 },
       industrialEstateName: { type: 'string', minLength: 1, maxLength: 255, nullable: true },
       longitude: { type: 'number', minimum: -180, maximum: 180, nullable: true },
@@ -3867,7 +3883,12 @@ const componentSchemas: Record<string, OpenApiObject> = {
           },
           eiaOther: { type: 'string', maxLength: 500, nullable: true },
           projectName: { type: 'string', maxLength: 500, nullable: true },
-          address: { type: 'string', maxLength: 1000, nullable: true },
+          address: {
+            type: 'string',
+            maxLength: 1000,
+            nullable: true,
+            description: factoryAreaWriteDescription,
+          },
           businessActivity: { type: 'string', maxLength: 4000, nullable: true },
           machineryHorsepower: { type: 'number', minimum: 0, nullable: true },
           latitude: { type: 'number', minimum: -90, maximum: 90, nullable: true },
@@ -7848,6 +7869,11 @@ const editRequestFormSchemas: Record<string, OpenApiObject> = {
     properties: {
       ...baseFormProperties,
       address: { ...baseFormProperties.address, description: factoryAddressNamesDescription },
+      districtName: { ...baseFormProperties.districtName, description: factoryAreaReadDescription },
+      subdistrictName: {
+        ...baseFormProperties.subdistrictName,
+        description: factoryAreaReadDescription,
+      },
       measurementPoints: {
         ...baseFormPoints,
         minItems: 1,
@@ -7882,6 +7908,11 @@ const editRequestFormSchemas: Record<string, OpenApiObject> = {
     properties: {
       ...baseFormProperties,
       address: { ...baseFormProperties.address, description: factoryAddressNamesDescription },
+      districtName: { ...baseFormProperties.districtName, description: factoryAreaReadDescription },
+      subdistrictName: {
+        ...baseFormProperties.subdistrictName,
+        description: factoryAreaReadDescription,
+      },
       systemType: { type: 'string', nullable: true, enum: ['CEMS', 'WPMS', null] },
       measurementPoints: {
         ...baseFormPoints,
@@ -7959,6 +7990,17 @@ const paths = decorateWriteRequestValidationDocs(
   ),
   components,
 );
+
+for (const [path, method] of [
+  ['/eligible-factories', 'post'],
+  ['/eligible-factories/add-requests', 'post'],
+  ['/monitoring-point-forms', 'post'],
+  ['/monitoring-point-forms/{id}', 'put'],
+  ['/monitoring-point-forms/{id}/select-eligible', 'post'],
+]) {
+  const operation = paths[path]?.[method] as OpenApiObject | undefined;
+  if (operation) describeFactoryAreaWriteOperation(operation);
+}
 
 for (const [uploadPath, method] of [
   ['/cems-wpms-requests/document-images', 'post'],

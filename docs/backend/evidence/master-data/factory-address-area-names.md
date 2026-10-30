@@ -86,9 +86,24 @@ Deploy สำเร็จวันที่ 30 ตุลาคม 2026 เวล
 
 Migrations [0151](../../../../backend/src/db/migrations/0151_create_historical_address_repair_backup.ts) และ [0152](../../../../backend/src/db/migrations/0152_repair_historical_factory_address_names.ts) แยกสร้าง backup ออกจากการซ่อม. `0152` มี frozen manifest 18 แถว ตรวจชื่อกับทะเบียนพื้นที่ก่อนเขียน ตรวจ ID/เลขทะเบียน/ที่อยู่/สถานะเดิม และซ่อมแบบ transaction ต่อโรงงาน. บันทึกก่อน/หลังใน `factory_address_history_repair_backup_0151`; เปลี่ยนเฉพาะ `address`, ไม่แก้ `deleted_at`, สถานะ, timestamp, `factories`, profile revision, snapshot JSON หรือ event เก่า. รันซ้ำไม่สร้าง backup ซ้ำหรือเขียนทับแถวที่เปลี่ยนหลัง audit
 
-การสแกนรอบนี้ยังไม่ถือว่าครบ: มี transaction `DELETE` เปิดค้างใน SQL session `87` จาก backend process `5036` ทำให้ยังอ่านแบบ committed ปกติไม่ได้ 1 แถวในคำขอและ 1 แถวใน factory snapshots. รายงานใช้ `READPAST` เฉพาะสองตารางนี้เพื่ออ่านแถวที่ไม่ถูกล็อกและแจ้งจำนวนที่ข้ามไว้ จึงไม่อ้างว่าแถวที่ล็อกผ่านการตรวจแล้ว. ยังไม่ได้ยกเลิก/rollback session นี้; ต้องได้รับการยืนยันก่อนทำให้การลบที่ยังไม่ commit ย้อนกลับ
+รอบแรกใช้ `READPAST` เฉพาะคำขอและ factory snapshots เพราะมี transaction ของ backend ค้างและมีแถวที่อ่านไม่ได้; จึงยังไม่ถือเป็นผลสแกน committed ครบทุกแถวในเวลานั้น. ป้าย `DELETE` ในตัวตรวจเดิมใช้ substring ซึ่งอาจตรงกับชื่อคอลัมน์ `deleted_at` จึงไม่ใช่หลักฐานว่ามีคำสั่งลบจริง
+
+ผลตรวจแบบอ่านอย่างเดียวต่อมาเวลา 16:18–16:32 น. `Asia/Bangkok`:
+
+- [Session identity](https://github.com/Nongten1010/POMS-app/actions/runs/41032450072) พบ session เดิมของ backend PID `5036` สิ้นสุดแล้ว และหมายเลข `87` ถูกใช้ใหม่โดย Apache HTTP Server PID `9876` ตั้งแต่ 16:17:34 โดยไม่มี open transaction; ไม่ยกเลิก session ใหม่โดยอ้างหมายเลขเก่า
+- [Committed scan](https://github.com/Nongten1010/POMS-app/actions/runs/41032969173) ไม่พบ transaction เดิมหรือ blocking request ของฐาน POMS และ backend connections ที่พบไม่มี open transaction. อ่านทั้ง 9 ตาราง/views แบบ committed ปกติ โดยไม่ใช้ `READPAST`/`NOLOCK`: คำขอ 383 แถว, factory snapshots 654 แถว. พบค่าตัวเลขเฉพาะ 18 base rows เดิม; แถวที่ซ้ำใน current views ไม่ใช่รายการซ่อมเพิ่ม
+- [Safe error details](https://github.com/Nongten1010/POMS-app/actions/runs/41033723397) พบ log เวลา 15:17:00 จาก `POST /api/v1/cems-wpms-requests/measurement-points` ว่า rollback ถูกปฏิเสธเพราะยังมี request in progress และมี original SQL error `208`. Log ไม่เก็บ session ID, เลขคำขอหรือค่าพารามิเตอร์ จึงยังไม่ยืนยันว่าเป็นต้นเหตุของ session เดิมหรือระบุชุดรายการก่อน/หลังได้ครบ
+- [Cleanup receipts](https://github.com/Nongten1010/POMS-app/actions/runs/41034111400) ไม่พบ receipt การล้างค่าตรวจวัดหรือ cleanup error log ของฐาน POMS นี้ระหว่าง 15:15–16:18 น.; ไม่ใช้ผลนี้รับรองว่าข้อมูลทุกประเภทไม่เคยเปลี่ยน
+
+การตรวจดังกล่าวไม่ได้ `KILL`, rollback, restart, deploy หรือรัน data migration. การไม่พบ session เดิมไม่ได้พิสูจน์ว่าจบด้วย commit หรือ rollback และยังไม่ทราบชุดการเปลี่ยนแปลงย้อนหลังทั้งหมด. ปัญหาวงจร transaction แยกจากการแปลงชื่อพื้นที่; latest main มี [หลักฐานการแก้ transaction lifecycle](../connection-requests/transaction-lock-recovery.md) ของ PR #37 แล้ว
 
 Tests ของ migration: [historical-factory-address-repair.test.ts](../../../../backend/tests/unit/historical-factory-address-repair.test.ts) ตรวจทั้งสองโหมด การคงสถานะเดิม การเปลี่ยนพร้อมกัน การรันซ้ำ และการหยุดก่อนเขียนเมื่อชื่อพื้นที่ไม่ตรงทะเบียน
+
+## ป้องกันข้อมูลใหม่และการตรวจ release รอบถัดไป
+
+แพตช์รอบนี้เพิ่ม shared normalization ก่อนบันทึกข้อมูลทั่วไปที่แก้ไขได้ และก่อนแสดง address/ชื่อพื้นที่ ทั้ง `legacy` และ `canonical`. แปลงเฉพาะป้ายหรือช่องชื่อที่เป็นตัวเลขเมื่อจับคู่จังหวัด+อำเภอ+ตำบลกับ `TUMBOL` ได้อย่างไม่กำกวม; รักษาเลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์ ช่องรหัส ชื่อที่อ่านได้ และ null ตาม contract เดิม. รหัสไม่ตรง/ไม่พอระบุชื่อให้หยุดก่อนเขียนด้วย `400 BAD_REQUEST`, `details.reason = UNRESOLVED_ADMINISTRATIVE_AREA`; แหล่งทะเบียนขัดข้องตอบ `503 FACTORY_AREA_LOOKUP_UNAVAILABLE`. GET ไม่เขียนกลับฐานหรือประวัติ ส่วน POMS edit snapshots ที่กำหนดอ่านอย่างเดียวคงกติกาเดิม ดู [contract ร่วม](../../api/menus/eligible-factories/README.md#ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่)
+
+สถานะหลักฐานของ release รอบนี้ยังเป็นก่อน deploy: migrations `0151/0152` และการป้องกันก่อนบันทึกยังต้องผ่านชุดตรวจ final release และยืนยัน migration batch/backup 18 แถว, health, runtime OpenAPI, การสแกน committed ทั้งระบบ และ deployed API ของโรงงานทะเบียน `82250600225587` หลัง deploy. ผล production ในหัวข้อก่อนหน้ายืนยันเฉพาะ release `0149/0150`; ไม่ใช้ผลทดสอบใน workspace อ้างว่า `0151/0152` รันบนฐานจริงแล้ว
 
 ## การแสดงชื่อโรงงานบนหน้าจอ
 

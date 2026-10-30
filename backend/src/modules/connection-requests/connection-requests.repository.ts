@@ -40,6 +40,7 @@ import {
   NotFoundError,
 } from '../../shared/errors/AppError';
 import { withProvinceInFactoryAddress } from '../eligible-factories/factory-address';
+import { normalizeFactoryAreaNamesForWrite } from '../eligible-factories/factory-area-names';
 import { removeUnconnectedRequestPoints } from './connection-request-point-cleanup';
 import {
   deriveHasEiaFromAssessment,
@@ -524,11 +525,14 @@ export const connectionRequestsRepository = {
     statuses: readonly string[],
     access: ListAccess,
   ): Promise<boolean> {
-    const row = await buildBaseQuery({}, {
-      ...access,
-      useAssignedFactoryAccess: true,
-      includeRequestOwnerAccess: false,
-    })
+    const row = await buildBaseQuery(
+      {},
+      {
+        ...access,
+        useAssignedFactoryAccess: true,
+        includeRequestOwnerAccess: false,
+      },
+    )
       .clearSelect()
       .clearOrder()
       .select('id')
@@ -1129,6 +1133,7 @@ export const connectionRequestsRepository = {
     initialStatus: ConnectionRequestStatus,
     options?: CreateRequestOptions,
   ): Promise<ConnectionRequestDTO> {
+    input = await normalizeFactoryAreaNamesForWrite(input);
     return db.transaction(async (trx) => {
       await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
       input = await validateAndNormalizeAddParameterInput(trx, input);
@@ -1179,6 +1184,8 @@ export const connectionRequestsRepository = {
         'Direct connection repository requires exactly one measurement point with a code',
       );
     }
+
+    input = await normalizeFactoryAreaNamesForWrite(input);
 
     try {
       return await db.transaction(async (trx) => {
@@ -1354,6 +1361,7 @@ export const connectionRequestsRepository = {
     nextStatus: ConnectionRequestStatus,
     access: ListAccess & { expectedUpdatedAt: string },
   ): Promise<ConnectionRequestDTO> {
+    input = await normalizeFactoryAreaNamesForWrite(input);
     return db.transaction(async (trx) => {
       const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
         .where('id', id)
@@ -1430,13 +1438,7 @@ export const connectionRequestsRepository = {
         }
       }
       await upsertFactorySnapshot(trx, id, input, actorUserId);
-      await insertHistory(
-        trx,
-        id,
-        nextStatus,
-        actorUserId,
-        RESUBMITTED_FORM_HISTORY_NOTE,
-      );
+      await insertHistory(trx, id, nextStatus, actorUserId, RESUBMITTED_FORM_HISTORY_NOTE);
 
       const updated = await findByIdInTransaction(trx, id);
       if (!updated) throw new Error('Updated connection request could not be loaded');
@@ -3838,7 +3840,9 @@ function mergeAddedParameterInstruments(
   parameters: string[],
 ): MeasurementInstrumentsInput | null {
   if (!current && !incoming) return null;
-  const labels = new Map(parameters.map((parameter) => [parameter.trim().toLowerCase(), parameter]));
+  const labels = new Map(
+    parameters.map((parameter) => [parameter.trim().toLowerCase(), parameter]),
+  );
   const instruments = new Map<string, MeasurementInstrumentsInput['parameters'][number]>();
   for (const instrument of [...(current?.parameters ?? []), ...(incoming?.parameters ?? [])]) {
     const key = instrument.parameter.trim().toLowerCase();

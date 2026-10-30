@@ -31,6 +31,10 @@ import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import { eligibleFactoriesService } from '../eligible-factories/eligible-factories.service';
+import {
+  type FactoryAreaNamesInput,
+  normalizeFactoryAreaNamesForRead,
+} from '../eligible-factories/factory-area-names';
 import type { SelectedEligibleFactoryDTO } from '../eligible-factories/eligible-factories.types';
 import type {
   CalendarStatusDetailsQuerySchemaInput,
@@ -105,6 +109,46 @@ import {
   type ParameterRequestActorContext,
 } from './parameter-request-policy';
 
+interface FactoryAreaReadContext extends FactoryAreaNamesInput {
+  province?: string | null;
+  newRegistrationNo?: string | null;
+  oldRegistrationNo?: string | null;
+}
+
+/** Add lookup context without adding fields to the public DTO or changing persisted snapshots. */
+async function normalizeReadFactoryAreas<T extends FactoryAreaReadContext>(
+  rows: T[],
+): Promise<T[]> {
+  const resolved = await normalizeFactoryAreaNamesForRead(
+    rows.map((row) => ({
+      ...row,
+      provinceName: row.provinceName ?? row.province,
+      factoryRegistrationNoNew:
+        row.factoryRegistrationNoNew ??
+        row.newRegistrationNo ??
+        row.factoryRegistrationNo ??
+        row.factoryId ??
+        row.oldRegistrationNo,
+    })),
+  );
+  return rows.map((row, index) => ({
+    ...row,
+    ...(Object.hasOwn(row, 'address') ? { address: resolved[index].address } : {}),
+    ...(Object.hasOwn(row, 'districtName') ? { districtName: resolved[index].districtName } : {}),
+    ...(Object.hasOwn(row, 'subdistrictName')
+      ? { subdistrictName: resolved[index].subdistrictName }
+      : {}),
+  }));
+}
+
+async function normalizeFactorySummaryMap(
+  summaries: Map<string, FactorySummaryDTO>,
+): Promise<Map<string, FactorySummaryDTO>> {
+  const entries = [...summaries.entries()];
+  const resolved = await normalizeReadFactoryAreas(entries.map(([, factory]) => factory));
+  return new Map(entries.map(([key], index) => [key, resolved[index]]));
+}
+
 const DESIGN_REVIEW_STATUSES: ConnectionRequestStatus[] = [
   CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
   CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
@@ -162,7 +206,7 @@ export const connectionRequestsService = {
       scope: viewScope,
       regionalAccess,
     });
-    return { data: rows, meta: { total } };
+    return { data: await normalizeReadFactoryAreas(rows), meta: { total } };
   },
 
   async listTableRows(
@@ -207,9 +251,12 @@ export const connectionRequestsService = {
       regionalAccess,
       useAssignedFactoryAccess: true,
     });
-    const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
+    const requests = await normalizeReadFactoryAreas(rows);
+    const factoryMap = await normalizeFactorySummaryMap(
+      await connectionRequestsRepository.findFactorySummariesForRequests(rows),
+    );
     const data = await Promise.all(
-      rows.map(async (request) => {
+      requests.map(async (request) => {
         const deviceConfigs = await deviceConnectionsService.listByRequestId(request.id);
         return {
           ...request,
@@ -229,11 +276,13 @@ export const connectionRequestsService = {
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<ConnectionRequestFactoryTableRowDTO>> {
     void query;
-    const factories = await connectionRequestsRepository.listFactoriesForAccess({
-      actorUserId,
-      scope: factoryViewScope,
-      regionalAccess,
-    });
+    const factories = await normalizeReadFactoryAreas(
+      await connectionRequestsRepository.listFactoriesForAccess({
+        actorUserId,
+        scope: factoryViewScope,
+        regionalAccess,
+      }),
+    );
     const eligibleFactories = factories.filter((factory) => factory.isEligible === true);
     const nonEligibleFactoryMasterIds = factories
       .filter((factory) => factory.isEligible !== true && factory.id !== null)
@@ -381,13 +430,15 @@ export const connectionRequestsService = {
     query: ListOperatorFactoriesQuery = {},
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryDashboardRowDTO>> {
-    const factories = await connectionRequestsRepository.listFactoriesForAccess({
-      actorUserId,
-      scope: factoryViewScope,
-      regionalAccess,
-      connectedPomsOnly: query.connectedOnly === true,
-      homeDashboard: true,
-    });
+    const factories = await normalizeReadFactoryAreas(
+      await connectionRequestsRepository.listFactoriesForAccess({
+        actorUserId,
+        scope: factoryViewScope,
+        regionalAccess,
+        connectedPomsOnly: query.connectedOnly === true,
+        homeDashboard: true,
+      }),
+    );
     const visibleFactories = factories.filter((factory) => factory.isActive !== false);
     const eligibleVisibleFactories = visibleFactories.filter(
       (factory) => factory.isEligible === true,
@@ -451,10 +502,12 @@ export const connectionRequestsService = {
     actorUserId: number,
     query: ListOperatorFactoryOverviewQuery = {},
   ): Promise<OperatorFactoryOverviewResultDTO> {
-    const factories = await connectionRequestsRepository.listFactoriesForAccess({
-      actorUserId,
-      scope: 'OWN_FACTORY',
-    });
+    const factories = await normalizeReadFactoryAreas(
+      await connectionRequestsRepository.listFactoriesForAccess({
+        actorUserId,
+        scope: 'OWN_FACTORY',
+      }),
+    );
     const visibleFactories = factories.filter((factory) => factory.isActive !== false);
     const factoryIdByLookupKey = buildFactoryLookupKeyMap(visibleFactories);
     const factoryIdByEligibleFactoryId = buildEligibleFactoryIdMap(visibleFactories);
@@ -524,13 +577,15 @@ export const connectionRequestsService = {
   async listPublicFactoryMapPoints(
     query: ListPublicFactoryMapPointsQuery = {},
   ): Promise<PaginatedTableRowsDTO<PublicFactoryMapPointDTO>> {
-    const factories = await connectionRequestsRepository.listFactoriesForAccess({
-      actorUserId: 0,
-      scope: 'ALL',
-      regionalAccess: undefined,
-      connectedPomsOnly: true,
-      homeDashboard: true,
-    });
+    const factories = await normalizeReadFactoryAreas(
+      await connectionRequestsRepository.listFactoriesForAccess({
+        actorUserId: 0,
+        scope: 'ALL',
+        regionalAccess: undefined,
+        connectedPomsOnly: true,
+        homeDashboard: true,
+      }),
+    );
     const eligibleFactories = factories.filter(
       (factory) =>
         factory.isEligible !== false &&
@@ -614,7 +669,7 @@ export const connectionRequestsService = {
       regionalAccess,
     });
     if (!factory) throw new NotFoundError('Factory general information not found');
-    return factory;
+    return (await normalizeReadFactoryAreas([factory]))[0];
   },
 
   async getById(
@@ -629,7 +684,7 @@ export const connectionRequestsService = {
       regionalAccess,
     });
     if (!request) throw new NotFoundError('Connection request not found');
-    return request;
+    return (await normalizeReadFactoryAreas([request]))[0];
   },
 
   async getDetail(
@@ -639,9 +694,9 @@ export const connectionRequestsService = {
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDetailDTO> {
     const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
-    const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests([
-      request,
-    ]);
+    const factoryMap = await normalizeFactorySummaryMap(
+      await connectionRequestsRepository.findFactorySummariesForRequests([request]),
+    );
     const deviceConfigs = await deviceConnectionsService.listByRequestId(id);
 
     return {
@@ -667,12 +722,15 @@ export const connectionRequestsService = {
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PreviousConnectionRequestDTO> {
-    const request = await connectionRequestsRepository.findPreviousRequestForReadAccess(factoryId, {
-      actorUserId,
-      scope: viewScope,
-      regionalAccess,
-    });
-    if (!request) {
+    const storedRequest = await connectionRequestsRepository.findPreviousRequestForReadAccess(
+      factoryId,
+      {
+        actorUserId,
+        scope: viewScope,
+        regionalAccess,
+      },
+    );
+    if (!storedRequest) {
       return {
         hasPreviousRequest: false,
         sourceRequestId: null,
@@ -681,6 +739,7 @@ export const connectionRequestsService = {
       };
     }
 
+    const [request] = await normalizeReadFactoryAreas([storedRequest]);
     const documents = request.measurementPoints.flatMap((point) => point.documentsAndImages ?? []);
     const frontPhotos = documents.filter(
       (document) => document.title === CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_FRONT_PHOTO,
@@ -794,8 +853,9 @@ export const connectionRequestsService = {
     const inferredOldRegistrationNo =
       request.factoryRegistrationNo !== request.factoryId ? request.factoryRegistrationNo : null;
 
+    const [displayRequest] = await normalizeReadFactoryAreas([currentRequest]);
     return toAddParameterFormDetail(
-      currentRequest,
+      displayRequest,
       withCurrentFactoryDocuments(point, currentPoint),
       stationId,
       {
@@ -872,13 +932,16 @@ export const connectionRequestsService = {
         useAssignedFactoryAccess: true,
       },
     );
-    const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
+    const requests = await normalizeReadFactoryAreas(rows);
+    const factoryMap = await normalizeFactorySummaryMap(
+      await connectionRequestsRepository.findFactorySummariesForRequests(rows),
+    );
     const currentPoints = rows.length
       ? await connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
           [...new Set(rows.map((request) => request.factoryId))],
           [
             ...new Set(
-              rows.flatMap((request) =>
+              requests.flatMap((request) =>
                 request.eligibleFactoryId != null ? [request.eligibleFactoryId] : [],
               ),
             ),
@@ -893,7 +956,7 @@ export const connectionRequestsService = {
       ),
     );
     const details = await Promise.all(
-      rows.flatMap((request) =>
+      requests.flatMap((request) =>
         request.measurementPoints
           .flatMap((point) => {
             const current = currentPointsBySourcePointId.get(point.id);
@@ -1263,13 +1326,15 @@ export const connectionRequestsService = {
       throw new ForbiddenError('Parameter request creation requires edit permission');
     }
     // Binary edit grants retain their granted view scope, never broadening data access.
-    const dataScope = getAccessScopeValue(actor.editScope) === null ? actor.viewScope : actor.editScope;
+    const dataScope =
+      getAccessScopeValue(actor.editScope) === null ? actor.viewScope : actor.editScope;
     if (!getAccessScopeValue(dataScope)) {
       throw new ForbiddenError('Parameter request edit permission requires a data scope');
     }
-    const scope = typeof dataScope === 'string'
-      ? { scope: dataScope as PermissionScopeDetails['scope'] }
-      : dataScope;
+    const scope =
+      typeof dataScope === 'string'
+        ? { scope: dataScope as PermissionScopeDetails['scope'] }
+        : dataScope;
     const actorUserId = actor.actorUserId;
     ensureRequestFormSections(
       input,
@@ -1281,14 +1346,17 @@ export const connectionRequestsService = {
       { actorUserId, scope, regionalAccess: actor.regionalAccess },
     );
     if (!factory) {
-      throw new NotFoundError('Active eligible factory not found within parameter edit access scope');
+      throw new NotFoundError(
+        'Active eligible factory not found within parameter edit access scope',
+      );
     }
     const eligibleFactory = {
       eligibleFactoryId: factory.eligibleFactoryId,
       factoryId: /^\d{14}$/.test(factory.newRegistrationNo)
         ? factory.newRegistrationNo
         : input.factoryId,
-      factoryRegistrationNo: factory.oldRegistrationNo ?? input.factoryRegistrationNo ?? factory.newRegistrationNo,
+      factoryRegistrationNo:
+        factory.oldRegistrationNo ?? input.factoryRegistrationNo ?? factory.newRegistrationNo,
     };
 
     return connectionRequestsRepository.create(

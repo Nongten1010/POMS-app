@@ -20,10 +20,18 @@ import { resolveEligibleFactoryAddressForStorage } from './eligible-factory-sour
 import { deriveConnectionStatusSummary } from './eligible-factory-status-summary';
 import { splitFactoryTypeSequence } from './factory-type-sequence';
 import { isMssqlUniqueConstraintError } from './eligible-factory-add-request-errors';
+import {
+  normalizeFactoryAreaNamesForRead,
+  normalizeFactoryAreaNamesForWrite,
+} from './factory-area-names';
 
 export const eligibleFactoriesService = {
-  listCandidates(query: ListEligibleFactoryCandidatesQuery, access?: EligibleFactoryAccessContext) {
-    return eligibleFactoryCandidatesRepository.list(query, access);
+  async listCandidates(
+    query: ListEligibleFactoryCandidatesQuery,
+    access?: EligibleFactoryAccessContext,
+  ) {
+    const result = await eligibleFactoryCandidatesRepository.list(query, access);
+    return { ...result, data: await normalizeFactoryAreaNamesForRead(result.data) };
   },
 
   async getSourceFactory(factoryRegistrationNo: string, access?: EligibleFactoryAccessContext) {
@@ -32,7 +40,8 @@ export const eligibleFactoriesService = {
       access,
     );
     if (!sourceFactory) throw new NotFoundError('Source factory not found');
-    return sourceFactory;
+    const [resolved] = await normalizeFactoryAreaNamesForRead([sourceFactory]);
+    return resolved;
   },
 
   async list(
@@ -40,7 +49,8 @@ export const eligibleFactoriesService = {
     access?: EligibleFactoryAccessContext,
   ): Promise<PaginatedEligibleFactoriesDTO> {
     const { rows, total } = await eligibleFactoriesRepository.list(query, access);
-    return { data: rows.map(toSelectedEligibleFactory), meta: { total } };
+    const resolved = await normalizeFactoryAreaNamesForRead(rows);
+    return { data: resolved.map(toSelectedEligibleFactory), meta: { total } };
   },
 
   async listAddRequests(
@@ -75,6 +85,7 @@ export const eligibleFactoriesService = {
       });
     }
 
+    input = await normalizeFactoryAreaNamesForWrite(input);
     const resolvedAddress = await resolveEligibleFactoryAddressForStorage({
       sourceFactoryId: input.sourceFactoryId ?? null,
       factoryRegistrationNoNew: input.factoryRegistrationNoNew,
@@ -144,7 +155,7 @@ export const eligibleFactoriesService = {
     }
 
     const provinceName = factory.provinceName ?? factory.province ?? 'ไม่ระบุจังหวัด';
-    const requestedFactory: CreateEligibleFactoryInput = {
+    const requestedFactory = await normalizeFactoryAreaNamesForWrite<CreateEligibleFactoryInput>({
       sourceSystem: 'eligible_factory_add_requests',
       sourceFactoryId: factory.factoryId,
       factoryName: factory.factoryName,
@@ -174,7 +185,7 @@ export const eligibleFactoriesService = {
       hasEia: factoryDetails?.hasEia ?? factory.hasEia ?? null,
       projectName: factoryDetails?.projectName ?? factory.projectName ?? null,
       selectedReason: input.reason,
-    };
+    });
 
     try {
       return await eligibleFactoriesRepository.createAddRequest(
@@ -273,7 +284,7 @@ function toSelectedEligibleFactory(factory: EligibleFactoryDTO): SelectedEligibl
     factory.factoryRegistrationNoOld === null &&
     Boolean(factory.sourceFactoryId?.trim());
   const factoryId = isLegacyDirectSelection
-    ? factory.sourceFactoryId!
+    ? (factory.sourceFactoryId ?? factory.factoryRegistrationNoNew)
     : factory.factoryRegistrationNoNew;
 
   return {

@@ -19,6 +19,96 @@ import {
 type OpenApiObject = Record<string, unknown>;
 type EnumLabelMap = Record<string, string>;
 
+export const factoryAreaWriteDescription =
+  'ก่อนบันทึก address, districtName และ subdistrictName ที่เป็นรหัสตัวเลข Backend ตรวจชื่อกับทะเบียน TUMBOL ด้วยจังหวัด+อำเภอ+ตำบล และเปลี่ยนเฉพาะป้ายพื้นที่/ช่องชื่อที่เป็นตัวเลข. รองรับเลขไทยและป้าย ตำบล/อำเภอ/แขวง/เขต/ต./อ.; เก็บเลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์ ข้อความที่อ่านได้ และช่องรหัสพื้นที่เดิม. ใช้กติกาเดียวกันทั้ง legacy/canonical. รหัสไม่ตรง หาชื่อไม่ได้ หรือชื่อกำกวมตอบ 400 BAD_REQUEST พร้อม details.path และ details.reason = UNRESOLVED_ADMINISTRATIVE_AREA โดยไม่บันทึกการเปลี่ยนแปลง; อ่านทะเบียนสำหรับค่าตัวเลขไม่ได้ชั่วคราวตอบ 503 FACTORY_AREA_LOOKUP_UNAVAILABLE ให้ลองใหม่ภายหลัง';
+export const factoryAreaReadDescription =
+  'การอ่านข้อมูลทั้ง legacy/canonical แปลงเฉพาะป้ายพื้นที่หรือช่องชื่ออำเภอ/ตำบลที่เป็นตัวเลขเมื่อยืนยันชื่อจากทะเบียน TUMBOL ด้วย PROV+AMP+TUMBOL ได้; ถ้ายืนยันไม่ได้จะละป้ายพื้นที่ตัวเลขและคืน null ในช่องชื่อที่เป็นตัวเลข โดยรักษารายละเอียดที่อยู่ ชื่อที่อ่านได้ และช่องรหัสเดิม. GET ไม่เขียนกลับฐานข้อมูลหรือ snapshot JSON/event history';
+
+export function describeFactoryAreaWriteOperation(operation: OpenApiObject): void {
+  operation.description = `${String(operation.description ?? '')}\n\n${factoryAreaWriteDescription}`;
+  const responses = (operation.responses ?? {}) as Record<string, OpenApiObject>;
+  for (const [status, description, exampleName, example] of [
+    [
+      '400',
+      'BAD_REQUEST เมื่อรหัสพื้นที่ไม่ตรงทะเบียน หาชื่อไม่ได้ หรือกำกวม; details.path ระบุ field และ reason เป็น UNRESOLVED_ADMINISTRATIVE_AREA',
+      'unresolvedAdministrativeArea',
+      {
+        success: false,
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Administrative area codes cannot be resolved to verified names',
+          details: { path: 'address', reason: 'UNRESOLVED_ADMINISTRATIVE_AREA' },
+        },
+      },
+    ],
+    [
+      '503',
+      'FACTORY_AREA_LOOKUP_UNAVAILABLE เมื่ออ่านทะเบียนชื่อพื้นที่สำหรับค่าตัวเลขไม่ได้ชั่วคราว; ไม่บันทึกชื่อพื้นที่เป็นรหัสและให้ลองใหม่ภายหลัง',
+      'factoryAreaLookupUnavailable',
+      {
+        success: false,
+        error: {
+          code: 'FACTORY_AREA_LOOKUP_UNAVAILABLE',
+          message: 'Administrative area lookup is temporarily unavailable',
+        },
+      },
+    ],
+  ] as const) {
+    const previous = responses[status] ?? {};
+    const previousContent =
+      ((previous.content as OpenApiObject | undefined)?.['application/json'] as
+        | OpenApiObject
+        | undefined) ?? {};
+    const previousExample = previousContent.example as OpenApiObject | undefined;
+    const previousError = previousExample?.error as OpenApiObject | undefined;
+    const previousExampleName =
+      previousError?.code === 'MEASUREMENT_CLEANUP_FAILED'
+        ? 'measurementCleanupFailed'
+        : 'otherFailure';
+    const examples = {
+      ...((previousContent.examples ?? {}) as OpenApiObject),
+      ...(previousContent.example === undefined
+        ? {}
+        : { [previousExampleName]: { value: previousContent.example } }),
+      [exampleName]: { value: example },
+    };
+    const lookupFailureSchema: OpenApiObject = {
+      allOf: [
+        schemaRef('ErrorEnvelope'),
+        {
+          type: 'object',
+          properties: {
+            error: {
+              type: 'object',
+              required: ['code', 'message'],
+              properties: {
+                code: { type: 'string', enum: ['FACTORY_AREA_LOOKUP_UNAVAILABLE'] },
+                message: { type: 'string' },
+              },
+            },
+          },
+        },
+      ],
+    };
+    const previousSchema = previousContent.schema as OpenApiObject | undefined;
+    const responseSchema =
+      status === '503' && previousSchema
+        ? { anyOf: [previousSchema, lookupFailureSchema] }
+        : (previousSchema ?? schemaRef('ErrorEnvelope'));
+    responses[status] = {
+      description:
+        `${String(previous.description ?? (status === '400' ? 'Payload/query/path ไม่ผ่าน validation หรือ business rule. ' : ''))} ${description}`.trim(),
+      content: {
+        'application/json': {
+          schema: responseSchema,
+          examples,
+        },
+      },
+    };
+  }
+  operation.responses = responses;
+}
+
 const canceledPointCodeReuseDescription =
   'รหัสเดิม เช่น P0267 จากคำขอ CANCELED ที่ยังไม่เคยเชื่อมต่อ ใช้กับคำขอใหม่ของโรงงานเดิมและ systemType เดิมได้. Backend ตรวจและเปลี่ยนเจ้าของการจองใน transaction ตอนกำหนดรหัส MANUAL_LEGACY หรือสร้าง direct connection โดยเก็บคำขอและจุดเดิมเป็นประวัติ; ใช้ได้กับคำขอที่ยกเลิกไว้ก่อน deploy ด้วย. ห้ามนำรหัสที่เคยเชื่อมต่อ รวมแถวที่เลิกใช้งานแล้ว รหัสที่มีจุดอื่นใช้อยู่หรือมี live device config กลับมาใช้; กรณีไม่เข้าเงื่อนไขยังตอบ 409 CONFLICT reason POINT_CODE_ALREADY_ASSIGNED. ช่วงรหัส legacy และการออกเลข AUTO ไม่เปลี่ยน';
 
@@ -725,15 +815,24 @@ const operatorFormProperties: Record<string, OpenApiObject> = {
     description: 'Optional; ถ้าส่งพร้อม eia ต้องตรงกับค่าที่ derive จาก eia',
   },
   projectName: nullableString(500, 'Optional'),
-  address: nullableString(1000, 'Optional'),
+  address: nullableString(
+    1000,
+    `Optional. ${factoryAreaWriteDescription} ${factoryAreaReadDescription}`,
+  ),
   regionCode: nullableString(64, 'Optional'),
   regionName: nullableString(128, 'Optional'),
   provinceCode: nullableString(32, 'Optional'),
   provinceName: nullableString(128, 'Optional'),
   districtCode: nullableString(32, 'Optional'),
-  districtName: nullableString(128, 'Optional'),
+  districtName: nullableString(
+    128,
+    `Optional; ช่องชื่อไม่เก็บรหัสตัวเลข. ${factoryAreaWriteDescription} ${factoryAreaReadDescription}`,
+  ),
   subdistrictCode: nullableString(32, 'Optional'),
-  subdistrictName: nullableString(128, 'Optional'),
+  subdistrictName: nullableString(
+    128,
+    `Optional; ช่องชื่อไม่เก็บรหัสตัวเลข. ${factoryAreaWriteDescription} ${factoryAreaReadDescription}`,
+  ),
   industrialEstateCode: nullableString(32, 'Optional'),
   industrialEstateName: nullableString(255, 'Optional'),
   latitude: nullableNumber(-90, 90, 'Optional'),
@@ -2361,15 +2460,24 @@ const componentSchemas: Record<string, OpenApiObject> = {
       eiaOther: nullableString(500, 'Required เมื่อ eia = อื่นๆ'),
       hasEia: { type: 'boolean', nullable: true },
       projectName: nullableString(500, 'Optional'),
-      address: nullableString(1000, 'Optional'),
+      address: nullableString(
+        1000,
+        `Optional. ${factoryAreaWriteDescription} ${factoryAreaReadDescription}`,
+      ),
       regionCode: nullableString(64, 'Optional'),
       regionName: nullableString(128, 'Optional'),
       provinceCode: nullableString(32, 'Optional'),
       provinceName: nullableString(128, 'Optional'),
       districtCode: nullableString(32, 'Optional'),
-      districtName: nullableString(128, 'Optional'),
+      districtName: nullableString(
+        128,
+        `Optional; ช่องชื่อไม่เก็บรหัสตัวเลข. ${factoryAreaWriteDescription} ${factoryAreaReadDescription}`,
+      ),
       subdistrictCode: nullableString(32, 'Optional'),
-      subdistrictName: nullableString(128, 'Optional'),
+      subdistrictName: nullableString(
+        128,
+        `Optional; ช่องชื่อไม่เก็บรหัสตัวเลข. ${factoryAreaWriteDescription} ${factoryAreaReadDescription}`,
+      ),
       industrialEstateCode: nullableString(32, 'Optional'),
       industrialEstateName: nullableString(255, 'Optional'),
       latitude: nullableNumber(-90, 90, 'Optional'),
@@ -4106,6 +4214,17 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
     }),
   },
 };
+for (const [path, method] of [
+  ['/cems-wpms-requests', 'post'],
+  ['/cems-wpms-requests/measurement-points', 'post'],
+  ['/cems-wpms-requests/direct-connections', 'post'],
+  ['/cems-wpms-requests/parameters', 'post'],
+  ['/cems-wpms-requests/{id}/form', 'put'],
+]) {
+  const operation = connectionRequestPaths[path]?.[method] as OpenApiObject | undefined;
+  if (operation) describeFactoryAreaWriteOperation(operation);
+}
+
 export const connectionRequestsOpenApiDocument: OpenApiObject = {
   openapi: '3.0.3',
   info: {

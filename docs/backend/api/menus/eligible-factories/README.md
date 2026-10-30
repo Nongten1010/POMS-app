@@ -57,6 +57,42 @@ curl --request POST \
 
 ข้อมูลที่ถูก soft delete ซึ่งไม่อยู่ในขอบเขต `0150` ใช้ migrations `0151/0152` เพิ่มเติมสำหรับ manifest ที่ตรวจยืนยันไว้: `eligible_factories` 10 แถว, `factory_monitoring_point_forms` 6 แถว และคำขอ `CANCELED` 2 แถว. เปลี่ยนเฉพาะป้ายอำเภอ/ตำบลใน `address` โดยใช้จังหวัดและรหัสพื้นที่ที่บันทึกในแถวนั้นเทียบทะเบียน `TUMBOL`; คง `deleted_at`, สถานะ, timestamp และรายละเอียดที่อยู่ส่วนอื่น ไม่คืนรายการเข้าสู่ระบบ. ใช้ตารางจริงจึงครอบคลุมทั้ง `legacy` และ views ของ `canonical`; ไม่แก้ snapshot JSON หรือ event history
 
+#### ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่
+
+ก่อนบันทึกข้อมูลทั่วไปที่แก้ไขได้ในคำขอเชื่อมต่อ, การเลือก/ขอเพิ่มโรงงานเข้าข่าย และ `factory` ของแบบฟอร์มข้อมูลจุดตรวจวัด Backend ใช้กติกาเดียวกันทั้ง `legacy` และ `canonical`:
+
+| Field | กติกา |
+| --- | --- |
+| `address` | เมื่อมีป้ายพื้นที่เป็นตัวเลข เช่น `ตำบล5 อำเภอ6`, `แขวง๕ เขต๖` หรือ `ต.5 อ.6` ให้เปลี่ยนเฉพาะป้ายที่ตรวจรหัสกับทะเบียนได้; เลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์และข้อความอื่นคงเดิม |
+| `districtName`, `subdistrictName` | ช่องชื่อที่เป็นตัวเลขล้วนต้องแปลงเป็นชื่อที่ยืนยันได้; ไม่เก็บรหัสแทนชื่อ |
+| `provinceCode`, `districtCode`, `subdistrictCode` | ยังคงเป็นช่องรหัสและไม่ถูกแทนด้วยชื่อ; ไม่มี field บังคับใหม่ |
+| ชื่อที่เป็นข้อความและค่า `null` | รักษาตาม contract ของ endpoint เดิม; ไม่เดาชื่อหรือเติมค่าที่ผู้ใช้ล้าง |
+
+ใช้จังหวัดและรหัสพื้นที่ที่ส่ง/บันทึกไว้ก่อนจับคู่กับ `TUMBOL.PROV + AMP + TUMBOL`; หากขาด context จึงใช้ FID/เลขทะเบียนค้นโรงงานต้นทางเพื่อยืนยันรหัส. ไม่เลือกชื่อจากรหัสอำเภอหรือตำบลตัวเดียว และไม่เขียน snapshot ประวัติเดิมระหว่างอ่าน. การสร้างคำขอและส่งแบบแก้ไขต้องผ่านการตรวจนี้ก่อนบันทึกที่อยู่หรือ snapshot ใหม่
+
+| HTTP / code | เงื่อนไขและการแก้ของ client |
+| --- | --- |
+| `400 BAD_REQUEST` | รหัสไม่ตรง หา context/ชื่อไม่ได้ หรือจับคู่ได้หลายชื่อ; `error.details.reason = UNRESOLVED_ADMINISTRATIVE_AREA` และ `path` เป็น `address`, `districtName` หรือ `subdistrictName` ภายใน object ข้อมูลพื้นที่ ให้ตรวจจังหวัดและรหัสแล้วส่งใหม่ |
+| `503 FACTORY_AREA_LOOKUP_UNAVAILABLE` | อ่านทะเบียนเพื่อแก้ค่าตัวเลขไม่ได้ชั่วคราว; ไม่มีการบันทึกชื่อเป็นตัวเลข ให้ลองใหม่ภายหลัง |
+
+ตัวอย่าง error ตาม [error envelope ร่วม](../../shared/common-api/README.md#shared-response-shape):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Administrative area codes cannot be resolved to verified names",
+    "details": {
+      "path": "address",
+      "reason": "UNRESOLVED_ADMINISTRATIVE_AREA"
+    }
+  }
+}
+```
+
+การอ่านรายการ/รายละเอียด/ฟอร์มคำขอใช้กติกาชื่อพื้นที่เดียวกัน. ถ้าหาชื่อสำหรับข้อมูลเก่าไม่ได้ ให้ละป้ายพื้นที่ตัวเลขใน `address` และคืน `null` สำหรับช่องชื่อที่เป็นตัวเลข โดยคงช่องรหัสและข้อความส่วนอื่น; `GET` ไม่ซ่อมฐานข้อมูล. ข้อมูลทั่วไปในคำขอแก้ไข POMS เป็น snapshot context ที่อ่านอย่างเดียวตาม [contract คำขอแก้ไข](../master-data/factory-edit-requests.md); กติกานี้ไม่เพิ่มสิทธิ์ให้ client แก้ที่อยู่ผ่าน field ที่ contract กำหนดให้อ่านอย่างเดียว
+
 ## Endpoint Summary
 
 | งาน | Method | Path | Auth | Permission |
