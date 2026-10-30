@@ -66,7 +66,31 @@ Deploy สำเร็จวันที่ 30 ตุลาคม 2026 เวล
 
 โรงงานนี้ยังมีคำขอสถานะ `WAITING_CONNECTION`, ไม่มี active `cems_wpms_connected_measurement_points` และยังไม่มี `factory_profiles` ของตัวเอง จึงตรวจ service ฟอร์มคำขอจริงแทนการอ้างว่าได้ทดสอบ POMS connected form สำหรับโรงงานนี้. ไม่ได้ยืนยันหน้าจอฟอร์มด้วยบัญชี browser เพราะบัญชีที่มีอยู่ไม่แสดงเมนูโรงงาน; หลักฐานข้างต้นเป็น database values, backups และ deployed internal read service เดียวกับ controller ของ endpoint
 
-## ชื่อโรงงานที่ดูไม่เต็มบนหน้าจอ
+## ผลสแกนทั้งระบบก่อนซ่อมข้อมูลประวัติ
+
+[Production audit run 41030444601](https://github.com/Nongten1010/POMS-app/actions/runs/41030444601) สแกนทั้งรูปแบบ `ตำบล5 อำเภอ6`, รูปย่อ, เลขไทย และช่อง `district_name`/`subdistrict_name` ที่มีใน schema. ตรวจตารางจริงและ views ของ `canonical` แยกกัน; ไม่เปลี่ยน mode production ซึ่งยังเป็น `legacy`
+
+| แหล่งข้อมูล | แถวที่ใช้งานและอ่านได้ | แถวใช้งานที่เป็นตัวเลข | แถวประวัติที่เป็นตัวเลข |
+| --- | --- | --- | --- |
+| `eligible_factories` | 934 | 0 | 10 ที่ถูกลบ |
+| `factory_profiles` | 0 | 0 | 0 |
+| `cems_wpms_connected_measurement_points` | 37 | 0 | 0 |
+| `factory_monitoring_point_forms` | 924 | 0 | 6 ที่ถูกลบ |
+| `current_eligible_factories` | 934 | 0 | 10 เดียวกับตารางจริง |
+| `current_connected_measurement_points` | 37 | 0 | 0 |
+| `current_factory_monitoring_point_forms` | 924 | 0 | 6 เดียวกับตารางจริง |
+| `cems_wpms_connection_requests` | 313 ที่อ่านได้ | 0 | 2 `CANCELED` |
+| `cems_wpms_request_factory_snapshots` | 313 ที่อ่านได้ | 0 | 0 |
+
+รายการที่ต้องซ่อมเพิ่มจริงมี 18 แถว ไม่ใช่ 34 แถว: ตัวเลขที่ซ้ำใน current views คือแถวเดียวกับ base table. ผู้ใช้อนุมัติให้ซ่อมทั้ง 18 แถวโดยคงสถานะลบ/ยกเลิกไว้. จับคู่ชื่อทั้งหมดได้จากจังหวัดและรหัสพื้นที่ในแต่ละแถวกับ `TUMBOL.PROV + AMP + TUMBOL`; ไม่ใช้ตำแหน่งปัจจุบันของโรงงานมาแทนที่อยู่ในประวัติ. ตัวอย่างจังหวัดอ่างทองรหัส `15`, อำเภอ `1`, ตำบล `11` ตรงกับ `เมืองอ่างทอง` / `โพสะ`
+
+Migrations [0151](../../../../backend/src/db/migrations/0151_create_historical_address_repair_backup.ts) และ [0152](../../../../backend/src/db/migrations/0152_repair_historical_factory_address_names.ts) แยกสร้าง backup ออกจากการซ่อม. `0152` มี frozen manifest 18 แถว ตรวจชื่อกับทะเบียนพื้นที่ก่อนเขียน ตรวจ ID/เลขทะเบียน/ที่อยู่/สถานะเดิม และซ่อมแบบ transaction ต่อโรงงาน. บันทึกก่อน/หลังใน `factory_address_history_repair_backup_0151`; เปลี่ยนเฉพาะ `address`, ไม่แก้ `deleted_at`, สถานะ, timestamp, `factories`, profile revision, snapshot JSON หรือ event เก่า. รันซ้ำไม่สร้าง backup ซ้ำหรือเขียนทับแถวที่เปลี่ยนหลัง audit
+
+การสแกนรอบนี้ยังไม่ถือว่าครบ: มี transaction `DELETE` เปิดค้างใน SQL session `87` จาก backend process `5036` ทำให้ยังอ่านแบบ committed ปกติไม่ได้ 1 แถวในคำขอและ 1 แถวใน factory snapshots. รายงานใช้ `READPAST` เฉพาะสองตารางนี้เพื่ออ่านแถวที่ไม่ถูกล็อกและแจ้งจำนวนที่ข้ามไว้ จึงไม่อ้างว่าแถวที่ล็อกผ่านการตรวจแล้ว. ยังไม่ได้ยกเลิก/rollback session นี้; ต้องได้รับการยืนยันก่อนทำให้การลบที่ยังไม่ commit ย้อนกลับ
+
+Tests ของ migration: [historical-factory-address-repair.test.ts](../../../../backend/tests/unit/historical-factory-address-repair.test.ts) ตรวจทั้งสองโหมด การคงสถานะเดิม การเปลี่ยนพร้อมกัน การรันซ้ำ และการหยุดก่อนเขียนเมื่อชื่อพื้นที่ไม่ตรงทะเบียน
+
+## การแสดงชื่อโรงงานบนหน้าจอ
 
 ข้อมูลและ service ของโรงงานเป้าหมายมีชื่อเต็มตรงทะเบียนต้นทาง ไม่พบการตัดชื่อใน backend mapper. หน้าแผนที่ใช้ `whiteSpace: nowrap`, `overflow: hidden` และ `textOverflow: ellipsis` สำหรับชื่อรายการ จึงแสดง `...` ตามความกว้าง ส่วนฟอร์มคำขอใช้ช่องชื่อแบบบรรทัดเดียว. งานนี้ตรวจหาสาเหตุและไม่ได้แก้ frontend
 

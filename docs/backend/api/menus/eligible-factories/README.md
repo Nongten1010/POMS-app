@@ -55,6 +55,8 @@ curl --request POST \
 
 ข้อมูลเก่าแก้ถาวรด้วย migrations `0149_create_factory_address_names_repair_backup` และ `0150_repair_factory_address_names`; ดูขอบเขต วิธีตรวจ และข้อจำกัดใน [หลักฐานการแก้ชื่อพื้นที่](../../../evidence/master-data/factory-address-area-names.md)
 
+ข้อมูลที่ถูก soft delete ซึ่งไม่อยู่ในขอบเขต `0150` ใช้ migrations `0151/0152` เพิ่มเติมสำหรับ manifest ที่ตรวจยืนยันไว้: `eligible_factories` 10 แถว, `factory_monitoring_point_forms` 6 แถว และคำขอ `CANCELED` 2 แถว. เปลี่ยนเฉพาะป้ายอำเภอ/ตำบลใน `address` โดยใช้จังหวัดและรหัสพื้นที่ที่บันทึกในแถวนั้นเทียบทะเบียน `TUMBOL`; คง `deleted_at`, สถานะ, timestamp และรายละเอียดที่อยู่ส่วนอื่น ไม่คืนรายการเข้าสู่ระบบ. ใช้ตารางจริงจึงครอบคลุมทั้ง `legacy` และ views ของ `canonical`; ไม่แก้ snapshot JSON หรือ event history
+
 ## Endpoint Summary
 
 | งาน | Method | Path | Auth | Permission |

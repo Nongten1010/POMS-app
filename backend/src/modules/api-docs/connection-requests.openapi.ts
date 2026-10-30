@@ -1864,7 +1864,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       expectedUpdatedAt: expectedUpdatedAtProperty,
     },
     description:
-      'Canonical form-prefill shape ที่ใช้ร่วมกันระหว่างคำขอเชื่อมต่อและข้อมูล current/live POMS; ชื่อ field ตรงกับ normalized PUT /cems-wpms-requests/{id}/form และไม่คืน workflow id, eligibleFactoryId หรือ measurement-point id',
+      'Canonical form-prefill shape ที่ใช้ร่วมกันระหว่างคำขอเชื่อมต่อและข้อมูล current/live POMS; ชื่อ field ตรงกับ normalized PUT /cems-wpms-requests/{id}/form และไม่คืน workflow id, eligibleFactoryId หรือ measurement-point id. address ใช้ชื่ออำเภอ/ตำบลที่อ่านได้; migrations 0151/0152 ซ่อมที่อยู่ตัวเลขในคำขอ CANCELED ที่ตรวจยืนยันไว้ โดยรักษาสถานะยกเลิกและ timestamp เดิม ไม่แก้ snapshot JSON หรือ event history และใช้ได้ทั้ง legacy/canonical',
     example: {
       ...addPointExample,
       requestType: 'ADD_MEASUREMENT_POINT',

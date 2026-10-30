@@ -16,6 +16,8 @@ permission code, grouped response alias และ scope keyword ที่อ้�
 
 เมื่อเลือกโรงงานสำหรับคำขอใหม่ เรียก [โหลดข้อมูลจากคำขอก่อนหน้า](./previous-request.md) เพื่อรับข้อมูลทั่วไป รูปหน้าโรงงาน โลโก้ ผู้ติดต่อ และอีเมลแจ้งเตือนจากคำขอล่าสุดที่อ่านได้ หาก `data.hasPreviousRequest = false` ให้เริ่มกรอกฟอร์มว่าง
 
+ที่อยู่ตัวเลขในคำขอที่ยังใช้งานซ่อมด้วย migrations `0149/0150`; migrations `0151/0152` เพิ่มการซ่อม `address` ของคำขอ `CANCELED` ที่ตรวจยืนยันไว้ 2 รายการ โดยคงสถานะยกเลิกและ timestamp เดิม. ฟอร์มประวัติที่อ่านได้จึงคืนชื่อพื้นที่ที่แก้แล้วใน `address` ส่วน snapshot JSON และ events คงค่าตามเวลาที่บันทึก ดู [กติกาและขอบเขตร่วม](../eligible-factories/README.md#ชื่ออำเภอและตำบลในที่อยู่) และ [หลักฐานการตรวจทั้งระบบ](../../../evidence/master-data/factory-address-area-names.md)
+
 ```bash
 curl "$BASE_URL/api/v1/cems-wpms-requests/factories/factory-001/previous-request" \
   -H "Authorization: Bearer $ACCESS_TOKEN"

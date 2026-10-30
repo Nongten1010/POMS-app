@@ -38,7 +38,7 @@ type OpenApiObject = Record<string, unknown>;
 
 const baseDocument = connectionRequestsOpenApiDocument as OpenApiObject;
 const factoryAddressNamesDescription =
-  'ที่อยู่ current/live ใน legacy และ canonical mode แปลงเฉพาะตำบล/อำเภอที่ค้างเป็นเลขรหัส โดยจับคู่โรงงานจาก FID/เลขทะเบียน และชื่อจาก TUMBOL ด้วย PROV+AMP+TUMBOL; รักษารายละเอียดที่อยู่และชื่อที่อ่านได้เดิม. ถ้าตรวจชื่อไม่ได้ ให้ละเฉพาะป้ายพื้นที่ตัวเลขในการแสดงผล ไม่เดาชื่อและไม่เขียนฐานข้อมูลจาก GET. canonical null ยังคง null. ข้อมูลเก่าซ่อมด้วย migrations 0149/0150 พร้อม backup และ canonical revision/event; snapshot ประวัติคำขอคงค่าตามเวลาที่บันทึก';
+  'ที่อยู่ current/live ใน legacy และ canonical mode แปลงเฉพาะตำบล/อำเภอที่ค้างเป็นเลขรหัส โดยจับคู่โรงงานจาก FID/เลขทะเบียน และชื่อจาก TUMBOL ด้วย PROV+AMP+TUMBOL; รักษารายละเอียดที่อยู่และชื่อที่อ่านได้เดิม. ถ้าตรวจชื่อไม่ได้ ให้ละเฉพาะป้ายพื้นที่ตัวเลขในการแสดงผล ไม่เดาชื่อและไม่เขียนฐานข้อมูลจาก GET. canonical null ยังคง null. ข้อมูลเก่าซ่อมด้วย migrations 0149/0150 พร้อม backup และ canonical revision/event. Migrations 0151/0152 ซ่อม address ของแถวที่ถูกลบและคำขอ CANCELED ตาม manifest ที่ตรวจแล้วโดยรักษาสถานะเดิม; snapshot JSON และ event history คงค่าตามเวลาที่บันทึก';
 
 interface OperationOptions {
   tag: string;
