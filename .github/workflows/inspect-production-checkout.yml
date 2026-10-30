@@ -50,16 +50,25 @@ jobs:
             ['factory_profiles', 'address'],
             ['cems_wpms_connected_measurement_points', 'factory_address'],
             ['factory_monitoring_point_forms', 'address'],
-            ['cems_wpms_connection_requests', 'address'],
             ['current_eligible_factories', 'address'],
             ['current_connected_measurement_points', 'factory_address'],
             ['current_factory_monitoring_point_forms', 'address'],
+            ['cems_wpms_connection_requests', 'address'],
             ['cems_wpms_request_factory_snapshots', null],
             ['districts', null],
             ['subdistricts', null],
           ];
           (async () => {
             try {
+              try {
+                const versioning = await db.raw('SELECT is_read_committed_snapshot_on, snapshot_isolation_state_desc FROM sys.databases WHERE database_id = DB_ID()').timeout(10000);
+                console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ versioning }));
+                const waits = await db.raw(`SELECT r.session_id, r.blocking_session_id, r.wait_type, r.wait_time, r.wait_resource,
+                  r.open_transaction_count, r.command, s.program_name, s.transaction_isolation_level
+                  FROM sys.dm_exec_requests r JOIN sys.dm_exec_sessions s ON s.session_id=r.session_id
+                  WHERE r.database_id=DB_ID() AND r.session_id<>@@SPID`).timeout(10000);
+                console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ waits }));
+              } catch (error) { console.log('[factory-address-all-audit-diagnostics] ' + JSON.stringify({ code: error.code || error.name })); }
               console.log('[factory-address-all-audit-stage] metadata');
               const columns = await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA', 'dbo')
                 .whereIn('TABLE_NAME', configs.map(x => x[0])).select('TABLE_NAME', 'COLUMN_NAME').timeout(20000);
@@ -82,7 +91,13 @@ jobs:
                 if (!available) { tables.push({ table, missing: true }); continue; }
                 const selected = candidates.filter(x => available.has(x));
                 console.log('[factory-address-all-audit-stage] reading ' + table);
-                const rows = await db(table).select(selected).timeout(20000);
+                let rows;
+                try { rows = await db(table).select(selected).timeout(15000, { cancel: true }); }
+                catch (error) {
+                  tables.push({ table, incomplete: true, code: error.code || error.name });
+                  console.log('[factory-address-all-audit-table] ' + JSON.stringify(tables[tables.length - 1]));
+                  continue;
+                }
                 console.log('[factory-address-all-audit-stage] read ' + table + ': ' + rows.length);
                 records.set(table, new Map(rows.map(x => [String(x.id), x])));
                 if (table === 'eligible_factories') for (const row of rows) {
@@ -117,6 +132,7 @@ jobs:
                   }
                 }
                 tables.push({ table, rows: rows.length, activeRows, activeIssues, historicalIssues, exactPatternIssues });
+                console.log('[factory-address-all-audit-table] ' + JSON.stringify(tables[tables.length - 1]));
               }
               const backups = await db('factory_address_names_repair_backup_0149')
                 .select('target_table', 'entity_id').timeout(20000);
@@ -136,7 +152,7 @@ jobs:
                   factoryName: factory.factory_name, address: factory.address,
                 });
               }
-              const report = { mode: env.FACTORY_PROFILE_MODE, tables, issues,
+              const report = { mode: env.FACTORY_PROFILE_MODE, complete: !tables.some(x => x.missing || x.incomplete), tables, issues,
                 backupSummary, repairedFactories: [...repairedFactories.values()],
                 activeIssues: issues.filter(x => x.active).length,
                 historicalIssues: issues.filter(x => !x.active).length,
