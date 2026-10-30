@@ -313,7 +313,7 @@ function readableAddressAreaNames(address: string | null | undefined): {
 } {
   const names: { district: string[]; subdistrict: string[] } = { district: [], subdistrict: [] };
   const pattern =
-    /(ตำบล|อำเภอ|แขวง|เขต|(?<![ก-ฮa-zA-Z])ต\.|(?<![ก-ฮa-zA-Z])อ\.)\s*([ก-ฮะ-์]+?)(?=\s|$|จังหวัด|กรุงเทพมหานคร|ตำบล|อำเภอ|แขวง|เขต|ต\.|อ\.)/gu;
+    /(ตำบล|อำเภอ|แขวง|เขต|(?<![ก-์a-zA-Z])ต\.|(?<![ก-์a-zA-Z])อ\.)\s*([ก-ฮะ-์]+?)(?=\s|$|จังหวัด|กรุงเทพมหานคร|ตำบล|อำเภอ|แขวง|เขต|ต\.|อ\.)/gu;
   for (const match of String(address ?? '').matchAll(pattern)) {
     names[['ตำบล', 'แขวง', 'ต.'].includes(match[1]) ? 'subdistrict' : 'district'].push(match[2]);
   }
