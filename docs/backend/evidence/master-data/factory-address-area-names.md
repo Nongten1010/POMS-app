@@ -2,7 +2,7 @@
 
 สัญญาปัจจุบัน: [โรงงานเข้าข่าย](../../api/menus/eligible-factories/README.md#ชื่ออำเภอและตำบลในที่อยู่) และ [ข้อมูล current/live และฟอร์ม POMS](../../api/menus/master-data/factory-edit-requests.md#ชื่ออำเภอและตำบลในที่อยู่)
 
-ผล production ล่าสุดวันที่ 30 ตุลาคม 2026: deploy การป้องกันข้อมูลใหม่และรัน `0151/0152` ซ่อมข้อมูลประวัติครบ 18 แถวแล้ว พร้อม backup. ผลตรวจเวลา 17:58:28 น. `Asia/Bangkok` ไม่พบชื่อพื้นที่เป็นตัวเลขทั้งรายการ active และประวัติในขอบเขตที่ตรวจ และยืนยันที่อยู่โรงงาน `82250600225587` เป็น **ตำบลมาบยางพร อำเภอปลวกแดง** จากฐานและ deployed service; ไม่ใช่การยืนยันหน้าจอ browser. ดู [deployment สำเร็จ](https://github.com/Nongten1010/POMS-app/actions/runs/41043404448) และ [ผลตรวจฐานจริงหลัง deploy](https://github.com/Nongten1010/POMS-app/actions/runs/41044627551)
+ผล production ล่าสุดวันที่ 31 ตุลาคม 2026: deploy การเติมช่องชื่อว่างและรัน `0153/0154` เติมชื่อที่ตรวจยืนยันได้ใน snapshot คำขอที่ยังไม่ถูกลบครบ 391 แถว พร้อม backup. ผลตรวจเวลา 08:59:27 น. `Asia/Bangkok` ยืนยันโรงงาน `82250600225587` คืนทั้ง **จังหวัดระยอง อำเภอปลวกแดง ตำบลมาบยางพร** ในช่องชื่อแยกและที่อยู่จาก deployed service ทั้งสองโหมด. ยังมีประวัติ/แบบฟอร์มที่หลักฐานไม่พอและข้อมูลทดสอบเดิมที่คงไว้ตามขอบเขตด้านล่าง; ไม่อ้างว่าชื่อทุกแถวถูกเติมหมดหรือยืนยันหน้าจอ browser. ดู [deployment สำเร็จ](https://github.com/Nongten1010/POMS-app/actions/runs/41156525068) และ [ผลตรวจหลัง deploy](https://github.com/Nongten1010/POMS-app/actions/runs/41157770634)
 
 ## สาเหตุและการแก้
 
@@ -134,7 +134,7 @@ Current views เป็นมุมอ่านของข้อมูลเด
 
 สำหรับโรงงานทะเบียน `82250600225587`, `eligible_factories.id=430`, แบบฟอร์ม `426` และคำขอ `10345`, `10346`, `10376`, `10377` เก็บชื่อโรงงานเต็ม `บริษัท อมตะ บี.กริม เพาเวอร์ (ระยอง) 5 จำกัด` และที่อยู่ `7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140` ถูกต้อง. สถานะคำขอ `10345/10346` ยังคง `CANCELED`; `10376/10377` ยังคง `WAITING_CONNECTION`
 
-Deployed `connectionRequestsService.getForm` ของ `10376/10377` คืนชื่อโรงงานเต็มและ `address` ดังกล่าวทั้ง `legacy` และ `canonical` ใน audit process. ช่องแยก `districtName` และ `subdistrictName` ของ snapshot คำขอเก่าเหล่านี้ยังเป็น `null` ตามเดิม; ไม่ได้เติมชื่อให้ช่อง null และไม่อ้างว่าช่องดังกล่าวถูก backfill. Config production ยังคง `legacy`; เปลี่ยน mode เฉพาะใน process ตรวจสอบ ไม่ได้สลับบริการจริงหรือยืนยันหน้าจอด้วย browser
+ผลตรวจเฉพาะ release `0151/0152` วันที่ 30 ตุลาคม: deployed `connectionRequestsService.getForm` ของ `10376/10377` คืนชื่อโรงงานเต็มและ `address` ดังกล่าวทั้ง `legacy` และ `canonical` ใน audit process แต่ขณะนั้นช่องแยก `districtName` และ `subdistrictName` ยังเป็น `null`. ข้อความนี้เป็นผลก่อนเติมชื่อว่าง; หลัง release `0153/0154` วันที่ 31 ตุลาคม ทั้งสองช่องมีชื่อแล้วตามผลตรวจในหัวข้อถัดไป. Config production ยังคง `legacy`; เปลี่ยน mode เฉพาะใน process ตรวจสอบ ไม่ได้สลับบริการจริงหรือยืนยันหน้าจอด้วย browser
 
 เรียก deployed [shared normalizer](../../../../backend/src/modules/eligible-factories/factory-area-names.ts) แบบไม่บันทึกข้อมูลด้วยตัวอย่างป้าย/ช่องชื่อที่เป็นรหัส: ได้ `ปลวกแดง` / `มาบยางพร` ทั้งสองโหมด โดยรักษา internal `provinceCode=1021`; รหัส `999` ถูกปฏิเสธด้วย `400 BAD_REQUEST`, `reason = UNRESOLVED_ADMINISTRATIVE_AREA`. การตรวจหลัง deploy ไม่มี database mutation เพิ่มเติม. [Runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) ตอบ `200` และตรวจพบ 400/503 contract ของ 10 write operations พร้อมคำอธิบายการรักษาเลขบ้าน/ถนนตรง source
 
@@ -142,17 +142,49 @@ Deployed `connectionRequestsService.getForm` ของ `10376/10377` คืน�
 
 Tests เพิ่มเติม: [shared normalization](../../../../backend/tests/unit/factory-area-names.test.ts), [request writes](../../../../backend/tests/unit/connection-request-area-writes.test.ts), [request reads](../../../../backend/tests/unit/connection-request-area-reads.test.ts) และ [runtime OpenAPI](../../../../backend/tests/unit/factory-area-names.openapi.test.ts) ตรวจค่าตัวเลข รหัสผิด การอ่านทะเบียนไม่ได้ การรักษาข้อความที่อยู่/ช่องรหัส และ error schemas ทั้งกรณีใหม่และ measurement cleanup เดิม
 
-## การเติมช่องชื่อพื้นที่ว่างในแพตช์ถัดจาก release 0151/0152
+## การเติมช่องชื่อพื้นที่ว่างหลัง release 0151/0152
 
-ผลตรวจ release วันที่ 30 ตุลาคมในหัวข้อก่อนหน้ายืนยัน `address` ถูกต้อง แต่ `districtName` และ `subdistrictName` ใน snapshot คำขอ `10376/10377` ยังเป็น `null`; ไม่ใช่หลักฐานว่าช่องชื่อแยกถูกเติมแล้ว. แพตช์รอบถัดไปเพิ่มการเติมเฉพาะ `provinceName`, `districtName` และ `subdistrictName` ที่มี property เดิมและยังว่าง จากพื้นที่ที่บันทึกใน address/รหัส/ชื่อเดิมซึ่งตรวจยืนยันกับทะเบียนได้
+ผลตรวจ release วันที่ 30 ตุลาคมในหัวข้อก่อนหน้ายืนยัน `address` ถูกต้อง แต่ `districtName` และ `subdistrictName` ใน snapshot คำขอ `10376/10377` ยังเป็น `null`; ไม่ใช่หลักฐานว่าช่องชื่อแยกถูกเติมแล้ว. แพตช์รอบนี้เพิ่มการเติมเฉพาะ `provinceName`, `districtName` และ `subdistrictName` ที่มี property เดิมและยังว่าง จากพื้นที่ที่บันทึกใน address/รหัส/ชื่อเดิมซึ่งตรวจยืนยันกับทะเบียนได้
 
 การเติมชื่อว่างไม่ใช้ตำแหน่งปัจจุบันของ Fac60k แม้ทราบ identity โรงงาน เพื่อรักษาสถานที่ในประวัติ; การ fallback ของตัวแก้ป้ายตัวเลขเดิมยังคงตาม contract เดิม. กรณีทราบเพียงจังหวัดและไม่มีข้อมูลท้องถิ่น เติมได้เฉพาะจังหวัดจาก mapping ที่ยืนยันได้. เมื่อมีข้อมูลอำเภอ/ตำบล ต้องมีแถวทะเบียนตรงกับ context ทั้งหมดก่อน; หากขัดแย้งหรือไม่มีแถวตรงให้คงชื่อว่างทั้งหมดแม้พอระบุจังหวัดได้. เมื่อมีหลายแถวที่ตรงกัน ชื่อเติมแยกตามความไม่กำกวม จึงอาจเติมจังหวัดและอำเภอได้แต่ตำบลยังว่าง. ข้อมูลไม่พอหรือชื่อยังกำกวมให้คงช่องนั้นว่าง; read lookup ขัดข้องคงว่าง. ไม่เพิ่ม DTO field ที่ไม่มีเดิม ไม่เปลี่ยนรหัส ชื่อที่อ่านได้ เลขบ้าน/หมู่/ซอย/ถนน/ไปรษณีย์ หรือ `address = null`. Numeric writes ยังคง error 400/503 เดิม; การเขียนช่องชื่อว่างที่มีรหัสหรือชื่อใน address ระบุพื้นที่เดิมได้ชัดเจนและต้องอ่านทะเบียนแต่ต้นทางขัดข้องตอบ 503 เช่นเดียวกัน
 
-[Production preflight 41154352573](https://github.com/Nongten1010/POMS-app/actions/runs/41154352573) และ [การตรวจประวัติเพิ่มเติม 41154660971](https://github.com/Nongten1010/POMS-app/actions/runs/41154660971) วันที่ 31 ตุลาคม 2026 ตรวจแบบอ่านอย่างเดียวพบ snapshot ที่ยังไม่ถูกลบ 391 แถว ซึ่งที่อยู่ที่บันทึกไว้มีชื่อพื้นที่เพียงพอให้ตรวจและเติมช่องชื่อแยกได้. Snapshot active `10639/10640` ของคำขอ `10377/10376` ของโรงงานเป้าหมายอยู่ในขอบเขตนี้. จำนวน 391 เป็นผลคาดหมายจาก preflight ไม่ใช่จำนวนที่อ้างว่า migration รันสำเร็จแล้ว
+[Production preflight 41154352573](https://github.com/Nongten1010/POMS-app/actions/runs/41154352573) และ [การตรวจประวัติเพิ่มเติม 41154660971](https://github.com/Nongten1010/POMS-app/actions/runs/41154660971) วันที่ 31 ตุลาคม 2026 ตรวจแบบอ่านอย่างเดียวพบ snapshot ที่ยังไม่ถูกลบ 391 แถว ซึ่งที่อยู่ที่บันทึกไว้มีชื่อพื้นที่เพียงพอให้ตรวจและเติมช่องชื่อแยกได้. Snapshot active `10639/10640` ของคำขอ `10377/10376` ของโรงงานเป้าหมายอยู่ในขอบเขตนี้. จำนวน 391 ในรอบ preflight เป็นจำนวนคาดหมายในเวลานั้น; ผลหลัง deploy ด้านล่างยืนยันจำนวนที่แก้จริงตรงกันแล้ว
 
 Snapshot ที่ถูกลบ 276 แถวมีเพียงจังหวัด โดยไม่มีรหัส/ที่อยู่ท้องถิ่นของตัวเองที่พอพิสูจน์ได้ และแบบฟอร์มทดสอบ `4/15` ว่างโดยตั้งใจ ไม่ผูก eligible และไม่พบ exact source match. ไม่พบประวัติที่อยู่คำขอที่ยืนยันได้จาก history notes หรือ linked JSON; backup `0149` ของคำขอ `10376/10377` มีอยู่ แต่เวลาเขียนแบบ UTC เทียบกับเวลาลบไม่ใช่หลักฐานว่าที่อยู่ตรงกับ historical snapshot แต่ละแถว. จึงคงชื่อท้องถิ่นที่พิสูจน์ไม่ได้ว่างไว้ ไม่ใช้ที่อยู่ปัจจุบันมาเติม และไม่อ้างว่ารู้ชื่อครบทุกแถว
 
-เตรียม migrations `0153/0154` แยก backup schema ออกจากการเติมชื่อที่ยืนยันได้ โดยเก็บค่าก่อน/หลังและรักษารหัสกับข้อมูลอื่น; ต้องยืนยันจำนวนที่แก้จริงและผล preservation หลัง deploy. ตัวอย่าง response fields และ fallback อ้าง [contract ร่วม](../../api/menus/eligible-factories/README.md#ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่). หลักฐาน production ของการเติมชื่อว่างยังต้องยืนยันหลัง deploy แพตช์นี้แยกจากผลการซ่อม 18 แถวด้านบน; ไม่ใช้ผล release `0151/0152` อ้างว่าช่อง null ถูกเติมแล้ว และไม่อ้างว่าได้สลับ config production เป็น canonical หรือยืนยันหน้าจอ browser
+Release SHA `0cc1beb7d620e3e37edc75a9820cec6ce03f5e14` จาก [PR #40](https://github.com/Nongten1010/POMS-app/pull/40) และ [PR #41](https://github.com/Nongten1010/POMS-app/pull/41) deploy สำเร็จวันที่ 31 ตุลาคม 2026 ผ่าน [run 41156525068](https://github.com/Nongten1010/POMS-app/actions/runs/41156525068). Windows runner ผ่าน 391 suites / 5,344 tests และข้าม 18 opt-in integration tests ใช้เวลาทดสอบ 867.998 วินาที. Migrations [0153](../../../../backend/src/db/migrations/0153_create_factory_area_names_repair_backup.ts) และ [0154](../../../../backend/src/db/migrations/0154_repair_missing_factory_area_names.ts) รันสำเร็จใน batch `124` เวลา 08:57:18.960 และ 08:57:37.150 น. `Asia/Bangkok` ตามลำดับ; service health เป็น `ok` เวลา 08:57:57.661 น.
+
+[Runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) ตรวจผ่านตัวอย่าง `verifiedAreaNames` ของ GET form ทั้ง 3 รูปแบบ และ properties ของช่องชื่อที่ยังรองรับ null ตาม fallback. ตัวอย่าง response fields และกติกาการเติมชื่ออ้าง [contract ร่วม](../../api/menus/eligible-factories/README.md#ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่)
+
+[Post-verification run 41157770634](https://github.com/Nongten1010/POMS-app/actions/runs/41157770634) เวลา 08:59:27 น. ผ่านการตรวจแบบอ่านอย่างเดียวหลัง deploy:
+
+| ขอบเขต | จำนวน | ผลที่ยืนยัน |
+| --- | --- | --- |
+| Snapshot คำขอที่ยังไม่ถูกลบและยืนยันชื่อจากพื้นที่เดิมได้ | 391 | เติมชื่อแล้วและมี backup ทุกแถวใน `factory_area_names_repair_backup_0153`; ไม่มีแถวจาก baseline ตกหล่นหรือแถวเพิ่มนอก baseline |
+| Historical snapshots ที่ถูกลบและยังยืนยันชื่อท้องถิ่นไม่ได้ | 276 | คงชื่อว่างตามเดิม; full-row SHA-256 ก่อน/หลังตรงกันทุกแถว และไม่มีแถวกลุ่มนี้ถูก backup/แก้ชื่อ |
+| แบบฟอร์มทดสอบที่ตั้งใจเว้นว่าง `factory_monitoring_point_forms.id=4/15` | 2 | คงเดิมทั้งแถวจาก full-row SHA-256 ไม่เดาชื่อหรือเปลี่ยนสถานะ |
+
+ตรวจ SHA-256 ของ original JSON ใน backup และเปรียบเทียบ SQL SHA-256 ของทุกคอลัมน์ที่ไม่ใช่ชื่อที่อนุญาตให้เติมทั้ง 391 แถวแล้วตรงกัน รวมรหัสและ audit fields ที่มีอยู่ในแถว โดยเปรียบเทียบ timestamp เต็มความละเอียด; ไม่พบ baseline drift หรือ preservation mismatch. ตัวตรวจไม่พบชื่อว่างที่ยังมีหลักฐานพอให้เติมได้เหลืออยู่ (`resolvableMissingRows = 0`) ซึ่งไม่ใช่การอ้างว่าชื่อว่าง 278 แถวที่ไม่มีหลักฐานครบถูกเติมแล้ว. [Post-scan เพิ่มเติม 41157704145](https://github.com/Nongten1010/POMS-app/actions/runs/41157704145) ตรวจ current views ด้วย
+
+ข้อมูลทดสอบที่มีชื่อพื้นที่ไม่ตรงทะเบียนอยู่ก่อน release อีก 4 แถวแยกจากกลุ่มชื่อว่าง: `eligible_factories.id=19` (`UNKNOWN_RECORDED_PROVINCE_NAME`), `factory_monitoring_point_forms.id=1/3` (`NO_MASTER_MATCH`) และ `id=16` (`UNKNOWN_RECORDED_PROVINCE_NAME`, `UNKNOWN_ADDRESS_PROVINCE_NAME`). ทุกแถวมี full-row hash ตรง preflight และไม่มี conflict ใหม่; ไม่เขียนทับชื่อที่อ่านได้ซึ่งอยู่นอกขอบเขตการเติมช่องว่าง และไม่รวมกลุ่มนี้เป็นรายการที่ซ่อมสำเร็จ
+
+Deployed `connectionRequestsService.getForm` ของคำขอ `10376` และ `10377` คืนผลต่อไปนี้ครบทั้ง `legacy` และ `canonical` ใน audit process:
+
+```json
+{
+  "factoryName": "บริษัท อมตะ บี.กริม เพาเวอร์ (ระยอง) 5 จำกัด",
+  "address": "7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140",
+  "provinceName": "ระยอง",
+  "districtName": "ปลวกแดง",
+  "subdistrictName": "มาบยางพร"
+}
+```
+
+ตรวจ deployed write normalizer เพิ่มด้วยชื่อที่เป็น `null`, ช่องว่าง และ input ที่ไม่ส่งชื่อ หลังเตรียม property ชื่อที่มีใน DTO เดิมแล้ว ได้ชื่อครบทั้งสองโหมดโดยรักษา `provinceCode=1021` และข้อความที่อยู่เดิม. เป็นการเรียก normalizer โดยไม่บันทึกข้อมูล ไม่ใช่การสร้างคำขอทดสอบบน production หรือการเพิ่ม DTO field ใหม่
+
+Production config ยังคง `legacy`; เปลี่ยน mode เฉพาะ audit process และคืนค่าเดิมหลังตรวจ. Post-verification ไม่มี database mutation และไม่ได้ยืนยัน UI ด้วย browser. ผลที่ยืนยันคือชื่อที่มีหลักฐานพอถูกเติมครบในขอบเขตที่ตรวจ พร้อมคงประวัติ/แบบฟอร์มที่ยังพิสูจน์ไม่ได้และข้อมูลทดสอบผิดเดิมไว้ตามที่เปิดเผยข้างต้น
+
+[Deployment รอบแรก 41155330856](https://github.com/Nongten1010/POMS-app/actions/runs/41155330856) ถูกยกเลิกระหว่าง Test backend โดยขั้นหยุดบริการและ migrations ถูกข้าม และขั้น Ensure backend ทำงานสำเร็จ. PR #41 แก้ test fixtures ที่ไม่ใช่งานพื้นที่ 2 ไฟล์ โดย application/migration code คงเดิมจาก PR #40; การพบ RPC จริงจาก unit fixtures และแก้จนการตรวจเฉพาะชุดไม่เรียก RPC ไม่ใช่หลักฐานว่าเป็นสาเหตุเดียวของเวลาทั้ง pipeline
 
 ## การแสดงชื่อโรงงานบนหน้าจอ
 
