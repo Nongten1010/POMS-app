@@ -45,8 +45,12 @@ jobs:
            options:{encrypt:factory?(env.FACTORY_DB_ENCRYPT??env.DB_ENCRYPT):env.DB_ENCRYPT,trustServerCertificate:factory?(env.FACTORY_DB_TRUST_SERVER_CERTIFICATE??env.DB_TRUST_SERVER_CERTIFICATE):env.DB_TRUST_SERVER_CERTIFICATE}},pool:{min:0,max:1}});
           const db=pool(),factoryDb=pool(true);
           const output=(stage,value)=>console.log('[factory-area-review-export-'+stage+'] '+JSON.stringify(value));
-          const guard=setTimeout(()=>{output('failure',{code:'TIME_LIMIT'});process.exit(1);},210000);guard.unref();
+          const exportStarted=Date.now();let stage='initializing',stageStarted=exportStarted;
+          async function phase(name,action,counts={}){stage=name;stageStarted=Date.now();output('stage',{stage,event:'start',elapsedMs:stageStarted-exportStarted,...counts});const value=await action();output('stage',{stage:name,event:'complete',durationMs:Date.now()-stageStarted,elapsedMs:Date.now()-exportStarted,...(Array.isArray(value)?{rows:value.length}:{})});return value;}
+          const guard=setTimeout(()=>{output('failure',{code:'TIME_LIMIT',stage,elapsedMs:Date.now()-exportStarted,phaseElapsedMs:Date.now()-stageStarted});process.exit(1);},210000);guard.unref();
           const TABLES={snapshots:'cems_wpms_request_factory_snapshots',requests:'cems_wpms_connection_requests',eligible:'eligible_factories',forms:'factory_monitoring_point_forms',backups:'factory_area_names_repair_backup_0153'};
+          const optionalLegacyTables=['factory_address_names_repair_backup_0149','factory_address_history_repair_backup_0151'];
+          const legacyTargetWhitelist=['eligible_factories','factory_monitoring_point_forms','cems_wpms_connected_measurement_points','cems_wpms_connection_requests','factory_profiles'];
           const currentMode=env.FACTORY_PROFILE_MODE;let metadata=[];
           const columnsFor=table=>metadata.filter(x=>x.TABLE_NAME===table).map(x=>x.COLUMN_NAME);
           const unique=value=>[...new Set(value.filter(x=>x!=null&&String(x).trim()).map(x=>String(x).trim()))];
@@ -62,80 +66,103 @@ jobs:
           }
           (async()=>{
            try{
-            const [start]=await db.raw('SELECT CONVERT(VARCHAR(33),SYSUTCDATETIME(),126) AS utc,CONVERT(VARCHAR(33),SYSDATETIME(),126) AS server_time').timeout(10000);
-            metadata=await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA','dbo').whereIn('TABLE_NAME',Object.values(TABLES)).orderBy('TABLE_NAME').orderBy('ORDINAL_POSITION')
-             .select('TABLE_NAME','COLUMN_NAME','DATA_TYPE','ORDINAL_POSITION').timeout(15000);
+            const [start]=await phase('clock-start',()=>db.raw('SELECT CONVERT(VARCHAR(33),SYSUTCDATETIME(),126) AS utc,CONVERT(VARCHAR(33),SYSDATETIME(),126) AS server_time').timeout(10000),{queryTimeoutMs:10000});
+            metadata=await phase('metadata',()=>db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA','dbo').whereIn('TABLE_NAME',[...new Set([...Object.values(TABLES),...optionalLegacyTables,...legacyTargetWhitelist])]).orderBy('TABLE_NAME').orderBy('ORDINAL_POSITION')
+             .select('TABLE_NAME','COLUMN_NAME','DATA_TYPE','ORDINAL_POSITION').timeout(15000),{queryTimeoutMs:15000});
             if(Object.values(TABLES).some(table=>!columnsFor(table).length))throw Object.assign(new Error('Required table missing'),{code:'REQUIRED_TABLE_MISSING'});
             // Every snapshot is exported in one ordinary committed SELECT; exact SQL DATETIME2 text is retained by FOR JSON.
-            const snapshots=await selectJson(TABLES.snapshots,null);
+            const snapshots=await phase('snapshots',()=>selectJson(TABLES.snapshots,null),{queryTimeoutMs:20000});
             const requestIds=unique(snapshots.map(x=>x.request_id));
             const requestFields=['id','eligible_factory_id','factory_id','factory_registration_no','factory_name','request_no','request_type','status','address','created_at','updated_at','deleted_at'];
-            const parentRequests=await selectJson(TABLES.requests,requestFields,requestIds);
+            const parentRequests=await phase('parents',()=>selectJson(TABLES.requests,requestFields,requestIds),{ids:requestIds.length,queryTimeoutMs:20000});
             const eligibleIds=unique([...parentRequests.map(x=>x.eligible_factory_id),'19']);
             const eligibleFields=['id','source_system','source_factory_id','monitoring_point_form_id','factory_registration_no_new','factory_registration_no_old','factory_name','province_name','address','created_at','updated_at','deleted_at'];
-            const eligibleContexts=await selectJson(TABLES.eligible,eligibleFields,eligibleIds);
+            const eligibleContexts=await phase('eligible',()=>selectJson(TABLES.eligible,eligibleFields,eligibleIds),{ids:eligibleIds.length,queryTimeoutMs:20000});
             const backupFields=['target_table','entity_id','request_id','original_row_json','original_context_json','resolved_names_json','original_row_hash','unchanged_columns_hash','created_at'];
-            const backups=await selectJson(TABLES.backups,backupFields);
+            const backups=await phase('backups',()=>selectJson(TABLES.backups,backupFields),{queryTimeoutMs:20000});
             // The special forms are deliberately selected without contact/document/application credential fields.
             const formFields=['id','factory_registration_no_new','factory_registration_no_old','factory_name','province_name','address','operation_status','created_at','updated_at','deleted_at'];
-            const specialForms=await selectJson(TABLES.forms,formFields,['4','15','1','3','16']);
+            const specialForms=await phase('forms',()=>selectJson(TABLES.forms,formFields,['4','15','1','3','16']),{ids:5,queryTimeoutMs:20000});
             const specialEligible=eligibleContexts.filter(x=>String(x.id)==='19');
             const linkedFormFields=eligibleFields;
             const linkedForms=[];
             if(columnsFor(TABLES.eligible).includes('monitoring_point_form_id')){
              const projection=rowJson(linkedFormFields.filter(x=>columnsFor(TABLES.eligible).includes(x)));
-             const found=await db(TABLES.eligible+' as row').whereIn('row.monitoring_point_form_id',[4,15,1,3,16]).select(db.raw(projection.sql,projection.bindings)).timeout(15000);
+             const found=await phase('linked-forms',()=>db(TABLES.eligible+' as row').whereIn('row.monitoring_point_form_id',[4,15,1,3,16]).select(db.raw(projection.sql,projection.bindings)).timeout(15000),{queryTimeoutMs:15000});
              linkedForms.push(...found.map(x=>JSON.parse(x.row_json)));
+            }
+            const rawLegacyAddressBackups=[];
+            for(const table of optionalLegacyTables){
+             if(!columnsFor(table).length){rawLegacyAddressBackups.push({table,present:false,rows:[]});continue;}
+             const rows=await phase('legacy-backup-'+table,()=>selectJson(table,null),{queryTimeoutMs:20000});
+             rawLegacyAddressBackups.push({table,present:true,rows,interpretation:'original_address is before that migration; resolved_address is immediately after that migration, not necessarily current. Current target rows are separately exported.'});
+            }
+            const currentLegacyAddressTargets=[];
+            const legacyTargetFields=['id','eligible_factory_id','source_request_id','source_factory_id','factory_id','factory_registration_no_new','factory_registration_no_old','factory_registration_no','factory_name','province_name','address','factory_address','status','revision','created_at','updated_at','deleted_at'];
+            for(const table of legacyTargetWhitelist){
+             const ids=unique(rawLegacyAddressBackups.flatMap(group=>group.rows.filter(row=>row.target_table===table).map(row=>row.entity_id)));
+             if(!ids.length)continue;
+             if(!columnsFor(table).length){currentLegacyAddressTargets.push({table,present:false,requestedIds:ids,rows:[]});continue;}
+             const rows=await phase('legacy-current-'+table,()=>selectJson(table,legacyTargetFields,ids),{ids:ids.length,queryTimeoutMs:20000});
+             const found=new Set(rows.map(row=>String(row.id)));
+             currentLegacyAddressTargets.push({table,present:true,rows,missingIds:ids.filter(id=>!found.has(id))});
             }
             const identities=unique([
              ...parentRequests.flatMap(x=>[x.factory_id,x.factory_registration_no]),
              ...eligibleContexts.flatMap(x=>[x.source_factory_id,x.factory_registration_no_new,x.factory_registration_no_old]),
              ...linkedForms.flatMap(x=>[x.source_factory_id,x.factory_registration_no_new,x.factory_registration_no_old]),
              ...specialForms.flatMap(x=>[x.factory_registration_no_new,x.factory_registration_no_old]),
+             ...currentLegacyAddressTargets.flatMap(group=>group.rows.flatMap(x=>[x.source_factory_id,x.factory_id,x.factory_registration_no_new,x.factory_registration_no_old,x.factory_registration_no])),
             ]);
-            const sourceMetadata=await factoryDb('INFORMATION_SCHEMA.COLUMNS').where({TABLE_SCHEMA:env.FACTORY_DB_SCHEMA,TABLE_NAME:env.FACTORY_DB_TABLE})
-             .orderBy('ORDINAL_POSITION').select('COLUMN_NAME','DATA_TYPE','ORDINAL_POSITION').timeout(15000);
+            const sourceMetadata=await phase('source-metadata',()=>factoryDb('INFORMATION_SCHEMA.COLUMNS').where({TABLE_SCHEMA:env.FACTORY_DB_SCHEMA,TABLE_NAME:env.FACTORY_DB_TABLE})
+             .orderBy('ORDINAL_POSITION').select('COLUMN_NAME','DATA_TYPE','ORDINAL_POSITION').timeout(15000),{queryTimeoutMs:15000});
             const actualColumns=new Map(sourceMetadata.map(x=>[x.COLUMN_NAME.toUpperCase(),x.COLUMN_NAME]));
             const identityColumns=['FID','FACREG','DISPFACREG'].filter(x=>actualColumns.has(x));
             const wantedSource=['FID','FACREG','DISPFACREG','FNAME','FADDR','FMOO','SOI','ROAD','PROV','AMP','TUMBOL','ZIPCODE'].filter(x=>actualColumns.has(x));
             if(!identityColumns.length)throw Object.assign(new Error('Source identity metadata missing'),{code:'SOURCE_IDENTITY_METADATA_MISSING'});
             const sourceCandidates=[];const seenSource=new Set();
-            for(let offset=0;offset<identities.length;offset+=500){
-             const chunk=identities.slice(offset,offset+500);
-             const rows=await factoryDb(`${env.FACTORY_DB_SCHEMA}.${env.FACTORY_DB_TABLE}`).where(builder=>{
-              for(const field of identityColumns)builder.orWhereRaw('LTRIM(RTRIM(??)) IN ('+chunk.map(()=> '?').join(',')+')',[actualColumns.get(field),...chunk]);
-             }).select(wantedSource.map(field=>actualColumns.get(field)+' as '+field)).timeout(20000);
-             const exactKeys=new Set(chunk);
-             for(const row of rows){if(!identityColumns.some(field=>exactKeys.has(String(row[field]??'').trim())))continue;const key=JSON.stringify(row);if(!seenSource.has(key)){seenSource.add(key);sourceCandidates.push(row);}}
+            for(let offset=0;offset<identities.length;offset+=200){
+             const chunk=identities.slice(offset,offset+200),exactKeys=new Set(chunk);
+             // Keep the identity column unwrapped so SQL Server can use its existing indexes.
+             // Each identity column is queried independently; no non-sargable TRIM scan is performed.
+             for(const field of identityColumns){
+              const rows=await phase('source-chunk-'+Math.floor(offset/200)+'-'+field,()=>factoryDb(`${env.FACTORY_DB_SCHEMA}.${env.FACTORY_DB_TABLE}`)
+               .whereIn(actualColumns.get(field),chunk).select(wantedSource.map(name=>actualColumns.get(name)+' as '+name)).timeout(20000),
+               {chunkIndex:Math.floor(offset/200),chunkKeys:chunk.length,totalKeys:identities.length,queryTimeoutMs:20000});
+              for(const row of rows){if(!identityColumns.some(name=>exactKeys.has(String(row[name]??'').trim())))continue;const key=JSON.stringify(row);if(!seenSource.has(key)){seenSource.add(key);sourceCandidates.push(row);}}
+             }
             }
-            const masterRows=await factoryDb(`${env.FACTORY_DB_SCHEMA}.TUMBOL`).select('PROV','AMP','TUMBOL','AMPNAME','TUMNAME').timeout(20000);
-            const localProvinces=await db('provinces').select('id','name_th').orderBy('id').timeout(10000);
+            const matchedSourceKeys=new Set(sourceCandidates.flatMap(row=>identityColumns.map(field=>String(row[field]??'').trim())));
+            const unmatchedSourceIdentityKeys=identities.filter(key=>!matchedSourceKeys.has(key));
+            const masterRows=await phase('master',()=>factoryDb(`${env.FACTORY_DB_SCHEMA}.TUMBOL`).select('PROV','AMP','TUMBOL','AMPNAME','TUMNAME').timeout(20000),{queryTimeoutMs:20000});
+            const localProvinces=await phase('local-provinces',()=>db('provinces').select('id','name_th').orderBy('id').timeout(10000),{queryTimeoutMs:10000});
             const {PROVINCE_NAMES_0154}=require('./dist/db/data-repairs/factory-area-names-0154');
-            const [end]=await db.raw('SELECT CONVERT(VARCHAR(33),SYSUTCDATETIME(),126) AS utc,CONVERT(VARCHAR(33),SYSDATETIME(),126) AS server_time').timeout(10000);
-            const [snapshotCount]=await db(TABLES.snapshots).count({rows:'id'}).timeout(10000);
+            const [end]=await phase('clock-end',()=>db.raw('SELECT CONVERT(VARCHAR(33),SYSUTCDATETIME(),126) AS utc,CONVERT(VARCHAR(33),SYSDATETIME(),126) AS server_time').timeout(10000),{queryTimeoutMs:10000});
+            const [snapshotCount]=await phase('snapshot-count-end',()=>db(TABLES.snapshots).count({rows:'id'}).timeout(10000),{queryTimeoutMs:10000});
             const foundParents=new Set(parentRequests.map(x=>String(x.id)));
             const missingParentIds=requestIds.filter(id=>!foundParents.has(id));
             const repairCounts={};for(const row of backups)repairCounts[row.target_table]=(repairCounts[row.target_table]||0)+1;
             const summary={snapshots:snapshots.length,currentSnapshots:snapshots.filter(x=>x.deleted_at==null).length,deletedSnapshots:snapshots.filter(x=>x.deleted_at!=null).length,
              parentRequests:parentRequests.length,eligibleContexts:eligibleContexts.length,backupRows:backups.length,backupsByTable:repairCounts,
-             specialForms:specialForms.length,specialEligible:specialEligible.length,sourceIdentityKeys:identities.length,sourceCandidates:sourceCandidates.length,
-             masterRows:masterRows.length,localProvinces:localProvinces.length,missingParentRows:missingParentIds.length,snapshotCountAtEnd:Number(snapshotCount.rows),snapshotCountDrift:Number(snapshotCount.rows)!==snapshots.length};
+             specialForms:specialForms.length,specialEligible:specialEligible.length,sourceIdentityKeys:identities.length,sourceCandidates:sourceCandidates.length,unmatchedSourceIdentityKeys:unmatchedSourceIdentityKeys.length,
+             legacyAddressBackupRows:rawLegacyAddressBackups.reduce((count,group)=>count+group.rows.length,0),currentLegacyAddressTargetRows:currentLegacyAddressTargets.reduce((count,group)=>count+group.rows.length,0),masterRows:masterRows.length,localProvinces:localProvinces.length,missingParentRows:missingParentIds.length,snapshotCountAtEnd:Number(snapshotCount.rows),snapshotCountDrift:Number(snapshotCount.rows)!==snapshots.length};
             const artifact={
-             exportVersion:1,readTimeUTC:start.utc+'Z',readEndUTC:end.utc+'Z',serverTimeStart:start.server_time,serverTimeEnd:end.server_time,
+             exportVersion:2,readTimeUTC:start.utc+'Z',readEndUTC:end.utc+'Z',serverTimeStart:start.server_time,serverTimeEnd:end.server_time,
              productionMode:currentMode,readMode:'ordinary committed reads; no NOLOCK/READPAST; no long transaction',
              mutationsPerformed:false,scope:'FULL snapshot export and exact-identity current Fac60k reference for user review BEFORE further repair',
              dateTimePolicy:'SQL FOR JSON preserves persisted DATETIME2 text and precision. Persisted audit timestamps are not automatically treated as UTC or compared across writer conventions.',
              historyPolicy:'Source Fac60k is CURRENT reference only, never historical proof. No historical name is filled or overwritten by this export. Deleted snapshots cannot inherit current request address merely because the factory matches.',
-             tableNames:TABLES,schema:metadata,snapshotRaw:snapshots,parentRequests,eligibleContexts,backups,
+             tableNames:TABLES,optionalLegacyBackupTables:optionalLegacyTables,schema:metadata,snapshotRaw:snapshots,parentRequests,eligibleContexts,backups,rawLegacyAddressBackups,currentLegacyAddressTargets,
              specialCases:{blankTestForms:specialForms.filter(x=>['4','15'].includes(String(x.id))),preExistingIssueForms:specialForms.filter(x=>['1','3','16'].includes(String(x.id))),preExistingIssueEligible:specialEligible,linkedEligibleBySpecialForm:linkedForms},
-             sourceFactoryTable:{schema:env.FACTORY_DB_SCHEMA,table:env.FACTORY_DB_TABLE,columns:sourceMetadata.filter(x=>wantedSource.includes(x.COLUMN_NAME.toUpperCase())),matchPolicy:'Exact trimmed FID/FACREG/DISPFACREG only; no fuzzy name matching',identityKeyCount:identities.length},
-             sourceCandidates,masterRows,localProvinces,provinceNamesByDiwCode:PROVINCE_NAMES_0154,summary,missingParentIds,
+             sourceFactoryTable:{schema:env.FACTORY_DB_SCHEMA,table:env.FACTORY_DB_TABLE,columns:sourceMetadata.filter(x=>wantedSource.includes(x.COLUMN_NAME.toUpperCase())),matchPolicy:'Indexed exact WHERE IN per FID/FACREG/DISPFACREG, 200 keys; strict trimmed JS identity check; no fuzzy matching',coverage:'No full TRIM scan for leading-whitespace source keys; unmatched keys explicitly exported for review',identityKeyCount:identities.length},
+             sourceCandidates,unmatchedSourceIdentityKeys,masterRows,localProvinces,provinceNamesByDiwCode:PROVINCE_NAMES_0154,summary,missingParentIds,
             };
             const artifactPath=path.join(process.env.RUNNER_TEMP||process.env.TEMP||require('os').tmpdir(),'poms-area-review-export.json');
+            stage='artifact-write';stageStarted=Date.now();output('stage',{stage,event:'start',elapsedMs:stageStarted-exportStarted});
             fs.writeFileSync(artifactPath,JSON.stringify(artifact));
             output('summary',summary);output('artifact',{path:artifactPath,bytes:fs.statSync(artifactPath).size,mutationsPerformed:false});
            }finally{clearTimeout(guard);await Promise.allSettled([db.destroy(),factoryDb.destroy()]);}
-          })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
+          })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null,stage,elapsedMs:Date.now()-exportStarted,phaseElapsedMs:Date.now()-stageStarted,configuredRequestTimeoutMs:20000,configuredAcquireTimeoutMs:10000,timedOut:/timeout|timed out/i.test(String(error.name)+' '+String(error.message))});process.exitCode=1;});
           '@ | node
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve read-only complete geography review data
