@@ -1,5 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
+// These non-geography fixtures use invented area names. Keep the real normalizer,
+// but an empty master makes its unresolved-name behavior deterministic and offline.
+const mockFactorySourceDb = jest.fn((_table: string) => ({
+  where: jest.fn().mockReturnThis(),
+  whereIn: jest.fn().mockReturnThis(),
+  timeout: jest.fn().mockReturnThis(),
+  select: jest.fn(async () => []),
+}));
+jest.mock('../../src/config/factory-source-database', () => ({
+  factorySourceDb: mockFactorySourceDb,
+  factorySourceTableName: () => 'dbo.fac_import',
+}));
+
 jest.mock('../../src/modules/connection-requests/connection-requests.repository', () => ({
   connectionRequestsRepository: {
     create: jest.fn(),
@@ -2426,6 +2439,7 @@ describe('connectionRequestsService', () => {
       scope: 'OWN_FACTORY',
       regionalAccess: undefined,
     });
+    expect(mockFactorySourceDb).toHaveBeenCalledWith(`${env.FACTORY_DB_SCHEMA}.TUMBOL`);
   });
 
   it('returns a form-only request payload that can be sent back to the strict resubmit contract', async () => {
@@ -4925,7 +4939,12 @@ describe('connectionRequestsService', () => {
       }),
     );
 
-    await connectionRequestsService.createParameterRequest(addParameterPayload, { actorUserId, userType: 'operator', roles: ['factory_operator'], editScope: { scope: 'OWN_FACTORY' } });
+    await connectionRequestsService.createParameterRequest(addParameterPayload, {
+      actorUserId,
+      userType: 'operator',
+      roles: ['factory_operator'],
+      editScope: { scope: 'OWN_FACTORY' },
+    });
 
     expect(mockedRepository.create).toHaveBeenCalledWith(
       { ...addParameterPayload, eligibleFactoryId: 9 },
@@ -4959,7 +4978,12 @@ describe('connectionRequestsService', () => {
     };
 
     await expect(
-      connectionRequestsService.createParameterRequest(addParameterPayload, { actorUserId, userType: 'operator', roles: ['factory_operator'], editScope: { scope: 'OWN_FACTORY' } }),
+      connectionRequestsService.createParameterRequest(addParameterPayload, {
+        actorUserId,
+        userType: 'operator',
+        roles: ['factory_operator'],
+        editScope: { scope: 'OWN_FACTORY' },
+      }),
     ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
 
     expect(mockedRepository.create).not.toHaveBeenCalled();

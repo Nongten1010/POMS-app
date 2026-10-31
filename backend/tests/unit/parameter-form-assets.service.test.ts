@@ -1,6 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import type { Knex } from 'knex';
 
+// These non-geography fixtures use invented area names. Keep the real normalizer,
+// but an empty master makes its unresolved-name behavior deterministic and offline.
+const mockFactorySourceDb = jest.fn((_table: string) => ({
+  where: jest.fn().mockReturnThis(),
+  whereIn: jest.fn().mockReturnThis(),
+  timeout: jest.fn().mockReturnThis(),
+  select: jest.fn(async () => []),
+}));
+jest.mock('../../src/config/factory-source-database', () => ({
+  factorySourceDb: mockFactorySourceDb,
+  factorySourceTableName: () => 'dbo.fac_import',
+}));
+
 jest.mock('../../src/config/database', () => ({ db: jest.fn() }));
 jest.mock('../../src/modules/device-connections/device-connections.service', () => ({
   deviceConnectionsService: { listActiveSettings: jest.fn(async () => []) },
@@ -122,6 +135,9 @@ describe.each(['legacy', 'canonical'] as const)(
         ]);
         expect(result.formDefaults).not.toHaveProperty('factoryFrontPhotos');
         expect(result.formDefaults).not.toHaveProperty('factoryLogo');
+        if (mode === 'legacy') {
+          expect(mockFactorySourceDb).toHaveBeenCalledWith(`${env.FACTORY_DB_SCHEMA}.TUMBOL`);
+        }
         expect(db).toHaveBeenCalledWith(
           mode === 'canonical'
             ? 'current_connected_measurement_points'
