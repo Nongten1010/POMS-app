@@ -4,17 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       factory_registration_no:
-        description: Reference only; inspect session 87 without changing database data
+        description: Factory registration reference for read-only geography audit
         required: true
         type: string
       audit_phase:
-        description: Read-only release verification phase
+        description: Read-only geography verification phase
         required: true
         default: preflight
         type: choice
-        options:
-          - preflight
-          - post
+        options: [preflight, post]
 
 permissions:
   contents: read
@@ -32,264 +30,154 @@ jobs:
       run:
         shell: powershell
     steps:
-      - name: Verify factory area names release without changing data
+      - name: Inspect blank factory geography names without changing data
         env:
           POMS_AUDIT_PHASE: ${{ inputs.audit_phase }}
         run: |
           $ErrorActionPreference = 'Stop'
           $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          Set-Location 'C:\apps\POMS-app'
+          $head = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect production SHA.' }
+          $changed = @(git diff --name-only HEAD)
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect tracked production changes.' }
+          Write-Host ('[factory-area-missing-checkout] ' + (@{ head=$head; trackedChanges=$changed } | ConvertTo-Json -Compress))
           Set-Location 'C:\apps\POMS-app\backend'
-          $service = Get-CimInstance Win32_Service -Filter "Name='poms-app-backend'" | Select-Object Name, ProcessId, State
-          $nodes = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Select-Object ProcessId, ParentProcessId, CreationDate)
-          Write-Host ('[session87-readonly-process] ' + (@{ service=$service; nodes=$nodes } | ConvertTo-Json -Compress -Depth 4))
           @'
-          const { env } = require('./dist/config/env');
-          const knex = require('knex');
-          const db = knex({ client: 'mssql', acquireConnectionTimeout: 10000,
-            connection: { server: env.DB_HOST, port: env.DB_PORT, user: env.DB_USER,
-              password: env.DB_PASSWORD, database: env.DB_NAME, connectionTimeout: 10000,
-              requestTimeout: 15000, options: { encrypt: env.DB_ENCRYPT,
-                trustServerCertificate: env.DB_TRUST_SERVER_CERTIFICATE } },
-            pool: { min: 0, max: 1 },
-          });
-          const sessionId = 87;
-          const output = (stage, value) => console.log('[factory-area-release-' + stage + '] ' + JSON.stringify(value));
-          const guard = setTimeout(() => { output('failure', { code: 'TIME_LIMIT' }); process.exit(1); }, 150000);
-          guard.unref();
-          function statementSummary(text) {
-            const original = String(text || '');
-            let sql = original;
-            const wrapped = /sp_executesql\s+N?'((?:''|[^'])*)'/iu.exec(sql);
-            if (wrapped) sql = wrapped[1].replace(/''/gu, "'");
-            const noComments = sql.replace(/\/\*[\s\S]*?\*\//gu, ' ').replace(/--[^\r\n]*/gu, ' ');
-            const withoutLiterals = noComments.replace(/N?'(?:''|[^'])*'/giu, "'<REDACTED>'")
-              .replace(/0x[\da-f]+/giu, '<BINARY>');
-            const operations = [...new Set((withoutLiterals.match(/\b(?:DELETE|UPDATE|INSERT|SELECT|MERGE|COMMIT|ROLLBACK)\b/giu) || []).map(x => x.toUpperCase()))];
-            const tables = [...new Set([...withoutLiterals.matchAll(/\b(?:from|join|update|into)\s+((?:\[?[a-z_][\w]*\]?\.)?\[?[a-z_][\w]*\]?)/giu)].map(x => x[1]))];
-            const predicates = [...noComments.matchAll(/\[?(id|request_id|eligible_factory_id|source_request_id|source_measurement_point_id|factory_registration_no|factory_id)\]?\s*=\s*(@[\w]+|N?'\d+'|\d+)/giu)]
-              .map(x => ({ column: x[1], value: x[2] }));
-            const bindings = [];
-            for (const predicate of predicates) {
-              if (!predicate.value.startsWith('@')) continue;
-              const name = predicate.value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-              const value = new RegExp(name + "\\s*=\\s*N?'?(\\d+)'?(?=\\s*(?:,|;|$))", 'iu').exec(original)?.[1];
-              if (value) bindings.push({ column: predicate.column, parameter: predicate.value, value });
-            }
-            return { operations, tables, predicates, numericIdentityBindings: bindings,
-              queryShape: withoutLiterals.replace(/\b\d+(?:\.\d+)?\b/gu, '?').replace(/\s+/gu, ' ').slice(0, 2200) };
-          }
-          async function query(stage, sql, bindings = []) {
-            try { const rows = await db.raw(sql, bindings).timeout(15000); output(stage, rows); return rows; }
-            catch (error) { output(stage, { error: error.code || error.name, number: error.number || error.originalError?.info?.number || null }); return null; }
-          }
-
-          if(process.env.POMS_AUDIT_PHASE==='preflight'){
-          const manifest=[{"table": "eligible_factories", "id": "12", "registration": "10150000125204", "originalAddress": "36 \u0e2b\u0e21\u0e39\u0e48 2 \u0e16\u0e19\u0e19\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32-\u0e2d\u0e48\u0e32\u0e07\u0e17\u0e2d\u0e07 \u0e15\u0e33\u0e1a\u0e2511 \u0e2d\u0e33\u0e40\u0e20\u0e2d1 14000", "provinceName": "\u0e2d\u0e48\u0e32\u0e07\u0e17\u0e2d\u0e07", "provinceCode": "15", "districtCode": "1", "subdistrictCode": "11", "status": null, "deleted": true, "districtName": "\u0e40\u0e21\u0e37\u0e2d\u0e07\u0e2d\u0e48\u0e32\u0e07\u0e17\u0e2d\u0e07", "subdistrictName": "\u0e42\u0e1e\u0e2a\u0e30", "resolvedAddress": "36 \u0e2b\u0e21\u0e39\u0e48 2 \u0e16\u0e19\u0e19\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32-\u0e2d\u0e48\u0e32\u0e07\u0e17\u0e2d\u0e07 \u0e15\u0e33\u0e1a\u0e25\u0e42\u0e1e\u0e2a\u0e30 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e40\u0e21\u0e37\u0e2d\u0e07\u0e2d\u0e48\u0e32\u0e07\u0e17\u0e2d\u0e07 14000"}, {"table": "eligible_factories", "id": "13", "registration": "10560000125311", "originalAddress": "92 \u0e2b\u0e21\u0e39\u0e48 17 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 56140", "provinceName": "\u0e1e\u0e30\u0e40\u0e22\u0e32", "provinceCode": "56", "districtCode": "6", "subdistrictCode": "4", "status": null, "deleted": true, "districtName": "\u0e1b\u0e07", "subdistrictName": "\u0e07\u0e34\u0e21", "resolvedAddress": "92 \u0e2b\u0e21\u0e39\u0e48 17 \u0e15\u0e33\u0e1a\u0e25\u0e07\u0e34\u0e21 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e1b\u0e07 56140"}, {"table": "eligible_factories", "id": "14", "registration": "20860071825668", "originalAddress": "\u0e42\u0e09\u0e19\u0e14\u0e17\u0e35\u0e48\u0e14\u0e34\u0e19\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48 43033 \u0e2b\u0e21\u0e39\u0e48 7 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d4 86110", "provinceName": "\u0e0a\u0e38\u0e21\u0e1e\u0e23", "provinceCode": "86", "districtCode": "4", "subdistrictCode": "4", "status": null, "deleted": true, "districtName": "\u0e2b\u0e25\u0e31\u0e07\u0e2a\u0e27\u0e19", "subdistrictName": "\u0e19\u0e32\u0e02\u0e32", "resolvedAddress": "\u0e42\u0e09\u0e19\u0e14\u0e17\u0e35\u0e48\u0e14\u0e34\u0e19\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48 43033 \u0e2b\u0e21\u0e39\u0e48 7 \u0e15\u0e33\u0e1a\u0e25\u0e19\u0e32\u0e02\u0e32 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e2b\u0e25\u0e31\u0e07\u0e2a\u0e27\u0e19 86110"}, {"table": "eligible_factories", "id": "15", "registration": "20860119425661", "originalAddress": "\u0e42\u0e09\u0e19\u0e14\u0e17\u0e35\u0e48\u0e14\u0e34\u0e19\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48 14930 \u0e2b\u0e21\u0e39\u0e48 11 \u0e15\u0e33\u0e1a\u0e2512 \u0e2d\u0e33\u0e40\u0e20\u0e2d4 86110", "provinceName": "\u0e0a\u0e38\u0e21\u0e1e\u0e23", "provinceCode": "86", "districtCode": "4", "subdistrictCode": "12", "status": null, "deleted": true, "districtName": "\u0e2b\u0e25\u0e31\u0e07\u0e2a\u0e27\u0e19", "subdistrictName": "\u0e27\u0e31\u0e07\u0e15\u0e30\u0e01\u0e2d", "resolvedAddress": "\u0e42\u0e09\u0e19\u0e14\u0e17\u0e35\u0e48\u0e14\u0e34\u0e19\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48 14930 \u0e2b\u0e21\u0e39\u0e48 11 \u0e15\u0e33\u0e1a\u0e25\u0e27\u0e31\u0e07\u0e15\u0e30\u0e01\u0e2d \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e2b\u0e25\u0e31\u0e07\u0e2a\u0e27\u0e19 86110"}, {"table": "eligible_factories", "id": "16", "registration": "10190000225448", "originalAddress": "219 \u0e2b\u0e21\u0e39\u0e48 5 \u0e16\u0e19\u0e19\u0e21\u0e34\u0e15\u0e23\u0e20\u0e32\u0e1e \u0e15\u0e33\u0e1a\u0e252 \u0e2d\u0e33\u0e40\u0e20\u0e2d2 18260", "provinceName": "\u0e2a\u0e23\u0e30\u0e1a\u0e38\u0e23\u0e35", "provinceCode": "19", "districtCode": "2", "subdistrictCode": "2", "status": null, "deleted": true, "districtName": "\u0e41\u0e01\u0e48\u0e07\u0e04\u0e2d\u0e22", "subdistrictName": "\u0e17\u0e31\u0e1a\u0e01\u0e27\u0e32\u0e07", "resolvedAddress": "219 \u0e2b\u0e21\u0e39\u0e48 5 \u0e16\u0e19\u0e19\u0e21\u0e34\u0e15\u0e23\u0e20\u0e32\u0e1e \u0e15\u0e33\u0e1a\u0e25\u0e17\u0e31\u0e1a\u0e01\u0e27\u0e32\u0e07 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e41\u0e01\u0e48\u0e07\u0e04\u0e2d\u0e22 18260"}, {"table": "eligible_factories", "id": "17", "registration": "10550000125197", "originalAddress": "189 \u0e2b\u0e21\u0e39\u0e48 10 \u0e16\u0e19\u0e19\u0e27\u0e23\u0e19\u0e04\u0e23 \u0e15\u0e33\u0e1a\u0e256 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 55140", "provinceName": "\u0e19\u0e48\u0e32\u0e19", "provinceCode": "55", "districtCode": "6", "subdistrictCode": "6", "status": null, "deleted": true, "districtName": "\u0e17\u0e48\u0e32\u0e27\u0e31\u0e07\u0e1c\u0e32", "subdistrictName": "\u0e28\u0e23\u0e35\u0e20\u0e39\u0e21\u0e34", "resolvedAddress": "189 \u0e2b\u0e21\u0e39\u0e48 10 \u0e16\u0e19\u0e19\u0e27\u0e23\u0e19\u0e04\u0e23 \u0e15\u0e33\u0e1a\u0e25\u0e28\u0e23\u0e35\u0e20\u0e39\u0e21\u0e34 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e17\u0e48\u0e32\u0e27\u0e31\u0e07\u0e1c\u0e32 55140"}, {"table": "eligible_factories", "id": "18", "registration": "10560000125584", "originalAddress": "88/1 \u0e2b\u0e21\u0e39\u0e48 7 \u0e16\u0e19\u0e19\u0e1e\u0e30\u0e40\u0e22\u0e32-\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e04\u0e33 \u0e15\u0e33\u0e1a\u0e256 \u0e2d\u0e33\u0e40\u0e20\u0e2d2 57000", "provinceName": "\u0e1e\u0e30\u0e40\u0e22\u0e32", "provinceCode": "56", "districtCode": "2", "subdistrictCode": "6", "status": null, "deleted": true, "districtName": "\u0e08\u0e38\u0e19", "subdistrictName": "\u0e2b\u0e49\u0e27\u0e22\u0e22\u0e32\u0e07\u0e02\u0e32\u0e21", "resolvedAddress": "88/1 \u0e2b\u0e21\u0e39\u0e48 7 \u0e16\u0e19\u0e19\u0e1e\u0e30\u0e40\u0e22\u0e32-\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e04\u0e33 \u0e15\u0e33\u0e1a\u0e25\u0e2b\u0e49\u0e27\u0e22\u0e22\u0e32\u0e07\u0e02\u0e32\u0e21 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e08\u0e38\u0e19 57000"}, {"table": "eligible_factories", "id": "20", "registration": "10520000225172", "originalAddress": "1 \u0e2b\u0e21\u0e39\u0e48 9 \u0e16\u0e19\u0e19\u0e1a\u0e49\u0e32\u0e19\u0e0a\u0e48\u0e2d\u0e07\u0e04\u0e2d\u0e21 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d13 52240", "provinceName": "\u0e25\u0e33\u0e1b\u0e32\u0e07", "provinceCode": "52", "districtCode": "13", "subdistrictCode": "4", "status": null, "deleted": true, "districtName": "\u0e40\u0e21\u0e37\u0e2d\u0e07\u0e1b\u0e32\u0e19", "subdistrictName": "\u0e41\u0e08\u0e49\u0e0b\u0e49\u0e2d\u0e19", "resolvedAddress": "1 \u0e2b\u0e21\u0e39\u0e48 9 \u0e16\u0e19\u0e19\u0e1a\u0e49\u0e32\u0e19\u0e0a\u0e48\u0e2d\u0e07\u0e04\u0e2d\u0e21 \u0e15\u0e33\u0e1a\u0e25\u0e41\u0e08\u0e49\u0e0b\u0e49\u0e2d\u0e19 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e40\u0e21\u0e37\u0e2d\u0e07\u0e1b\u0e32\u0e19 52240"}, {"table": "eligible_factories", "id": "58", "registration": "10710100125493", "originalAddress": "1/104 \u0e2b\u0e21\u0e39\u0e48 8 \u0e16\u0e19\u0e19\u0e41\u0e2a\u0e07\u0e0a\u0e39\u0e42\u0e15 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d5 71120", "provinceName": "\u0e01\u0e32\u0e0d\u0e08\u0e19\u0e1a\u0e38\u0e23\u0e35", "provinceCode": "71", "districtCode": "5", "subdistrictCode": "4", "status": null, "deleted": true, "districtName": "\u0e17\u0e48\u0e32\u0e21\u0e30\u0e01\u0e32", "subdistrictName": "\u0e17\u0e48\u0e32\u0e44\u0e21\u0e49", "resolvedAddress": "1/104 \u0e2b\u0e21\u0e39\u0e48 8 \u0e16\u0e19\u0e19\u0e41\u0e2a\u0e07\u0e0a\u0e39\u0e42\u0e15 \u0e15\u0e33\u0e1a\u0e25\u0e17\u0e48\u0e32\u0e44\u0e21\u0e49 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e17\u0e48\u0e32\u0e21\u0e30\u0e01\u0e32 71120"}, {"table": "eligible_factories", "id": "644", "registration": "82170053425676", "originalAddress": "9/19 \u0e2b\u0e21\u0e39\u0e48 4 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e1721 \u0e15\u0e33\u0e1a\u0e257 \u0e2d\u0e33\u0e40\u0e20\u0e2d3 13260", "provinceName": "\u0e1e\u0e23\u0e30\u0e19\u0e04\u0e23\u0e28\u0e23\u0e35\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32", "provinceCode": "14", "districtCode": "3", "subdistrictCode": "7", "status": null, "deleted": true, "districtName": "\u0e19\u0e04\u0e23\u0e2b\u0e25\u0e27\u0e07", "subdistrictName": "\u0e1a\u0e32\u0e07\u0e1e\u0e23\u0e30\u0e04\u0e23\u0e39", "resolvedAddress": "9/19 \u0e2b\u0e21\u0e39\u0e48 4 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e1721 \u0e15\u0e33\u0e1a\u0e25\u0e1a\u0e32\u0e07\u0e1e\u0e23\u0e30\u0e04\u0e23\u0e39 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e19\u0e04\u0e23\u0e2b\u0e25\u0e27\u0e07 13260"}, {"table": "factory_monitoring_point_forms", "id": "14", "registration": "10550000125197", "originalAddress": "189 \u0e2b\u0e21\u0e39\u0e48 10 \u0e16\u0e19\u0e19\u0e27\u0e23\u0e19\u0e04\u0e23 \u0e15\u0e33\u0e1a\u0e256 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e19\u0e48\u0e32\u0e19 55140", "provinceName": "\u0e19\u0e48\u0e32\u0e19", "provinceCode": "55", "districtCode": "6", "subdistrictCode": "6", "status": null, "deleted": true, "districtName": "\u0e17\u0e48\u0e32\u0e27\u0e31\u0e07\u0e1c\u0e32", "subdistrictName": "\u0e28\u0e23\u0e35\u0e20\u0e39\u0e21\u0e34", "resolvedAddress": "189 \u0e2b\u0e21\u0e39\u0e48 10 \u0e16\u0e19\u0e19\u0e27\u0e23\u0e19\u0e04\u0e23 \u0e15\u0e33\u0e1a\u0e25\u0e28\u0e23\u0e35\u0e20\u0e39\u0e21\u0e34 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e17\u0e48\u0e32\u0e27\u0e31\u0e07\u0e1c\u0e32 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e19\u0e48\u0e32\u0e19 55140"}, {"table": "factory_monitoring_point_forms", "id": "17", "registration": "10520000225172", "originalAddress": "1 \u0e2b\u0e21\u0e39\u0e48 9 \u0e16\u0e19\u0e19\u0e1a\u0e49\u0e32\u0e19\u0e0a\u0e48\u0e2d\u0e07\u0e04\u0e2d\u0e21 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d13 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e25\u0e33\u0e1b\u0e32\u0e07 52240", "provinceName": "\u0e25\u0e33\u0e1b\u0e32\u0e07", "provinceCode": "52", "districtCode": "13", "subdistrictCode": "4", "status": null, "deleted": true, "districtName": "\u0e40\u0e21\u0e37\u0e2d\u0e07\u0e1b\u0e32\u0e19", "subdistrictName": "\u0e41\u0e08\u0e49\u0e0b\u0e49\u0e2d\u0e19", "resolvedAddress": "1 \u0e2b\u0e21\u0e39\u0e48 9 \u0e16\u0e19\u0e19\u0e1a\u0e49\u0e32\u0e19\u0e0a\u0e48\u0e2d\u0e07\u0e04\u0e2d\u0e21 \u0e15\u0e33\u0e1a\u0e25\u0e41\u0e08\u0e49\u0e0b\u0e49\u0e2d\u0e19 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e40\u0e21\u0e37\u0e2d\u0e07\u0e1b\u0e32\u0e19 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e25\u0e33\u0e1b\u0e32\u0e07 52240"}, {"table": "factory_monitoring_point_forms", "id": "18", "registration": "10100700125319", "originalAddress": "210 \u0e2b\u0e21\u0e39\u0e48 1 \u0e0b\u0e2d\u0e22\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e17 64 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e17 \u0e15\u0e33\u0e1a\u0e2510 \u0e2d\u0e33\u0e40\u0e20\u0e2d9 \u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23 10260", "provinceName": "\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23", "provinceCode": "10", "districtCode": "9", "subdistrictCode": "10", "status": null, "deleted": true, "districtName": "\u0e1e\u0e23\u0e30\u0e42\u0e02\u0e19\u0e07", "subdistrictName": "\u0e1e\u0e23\u0e30\u0e42\u0e02\u0e19\u0e07\u0e43\u0e15\u0e49", "resolvedAddress": "210 \u0e2b\u0e21\u0e39\u0e48 1 \u0e0b\u0e2d\u0e22\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e17 64 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e17 \u0e15\u0e33\u0e1a\u0e25\u0e1e\u0e23\u0e30\u0e42\u0e02\u0e19\u0e07\u0e43\u0e15\u0e49 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e1e\u0e23\u0e30\u0e42\u0e02\u0e19\u0e07 \u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23 10260"}, {"table": "factory_monitoring_point_forms", "id": "54", "registration": "10710100125493", "originalAddress": "1/104 \u0e2b\u0e21\u0e39\u0e48 8 \u0e16\u0e19\u0e19\u0e41\u0e2a\u0e07\u0e0a\u0e39\u0e42\u0e15 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d5 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e01\u0e32\u0e0d\u0e08\u0e19\u0e1a\u0e38\u0e23\u0e35 71120", "provinceName": "\u0e01\u0e32\u0e0d\u0e08\u0e19\u0e1a\u0e38\u0e23\u0e35", "provinceCode": "71", "districtCode": "5", "subdistrictCode": "4", "status": null, "deleted": true, "districtName": "\u0e17\u0e48\u0e32\u0e21\u0e30\u0e01\u0e32", "subdistrictName": "\u0e17\u0e48\u0e32\u0e44\u0e21\u0e49", "resolvedAddress": "1/104 \u0e2b\u0e21\u0e39\u0e48 8 \u0e16\u0e19\u0e19\u0e41\u0e2a\u0e07\u0e0a\u0e39\u0e42\u0e15 \u0e15\u0e33\u0e1a\u0e25\u0e17\u0e48\u0e32\u0e44\u0e21\u0e49 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e17\u0e48\u0e32\u0e21\u0e30\u0e01\u0e32 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e01\u0e32\u0e0d\u0e08\u0e19\u0e1a\u0e38\u0e23\u0e35 71120"}, {"table": "factory_monitoring_point_forms", "id": "278", "registration": "91120001325592", "originalAddress": "454/16 \u0e2b\u0e21\u0e39\u0e48 9 \u0e15\u0e33\u0e1a\u0e2511 \u0e2d\u0e33\u0e40\u0e20\u0e2d2 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e1b\u0e23\u0e32\u0e08\u0e35\u0e19\u0e1a\u0e38\u0e23\u0e35 25110", "provinceName": "\u0e1b\u0e23\u0e32\u0e08\u0e35\u0e19\u0e1a\u0e38\u0e23\u0e35", "provinceCode": "25", "districtCode": "2", "subdistrictCode": "11", "status": null, "deleted": true, "districtName": "\u0e01\u0e1a\u0e34\u0e19\u0e17\u0e23\u0e4c\u0e1a\u0e38\u0e23\u0e35", "subdistrictName": "\u0e2b\u0e19\u0e2d\u0e07\u0e01\u0e35\u0e48", "resolvedAddress": "454/16 \u0e2b\u0e21\u0e39\u0e48 9 \u0e15\u0e33\u0e1a\u0e25\u0e2b\u0e19\u0e2d\u0e07\u0e01\u0e35\u0e48 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e01\u0e1a\u0e34\u0e19\u0e17\u0e23\u0e4c\u0e1a\u0e38\u0e23\u0e35 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e1b\u0e23\u0e32\u0e08\u0e35\u0e19\u0e1a\u0e38\u0e23\u0e35 25110"}, {"table": "factory_monitoring_point_forms", "id": "640", "registration": "82170053425676", "originalAddress": "9/19 \u0e2b\u0e21\u0e39\u0e48 4 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e1721 \u0e15\u0e33\u0e1a\u0e257 \u0e2d\u0e33\u0e40\u0e20\u0e2d3 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e1e\u0e23\u0e30\u0e19\u0e04\u0e23\u0e28\u0e23\u0e35\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32 13260", "provinceName": "\u0e1e\u0e23\u0e30\u0e19\u0e04\u0e23\u0e28\u0e23\u0e35\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32", "provinceCode": "14", "districtCode": "3", "subdistrictCode": "7", "status": null, "deleted": true, "districtName": "\u0e19\u0e04\u0e23\u0e2b\u0e25\u0e27\u0e07", "subdistrictName": "\u0e1a\u0e32\u0e07\u0e1e\u0e23\u0e30\u0e04\u0e23\u0e39", "resolvedAddress": "9/19 \u0e2b\u0e21\u0e39\u0e48 4 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e1721 \u0e15\u0e33\u0e1a\u0e25\u0e1a\u0e32\u0e07\u0e1e\u0e23\u0e30\u0e04\u0e23\u0e39 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e19\u0e04\u0e23\u0e2b\u0e25\u0e27\u0e07 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e1e\u0e23\u0e30\u0e19\u0e04\u0e23\u0e28\u0e23\u0e35\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32 13260"}, {"table": "cems_wpms_connection_requests", "id": "10345", "registration": "82250600225587", "originalAddress": "7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e255 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140", "provinceName": "\u0e23\u0e30\u0e22\u0e2d\u0e07", "provinceCode": "21", "districtCode": "6", "subdistrictCode": "5", "status": "CANCELED", "deleted": false, "districtName": "\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07", "subdistrictName": "\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23", "resolvedAddress": "7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e25\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140"}, {"table": "cems_wpms_connection_requests", "id": "10346", "registration": "82250600225587", "originalAddress": "7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e255 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140", "provinceName": "\u0e23\u0e30\u0e22\u0e2d\u0e07", "provinceCode": "21", "districtCode": "6", "subdistrictCode": "5", "status": "CANCELED", "deleted": false, "districtName": "\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07", "subdistrictName": "\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23", "resolvedAddress": "7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e25\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140"}];
-          (async()=>{
-           try{
-            await query('clock',`SELECT CONVERT(VARCHAR(33),SYSDATETIME(),126) AS server_time,
-             CONVERT(VARCHAR(33),SYSUTCDATETIME(),126) AS server_utc`);
-            await query('open-backend-transactions',`SELECT s.session_id,s.host_process_id,s.program_name,s.status,s.open_transaction_count,
-             CONVERT(VARCHAR(32),st.transaction_id) AS transaction_id,
-             CONVERT(VARCHAR(33),t.transaction_begin_time,126) AS transaction_begin_time
-             FROM sys.dm_exec_sessions s LEFT JOIN sys.dm_tran_session_transactions st ON st.session_id=s.session_id
-             LEFT JOIN sys.dm_tran_active_transactions t ON t.transaction_id=st.transaction_id
-             WHERE s.program_name='knex' AND s.open_transaction_count>0 AND s.session_id<>@@SPID`);
-            await query('blocking',`SELECT session_id,blocking_session_id,command,wait_type,wait_time
-             FROM sys.dm_exec_requests WHERE database_id=DB_ID() AND blocking_session_id>0`);
-            await query('migrations',`SELECT TOP(6) name,batch,CONVERT(VARCHAR(33),migration_time,126) AS migration_time
-             FROM knex_migrations ORDER BY id DESC`);
-            const backupExists=await db.schema.hasTable('factory_address_history_repair_backup_0151');
-            output('backup-state',{exists:backupExists});
-            if(backupExists)await query('backup-counts',`SELECT target_table,COUNT(*) AS rows FROM factory_address_history_repair_backup_0151 GROUP BY target_table`);
-            const tables=[...new Set(manifest.map(x=>x.table))];
-            const before=[];
-            for(const table of tables){
-             const columns=await db('INFORMATION_SCHEMA.COLUMNS').where({TABLE_SCHEMA:'dbo',TABLE_NAME:table})
-              .orderBy('ORDINAL_POSITION').select('COLUMN_NAME').timeout(10000);
-             const unchanged=columns.map(x=>x.COLUMN_NAME).filter(x=>x!=='address');
-             const hashSql="CONVERT(VARCHAR(64),HASHBYTES('SHA2_256',(SELECT "+unchanged.map(()=> '??').join(',')+" FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER)),2) AS unchanged_hash";
-             const rows=await db(table+' as row').whereIn('row.id',manifest.filter(x=>x.table===table).map(x=>x.id))
-              .select('row.id','row.address')
-              .select(db.raw(hashSql,unchanged.map(x=>'row.'+x)))
-              .select(db.raw('CONVERT(VARCHAR(33),??,126) AS deleted_at_exact',['row.deleted_at']))
-              .timeout(15000);
-             for(const row of rows){
-              const plan=manifest.find(x=>x.table===table&&String(x.id)===String(row.id));
-              before.push({table,...row,originalMatches:row.address===plan.originalAddress,resolvedMatches:row.address===plan.resolvedAddress});
-             }
-            }
-            output('manifest-before',before);
-            if(before.length!==18||before.some(x=>!x.originalMatches&&!x.resolvedMatches))throw new Error('STALE_MANIFEST');
-            output('preflight',{manifestRows:before.length,originalRows:before.filter(x=>x.originalMatches).length,resolvedRows:before.filter(x=>x.resolvedMatches).length});
-            const extraTable='eligible_factory_add_requests';
-            const extraColumns=await db('INFORMATION_SCHEMA.COLUMNS').where({TABLE_SCHEMA:'dbo',TABLE_NAME:extraTable}).select('COLUMN_NAME').timeout(10000);
-            const extraFields=['id','address','status','deleted_at','factory_registration_no','factory_id'].filter(x=>extraColumns.some(c=>c.COLUMN_NAME===x));
-            if(extraFields.includes('address')){
-             const rows=await db(extraTable).select(extraFields).timeout(15000);
-             const pattern=/(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15|\u0e15\.|\u0e2d\.)\s*[:.\-]?\s*[0-9\u0e50-\u0e59]+/u;
-             output('additional-address-scan',{table:extraTable,rows:rows.length,issues:rows.filter(x=>x.address&&pattern.test(x.address))});
-            }
-
-           }finally{clearTimeout(guard);await db.destroy();}
-          })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
-
-          }else if(process.env.POMS_AUDIT_PHASE==='post'){
-          const baseline=[{"table":"eligible_factories","id":"12","address":"36 \u0e2b\u0e21\u0e39\u0e48 2 \u0e16\u0e19\u0e19\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32-\u0e2d\u0e48\u0e32\u0e07\u0e17\u0e2d\u0e07 \u0e15\u0e33\u0e1a\u0e2511 \u0e2d\u0e33\u0e40\u0e20\u0e2d1 14000","unchanged_hash":"439D8F6251E169096D27F4E36D58F28B8A03CA4C59309B863338EDEA68ABE158","deleted_at_exact":"2026-06-08T09:54:15.1866667","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"13","address":"92 \u0e2b\u0e21\u0e39\u0e48 17 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 56140","unchanged_hash":"83783A154E73049DF418FCD54993A482ED5EF1AF847A27703210C57F3204ECCE","deleted_at_exact":"2026-06-22T21:37:00.9300000","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"14","address":"\u0e42\u0e09\u0e19\u0e14\u0e17\u0e35\u0e48\u0e14\u0e34\u0e19\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48 43033 \u0e2b\u0e21\u0e39\u0e48 7 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d4 86110","unchanged_hash":"8002513BCFC2158E86D474C93204CB3F90CDD8E894F11173E0AEC4B94FE12CCD","deleted_at_exact":"2026-06-08T10:19:42.5933333","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"15","address":"\u0e42\u0e09\u0e19\u0e14\u0e17\u0e35\u0e48\u0e14\u0e34\u0e19\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48 14930 \u0e2b\u0e21\u0e39\u0e48 11 \u0e15\u0e33\u0e1a\u0e2512 \u0e2d\u0e33\u0e40\u0e20\u0e2d4 86110","unchanged_hash":"2F8AD4F33791126AE020DBC6863617533605CACE92DABFAFE0988DF994E5C14C","deleted_at_exact":"2026-06-08T10:58:16.7566667","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"16","address":"219 \u0e2b\u0e21\u0e39\u0e48 5 \u0e16\u0e19\u0e19\u0e21\u0e34\u0e15\u0e23\u0e20\u0e32\u0e1e \u0e15\u0e33\u0e1a\u0e252 \u0e2d\u0e33\u0e40\u0e20\u0e2d2 18260","unchanged_hash":"0C10B804DEDC9FFC3F55ED3C2AE995886A211AC718F42805050D027F1E6C10E2","deleted_at_exact":"2026-06-22T21:37:02.4800000","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"17","address":"189 \u0e2b\u0e21\u0e39\u0e48 10 \u0e16\u0e19\u0e19\u0e27\u0e23\u0e19\u0e04\u0e23 \u0e15\u0e33\u0e1a\u0e256 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 55140","unchanged_hash":"5858B4DEFE406AF9FD1DBE00A30639097456F9ABD0B5560875DA31FB7C1B2D22","deleted_at_exact":"2026-06-22T21:37:01.7966667","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"18","address":"88/1 \u0e2b\u0e21\u0e39\u0e48 7 \u0e16\u0e19\u0e19\u0e1e\u0e30\u0e40\u0e22\u0e32-\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e04\u0e33 \u0e15\u0e33\u0e1a\u0e256 \u0e2d\u0e33\u0e40\u0e20\u0e2d2 57000","unchanged_hash":"05992BEE529090F12D905874BF43140D297A1DD4BA8071822BD2FE39F1CAA0B4","deleted_at_exact":"2026-06-22T21:37:00.0900000","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"20","address":"1 \u0e2b\u0e21\u0e39\u0e48 9 \u0e16\u0e19\u0e19\u0e1a\u0e49\u0e32\u0e19\u0e0a\u0e48\u0e2d\u0e07\u0e04\u0e2d\u0e21 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d13 52240","unchanged_hash":"40D6CAA84655A7E973741DF5C3477A5161504B3237B69A3D755132B1BFADB79A","deleted_at_exact":"2026-06-23T08:29:04.8700000","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"58","address":"1/104 \u0e2b\u0e21\u0e39\u0e48 8 \u0e16\u0e19\u0e19\u0e41\u0e2a\u0e07\u0e0a\u0e39\u0e42\u0e15 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d5 71120","unchanged_hash":"1FC67E6342BCE501DE67BADB45338AEA22BAC87BB8E906525D53B020DBCB1A7B","deleted_at_exact":"2026-07-15T10:42:50.5300000","originalMatches":true,"resolvedMatches":false},{"table":"eligible_factories","id":"644","address":"9/19 \u0e2b\u0e21\u0e39\u0e48 4 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e1721 \u0e15\u0e33\u0e1a\u0e257 \u0e2d\u0e33\u0e40\u0e20\u0e2d3 13260","unchanged_hash":"3D7FF46B5F4F5A2BF87DF479174876D598E36330C9D460BA82914770CF49D31E","deleted_at_exact":"2026-06-26T11:42:16.9766667","originalMatches":true,"resolvedMatches":false},{"table":"factory_monitoring_point_forms","id":"14","address":"189 \u0e2b\u0e21\u0e39\u0e48 10 \u0e16\u0e19\u0e19\u0e27\u0e23\u0e19\u0e04\u0e23 \u0e15\u0e33\u0e1a\u0e256 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e19\u0e48\u0e32\u0e19 55140","unchanged_hash":"44F82D1A626D3D0571209A6BFB51532683C9DAFD116F28C10B792718036FC24E","deleted_at_exact":"2026-08-10T17:28:34.2221766","originalMatches":true,"resolvedMatches":false},{"table":"factory_monitoring_point_forms","id":"17","address":"1 \u0e2b\u0e21\u0e39\u0e48 9 \u0e16\u0e19\u0e19\u0e1a\u0e49\u0e32\u0e19\u0e0a\u0e48\u0e2d\u0e07\u0e04\u0e2d\u0e21 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d13 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e25\u0e33\u0e1b\u0e32\u0e07 52240","unchanged_hash":"10F860A8049D090C4BC9CF0ECF0680CF0FD1C80031A186A42F98272BD7C49D2C","deleted_at_exact":"2026-08-10T17:28:34.2221766","originalMatches":true,"resolvedMatches":false},{"table":"factory_monitoring_point_forms","id":"18","address":"210 \u0e2b\u0e21\u0e39\u0e48 1 \u0e0b\u0e2d\u0e22\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e17 64 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e17 \u0e15\u0e33\u0e1a\u0e2510 \u0e2d\u0e33\u0e40\u0e20\u0e2d9 \u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23 10260","unchanged_hash":"3DBFF730F20867502C216FAE4B90E743C6004DE4F5000E2EA9F5E05EFB6E44CA","deleted_at_exact":"2026-08-10T17:28:34.2221766","originalMatches":true,"resolvedMatches":false},{"table":"factory_monitoring_point_forms","id":"54","address":"1/104 \u0e2b\u0e21\u0e39\u0e48 8 \u0e16\u0e19\u0e19\u0e41\u0e2a\u0e07\u0e0a\u0e39\u0e42\u0e15 \u0e15\u0e33\u0e1a\u0e254 \u0e2d\u0e33\u0e40\u0e20\u0e2d5 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e01\u0e32\u0e0d\u0e08\u0e19\u0e1a\u0e38\u0e23\u0e35 71120","unchanged_hash":"BF060BC2A492D464AB880286DB63EC4BA2E65CC8CF31BE004B05A9C7157F808A","deleted_at_exact":"2026-08-10T17:28:34.2221766","originalMatches":true,"resolvedMatches":false},{"table":"factory_monitoring_point_forms","id":"278","address":"454/16 \u0e2b\u0e21\u0e39\u0e48 9 \u0e15\u0e33\u0e1a\u0e2511 \u0e2d\u0e33\u0e40\u0e20\u0e2d2 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e1b\u0e23\u0e32\u0e08\u0e35\u0e19\u0e1a\u0e38\u0e23\u0e35 25110","unchanged_hash":"57B67A79A65F089035270F44F3255E148EFE7949ACDD0268BB7097824BF3D066","deleted_at_exact":"2026-08-10T17:28:34.2221766","originalMatches":true,"resolvedMatches":false},{"table":"factory_monitoring_point_forms","id":"640","address":"9/19 \u0e2b\u0e21\u0e39\u0e48 4 \u0e16\u0e19\u0e19\u0e2a\u0e38\u0e02\u0e38\u0e21\u0e27\u0e34\u0e1721 \u0e15\u0e33\u0e1a\u0e257 \u0e2d\u0e33\u0e40\u0e20\u0e2d3 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e1e\u0e23\u0e30\u0e19\u0e04\u0e23\u0e28\u0e23\u0e35\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32 13260","unchanged_hash":"517199BEF94BCF6216F488545093A91A83F0B90D90B3DA564166D87A78225CF3","deleted_at_exact":"2026-08-10T17:28:34.2221766","originalMatches":true,"resolvedMatches":false},{"table":"cems_wpms_connection_requests","id":"10345","address":"7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e255 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140","unchanged_hash":"751085DFC20C5C8F9B1D5CA5F380576ED1971C480098ABE13ACA61724F7EA874","deleted_at_exact":null,"originalMatches":true,"resolvedMatches":false},{"table":"cems_wpms_connection_requests","id":"10346","address":"7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e255 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140","unchanged_hash":"3FD135D68AF2B12DFA136F2E45314D6300A0DEAF490F93D4613AC503097DC81E","deleted_at_exact":null,"originalMatches":true,"resolvedMatches":false}];
-          const expectedBackupCounts={eligible_factories:10,factory_monitoring_point_forms:6,cems_wpms_connection_requests:2};
-          const expectedFactoryName='\u0e1a\u0e23\u0e34\u0e29\u0e31\u0e17 \u0e2d\u0e21\u0e15\u0e30 \u0e1a\u0e35.\u0e01\u0e23\u0e34\u0e21 \u0e40\u0e1e\u0e32\u0e40\u0e27\u0e2d\u0e23\u0e4c (\u0e23\u0e30\u0e22\u0e2d\u0e07) 5 \u0e08\u0e33\u0e01\u0e31\u0e14';
-          const expectedAddress='7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e25\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23 \u0e2d\u0e33\u0e40\u0e20\u0e2d\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140';
-          const numericAddress='7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e255 \u0e2d\u0e33\u0e40\u0e20\u0e2d6 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140';
-          const assert=(condition,code)=>{if(!condition)throw Object.assign(new Error(code),{code});};
-          const closedStatuses=new Set(['CANCELED','CANCELLED','REJECTED']);
-          const broadArea=/(?:\u0e15\u0e33\u0e1a\u0e25|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15|(?<![\u0e01-\u0e59a-zA-Z])\u0e15\.|(?<![\u0e01-\u0e59a-zA-Z])\u0e2d\.)\s*[:.\-]?\s*[0-9\u0e50-\u0e59]+/u;
-          const numericOnly=/^\s*[0-9\u0e50-\u0e59]+\s*$/u;
-          const originalMode=env.FACTORY_PROFILE_MODE;
-          let applicationDb;
-          let factoryLookupDb;
-          let parameterLookupDb;
-          (async()=>{
-           try{
-            await query('post-clock',`SELECT CONVERT(VARCHAR(33),SYSDATETIME(),126) AS server_time,
-             CONVERT(VARCHAR(33),SYSUTCDATETIME(),126) AS server_utc`);
-            const migrations=await db('knex_migrations').where(builder=>builder.where('name','like','0151_%').orWhere('name','like','0152_%'))
-             .select('name','batch').select(db.raw('CONVERT(VARCHAR(33),migration_time,126) AS migration_time')).orderBy('id').timeout(15000);
-            output('post-migrations',migrations);
-            assert(migrations.length===2&&migrations.some(x=>x.name.startsWith('0151_create_historical_address_repair_backup.'))&&migrations.some(x=>x.name.startsWith('0152_repair_historical_factory_address_names.')),'EXPECTED_MIGRATIONS_NOT_APPLIED');
-
-            const backupTable='factory_address_history_repair_backup_0151';
-            const backups=await db(backupTable).select('target_table','entity_id','original_address','resolved_address','original_status')
-             .select(db.raw('CONVERT(VARCHAR(33),original_deleted_at,126) AS original_deleted_at_exact')).timeout(15000);
-            const backupCounts={};for(const row of backups)backupCounts[row.target_table]=(backupCounts[row.target_table]||0)+1;
-            output('post-backup-counts',{rows:backups.length,byTable:backupCounts});
-            assert(backups.length===18&&Object.keys(backupCounts).length===3&&Object.entries(expectedBackupCounts).every(([table,count])=>backupCounts[table]===count),'BACKUP_COUNT_MISMATCH');
-            const baselineKeys=new Set(baseline.map(x=>x.table+':'+String(x.id)));
-            assert(backups.every(x=>baselineKeys.has(x.target_table+':'+String(x.entity_id))),'UNEXPECTED_BACKUP_ENTITY');
-            const after=[];
-            const preservationMismatches=[];
-            for(const table of Object.keys(expectedBackupCounts)){
-             const columns=await db('INFORMATION_SCHEMA.COLUMNS').where({TABLE_SCHEMA:'dbo',TABLE_NAME:table})
-              .orderBy('ORDINAL_POSITION').select('COLUMN_NAME').timeout(10000);
-             const unchanged=columns.map(x=>x.COLUMN_NAME).filter(x=>x!=='address');
-             const hashSql="CONVERT(VARCHAR(64),HASHBYTES('SHA2_256',(SELECT "+unchanged.map(()=> '??').join(',')+" FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER)),2) AS unchanged_hash";
-             const current=await db(table+' as row').whereIn('row.id',baseline.filter(x=>x.table===table).map(x=>x.id))
-              .select('row.id','row.address').select(db.raw(hashSql,unchanged.map(x=>'row.'+x)))
-              .select(db.raw('CONVERT(VARCHAR(33),??,126) AS deleted_at_exact',['row.deleted_at']))
-              .select(...(table==='cems_wpms_connection_requests'?['row.status']:[])).timeout(15000);
-             for(const before of baseline.filter(x=>x.table===table)){
-              const row=current.find(x=>String(x.id)===String(before.id));
-              const backup=backups.find(x=>x.target_table===table&&String(x.entity_id)===String(before.id));
-              const reasons=[];
-              if(!row)reasons.push('MISSING_CURRENT_ROW');
-              if(!backup)reasons.push('MISSING_BACKUP');
-              if(row&&backup){
-               if(row.address!==backup.resolved_address)reasons.push('RESOLVED_ADDRESS_MISMATCH');
-               if(backup.original_address!==before.address)reasons.push('ORIGINAL_ADDRESS_BACKUP_MISMATCH');
-               if(row.deleted_at_exact!==before.deleted_at_exact||backup.original_deleted_at_exact!==before.deleted_at_exact)reasons.push('DELETED_AT_CHANGED');
-               if(table==='cems_wpms_connection_requests'&&(row.status!==backup.original_status||backup.original_status!=='CANCELED'))reasons.push('STATUS_CHANGED');
-               if(table!=='cems_wpms_connection_requests'&&backup.original_status!==null)reasons.push('UNEXPECTED_ORIGINAL_STATUS');
-               if(row.unchanged_hash!==before.unchanged_hash)reasons.push('NON_ADDRESS_COLUMNS_CHANGED');
-              }
-              if(reasons.length)preservationMismatches.push({table,id:String(before.id),reasons});
-              if(row)after.push({table,id:String(row.id)});
-             }
-             const exactChecks=await db.raw(`SELECT r.id,
-              CASE WHEN (r.deleted_at=b.original_deleted_at OR (r.deleted_at IS NULL AND b.original_deleted_at IS NULL)) THEN 1 ELSE 0 END AS deleted_at_same,
-              ${table==='cems_wpms_connection_requests'?'CASE WHEN (r.status=b.original_status OR (r.status IS NULL AND b.original_status IS NULL)) THEN 1 ELSE 0 END':'CASE WHEN b.original_status IS NULL THEN 1 ELSE 0 END'} AS status_same
-              FROM ?? AS r JOIN ?? AS b ON b.target_table=? AND b.entity_id=r.id`,[table,backupTable,table]).timeout(15000);
-             for(const check of exactChecks)if(Number(check.deleted_at_same)!==1||Number(check.status_same)!==1)preservationMismatches.push({table,id:String(check.id),reasons:['SQL_EXACT_PRESERVATION_CHECK_FAILED']});
-             assert(exactChecks.length===expectedBackupCounts[table],'BACKUP_CURRENT_JOIN_COUNT_MISMATCH');
-            }
-            output('post-preservation',{checkedRows:after.length,nonAddressColumnsComparedBySha256:true,datetime2ComparedExactly:true,mismatches:preservationMismatches});
-            assert(after.length===18&&preservationMismatches.length===0,'HISTORICAL_ROW_PRESERVATION_FAILED');
-
-            const requiredTables=['eligible_factories','factory_profiles','cems_wpms_connected_measurement_points','factory_monitoring_point_forms',
-             'current_eligible_factories','current_connected_measurement_points','current_factory_monitoring_point_forms','cems_wpms_connection_requests','cems_wpms_request_factory_snapshots'];
-            const optionalTables=['eligible_factory_add_requests'];
-            const allTables=[...requiredTables,...optionalTables];
-            const columns=await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA','dbo').whereIn('TABLE_NAME',allTables).select('TABLE_NAME','COLUMN_NAME').timeout(15000);
-            const byTable=new Map(allTables.map(table=>[table,new Set(columns.filter(x=>x.TABLE_NAME===table).map(x=>x.COLUMN_NAME))]));
-            const selectedFields=['id','eligible_factory_id','request_id','deleted_at','status','address','factory_address','district_name','subdistrict_name'];
-            const rawRows=new Map();
-            for(const table of allTables){
-             const available=byTable.get(table);
-             if(!available.size){assert(!requiredTables.includes(table),'REQUIRED_SCAN_TABLE_MISSING');continue;}
-             rawRows.set(table,await db(table).select(selectedFields.filter(x=>available.has(x))).timeout(15000));
-            }
-            const activeEligible=new Set((rawRows.get('eligible_factories')||[]).filter(x=>x.deleted_at==null).map(x=>String(x.id)));
-            const activeRequests=new Set((rawRows.get('cems_wpms_connection_requests')||[]).filter(x=>x.deleted_at==null&&!closedStatuses.has(x.status)).map(x=>String(x.id)));
-            const scan=[];let activeIssues=0,historicalIssues=0;
-            for(const table of allTables){
-             const rows=rawRows.get(table);
-             if(!rows){scan.push({table,optional:true,present:false});continue;}
-             let activeRows=0;const issues=[];
-             for(const row of rows){
-              let active=row.deleted_at==null&&!closedStatuses.has(row.status);
-              if(table==='factory_profiles'||table==='cems_wpms_connected_measurement_points')active=active&&activeEligible.has(String(row.eligible_factory_id));
-              if(table==='cems_wpms_request_factory_snapshots')active=active&&activeRequests.has(String(row.request_id));
-              if(active)activeRows++;
-              for(const field of ['address','factory_address','district_name','subdistrict_name']){
-               if(row[field]==null)continue;
-               const value=String(row[field]);
-               if(!broadArea.test(value)&&!(field.endsWith('_name')&&numericOnly.test(value)))continue;
-               issues.push({id:String(row.id),field,active,status:row.status||null,deleted:row.deleted_at!=null});
-               if(active)activeIssues++;else historicalIssues++;
-              }
-             }
-             scan.push({table,present:true,optional:optionalTables.includes(table),rows:rows.length,activeRows,historicalRows:rows.length-activeRows,readPast:false,activeNumericIssues:issues.filter(x=>x.active).length,historicalNumericIssues:issues.filter(x=>!x.active).length,issues});
-            }
-            output('post-global-scan',{complete:true,readMode:'committed; no READPAST/NOLOCK',activeNumericIssues:activeIssues,historicalNumericIssues:historicalIssues,tables:scan});
-
-            const eligible=await db('eligible_factories').where('id',430).first('id','factory_registration_no_new','factory_name','address').timeout(15000);
-            const form=await db('factory_monitoring_point_forms').where('id',426).first('id','factory_registration_no_new','factory_name','address').timeout(15000);
-            const targetIds=[10345,10346,10376,10377];
-            const requests=await db('cems_wpms_connection_requests').whereIn('id',targetIds).select('id','request_no','factory_id','factory_registration_no','factory_name','address','status').timeout(15000);
-            output('post-target-database',{eligible,form,requests});
-            assert(eligible?.factory_registration_no_new==='82250600225587'&&form?.factory_registration_no_new==='82250600225587','TARGET_REGISTRATION_MISMATCH');
-            assert([eligible,form,...requests].length===6&&requests.length===4&&[eligible,form,...requests].every(x=>x&&x.address===expectedAddress),'TARGET_FACTORY_DATABASE_MISMATCH');
-            assert([eligible,form,...requests.filter(x=>[10376,10377].includes(Number(x.id)))].every(x=>x.factory_name===expectedFactoryName),'TARGET_CURRENT_FACTORY_NAME_MISMATCH');
-
-            applicationDb=require('./dist/config/database').db;
-            factoryLookupDb=require('./dist/config/factory-source-database').factorySourceDb;
-            parameterLookupDb=require('./dist/config/parameter-source-database').parameterSourceDb;
-            const {connectionRequestsService}=require('./dist/modules/connection-requests/connection-requests.service');
-            const {eligibleFactoriesRepository}=require('./dist/modules/eligible-factories/eligible-factories.repository');
-            const {normalizeFactoryAreaNamesForWrite}=require('./dist/modules/eligible-factories/factory-area-names');
-            for(const mode of ['legacy','canonical']){
-             env.FACTORY_PROFILE_MODE=mode;
-             const selected=await eligibleFactoriesRepository.findById(430);
-             assert(selected?.address===expectedAddress&&selected?.factoryName===expectedFactoryName,'MODE_ELIGIBLE_FACTORY_MISMATCH');
-             for(const id of [10376,10377]){
-              const result=await connectionRequestsService.getForm(id,1,'ALL');
-              const evidence={mode,requestId:id,factoryName:result.factoryName,factoryRegistrationNo:result.factoryRegistrationNo,address:result.address,
-               provinceName:result.provinceName,districtName:result.districtName,subdistrictName:result.subdistrictName};
-              output('post-target-form-service',evidence);
-              assert(result.address===expectedAddress&&result.factoryName===expectedFactoryName,'TARGET_FACTORY_SERVICE_MISMATCH');
-             }
-             const input={factoryId:'82250600225587',factoryRegistrationNoNew:'82250600225587',address:numericAddress,
-              provinceName:'\u0e23\u0e30\u0e22\u0e2d\u0e07',provinceCode:'1021',districtCode:'6',districtName:'6',subdistrictCode:'5',subdistrictName:'5'};
-             const normalized=await normalizeFactoryAreaNamesForWrite(input);
-             assert(normalized.address===expectedAddress&&normalized.districtName==='\u0e1b\u0e25\u0e27\u0e01\u0e41\u0e14\u0e07'&&normalized.subdistrictName==='\u0e21\u0e32\u0e1a\u0e22\u0e32\u0e07\u0e1e\u0e23','DEPLOYED_WRITE_NORMALIZER_MISMATCH');
-             assert(normalized.provinceCode==='1021'&&normalized.districtCode==='6'&&normalized.subdistrictCode==='5','MACHINE_CODES_CHANGED');
-             let rejection=null;
-             try{await normalizeFactoryAreaNamesForWrite({...input,address:'7/507 \u0e2b\u0e21\u0e39\u0e48 6 \u0e15\u0e33\u0e1a\u0e255 \u0e2d\u0e33\u0e40\u0e20\u0e2d999 \u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\u0e23\u0e30\u0e22\u0e2d\u0e07 21140',districtCode:'999',districtName:'999'});}
-             catch(error){rejection={statusCode:error.statusCode,code:error.code,reason:error.details?.reason};}
-             assert(rejection?.statusCode===400&&rejection?.code==='BAD_REQUEST'&&rejection?.reason==='UNRESOLVED_ADMINISTRATIVE_AREA','INVALID_AREA_CODE_NOT_REJECTED');
-             output('post-deployed-normalizer',{mode,noPersistence:true,normalized:{address:normalized.address,districtName:normalized.districtName,subdistrictName:normalized.subdistrictName,
-              provinceCode:normalized.provinceCode,districtCode:normalized.districtCode,subdistrictCode:normalized.subdistrictCode},invalid999:rejection});
-            }
-            env.FACTORY_PROFILE_MODE=originalMode;
-            assert(activeIssues===0&&historicalIssues===0,'NUMERIC_ADMINISTRATIVE_NAMES_REMAIN');
-            output('post-result',{passed:true,repairedHistoricalRows:18,activeNumericIssues:0,historicalNumericIssues:0,
-             productionMode:originalMode,modesExercisedInAuditProcessOnly:['legacy','canonical'],mutationsPerformed:false});
-           }finally{
-            env.FACTORY_PROFILE_MODE=originalMode;
-            clearTimeout(guard);
-            await Promise.allSettled([...new Set([db,applicationDb,factoryLookupDb,parameterLookupDb].filter(Boolean))].map(pool=>pool.destroy()));
+          const {env}=require('./dist/config/env');
+          const knex=require('knex');
+          const fs=require('fs'),path=require('path');
+          const pool=(source=false)=>knex({client:'mssql',acquireConnectionTimeout:10000,connection:{
+           server:source?(env.FACTORY_DB_HOST??env.DB_HOST):env.DB_HOST,port:source?(env.FACTORY_DB_PORT??env.DB_PORT):env.DB_PORT,
+           user:source?(env.FACTORY_DB_USER??env.DB_USER):env.DB_USER,password:source?(env.FACTORY_DB_PASSWORD??env.DB_PASSWORD):env.DB_PASSWORD,
+           database:source?env.FACTORY_DB_NAME:env.DB_NAME,connectionTimeout:10000,requestTimeout:20000,
+           options:{encrypt:source?(env.FACTORY_DB_ENCRYPT??env.DB_ENCRYPT):env.DB_ENCRYPT,trustServerCertificate:source?(env.FACTORY_DB_TRUST_SERVER_CERTIFICATE??env.DB_TRUST_SERVER_CERTIFICATE):env.DB_TRUST_SERVER_CERTIFICATE}},pool:{min:0,max:1}});
+          const db=pool(),source=pool(true);
+          const output=(stage,value)=>console.log('[factory-area-missing-'+stage+'] '+JSON.stringify(value));
+          const guard=setTimeout(()=>{output('failure',{code:'TIME_LIMIT'});process.exit(1);},210000);guard.unref();
+          const provinces={"10":"\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23","11":"\u0e2a\u0e21\u0e38\u0e17\u0e23\u0e1b\u0e23\u0e32\u0e01\u0e32\u0e23","12":"\u0e19\u0e19\u0e17\u0e1a\u0e38\u0e23\u0e35","13":"\u0e1b\u0e17\u0e38\u0e21\u0e18\u0e32\u0e19\u0e35","14":"\u0e1e\u0e23\u0e30\u0e19\u0e04\u0e23\u0e28\u0e23\u0e35\u0e2d\u0e22\u0e38\u0e18\u0e22\u0e32","15":"\u0e2d\u0e48\u0e32\u0e07\u0e17\u0e2d\u0e07","16":"\u0e25\u0e1e\u0e1a\u0e38\u0e23\u0e35","17":"\u0e2a\u0e34\u0e07\u0e2b\u0e4c\u0e1a\u0e38\u0e23\u0e35","18":"\u0e0a\u0e31\u0e22\u0e19\u0e32\u0e17","19":"\u0e2a\u0e23\u0e30\u0e1a\u0e38\u0e23\u0e35","20":"\u0e0a\u0e25\u0e1a\u0e38\u0e23\u0e35","21":"\u0e23\u0e30\u0e22\u0e2d\u0e07","22":"\u0e08\u0e31\u0e19\u0e17\u0e1a\u0e38\u0e23\u0e35","23":"\u0e15\u0e23\u0e32\u0e14","24":"\u0e09\u0e30\u0e40\u0e0a\u0e34\u0e07\u0e40\u0e17\u0e23\u0e32","25":"\u0e1b\u0e23\u0e32\u0e08\u0e35\u0e19\u0e1a\u0e38\u0e23\u0e35","26":"\u0e19\u0e04\u0e23\u0e19\u0e32\u0e22\u0e01","27":"\u0e2a\u0e23\u0e30\u0e41\u0e01\u0e49\u0e27","30":"\u0e19\u0e04\u0e23\u0e23\u0e32\u0e0a\u0e2a\u0e35\u0e21\u0e32","31":"\u0e1a\u0e38\u0e23\u0e35\u0e23\u0e31\u0e21\u0e22\u0e4c","32":"\u0e2a\u0e38\u0e23\u0e34\u0e19\u0e17\u0e23\u0e4c","33":"\u0e28\u0e23\u0e35\u0e2a\u0e30\u0e40\u0e01\u0e29","34":"\u0e2d\u0e38\u0e1a\u0e25\u0e23\u0e32\u0e0a\u0e18\u0e32\u0e19\u0e35","35":"\u0e22\u0e42\u0e2a\u0e18\u0e23","36":"\u0e0a\u0e31\u0e22\u0e20\u0e39\u0e21\u0e34","37":"\u0e2d\u0e33\u0e19\u0e32\u0e08\u0e40\u0e08\u0e23\u0e34\u0e0d","38":"\u0e1a\u0e36\u0e07\u0e01\u0e32\u0e2c","39":"\u0e2b\u0e19\u0e2d\u0e07\u0e1a\u0e31\u0e27\u0e25\u0e33\u0e20\u0e39","40":"\u0e02\u0e2d\u0e19\u0e41\u0e01\u0e48\u0e19","41":"\u0e2d\u0e38\u0e14\u0e23\u0e18\u0e32\u0e19\u0e35","42":"\u0e40\u0e25\u0e22","43":"\u0e2b\u0e19\u0e2d\u0e07\u0e04\u0e32\u0e22","44":"\u0e21\u0e2b\u0e32\u0e2a\u0e32\u0e23\u0e04\u0e32\u0e21","45":"\u0e23\u0e49\u0e2d\u0e22\u0e40\u0e2d\u0e47\u0e14","46":"\u0e01\u0e32\u0e2c\u0e2a\u0e34\u0e19\u0e18\u0e38\u0e4c","47":"\u0e2a\u0e01\u0e25\u0e19\u0e04\u0e23","48":"\u0e19\u0e04\u0e23\u0e1e\u0e19\u0e21","49":"\u0e21\u0e38\u0e01\u0e14\u0e32\u0e2b\u0e32\u0e23","50":"\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e43\u0e2b\u0e21\u0e48","51":"\u0e25\u0e33\u0e1e\u0e39\u0e19","52":"\u0e25\u0e33\u0e1b\u0e32\u0e07","53":"\u0e2d\u0e38\u0e15\u0e23\u0e14\u0e34\u0e15\u0e16\u0e4c","54":"\u0e41\u0e1e\u0e23\u0e48","55":"\u0e19\u0e48\u0e32\u0e19","56":"\u0e1e\u0e30\u0e40\u0e22\u0e32","57":"\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e23\u0e32\u0e22","58":"\u0e41\u0e21\u0e48\u0e2e\u0e48\u0e2d\u0e07\u0e2a\u0e2d\u0e19","60":"\u0e19\u0e04\u0e23\u0e2a\u0e27\u0e23\u0e23\u0e04\u0e4c","61":"\u0e2d\u0e38\u0e17\u0e31\u0e22\u0e18\u0e32\u0e19\u0e35","62":"\u0e01\u0e33\u0e41\u0e1e\u0e07\u0e40\u0e1e\u0e0a\u0e23","63":"\u0e15\u0e32\u0e01","64":"\u0e2a\u0e38\u0e42\u0e02\u0e17\u0e31\u0e22","65":"\u0e1e\u0e34\u0e29\u0e13\u0e38\u0e42\u0e25\u0e01","66":"\u0e1e\u0e34\u0e08\u0e34\u0e15\u0e23","67":"\u0e40\u0e1e\u0e0a\u0e23\u0e1a\u0e39\u0e23\u0e13\u0e4c","70":"\u0e23\u0e32\u0e0a\u0e1a\u0e38\u0e23\u0e35","71":"\u0e01\u0e32\u0e0d\u0e08\u0e19\u0e1a\u0e38\u0e23\u0e35","72":"\u0e2a\u0e38\u0e1e\u0e23\u0e23\u0e13\u0e1a\u0e38\u0e23\u0e35","73":"\u0e19\u0e04\u0e23\u0e1b\u0e10\u0e21","74":"\u0e2a\u0e21\u0e38\u0e17\u0e23\u0e2a\u0e32\u0e04\u0e23","75":"\u0e2a\u0e21\u0e38\u0e17\u0e23\u0e2a\u0e07\u0e04\u0e23\u0e32\u0e21","76":"\u0e40\u0e1e\u0e0a\u0e23\u0e1a\u0e38\u0e23\u0e35","77":"\u0e1b\u0e23\u0e30\u0e08\u0e27\u0e1a\u0e04\u0e35\u0e23\u0e35\u0e02\u0e31\u0e19\u0e18\u0e4c","80":"\u0e19\u0e04\u0e23\u0e28\u0e23\u0e35\u0e18\u0e23\u0e23\u0e21\u0e23\u0e32\u0e0a","81":"\u0e01\u0e23\u0e30\u0e1a\u0e35\u0e48","82":"\u0e1e\u0e31\u0e07\u0e07\u0e32","83":"\u0e20\u0e39\u0e40\u0e01\u0e47\u0e15","84":"\u0e2a\u0e38\u0e23\u0e32\u0e29\u0e0e\u0e23\u0e4c\u0e18\u0e32\u0e19\u0e35","85":"\u0e23\u0e30\u0e19\u0e2d\u0e07","86":"\u0e0a\u0e38\u0e21\u0e1e\u0e23","90":"\u0e2a\u0e07\u0e02\u0e25\u0e32","91":"\u0e2a\u0e15\u0e39\u0e25","92":"\u0e15\u0e23\u0e31\u0e07","93":"\u0e1e\u0e31\u0e17\u0e25\u0e38\u0e07","94":"\u0e1b\u0e31\u0e15\u0e15\u0e32\u0e19\u0e35","95":"\u0e22\u0e30\u0e25\u0e32","96":"\u0e19\u0e23\u0e32\u0e18\u0e34\u0e27\u0e32\u0e2a"};
+          const provinceByName=new Map(Object.entries(provinces).map(([code,name])=>[name,code]));
+          const baseTables=['eligible_factories','factory_profiles','factory_monitoring_point_forms','cems_wpms_connected_measurement_points','cems_wpms_connection_requests','cems_wpms_request_factory_snapshots','eligible_factory_add_requests'];
+          const viewTables=['current_eligible_factories','current_factory_monitoring_point_forms','current_connected_measurement_points'];
+          const nameFields=['province_name','district_name','subdistrict_name'];
+          const codeFields=['province_code','district_code','subdistrict_code'];
+          const closed=new Set(['CANCELED','CANCELLED','REJECTED']);
+          const blank=value=>value==null||String(value).trim()==='';
+          const code=value=>{const s=String(value??'').trim().replace(/[\u0e50-\u0e59]/gu,x=>String(x.charCodeAt(0)-0x0e50));return /^\d+$/u.test(s)?String(Number(s)):null;};
+          const sameName=(a,b)=>String(a??'').trim().replace(/^(\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e15\u0e33\u0e1a\u0e25|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15|\u0e08\.|\u0e2d\.|\u0e15\.)\s*/u,'')===String(b??'').trim();
+          const usableName=value=>!blank(value)&&/[\u0e01-\u0e2e]/u.test(String(value))&&!/^(?:-|\u0e44\u0e21\u0e48\u0e23\u0e30\u0e1a\u0e38|\u0e23\u0e2b\u0e31\u0e2a\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14)/u.test(String(value).trim());
+          function labels(address){
+           const text=String(address??'');const result={province:[],district:[],subdistrict:[]};
+           for(const m of text.matchAll(/(\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14|(?<![\u0e01-\u0e59a-zA-Z])\u0e08\.|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e40\u0e02\u0e15|(?<![\u0e01-\u0e59a-zA-Z])\u0e2d\.|\u0e15\u0e33\u0e1a\u0e25|\u0e41\u0e02\u0e27\u0e07|(?<![\u0e01-\u0e59a-zA-Z])\u0e15\.)\s*([\u0e01-\u0e590-9]+?)(?=\s|$|[,;()]|\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e15\u0e33\u0e1a\u0e25|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15)/gu)){
+            const key=['\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14','\u0e08.'].includes(m[1])?'province':['\u0e2d\u0e33\u0e40\u0e20\u0e2d','\u0e40\u0e02\u0e15','\u0e2d.'].includes(m[1])?'district':'subdistrict';result[key].push(m[2]);
            }
+           if(text.includes('\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23'))result.province.push('\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23');return result;
+          }
+          function areaCodeMatches(value,area,subdistrict){
+           const n=code(value),local=code(subdistrict?area.TUMBOL:area.AMP);if(n==null||local==null)return false;if(n===local)return true;
+           const p=code(area.PROV),d=code(area.AMP);return n===(subdistrict?`${p.padStart(2,'0')}${d.padStart(2,'0')}${local.padStart(2,'0')}`:`${p.padStart(2,'0')}${local.padStart(2,'0')}`);
+          }
+          function resolve(row,areas,localProvinces){
+           const addressEvidenceAllowed=row.table!=='cems_wpms_request_factory_snapshots'||row.deleted_at_exact==null;
+           const address=row.address??row.factory_address??(addressEvidenceAllowed?row.request_address:null);
+           const parts=labels(address),pc=[];const conflicts=[];
+           if(usableName(row.province_name)){const p=provinceByName.get(String(row.province_name).trim().replace(/^\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\s*/u,''));if(p)pc.push(p);else conflicts.push('UNKNOWN_RECORDED_PROVINCE_NAME');}
+           for(const name of parts.province){const p=provinceByName.get(name);if(p)pc.push(p);else conflicts.push('UNKNOWN_ADDRESS_PROVINCE_NAME');}
+           const rawP=code(row.province_code);if(rawP&&rawP.length===2&&provinces[rawP])pc.push(rawP);
+           else if(rawP&&localProvinces.has(rawP))pc.push(localProvinces.get(rawP));
+           for(const c of [row.district_code,...parts.district])if(code(c)?.length===4)pc.push(code(c).slice(0,2));
+           for(const c of [row.subdistrict_code,...parts.subdistrict])if(code(c)?.length===6)pc.push(code(c).slice(0,2));
+           const provinceCodes=[...new Set(pc)];if(provinceCodes.length>1)conflicts.push('PROVINCE_CONTEXT_CONFLICT');
+           const districts=[row.district_code,...parts.district].filter(x=>!blank(x));
+           const subdistricts=[row.subdistrict_code,...parts.subdistrict].filter(x=>!blank(x));
+           if(!blank(row.district_name))districts.push(row.district_name);
+           if(!blank(row.subdistrict_name))subdistricts.push(row.subdistrict_name);
+           const hasContext=provinceCodes.length||districts.length||subdistricts.length;
+           const matches=!conflicts.length&&hasContext?areas.filter(a=>
+            (!provinceCodes.length||code(a.PROV)===provinceCodes[0])&&
+            districts.every(x=>code(x)!=null?areaCodeMatches(x,a,false):sameName(x,a.AMPNAME))&&
+            subdistricts.every(x=>code(x)!=null?areaCodeMatches(x,a,true):sameName(x,a.TUMNAME))):[];
+           const uniqueValues=field=>[...new Set(matches.map(a=>field==='province_name'?provinces[code(a.PROV)]:field==='district_name'?a.AMPNAME:a.TUMNAME).filter(usableName).map(x=>String(x).trim()))];
+           const proposed={};for(const field of row.existing_name_fields)if(blank(row[field])){const names=uniqueValues(field);if(names.length===1)proposed[field]=names[0];}
+           if(hasContext&&!matches.length&&!conflicts.length)conflicts.push('NO_MASTER_MATCH');
+           return {address_evidence_allowed:addressEvidenceAllowed,address_evidence:address??null,address_labels:parts,province_codes:provinceCodes,
+            candidate_count:matches.length,candidates:matches.length<=8?matches.map(a=>({PROV:code(a.PROV),AMP:code(a.AMP),TUMBOL:code(a.TUMBOL),province_name:provinces[code(a.PROV)]??null,AMPNAME:a.AMPNAME,TUMNAME:a.TUMNAME})):[],
+            distinct_names:{province_name:uniqueValues('province_name'),district_name:uniqueValues('district_name'),subdistrict_name:uniqueValues('subdistrict_name')},
+            conflicts,proposed_patch:proposed,resolution:conflicts.length?'CONFLICT':Object.keys(proposed).length?'FILL_CANDIDATE':hasContext?'AMBIGUOUS_OR_INCOMPLETE':'NO_RECORDED_CONTEXT'};
+          }
+          (async()=>{
+           try{
+            const [clock]=await db.raw('SELECT CONVERT(VARCHAR(33),SYSDATETIME(),126) AS server_time,CONVERT(VARCHAR(33),SYSUTCDATETIME(),126) AS server_utc').timeout(10000);output('clock',clock);
+            const metadata=await db('INFORMATION_SCHEMA.COLUMNS AS c').join('INFORMATION_SCHEMA.TABLES AS t',function(){this.on('t.TABLE_SCHEMA','=','c.TABLE_SCHEMA').andOn('t.TABLE_NAME','=','c.TABLE_NAME');})
+             .where('c.TABLE_SCHEMA','dbo').select('c.TABLE_NAME','t.TABLE_TYPE','c.COLUMN_NAME','c.DATA_TYPE','c.IS_NULLABLE','c.ORDINAL_POSITION').orderBy('c.TABLE_NAME').orderBy('c.ORDINAL_POSITION').timeout(15000);
+            const inventory=[];for(const table of [...new Set(metadata.map(x=>x.TABLE_NAME))]){
+             const cols=metadata.filter(x=>x.TABLE_NAME===table);const relevant=cols.filter(x=>/province|district|subdistrict|address/i.test(x.COLUMN_NAME));
+             const historical=/(snapshot|history|revision|edit_request)/i.test(table)&&/(factory|cems_wpms|monitoring)/i.test(table);
+             if(relevant.length||historical)inventory.push({table,type:cols[0].TABLE_TYPE,repair_scope:baseTables.includes(table)?'BASE_CANDIDATE':viewTables.includes(table)?'DERIVED_VIEW':table==='factories'?'SUPPORTING_FACTORY_EXCLUDED':'DISCOVERY_ONLY',
+              columns:(historical?cols.filter(x=>/province|district|subdistrict|address|json|request_id|created_at|updated_at|deleted_at|status/i.test(x.COLUMN_NAME)):relevant).map(({COLUMN_NAME,DATA_TYPE,IS_NULLABLE,ORDINAL_POSITION})=>({name:COLUMN_NAME,type:DATA_TYPE,nullable:IS_NULLABLE,ordinal:ORDINAL_POSITION}))});
+            }
+            output('schema',inventory);
+            const areas=await source(`${env.FACTORY_DB_SCHEMA}.TUMBOL`).select('PROV','AMP','TUMBOL','AMPNAME','TUMNAME').timeout(20000);
+            const localProvinceRows=await db('provinces').select('id','name_th').timeout(10000);
+            const localProvinces=new Map(localProvinceRows.map(x=>[String(x.id),provinceByName.get(String(x.name_th).trim())]).filter(([,p])=>p));
+            output('master-summary',{rows:areas.length,localProvinceMappings:localProvinces.size,source:'TUMBOL; no Fac60k location fallback'});
+            const desired=['id','eligible_factory_id','request_id','factory_id','source_factory_id','factory_registration_no_new','factory_registration_no_old','factory_registration_no','factory_name','request_no','status','is_open','monitoring_point_form_id',...nameFields,...codeFields,'address','factory_address'];
+            const records=new Map();
+            for(const table of [...baseTables,...viewTables]){
+             const cols=metadata.filter(x=>x.TABLE_NAME===table);if(!cols.length){output('table',{table,missing:true});continue;}
+             const names=new Set(cols.map(x=>x.COLUMN_NAME));const q=db(table+' as row').select(desired.filter(x=>names.has(x)).map(x=>'row.'+x));
+             for(const field of ['created_at','updated_at','deleted_at'])if(names.has(field))q.select(db.raw('CONVERT(VARCHAR(33),??,126) AS ??',['row.'+field,field+'_exact']));
+             records.set(table,await q.timeout(20000));
+            }
+            const requests=new Map((records.get('cems_wpms_connection_requests')||[]).map(x=>[String(x.id),x]));
+            const eligible=new Map((records.get('eligible_factories')||[]).map(x=>[String(x.id),x]));
+            const baselines=[];const summaries=[];
+            for(const [table,rows] of records){
+             const cols=metadata.filter(x=>x.TABLE_NAME===table);const existingNames=nameFields.filter(field=>cols.some(c=>c.COLUMN_NAME===field));
+             const summariesByName={};for(const field of existingNames)summariesByName[field]={null:0,empty:0,whitespace:0,active_missing:0,historic_missing:0};
+             const candidates=[];let conflicts=0;let blankRows=0;
+             for(const raw of rows){
+              const row={...raw,table,existing_name_fields:existingNames};let active=row.deleted_at_exact==null&&!closed.has(row.status);
+              if(table==='cems_wpms_request_factory_snapshots'){
+               const parent=requests.get(String(row.request_id));row.request_address=parent?.address??null;row.request_factory_id=parent?.factory_id??null;row.request_factory_name=parent?.factory_name??null;row.request_no=parent?.request_no??null;
+               row.request_status=parent?.status??null;row.request_created_at_exact=parent?.created_at_exact??null;row.request_updated_at_exact=parent?.updated_at_exact??null;row.request_deleted_at_exact=parent?.deleted_at_exact??null;
+               active=active&&Boolean(parent)&&parent.deleted_at_exact==null&&!closed.has(parent.status);
+              }
+              if(table==='factory_profiles'||table==='cems_wpms_connected_measurement_points'){const parent=eligible.get(String(row.eligible_factory_id));row.parent_province_name=parent?.province_name??null;row.parent_address=parent?.address??null;active=active&&Boolean(parent)&&parent.deleted_at_exact==null;}
+              row.active=active;row.missing_name_fields=existingNames.filter(field=>blank(row[field]));
+              for(const field of row.missing_name_fields){const count=summariesByName[field];if(row[field]==null)count.null++;else if(String(row[field])==='')count.empty++;else count.whitespace++;count[active?'active_missing':'historic_missing']++;}
+              const resolved=resolve(row,areas,localProvinces);if(resolved.conflicts.length)conflicts++;
+              if(row.missing_name_fields.length)blankRows++;
+              const target=String(row.factory_id??row.source_factory_id??row.factory_registration_no_new??row.request_factory_id??'')==='82250600225587'||['10376','10377'].includes(String(table==='cems_wpms_request_factory_snapshots'?row.request_id:table==='cems_wpms_connection_requests'?row.id:''));
+              if(row.missing_name_fields.length||resolved.conflicts.length||target)candidates.push({...row,resolution:resolved});
+             }
+             summaries.push({table,type:cols[0].TABLE_TYPE,total_rows:rows.length,existing_name_fields:existingNames,missing_rows:blankRows,conflict_rows:conflicts,counts:summariesByName,read_mode:'committed; no READPAST/NOLOCK'});
+             if(baseTables.includes(table)&&candidates.length){
+              const unchanged=cols.map(x=>x.COLUMN_NAME).filter(x=>!existingNames.includes(x));
+              const hashSql="CONVERT(VARCHAR(64),HASHBYTES('SHA2_256',(SELECT "+unchanged.map(()=> '??').join(',')+" FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER)),2) AS non_name_hash";
+              for(let offset=0;offset<candidates.length;offset+=250){
+               const chunk=candidates.slice(offset,offset+250);const hashes=await db(table+' as row').whereIn('row.id',chunk.map(x=>x.id)).select('row.id').select(db.raw(hashSql,unchanged.map(x=>'row.'+x))).timeout(20000);
+               for(const row of chunk)row.non_name_hash=hashes.find(x=>String(x.id)===String(row.id))?.non_name_hash??null;
+              }
+             }
+             baselines.push(...candidates);
+            }
+            output('table-summaries',summaries);
+            for(const table of [...baseTables,...viewTables]){const rows=baselines.filter(x=>x.table===table);if(rows.length)output('baseline',{table,rows});}
+            const artifact={clock,schema:inventory,table_summaries:summaries,rows:baselines,master_rows:areas,local_province_mappings:[...localProvinces],mutations:false,
+             history_policy:'Deleted snapshots resolve from own codes/names only. Current request address is reference-only for deleted snapshots; request/snapshot timestamps included. No Fac60k current-location fallback.'};
+            const artifactPath=path.join(process.env.RUNNER_TEMP||process.env.TEMP||process.cwd(),'poms-area-missing-audit.json');fs.writeFileSync(artifactPath,JSON.stringify(artifact));
+            output('artifact',{path:artifactPath,bytes:fs.statSync(artifactPath).size,baseline_rows:baselines.length,master_rows:areas.length});
+            output('result',{complete:true,mutations:false,base_missing_rows:summaries.filter(x=>baseTables.includes(x.table)).reduce((n,x)=>n+x.missing_rows,0),base_conflict_rows:summaries.filter(x=>baseTables.includes(x.table)).reduce((n,x)=>n+x.conflict_rows,0)});
+           }finally{clearTimeout(guard);await Promise.allSettled([db.destroy(),source.destroy()]);}
           })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
-
-          }else{output('failure',{code:'INVALID_AUDIT_PHASE'});process.exitCode=1;}
           '@ | node
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve read-only geography audit baseline
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: factory-area-missing-${{ github.run_id }}
+          path: ${{ runner.temp }}/poms-area-missing-audit.json
+          if-no-files-found: error
+          retention-days: 3
