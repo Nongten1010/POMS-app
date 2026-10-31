@@ -357,3 +357,329 @@ describe.each(['legacy', 'canonical'])('street word boundaries in %s mode', (mod
     expect(result.address).toBe('7/507 ซอยเอ.6 จังหวัดระยอง 21140');
   });
 });
+
+describe.each(['legacy', 'canonical'])('blank factory area names in %s mode', (mode) => {
+  beforeEach(() => {
+    mockEnv.FACTORY_PROFILE_MODE = mode;
+  });
+
+  it('fills present blank names from readable recorded address and preserves machine codes and input', async () => {
+    const input = {
+      address: readableAddress,
+      provinceName: null,
+      districtName: '  ',
+      subdistrictName: undefined,
+      provinceCode: '1021',
+      districtCode: null,
+      subdistrictCode: null,
+    };
+    const expected = {
+      ...input,
+      provinceName: 'ระยอง',
+      districtName: 'ปลวกแดง',
+      subdistrictName: 'มาบยางพร',
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual(expected);
+    expect(await normalizeFactoryAreaNamesForRead([input])).toEqual([expected]);
+    expect(input).toEqual({
+      address: readableAddress,
+      provinceName: null,
+      districtName: '  ',
+      subdistrictName: undefined,
+      provinceCode: '1021',
+      districtCode: null,
+      subdistrictCode: null,
+    });
+    expect(mockSourceDb).toHaveBeenCalledTimes(2);
+    expect(mockSourceDb).not.toHaveBeenCalledWith('dbo.fac_import');
+  });
+
+  it('does not add absent name fields or infer historic names from identity alone', async () => {
+    const input = { address: readableAddress, factoryId: factory.FID };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toBe(input);
+    const unknown = {
+      address: '99 หมู่ 1 ซอย 3',
+      factoryId: factory.FID,
+      provinceCode: '1021',
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(unknown)).toBe(unknown);
+    expect(await normalizeFactoryAreaNamesForRead([unknown])).toEqual([unknown]);
+    expect(mockSourceDb).not.toHaveBeenCalled();
+  });
+
+  it('uses recorded names instead of the current location of a moved factory', async () => {
+    sources = [{ ...factory, PROV: 10, AMP: 9, TUMBOL: 10 }];
+    const input = {
+      address: readableAddress,
+      factoryId: factory.FID,
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      provinceName: 'ระยอง',
+      districtName: 'ปลวกแดง',
+      subdistrictName: 'มาบยางพร',
+    });
+    expect(mockSourceDb).toHaveBeenCalledTimes(1);
+    expect(mockSourceDb).toHaveBeenCalledWith('dbo.TUMBOL');
+  });
+
+  it('fills a mapped province alone without querying or guessing district names', async () => {
+    const input = {
+      address: '99 หมู่ 1',
+      provinceCode: '21',
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      provinceName: 'ระยอง',
+    });
+    expect(mockSourceDb).not.toHaveBeenCalled();
+  });
+
+  it('resolves full administrative codes with a street-only address', async () => {
+    const input = {
+      address: '99 หมู่ 1 ซอย 3 21140',
+      subdistrictCode: '210605',
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      provinceName: 'ระยอง',
+      districtName: 'ปลวกแดง',
+      subdistrictName: 'มาบยางพร',
+    });
+  });
+
+  it('infers the province from verified recorded district and subdistrict names', async () => {
+    const input = {
+      address: '7/507 ตำบลมาบยางพร อำเภอปลวกแดง 21140',
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      provinceName: 'ระยอง',
+      districtName: 'ปลวกแดง',
+      subdistrictName: 'มาบยางพร',
+    });
+  });
+
+  it('supports abbreviated and bare recorded province names', async () => {
+    for (const address of [
+      'ต.มาบยางพร อ.ปลวกแดง จ.ระยอง 21140',
+      'ตำบลมาบยางพร อำเภอปลวกแดง ระยอง 21140',
+    ]) {
+      const input = { address, provinceName: null, districtName: null, subdistrictName: null };
+      expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+        ...input,
+        provinceName: 'ระยอง',
+        districtName: 'ปลวกแดง',
+        subdistrictName: 'มาบยางพร',
+      });
+    }
+  });
+
+  it('fills only names common to all matches and leaves ambiguous subdistrict blank', async () => {
+    areas = [master, { ...master, TUMBOL: 6, TUMNAME: 'ตำบลอื่น' }];
+    const input = {
+      provinceCode: '21',
+      districtCode: '6',
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      provinceName: 'ระยอง',
+      districtName: 'ปลวกแดง',
+    });
+  });
+
+  it('does not guess ambiguous provinces or fill names contradicting recorded geography', async () => {
+    areas = [master, { PROV: 10, AMP: 6, TUMBOL: 5, AMPNAME: 'ปลวกแดง', TUMNAME: 'มาบยางพร' }];
+    const ambiguous = { districtCode: '6', subdistrictCode: '5', provinceName: null };
+    expect(await normalizeFactoryAreaNamesForWrite(ambiguous)).toBe(ambiguous);
+    const conflicting = {
+      address: readableAddress,
+      provinceName: 'น่าน',
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(conflicting)).toBe(conflicting);
+    expect(await normalizeFactoryAreaNamesForRead([conflicting])).toEqual([conflicting]);
+    const nameConflict = {
+      address: readableAddress,
+      provinceName: null,
+      districtName: 'เมืองระยอง',
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(nameConflict)).toBe(nameConflict);
+  });
+
+  it('preserves readable name fields and every address detail', async () => {
+    const input = {
+      address: readableAddress,
+      districtName: 'ปลวกแดง',
+      subdistrictName: null,
+      provinceName: 'ระยอง',
+      provinceCode: '1021',
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      subdistrictName: 'มาบยางพร',
+    });
+  });
+
+  it('keeps optional blanks on read or name-only lookup outage', async () => {
+    failure = true;
+    const input = {
+      address: readableAddress,
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForRead([input])).toEqual([input]);
+    await expect(normalizeFactoryAreaNamesForWrite(input)).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'FACTORY_AREA_LOOKUP_UNAVAILABLE',
+    });
+    const weak = {
+      address: 'ตำบลมาบยางพร',
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(weak)).toBe(weak);
+  });
+
+  it('rejects code-backed write outages rather than persisting resolvable blank names', async () => {
+    failure = true;
+    const input = {
+      provinceCode: '21',
+      districtCode: '6',
+      subdistrictCode: '5',
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    await expect(normalizeFactoryAreaNamesForWrite(input)).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'FACTORY_AREA_LOOKUP_UNAVAILABLE',
+    });
+    expect(await normalizeFactoryAreaNamesForRead([input])).toEqual([input]);
+    await expect(
+      normalizeFactoryAreaNamesForWrite({
+        subdistrictCode: '210605',
+        provinceName: null,
+        districtName: null,
+        subdistrictName: null,
+      }),
+    ).rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  it('batches blank-name rows into one master lookup', async () => {
+    const input = Array.from({ length: 20 }, (_, id) => ({
+      id,
+      address: readableAddress,
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    }));
+    const result = await normalizeFactoryAreaNamesForRead(input);
+    expect(
+      result.every(
+        (x) =>
+          x.provinceName === 'ระยอง' &&
+          x.districtName === 'ปลวกแดง' &&
+          x.subdistrictName === 'มาบยางพร',
+      ),
+    ).toBe(true);
+    expect(mockSourceDb).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not parse industrial-estate and street เขต descriptions as administrative district names', async () => {
+    areas = [
+      { PROV: 21, AMP: 1, TUMBOL: 3, AMPNAME: 'เมืองระยอง', TUMNAME: 'ตะพง' },
+      { PROV: 25, AMP: 2, TUMBOL: 11, AMPNAME: 'กบินทร์บุรี', TUMNAME: 'หนองกี่' },
+    ];
+    for (const [address, provinceName, districtName, subdistrictName] of [
+      [
+        '140/6 หมู่4 ซอยเขตประกอบการฯ ทีพีไอ ถนนสุขุมวิท ตำบลตะพง อำเภอเมืองระยอง จังหวัดระยอง21000',
+        'ระยอง',
+        'เมืองระยอง',
+        'ตะพง',
+      ],
+      [
+        '444(เขตอุตสาหกรรมกบินทร์บุรี) หมู่9 ตำบลหนองกี่ อำเภอกบินทร์บุรี จังหวัดปราจีนบุรี25110',
+        'ปราจีนบุรี',
+        'กบินทร์บุรี',
+        'หนองกี่',
+      ],
+    ]) {
+      const input = { address, provinceName: null, districtName: null, subdistrictName: null };
+      expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+        ...input,
+        provinceName,
+        districtName,
+        subdistrictName,
+      });
+    }
+  });
+});
+
+describe.each(['legacy', 'canonical'])('literal district-word suffixes in %s mode', (mode) => {
+  beforeEach(() => {
+    mockEnv.FACTORY_PROFILE_MODE = mode;
+  });
+  it('preserves เขต inside official subdistrict names instead of treating the suffix as a label', async () => {
+    areas = [
+      { PROV: 24, AMP: 1, TUMBOL: 17, AMPNAME: 'เมืองฉะเชิงเทรา', TUMNAME: 'คลองนครเนื่องเขต' },
+      { PROV: 31, AMP: 23, TUMBOL: 2, AMPNAME: 'เฉลิมพระเกียรติ', TUMNAME: 'อีสานเขต' },
+    ];
+    for (const [address, provinceName, districtName, subdistrictName] of [
+      [
+        'ตำบลคลองนครเนื่องเขต อำเภอเมืองฉะเชิงเทรา จังหวัดฉะเชิงเทรา',
+        'ฉะเชิงเทรา',
+        'เมืองฉะเชิงเทรา',
+        'คลองนครเนื่องเขต',
+      ],
+      [
+        'ตำบลอีสานเขต อำเภอเฉลิมพระเกียรติ จังหวัดบุรีรัมย์',
+        'บุรีรัมย์',
+        'เฉลิมพระเกียรติ',
+        'อีสานเขต',
+      ],
+    ]) {
+      const input = { address, provinceName: null, districtName: null, subdistrictName: null };
+      const expected = { ...input, provinceName, districtName, subdistrictName };
+      expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual(expected);
+      expect(await normalizeFactoryAreaNamesForRead([input])).toEqual([expected]);
+    }
+  });
+  it('still reads real boundary-delimited Bangkok แขวง and เขต labels', async () => {
+    areas = [{ PROV: 10, AMP: 9, TUMBOL: 10, AMPNAME: 'พระโขนง', TUMNAME: 'พระโขนงใต้' }];
+    const input = {
+      address: '210 ซอยสุขุมวิท 64 แขวงพระโขนงใต้ เขตพระโขนง กรุงเทพมหานคร 10260',
+      provinceName: null,
+      districtName: null,
+      subdistrictName: null,
+    };
+    expect(await normalizeFactoryAreaNamesForWrite(input)).toEqual({
+      ...input,
+      provinceName: 'กรุงเทพมหานคร',
+      districtName: 'พระโขนง',
+      subdistrictName: 'พระโขนงใต้',
+    });
+  });
+});

@@ -150,10 +150,58 @@ describe('factory administrative-name runtime OpenAPI contract', () => {
     },
   );
 
+  it.each([
+    ['/cems-wpms-requests/{id}/form', 'ConnectionRequestForm'],
+    ['/poms-factories/{factoryId}/form', 'PomsFactoryForm'],
+    ['/poms-factories/edit-requests/{id}/form', 'PomsFactoryEditRequestForm'],
+  ])(
+    'publishes verified existing name fields in the form response example for %s',
+    (path, schemaName) => {
+      const media = responseMedia(path, 'get', '200');
+      const example = object(object(object(media.examples).verifiedAreaNames).value);
+      expect(example.success).toBe(true);
+      const data = object(example.data);
+      expect(data).toMatchObject({
+        address: '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140',
+        provinceCode: null,
+        provinceName: 'ระยอง',
+        districtCode: null,
+        districtName: 'ปลวกแดง',
+        subdistrictCode: null,
+        subdistrictName: 'มาบยางพร',
+      });
+      const schema = object(schemas[schemaName]);
+      const properties = object(schema.properties);
+      for (const key of Object.keys(data)) expect(properties).toHaveProperty(key);
+      for (const key of schema.required as string[]) expect(data).toHaveProperty(key);
+      for (const field of ['provinceName', 'districtName', 'subdistrictName']) {
+        expect(object(properties[field]).nullable).toBe(true);
+      }
+      expect(media).not.toHaveProperty('example');
+    },
+  );
+
+  it('documents name-by-name historical locality checks and preserves unknown blank fallbacks', () => {
+    const properties = object(object(schemas.ConnectionRequestForm).properties);
+    for (const field of ['provinceName', 'districtName', 'subdistrictName']) {
+      const description = String(object(properties[field]).description);
+      expect(description).toContain('มี property เดิม');
+      expect(description).toContain('null/undefined/สตริงว่าง');
+      expect(description).toContain('ไม่ใช้ตำแหน่งปัจจุบันของ Fac60k');
+      expect(description).toContain('อาจเติมจังหวัด/อำเภอได้แต่ตำบลยังว่าง');
+      expect(description).toContain('มีเพียงจังหวัดที่ยืนยันได้');
+      expect(description).toContain('เมื่อมีข้อมูลอำเภอ/ตำบล');
+      expect(description).toContain('คงชื่อว่างทั้งหมด');
+      expect(description).toContain('คงช่องว่าง');
+      expect(description).toContain('ไม่เพิ่ม property ที่ไม่มีเดิม');
+      expect(description).toContain('ไม่เปลี่ยนชื่อที่อ่านได้หรือช่องรหัส');
+    }
+  });
+
   it('keeps POMS edit geography as read-only context instead of a new mutable write contract', () => {
     for (const schemaName of ['PomsFactoryForm', 'PomsFactoryEditRequestForm']) {
       const properties = object(object(schemas[schemaName]).properties);
-      for (const field of ['address', 'districtName', 'subdistrictName']) {
+      for (const field of ['address', 'provinceName', 'districtName', 'subdistrictName']) {
         const description = String(object(properties[field]).description);
         expect(description).toContain('GET');
         expect(description).not.toContain('503 FACTORY_AREA_LOOKUP_UNAVAILABLE');

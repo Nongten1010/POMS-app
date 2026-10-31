@@ -67,7 +67,11 @@ export const pomsFactoriesService = {
         provinceName: row.province,
       })),
     );
-    const data = rows.map((row, index) => ({ ...row, address: addresses[index].address }));
+    const data = rows.map((row, index) => ({
+      ...row,
+      address: addresses[index].address,
+      province: addresses[index].provinceName,
+    }));
     return { data, meta: { total: data.length } };
   },
 
@@ -91,7 +95,11 @@ export const pomsFactoriesService = {
         provinceName: detail.provinceName,
       },
     ]);
-    return { ...detail, factoryAddress: resolved.address };
+    return {
+      ...detail,
+      factoryAddress: resolved.address,
+      provinceName: resolved.provinceName,
+    };
   },
 
   async getFactoryForm(
@@ -107,13 +115,15 @@ export const pomsFactoriesService = {
       current.eligibleFactoryId,
       systemType,
     );
-    return toPomsConnectionRequestForm(
-      current,
-      current.measurementPoints,
-      systemType,
-      undefined,
-      formContacts,
-      true,
+    return normalizePomsFormAreas(
+      toPomsConnectionRequestForm(
+        current,
+        current.measurementPoints,
+        systemType,
+        undefined,
+        formContacts,
+        true,
+      ),
     );
   },
 
@@ -151,17 +161,21 @@ export const pomsFactoriesService = {
       if (!contactsChanged(contacts.currentContacts, contacts.proposedContacts)) {
         ensureMeasurementRequestChanged(current, proposedFactory, proposed);
       }
-      return pomsFactoriesRepository.createEditRequest(
-        current,
-        {
-          formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
-          proposedFactory,
-          proposedMeasurementPoints: proposed,
-          targetMeasurementPointIds: input.measurementPoints.map((point) => point.connectedPointId),
-          ...contacts,
-        },
-        input.note ?? null,
-        actorUserId,
+      return normalizePomsRequestAreas(
+        pomsFactoriesRepository.createEditRequest(
+          current,
+          {
+            formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
+            proposedFactory,
+            proposedMeasurementPoints: proposed,
+            targetMeasurementPointIds: input.measurementPoints.map(
+              (point) => point.connectedPointId,
+            ),
+            ...contacts,
+          },
+          input.note ?? null,
+          actorUserId,
+        ),
       );
     }
 
@@ -169,16 +183,18 @@ export const pomsFactoriesService = {
     const contacts = await prepareContactSnapshots(current, input, current.measurementPoints);
     if (!contactsChanged(contacts.currentContacts, contacts.proposedContacts))
       ensureProfileChanged(current, proposed);
-    return pomsFactoriesRepository.createEditRequest(
-      current,
-      {
-        formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO,
-        proposedFactory: proposed,
-        proposedMeasurementPoints: null,
-        ...contacts,
-      },
-      null,
-      actorUserId,
+    return normalizePomsRequestAreas(
+      pomsFactoriesRepository.createEditRequest(
+        current,
+        {
+          formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO,
+          proposedFactory: proposed,
+          proposedMeasurementPoints: null,
+          ...contacts,
+        },
+        null,
+        actorUserId,
+      ),
     );
   },
 
@@ -221,7 +237,7 @@ export const pomsFactoriesService = {
             request.eligibleFactoryId,
             systemType,
           );
-    return {
+    return normalizePomsRequestAreas({
       ...request,
       currentContacts: request.currentContacts ?? null,
       proposedContacts: request.proposedContacts ?? null,
@@ -248,7 +264,7 @@ export const pomsFactoriesService = {
           ...point,
           details: deriveCurrentPomsParameterDetails(point),
         })) ?? null,
-    };
+    });
   },
 
   async cancelEditRequest(
@@ -261,10 +277,12 @@ export const pomsFactoriesService = {
     if (!CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES.includes(request.status)) {
       throw invalidCancellationTransition(id, request.status);
     }
-    return pomsFactoriesRepository.cancelEditRequest(id, actorUserId, {
-      scope: editScope,
-      regionalAccess,
-    });
+    return normalizePomsRequestAreas(
+      pomsFactoriesRepository.cancelEditRequest(id, actorUserId, {
+        scope: editScope,
+        regionalAccess,
+      }),
+    );
   },
 
   async getEditRequestForm(
@@ -336,7 +354,7 @@ export const pomsFactoriesService = {
     if (proposedContacts) {
       form.officerNotificationEmails = [...proposedContacts.officerNotificationEmails];
     }
-    return form;
+    return normalizePomsFormAreas(form);
   },
 
   async resubmitEditRequest(
@@ -376,18 +394,22 @@ export const pomsFactoriesService = {
       if (!contactsChanged(contacts.currentContacts, contacts.proposedContacts)) {
         ensureMeasurementRequestChanged(current, proposedFactory, proposed);
       }
-      return pomsFactoriesRepository.resubmitEditRequest(
-        id,
-        {
-          formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
-          ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
-          proposedFactory,
-          proposedMeasurementPoints: proposed,
-          targetMeasurementPointIds: input.measurementPoints.map((point) => point.connectedPointId),
-          ...contacts,
-        },
-        input.note ?? null,
-        actorUserId,
+      return normalizePomsRequestAreas(
+        pomsFactoriesRepository.resubmitEditRequest(
+          id,
+          {
+            formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
+            ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
+            proposedFactory,
+            proposedMeasurementPoints: proposed,
+            targetMeasurementPointIds: input.measurementPoints.map(
+              (point) => point.connectedPointId,
+            ),
+            ...contacts,
+          },
+          input.note ?? null,
+          actorUserId,
+        ),
       );
     }
 
@@ -398,17 +420,19 @@ export const pomsFactoriesService = {
     const contacts = await prepareContactSnapshots(current, input, current.measurementPoints);
     if (!contactsChanged(contacts.currentContacts, contacts.proposedContacts))
       ensureProfileChanged(current, proposed);
-    return pomsFactoriesRepository.resubmitEditRequest(
-      id,
-      {
-        formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO,
-        ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
-        proposedFactory: proposed,
-        proposedMeasurementPoints: null,
-        ...contacts,
-      },
-      null,
-      actorUserId,
+    return normalizePomsRequestAreas(
+      pomsFactoriesRepository.resubmitEditRequest(
+        id,
+        {
+          formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO,
+          ...(isCanonicalFactoryProfilesEnabled() ? { currentFactory: current } : {}),
+          proposedFactory: proposed,
+          proposedMeasurementPoints: null,
+          ...contacts,
+        },
+        null,
+        actorUserId,
+      ),
     );
   },
 
@@ -442,7 +466,7 @@ export const pomsFactoriesService = {
       scope: viewScope,
       regionalAccess,
     });
-    return {
+    return normalizePomsRequestAreas({
       ...reviewed,
       contactPersons: (reviewed.proposedContacts?.contactPersons ?? request.contactPersons).map(
         (contact) => ({ ...contact }),
@@ -461,9 +485,45 @@ export const pomsFactoriesService = {
           ...point,
           details: deriveCurrentPomsParameterDetails(point),
         })) ?? null,
-    };
+    });
   },
 };
+
+async function normalizePomsFormAreas<T extends PomsFactoryEditRequestFormDTO>(
+  form: T,
+): Promise<T> {
+  const [resolved] = await normalizeFactoryAreaNamesForRead([form]);
+  return resolved;
+}
+
+/** Enrich response copies only; persisted edit snapshots remain comparison inputs. */
+async function normalizePomsRequestAreas<T extends PomsFactoryEditRequestDTO>(
+  result: T | Promise<T>,
+): Promise<T> {
+  const request = await result;
+  const profiles = [request.currentFactory, request.proposedFactory];
+  const resolved = await normalizeFactoryAreaNamesForRead(
+    profiles.map((profile) => ({
+      address: profile.factoryAddress,
+      provinceName: profile.provinceName,
+    })),
+  );
+  if (
+    profiles.every(
+      (profile, index) =>
+        profile.factoryAddress === resolved[index].address &&
+        profile.provinceName === resolved[index].provinceName,
+    )
+  ) {
+    return request;
+  }
+  const [currentFactory, proposedFactory] = profiles.map((profile, index) => ({
+    ...profile,
+    factoryAddress: resolved[index].address,
+    provinceName: resolved[index].provinceName,
+  }));
+  return { ...request, currentFactory, proposedFactory };
+}
 
 /** Write workflows compare raw persisted snapshots; display enrichment must not alter them. */
 async function requireCurrentFactoryDetail(

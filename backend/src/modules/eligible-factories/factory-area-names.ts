@@ -1,12 +1,13 @@
 import { env } from '../../config/env';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
 import { AppError, BadRequestError } from '../../shared/errors/AppError';
-import { diwProvinceCodeFromName } from './fac-import.mapper';
+import { diwProvinceCodeFromName, diwProvinceNameFromCode } from './fac-import.mapper';
 import {
   factoryAreaCodeMatches,
   hasNumericFactoryAddressAreas,
   normalizedFactoryAreaCode,
   numericFactoryAddressAreaCodes,
+  readableFactoryAddressAreaNames,
   replaceNumericFactoryAddressAreas,
   withoutNumericFactoryAddressAreas,
 } from './factory-address';
@@ -54,8 +55,7 @@ const CHUNK_SIZE = 500;
 export async function normalizeFactoryAreaNamesForWrite<T extends FactoryAreaNamesInput>(
   input: T,
 ): Promise<T> {
-  if (!needsNames(input)) return input;
-  const [result] = await normalize([input], true);
+  const [result] = await enrichBlankNames(await normalize([input], true), true);
   return result;
 }
 
@@ -63,7 +63,7 @@ export async function normalizeFactoryAreaNamesForWrite<T extends FactoryAreaNam
 export async function normalizeFactoryAreaNamesForRead<T extends FactoryAreaNamesInput>(
   rows: T[],
 ): Promise<T[]> {
-  return normalize(rows, false);
+  return enrichBlankNames(await normalize(rows, false), false);
 }
 
 async function normalize<T extends FactoryAreaNamesInput>(
@@ -148,6 +148,161 @@ async function normalize<T extends FactoryAreaNamesInput>(
   }
 }
 
+type NameField = 'provinceName' | 'districtName' | 'subdistrictName';
+const NAME_FIELDS: readonly NameField[] = ['provinceName', 'districtName', 'subdistrictName'];
+
+/** Blank optional fields use recorded geography only, never a factory's current location. */
+async function enrichBlankNames<T extends FactoryAreaNamesInput>(
+  rows: T[],
+  strict: boolean,
+): Promise<T[]> {
+  const result = [...rows];
+  const pending: Array<{ row: T; index: number; context: Context }> = [];
+  for (const [index, row] of rows.entries()) {
+    if (!NAME_FIELDS.some((field) => isBlankOwnName(row, field))) continue;
+    const recordedProvince = recordedProvinceNames(row.address);
+    const contextRow =
+      !row.provinceName?.trim() && recordedProvince.length === 1
+        ? { ...row, provinceName: recordedProvince[0] }
+        : row;
+    const context = contextFor(contextRow);
+    const provinceCodes = recordedProvince.map(diwProvinceCodeFromName);
+    if (provinceCodes.some((code) => code == null) || new Set(provinceCodes).size > 1)
+      context.invalid = true;
+    if (context.province && provinceCodes.some((code) => code !== context.province))
+      context.invalid = true;
+    const readable = readableFactoryAddressAreaNames(row.address, row.provinceName);
+    const hasLocalContext =
+      context.districts.length > 0 ||
+      context.subdistricts.length > 0 ||
+      readable.district.length > 0 ||
+      readable.subdistrict.length > 0 ||
+      Boolean(row.districtName?.trim() || row.subdistrictName?.trim());
+    if (context.invalid) continue;
+    if (!hasLocalContext) {
+      const provinceName = diwProvinceNameFromCode(context.province);
+      if (provinceName && isBlankOwnName(row, 'provinceName'))
+        result[index] = { ...row, provinceName };
+      continue;
+    }
+    pending.push({ row, index, context });
+  }
+  if (!pending.length) return result;
+  try {
+    const provinces = [
+      ...new Set(pending.map((x) => x.context.province).filter((x): x is string => x != null)),
+    ];
+    const unknown = pending.filter((x) => x.context.province == null);
+    const query = factorySourceDb<Area>(`${env.FACTORY_DB_SCHEMA}.TUMBOL`);
+    if (!unknown.length) query.whereIn('PROV', provinces);
+    else {
+      const names = unknown.map((x) =>
+        readableFactoryAddressAreaNames(x.row.address, x.row.provinceName),
+      );
+      const districts = [...new Set(unknown.flatMap((x) => x.context.districts))];
+      const subdistricts = [...new Set(unknown.flatMap((x) => x.context.subdistricts))];
+      const districtNames = [
+        ...new Set([
+          ...names.flatMap((x) => x.district),
+          ...unknown.map((x) => x.row.districtName?.trim()).filter((x): x is string => Boolean(x)),
+        ]),
+      ];
+      const subdistrictNames = [
+        ...new Set([
+          ...names.flatMap((x) => x.subdistrict),
+          ...unknown
+            .map((x) => x.row.subdistrictName?.trim())
+            .filter((x): x is string => Boolean(x)),
+        ]),
+      ];
+      query.where((builder) => {
+        if (provinces.length) builder.orWhereIn('PROV', provinces);
+        if (districts.length) builder.orWhereIn('AMP', districts);
+        if (subdistricts.length) builder.orWhereIn('TUMBOL', subdistricts);
+        if (districtNames.length) builder.orWhereIn('AMPNAME', districtNames);
+        if (subdistrictNames.length) builder.orWhereIn('TUMNAME', subdistrictNames);
+      });
+    }
+    const areas = await query
+      .timeout(LOOKUP_TIMEOUT_MS)
+      .select('PROV', 'AMP', 'TUMBOL', 'AMPNAME', 'TUMNAME');
+    for (const { row, index, context } of pending) {
+      const matches = areas.filter(
+        (area) =>
+          diwProvinceNameFromCode(area.PROV) != null &&
+          matchesContext(
+            row,
+            { ...context, province: context.province ?? normalizedFactoryAreaCode(area.PROV) },
+            area,
+          ),
+      );
+      if (!matches.length) continue;
+      const patch: Partial<FactoryAreaNamesInput> = {};
+      for (const field of NAME_FIELDS) {
+        if (!isBlankOwnName(row, field)) continue;
+        const names = matches.map((area) =>
+          field === 'provinceName'
+            ? diwProvinceNameFromCode(area.PROV)
+            : field === 'districtName'
+              ? (area.AMPNAME?.trim() ?? null)
+              : (area.TUMNAME?.trim() ?? null),
+        );
+        if (names.every(validName) && new Set(names).size === 1) patch[field] = names[0];
+      }
+      if (Object.keys(patch).length) result[index] = { ...row, ...patch };
+    }
+  } catch {
+    if (strict && pending.some(({ row, context }) => requiresBlankNameLookup(row, context))) {
+      throw new AppError(
+        'Administrative area lookup is temporarily unavailable',
+        503,
+        'FACTORY_AREA_LOOKUP_UNAVAILABLE',
+      );
+    }
+  }
+  return result;
+}
+
+function isBlankOwnName(row: FactoryAreaNamesInput, field: NameField): boolean {
+  return Object.prototype.hasOwnProperty.call(row, field) && !row[field]?.trim();
+}
+function requiresBlankNameLookup(row: FactoryAreaNamesInput, context: Context): boolean {
+  if (!context.province) return false;
+  const subdistrict = normalizedFactoryAreaCode(row.subdistrictCode);
+  const district =
+    normalizedFactoryAreaCode(row.districtCode) ??
+    (subdistrict?.length === 6 ? subdistrict.slice(0, 4) : null);
+  const province = normalizedFactoryAreaCode(row.provinceCode);
+  const explicitProvince =
+    province?.length === 2 || district?.length === 4 || subdistrict?.length === 6;
+  const addressNames = readableFactoryAddressAreaNames(row.address, row.provinceName);
+  const districtEvidence = district != null || addressNames.district.length > 0;
+  const strongAddress = addressNames.district.length > 0 && addressNames.subdistrict.length > 0;
+  return Boolean(
+    (strongAddress && NAME_FIELDS.some((field) => isBlankOwnName(row, field))) ||
+    (isBlankOwnName(row, 'provinceName') && explicitProvince) ||
+    (isBlankOwnName(row, 'districtName') && districtEvidence) ||
+    (isBlankOwnName(row, 'subdistrictName') &&
+      districtEvidence &&
+      (subdistrict != null || addressNames.subdistrict.length > 0)),
+  );
+}
+function recordedProvinceNames(address: string | null | undefined): string[] {
+  const text = address ?? '';
+  const explicit = [...text.matchAll(/(?:จังหวัด|(?<![ก-์a-zA-Z])จ\.)\s*([ก-ฮะ-์]+)/gu)].map(
+    (match) => match[1],
+  );
+  if (text.includes('กรุงเทพมหานคร')) explicit.push('กรุงเทพมหานคร');
+  if (explicit.length) return [...new Set(explicit)];
+  const suffix: string[] = [];
+  for (let code = 10; code <= 96; code++) {
+    const name = diwProvinceNameFromCode(code);
+    if (name && new RegExp(`(?:^|\\s)${name}(?=\\s*(?:[0-9๐-๙]{5})?(?:\\s|$|\\())`, 'u').test(text))
+      suffix.push(name);
+  }
+  return [...new Set(suffix)];
+}
+
 function needsNames(row: FactoryAreaNamesInput): boolean {
   return (
     hasNumericFactoryAddressAreas(row.address) ||
@@ -178,7 +333,7 @@ function contextFor(row: FactoryAreaNamesInput): Context {
   const provinceCandidates: string[] = [];
   const hasReadableDistrict =
     Boolean(row.districtName?.trim() && !isNumericAreaName(row.districtName)) ||
-    readableAddressAreaNames(row.address).district.length > 0;
+    readableFactoryAddressAreaNames(row.address, row.provinceName).district.length > 0;
   let invalid =
     (isNumericAreaName(row.districtName) && districtName == null) ||
     (isNumericAreaName(row.subdistrictName) && subdistrictName == null);
@@ -286,7 +441,7 @@ function matchesContext(row: FactoryAreaNamesInput, context: Context, area: Area
   if (!context.subdistricts.every((code) => factoryAreaCodeMatches(code, area, true))) return false;
   if (context.needsDistrict && !validName(area.AMPNAME)) return false;
   if (context.needsSubdistrict && !validName(area.TUMNAME)) return false;
-  const embeddedNames = readableAddressAreaNames(row.address);
+  const embeddedNames = readableFactoryAddressAreaNames(row.address, row.provinceName);
   if (!embeddedNames.district.every((name) => name === area.AMPNAME?.trim())) return false;
   if (!embeddedNames.subdistrict.every((name) => name === area.TUMNAME?.trim())) return false;
   if (
@@ -307,18 +462,6 @@ function validName(value: string | null): boolean {
   return Boolean(value && /[ก-ฮ]/u.test(value) && !hasNumericFactoryAddressAreas(value));
 }
 
-function readableAddressAreaNames(address: string | null | undefined): {
-  district: string[];
-  subdistrict: string[];
-} {
-  const names: { district: string[]; subdistrict: string[] } = { district: [], subdistrict: [] };
-  const pattern =
-    /(ตำบล|อำเภอ|แขวง|เขต|(?<![ก-์a-zA-Z])ต\.|(?<![ก-์a-zA-Z])อ\.)\s*([ก-ฮะ-์]+?)(?=\s|$|จังหวัด|กรุงเทพมหานคร|ตำบล|อำเภอ|แขวง|เขต|ต\.|อ\.)/gu;
-  for (const match of String(address ?? '').matchAll(pattern)) {
-    names[['ตำบล', 'แขวง', 'ต.'].includes(match[1]) ? 'subdistrict' : 'district'].push(match[2]);
-  }
-  return names;
-}
 function applyNames<T extends FactoryAreaNamesInput>(row: T, area: Area): T | null {
   const result = { ...row };
   if (hasNumericFactoryAddressAreas(row.address) && row.address) {

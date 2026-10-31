@@ -91,6 +91,36 @@ export function withoutNumericFactoryAddressAreas(address: string): string {
   return address.replace(new RegExp(`${NUMERIC_AREA_PATTERN_SOURCE}\\s*`, 'gu'), '').trim();
 }
 
+/** Readable geography labels only; estate/street descriptions are not district names. */
+export function readableFactoryAddressAreaNames(
+  address: string | null | undefined,
+  provinceName?: string | null,
+): { district: string[]; subdistrict: string[] } {
+  const text = address ?? '';
+  const province =
+    provinceName?.trim().replace(/^จังหวัด\s*/u, '') ||
+    /(?:จังหวัด|(?<![ก-์a-zA-Z])จ\.)\s*([ก-ฮะ-์]+)/u.exec(text)?.[1];
+  const outsideBangkok = Boolean(province && province !== 'กรุงเทพมหานคร');
+  const district: string[] = [];
+  const subdistrict: string[] = [];
+  const cityDistrict: string[] = [];
+  const citySubdistrict: string[] = [];
+  const pattern =
+    /(ตำบล|อำเภอ|(?<![ก-์a-zA-Z])แขวง|(?<![ก-์a-zA-Z])เขต|(?<![ก-์a-zA-Z])ต\.|(?<![ก-์a-zA-Z])อ\.)\s*([ก-ฮะ-์]+?)(?=\s|$|[,;()]|จังหวัด|กรุงเทพมหานคร|ตำบล|อำเภอ|ต\.|อ\.)/gu;
+  for (const match of text.matchAll(pattern)) {
+    if (match[1] === 'แขวง') {
+      if (!outsideBangkok) citySubdistrict.push(match[2]);
+    } else if (match[1] === 'เขต') {
+      if (!outsideBangkok) cityDistrict.push(match[2]);
+    } else if (match[1] === 'ตำบล' || match[1] === 'ต.') subdistrict.push(match[2]);
+    else district.push(match[2]);
+  }
+  return {
+    district: district.length ? district : cityDistrict,
+    subdistrict: subdistrict.length ? subdistrict : citySubdistrict,
+  };
+}
+
 interface FactoryAddressPlacementOptions {
   postalCode?: string | number | null;
 }

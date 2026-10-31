@@ -31,6 +31,11 @@ import {
 } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 import type { EligibleFactoryDTO } from '../../src/modules/eligible-factories/eligible-factories.types';
 import { pomsFactoriesService } from '../../src/modules/poms-factories/poms-factories.service';
+import type {
+  PomsFactoryDetailDTO,
+  PomsFactoryEditRequestDTO,
+  PomsFactoryProfileDTO,
+} from '../../src/modules/poms-factories/poms-factories.types';
 
 const numericAddress = '7/507 หมู่ 6 ตำบล5 อำเภอ6 จังหวัดระยอง 21140 (ประตู 2)';
 const readableAddress = '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140 (ประตู 2)';
@@ -87,18 +92,33 @@ function eligible(address: string | null = numericAddress): EligibleFactoryDTO {
   };
 }
 
-function detail() {
+function detail(): PomsFactoryDetailDTO {
   return {
     ...eligible(),
     eligibleFactoryId: 1,
     factoryId: source.FID,
     factoryRegistrationNo: source.DISPFACREG,
+    industryMainOrder: '08802',
+    industryMainOrderLabel: null,
+    industrySubOrder: null,
     factoryAddress: numericAddress,
+    latitude: null,
+    longitude: null,
+    eia: null,
+    eiaOther: null,
+    projectName: null,
     factoryFrontPhotos: [],
     factoryLogo: null,
+    systemTypes: ['CEMS'],
+    measurementPointCount: 1,
+    pendingEditRequestCount: 0,
     measurementPoints: [
       {
         connectedPointId: 1,
+        sourceMeasurementPointId: 1,
+        eligibleFactoryId: 1,
+        factoryId: source.FID,
+        factoryName: 'โรงงานทดสอบ',
         systemType: 'CEMS',
         pointName: 'A',
         pointCode: 'S0001',
@@ -108,8 +128,44 @@ function detail() {
         documentsAndImages: [],
         monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
         measurementInstruments: null,
+        updatedAt: '2026-10-30',
       },
     ],
+  };
+}
+
+function editRequest(
+  currentFactory: PomsFactoryProfileDTO = detail(),
+  proposedFactory: PomsFactoryProfileDTO = detail(),
+): PomsFactoryEditRequestDTO {
+  return {
+    id: 1,
+    requestNo: 'POMS-0001/2569',
+    eligibleFactoryId: 1,
+    factoryId: source.FID,
+    factoryRegistrationNo: source.DISPFACREG,
+    factoryName: 'โรงงานทดสอบ',
+    formType: 'BASIC_INFO',
+    status: 'PENDING_REVIEW',
+    statusLabel: 'รอพิจารณา',
+    revisionNo: 0,
+    isOpen: true,
+    currentFactory,
+    proposedFactory,
+    currentMeasurementPoints: null,
+    proposedMeasurementPoints: null,
+    requestNote: null,
+    revisionReason: null,
+    officerNote: null,
+    submittedBy: 1,
+    reviewedBy: null,
+    submittedAt: '2026-10-30',
+    reviewedAt: null,
+    approvedAt: null,
+    createdBy: 1,
+    createdAt: '2026-10-30',
+    updatedAt: '2026-10-30',
+    events: [],
   };
 }
 
@@ -127,15 +183,8 @@ describe.each(['legacy', 'canonical'])('factory address names in %s mode', (mode
     mockFindDetail.mockImplementation(async () => detail());
     mockFindContacts.mockImplementation(async () => null);
     mockFindOpenRequest.mockImplementation(async () => null);
-    mockFindEditRequest.mockImplementation(async () => ({
-      id: 1,
-      eligibleFactoryId: 1,
-      factoryId: source.FID,
-      formType: 'BASIC_INFO',
-      currentFactory: detail(),
-      proposedFactory: detail(),
-      requestNote: null,
-    }));
+    mockFindEditRequest.mockImplementation(async () => editRequest());
+    mockCreateEditRequest.mockImplementation(async () => editRequest());
     mockListFactories.mockImplementation(async () => [
       {
         factoryId: source.FID,
@@ -168,7 +217,13 @@ describe.each(['legacy', 'canonical'])('factory address names in %s mode', (mode
   });
 
   it('retains raw persisted addresses in write snapshots instead of display enrichment', async () => {
-    await pomsFactoriesService.createEditRequest(
+    const stored = Object.freeze(detail());
+    const saved = Object.freeze(
+      editRequest(stored, Object.freeze({ ...stored, projectName: 'New project' })),
+    );
+    mockFindDetail.mockImplementation(async () => stored);
+    mockCreateEditRequest.mockImplementation(async () => saved);
+    const result = await pomsFactoriesService.createEditRequest(
       source.FID,
       { projectName: 'New project' },
       1,
@@ -182,7 +237,14 @@ describe.each(['legacy', 'canonical'])('factory address names in %s mode', (mode
       null,
       1,
     );
-    expect(mockSourceDb).not.toHaveBeenCalled();
+    expect(stored.factoryAddress).toBe(numericAddress);
+    expect(saved.currentFactory.factoryAddress).toBe(numericAddress);
+    expect(saved.proposedFactory.factoryAddress).toBe(numericAddress);
+    expect(result.currentFactory.factoryAddress).toBe(readableAddress);
+    expect(result.proposedFactory.factoryAddress).toBe(readableAddress);
+    expect(mockSourceDb).toHaveBeenCalledTimes(1);
+    expect(mockSourceDb).toHaveBeenCalledWith('dbo.TUMBOL');
+    expect(mockSourceDb).not.toHaveBeenCalledWith('dbo.fac_import');
   });
 
   it('resolves list addresses in a batch', async () => {
@@ -222,7 +284,11 @@ describe.each(['legacy', 'canonical'])('factory address names in %s mode', (mode
     }));
     const form = await pomsFactoriesService.getFactoryForm(source.FID, 1, 'ALL', {});
     expect(form.address).toBe(readableAddress);
-    expect(mockSourceDb).not.toHaveBeenCalled();
+    expect(form.districtName).toBe('ปลวกแดง');
+    expect(form.subdistrictName).toBe('มาบยางพร');
+    expect(mockSourceDb).toHaveBeenCalledTimes(1);
+    expect(mockSourceDb).toHaveBeenCalledWith('dbo.TUMBOL');
+    expect(mockSourceDb).not.toHaveBeenCalledWith('dbo.fac_import');
   });
 
   it('refuses persistent repairs when the stored area codes differ from Fac60k', async () => {

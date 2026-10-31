@@ -1133,7 +1133,7 @@ export const connectionRequestsRepository = {
     initialStatus: ConnectionRequestStatus,
     options?: CreateRequestOptions,
   ): Promise<ConnectionRequestDTO> {
-    input = await normalizeFactoryAreaNamesForWrite(input);
+    input = await normalizeRequestFactoryAreaNames(input);
     return db.transaction(async (trx) => {
       await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
       input = await validateAndNormalizeAddParameterInput(trx, input);
@@ -1185,7 +1185,7 @@ export const connectionRequestsRepository = {
       );
     }
 
-    input = await normalizeFactoryAreaNamesForWrite(input);
+    input = await normalizeRequestFactoryAreaNames(input);
 
     try {
       return await db.transaction(async (trx) => {
@@ -1361,7 +1361,7 @@ export const connectionRequestsRepository = {
     nextStatus: ConnectionRequestStatus,
     access: ListAccess & { expectedUpdatedAt: string },
   ): Promise<ConnectionRequestDTO> {
-    input = await normalizeFactoryAreaNamesForWrite(input);
+    input = await normalizeRequestFactoryAreaNames(input);
     return db.transaction(async (trx) => {
       const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
         .where('id', id)
@@ -3500,6 +3500,18 @@ function toConnectionRequestDTO(
   };
 }
 
+/** Snapshot columns exist even when clients omit the optional split-name input fields. */
+async function normalizeRequestFactoryAreaNames<T extends CreateConnectionRequestInput>(
+  input: T,
+): Promise<T> {
+  return normalizeFactoryAreaNamesForWrite({
+    ...input,
+    provinceName: input.provinceName ?? null,
+    districtName: input.districtName ?? null,
+    subdistrictName: input.subdistrictName ?? null,
+  });
+}
+
 function toRequestRow(input: CreateConnectionRequestInput): Record<string, unknown> {
   const hasEia = input.eia ? deriveHasEiaFromAssessment(input.eia) : (input.hasEia ?? null);
   return {
@@ -3601,13 +3613,32 @@ function toFactorySnapshotInsertRow(
   source: FactorySnapshotSourceRow | null,
   actorUserId: number,
 ): Record<string, unknown> {
-  const regionName = input.regionName ?? source?.province_region ?? null;
+  const submittedProvince = normalizeLookupText(input.provinceName)?.replace(/^จังหวัด\s*/u, '');
+  const sourceProvince = normalizeLookupText(source?.province_name)?.replace(/^จังหวัด\s*/u, '');
+  const hasRecordedGeography =
+    [
+      input.provinceCode,
+      input.districtCode,
+      input.subdistrictCode,
+      input.districtName,
+      input.subdistrictName,
+    ].some((value) => normalizeLookupText(value) != null) ||
+    /(?:ตำบล|อำเภอ|แขวง|เขต|จังหวัด|กรุงเทพมหานคร|(?:^|\s)[ตอจ]\.)/u.test(input.address ?? '');
+  // Supporting master geography must not replace a recorded but unresolved historical location.
+  const sourceMatchesProvince = submittedProvince
+    ? submittedProvince === sourceProvince
+    : !hasRecordedGeography;
+  const regionName =
+    input.regionName ?? (sourceMatchesProvince ? (source?.province_region ?? null) : null);
   return {
     request_id: requestId,
     region_code: input.regionCode ?? regionName,
     region_name: regionName,
-    province_code: input.provinceCode ?? source?.province_id ?? null,
-    province_name: input.provinceName ?? source?.province_name ?? null,
+    province_code:
+      input.provinceCode ?? (sourceMatchesProvince ? (source?.province_id ?? null) : null),
+    province_name:
+      normalizeLookupText(input.provinceName) ??
+      (sourceMatchesProvince ? (source?.province_name ?? null) : null),
     district_code: input.districtCode ?? null,
     district_name: input.districtName ?? null,
     subdistrict_code: input.subdistrictCode ?? null,

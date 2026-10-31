@@ -720,6 +720,117 @@ describe('monitoringPointFormsService', () => {
     expect(mockedRepository.update).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['create', false],
+    ['create', true],
+    ['update', false],
+    ['update', true],
+  ] as const)(
+    'propagates a verified blank province into the saved form and address during %s (canonical: %s)',
+    async (action, canonical) => {
+      mockCanonicalMode.mockReturnValue(canonical);
+      const blankInput = {
+        ...input,
+        factory: {
+          ...input.factory,
+          provinceName: '',
+          address: '189 หมู่ 10 ถนนวรนคร ตำบลศรีภูมิ อำเภอท่าวังผา 55140',
+        },
+      };
+      const verifiedInput = {
+        ...blankInput,
+        factory: { ...blankInput.factory, provinceName: 'น่าน' },
+      };
+      const saved = {
+        id: 1,
+        factory: toFactoryDTO(verifiedInput.factory),
+        points: [],
+        createdAt: '2026-10-31',
+        updatedAt: '2026-10-31',
+      };
+      mockedRepository.list.mockResolvedValue([]);
+      mockedRepository.create.mockResolvedValue(saved);
+      mockedRepository.update.mockResolvedValue(saved);
+      mockedRepository.findById.mockResolvedValue(saved);
+      mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(null);
+      mockedEligibleRepository.findByRegistrationNoNew.mockResolvedValue(null);
+      mockedEligibleRepository.create.mockResolvedValue(createEligibleFactoryDTO());
+      mockedNormalizeAreasWrite.mockImplementation(async (value) =>
+        value.provinceName === '' ? { ...value, provinceName: 'น่าน' } : value,
+      );
+
+      if (action === 'create') await monitoringPointFormsService.create(blankInput, 42);
+      else await monitoringPointFormsService.update(1, blankInput, 42);
+
+      const submitted =
+        action === 'create'
+          ? mockedRepository.create.mock.calls[0]?.[0]
+          : mockedRepository.update.mock.calls[0]?.[1];
+      expect(submitted?.factory.provinceName).toBe('น่าน');
+      expect(submitted?.factory.address).toBe(
+        '189 หมู่ 10 ถนนวรนคร ตำบลศรีภูมิ อำเภอท่าวังผา จังหวัดน่าน 55140',
+      );
+      expect(blankInput.factory.provinceName).toBe('');
+    },
+  );
+
+  it.each([false, true])(
+    'passes a historical blank province to verification before applying its required fallback (canonical: %s)',
+    async (canonical) => {
+      mockCanonicalMode.mockReturnValue(canonical);
+      const saved = {
+        id: 1,
+        factory: toFactoryDTO({ ...input.factory, provinceName: null }),
+        points: [],
+        createdAt: '2026-10-31',
+        updatedAt: '2026-10-31',
+      };
+      mockedRepository.findById.mockResolvedValue(saved);
+      mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(null);
+      mockedEligibleRepository.findByRegistrationNoNew.mockResolvedValue(null);
+      mockedEligibleRepository.create.mockResolvedValue(createEligibleFactoryDTO());
+      mockedNormalizeAreasWrite.mockImplementationOnce(async (value) => ({
+        ...value,
+        provinceName: 'ลำปาง',
+      }));
+
+      await monitoringPointFormsService.selectEligible(1, 42);
+
+      expect(mockedNormalizeAreasWrite).toHaveBeenCalledWith(
+        expect.objectContaining({ provinceName: '' }),
+      );
+      expect(mockedEligibleRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ provinceName: 'ลำปาง' }),
+        42,
+        mockTransaction,
+      );
+    },
+  );
+
+  it('preserves the required unknown-province fallback when verification cannot fill a blank', async () => {
+    mockedRepository.findById.mockResolvedValue({
+      id: 1,
+      factory: toFactoryDTO({ ...input.factory, provinceName: null }),
+      points: [],
+      createdAt: '2026-10-31',
+      updatedAt: '2026-10-31',
+    });
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(null);
+    mockedEligibleRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedEligibleRepository.create.mockResolvedValue(createEligibleFactoryDTO());
+
+    await monitoringPointFormsService.selectEligible(1, 42);
+
+    expect(mockedNormalizeAreasWrite).toHaveBeenCalledWith(
+      expect.objectContaining({ provinceName: '' }),
+    );
+    expect(mockedEligibleRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ provinceName: '-' }),
+      42,
+      mockTransaction,
+    );
+  });
+
   it('throws not found when updating an unknown form', async () => {
     mockedRepository.update.mockResolvedValue(null);
 

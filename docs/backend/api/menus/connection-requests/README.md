@@ -25,9 +25,11 @@ curl "$BASE_URL/api/v1/cems-wpms-requests/factories/factory-001/previous-request
 
 ### ชื่ออำเภอและตำบลก่อนบันทึกและเมื่ออ่านฟอร์ม
 
-`POST /cems-wpms-requests`, `/measurement-points`, `/direct-connections`, `/parameters` และ `PUT /cems-wpms-requests/:id/form` ตรวจ `address`, `districtName` และ `subdistrictName` ที่เป็นรหัสตัวเลขก่อนบันทึกคำขอหรือ snapshot ใหม่. ใช้จังหวัด+อำเภอ+ตำบลเทียบทะเบียนเดียวกันทั้งโหมดเดิมและ `canonical`; เก็บเลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์และช่องรหัสเดิม. ค่าที่อ่านเป็นชื่ออยู่แล้วและ `null` คงตาม contract เดิม
+`POST /cems-wpms-requests`, `/measurement-points`, `/direct-connections`, `/parameters` และ `PUT /cems-wpms-requests/:id/form` ตรวจ `address`, `districtName` และ `subdistrictName` ที่เป็นรหัสตัวเลขก่อนบันทึกคำขอหรือ snapshot ใหม่. ใช้จังหวัด+อำเภอ+ตำบลเทียบทะเบียนเดียวกันทั้งโหมดเดิมและ `canonical`; เก็บเลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์และช่องรหัสเดิม. ชื่อที่อ่านได้และ `address = null` คงเดิม; ช่องชื่อพื้นที่เดิมที่เป็น `null`/สตริงว่างเติมได้เฉพาะชื่อที่ตรวจยืนยันจากพื้นที่ในรายการเดิม โดยไม่เปลี่ยนช่องรหัสหรือเพิ่ม property
 
-รหัสไม่ตรง หาชื่อไม่ได้หรือกำกวมตอบ `400 BAD_REQUEST` พร้อม `details.path` และ `details.reason = UNRESOLVED_ADMINISTRATIVE_AREA`; อ่านทะเบียนสำหรับค่าตัวเลขไม่ได้ชั่วคราวตอบ `503 FACTORY_AREA_LOOKUP_UNAVAILABLE`. Client ต้องแก้ข้อมูลหรือรอลองใหม่ โดยไม่ถือว่าคำขอถูกบันทึกสำเร็จ ดู field rules และตัวอย่าง error ใน [กติกาชื่อพื้นที่ร่วม](../eligible-factories/README.md#ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่)
+สำหรับป้าย/ชื่อที่เป็นตัวเลข รหัสไม่ตรง หาชื่อไม่ได้หรือกำกวมตอบ `400 BAD_REQUEST` พร้อม `details.path` และ `details.reason = UNRESOLVED_ADMINISTRATIVE_AREA`; อ่านทะเบียนสำหรับค่าตัวเลข หรือช่องชื่อว่างซึ่งมีรหัสหรือชื่อใน `address` ระบุพื้นที่เดิมได้ชัดเจนไม่ได้ชั่วคราวตอบ `503 FACTORY_AREA_LOOKUP_UNAVAILABLE`. Client ต้องแก้ข้อมูลหรือรอลองใหม่ โดยไม่ถือว่าคำขอถูกบันทึกสำเร็จ ดู field rules และตัวอย่าง error ใน [กติกาชื่อพื้นที่ร่วม](../eligible-factories/README.md#ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่)
+
+`provinceName`, `districtName` และ `subdistrictName` ที่มี field อยู่แล้วแต่เป็น `null`/สตริงว่างจะเติมแยกเฉพาะชื่อที่ยืนยันได้จาก `address`, รหัสและชื่อพื้นที่ที่บันทึกในคำขอนั้น. ไม่ใช้ Fac60k ปัจจุบันมาเดาชื่อว่างของประวัติ แม้ทราบ `factoryId`; กรณีทราบเพียงจังหวัดโดยไม่มีข้อมูลท้องถิ่น เติมได้เฉพาะจังหวัดจาก mapping ที่ยืนยันได้. เมื่อมีข้อมูลท้องถิ่นแต่ขัดแย้งหรือไม่มีแถวทะเบียนที่ตรงกับ context ให้คงชื่อว่างทั้งหมด; เมื่อมีหลายแถวที่ตรงกันให้เติมเฉพาะชื่อที่ไม่กำกวม. ข้อมูลไม่พอหรืออ่านทะเบียนไม่ได้ให้คงช่องว่าง. ตัวอย่าง `address` ที่ระบุ `ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง` จะคืนชื่อแยกครบเมื่อจับคู่ทะเบียนได้ โดยช่องรหัสเดิมยังคงค่าเดิม ดู [ตัวอย่างส่วนข้อมูลพื้นที่](../eligible-factories/README.md#ป้องกันรหัสตัวเลขในข้อมูลที่บันทึกใหม่)
 
 รายการ รายละเอียด ฟอร์ม และข้อมูลจากคำขอก่อนหน้าจะคืนชื่อแทนค่าตัวเลขเมื่อยืนยันได้. หากยืนยันไม่ได้ ให้ละป้ายพื้นที่ตัวเลขใน `address` และคืน `null` ในช่องชื่อที่เป็นตัวเลข โดยไม่เปลี่ยนช่องรหัสหรือเขียนข้อมูลเก่าระหว่าง `GET`; snapshot JSON และ event history ในฐานยังคงเดิม
 
@@ -1018,8 +1020,8 @@ Frontend ใช้ `statusHistory[].note` ได้โดยตรง และ�
 | `data.factoryId`, `data.factoryName`, `data.factoryRegistrationNo` | string | no | identity โรงงานที่ใช้ในฟอร์ม |
 | `data.industryMainOrder`, `data.industryMainOrderLabel`, `data.industrySubOrder`, `data.businessActivity` | string | yes | กลุ่มอุตสาหกรรมและลักษณะกิจการ |
 | `data.eia`, `data.eiaOther`, `data.hasEia`, `data.projectName` | string/boolean | yes | ข้อมูล EIA และชื่อโครงการ |
-| `data.address` | string | yes | ที่อยู่ที่แปลงป้ายพื้นที่ตัวเลขตามกติกาชื่อพื้นที่ร่วม; form response ไม่คืน `factoryAddress` |
-| `data.regionCode`, `data.regionName`, `data.provinceCode`, `data.provinceName`, `data.districtCode`, `data.districtName`, `data.subdistrictCode`, `data.subdistrictName`, `data.industrialEstateCode`, `data.industrialEstateName` | string | yes | รหัสและชื่อพื้นที่ |
+| `data.address` | string | yes | ที่อยู่ที่แปลงป้ายพื้นที่ตัวเลขตามกติกาชื่อพื้นที่ร่วม; การเติมช่องชื่อแยกไม่แก้ข้อความนี้ และ form response ไม่คืน `factoryAddress` |
+| `data.regionCode`, `data.regionName`, `data.provinceCode`, `data.provinceName`, `data.districtCode`, `data.districtName`, `data.subdistrictCode`, `data.subdistrictName`, `data.industrialEstateCode`, `data.industrialEstateName` | string | yes | รหัสเดิมคงเดิม; ช่องชื่อจังหวัด/อำเภอ/ตำบลที่ว่างเติมเฉพาะชื่อที่ยืนยันจากพื้นที่ในคำขอได้ ไม่เดาจากที่อยู่ปัจจุบัน |
 | `data.latitude`, `data.longitude` | number | yes | พิกัดโรงงาน |
 | `data.systemType` | `CEMS` \| `WPMS` | no | ระบบของฟอร์มนี้ |
 | `data.contactName`, `data.contactPhone` | string | no | ผู้ติดต่อหลัก; POMS prefill คืน empty string เพราะ current/live POMS ไม่เก็บ field นี้ |

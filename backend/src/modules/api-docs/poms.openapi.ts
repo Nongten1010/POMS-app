@@ -2998,7 +2998,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         description: factoryAddressNamesDescription,
         example: '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140',
       },
-      provinceName: nullableStringSchema(128),
+      provinceName: { ...nullableStringSchema(128), description: factoryAreaReadDescription },
       industrialEstateName: nullableStringSchema(255),
       latitude: { type: 'number', minimum: -90, maximum: 90, nullable: true },
       longitude: { type: 'number', minimum: -180, maximum: 180, nullable: true },
@@ -7869,6 +7869,7 @@ const editRequestFormSchemas: Record<string, OpenApiObject> = {
     properties: {
       ...baseFormProperties,
       address: { ...baseFormProperties.address, description: factoryAddressNamesDescription },
+      provinceName: { ...baseFormProperties.provinceName, description: factoryAreaReadDescription },
       districtName: { ...baseFormProperties.districtName, description: factoryAreaReadDescription },
       subdistrictName: {
         ...baseFormProperties.subdistrictName,
@@ -7908,6 +7909,7 @@ const editRequestFormSchemas: Record<string, OpenApiObject> = {
     properties: {
       ...baseFormProperties,
       address: { ...baseFormProperties.address, description: factoryAddressNamesDescription },
+      provinceName: { ...baseFormProperties.provinceName, description: factoryAreaReadDescription },
       districtName: { ...baseFormProperties.districtName, description: factoryAreaReadDescription },
       subdistrictName: {
         ...baseFormProperties.subdistrictName,
@@ -8000,6 +8002,22 @@ for (const [path, method] of [
 ]) {
   const operation = paths[path]?.[method] as OpenApiObject | undefined;
   if (operation) describeFactoryAreaWriteOperation(operation);
+}
+
+for (const [path, schemaName] of [
+  ['/poms-factories/{factoryId}/form', 'PomsFactoryForm'],
+  ['/poms-factories/edit-requests/{id}/form', 'PomsFactoryEditRequestForm'],
+]) {
+  const operation = paths[path]?.get as OpenApiObject | undefined;
+  if (!operation) continue;
+  const response = (operation.responses as OpenApiObject)['200'] as OpenApiObject;
+  const media = (response.content as OpenApiObject)['application/json'] as OpenApiObject;
+  media.examples = {
+    verifiedAreaNames: {
+      summary: 'ชื่อพื้นที่จากข้อมูลเดิมที่ตรวจยืนยันได้; ไม่เปลี่ยนช่องรหัส',
+      value: { success: true, data: editRequestFormSchemas[schemaName].example },
+    },
+  };
 }
 
 for (const [uploadPath, method] of [

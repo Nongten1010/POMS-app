@@ -210,6 +210,11 @@ export function diwProvinceCodeFromName(provinceName: string): string | null {
   return found?.[0] ?? null;
 }
 
+export function diwProvinceNameFromCode(code: string | number | null | undefined): string | null {
+  const normalized = normalizeNumberCode(code);
+  return normalized ? (PROVINCE_BY_DIW_CODE[normalized] ?? null) : null;
+}
+
 export function diwFactoryFlagFromOperationStatus(operationStatus: string): string | null {
   if (operationStatus === 'ยังไม่แจ้งประกอบ') return NOT_STARTED_FACTORY_FLAG;
   if (operationStatus === 'แจ้งประกอบแล้ว') return ACTIVE_FACTORY_FLAG;

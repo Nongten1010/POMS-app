@@ -111,10 +111,15 @@ describe.each(['legacy', 'canonical'])('request area write boundary in %s mode',
   );
 
   it.each(writers)(
-    '$name allows readable addresses through without an external name lookup',
+    '$name allows complete readable area names through without an external name lookup',
     async ({ run }) => {
       await expect(
-        run({ ...input, address: '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง 21140' }),
+        run({
+          ...input,
+          address: '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง 21140',
+          districtName: 'ปลวกแดง',
+          subdistrictName: 'มาบยางพร',
+        }),
       ).rejects.toThrow('TRANSACTION_REACHED');
       expect(mockTransaction).toHaveBeenCalledTimes(1);
       expect(mockSource).not.toHaveBeenCalled();
