@@ -192,6 +192,138 @@ describe.each(['legacy', 'canonical'])('connection request geography reads in %s
     expect(stored.districtName).toBe('6');
   });
 
+  it.each([null, '   '])(
+    'fills blank split names from the recorded readable address for form/list/prefill (%j)',
+    async (blank) => {
+      const stored = Object.freeze({
+        ...storedRequest(),
+        address: readableAddress,
+        provinceCode: '1021',
+        provinceName: blank,
+        districtCode: null,
+        districtName: blank,
+        subdistrictCode: null,
+        subdistrictName: blank,
+      });
+      mockFindRequest.mockImplementation(async () => stored);
+      mockPrevious.mockImplementation(async () => stored);
+      mockList.mockImplementation(async () => ({ rows: [stored], total: 1 }));
+      const form = await connectionRequestsService.getForm(1, 42, 'OWN_FACTORY');
+      const previous = await connectionRequestsService.getPreviousRequest(
+        registration,
+        42,
+        'OWN_FACTORY',
+      );
+      const list = await connectionRequestsService.list({}, 42, 'OWN_FACTORY');
+      for (const row of [form, previous.formData, list.data[0]]) {
+        expect(row).toMatchObject({
+          address: readableAddress,
+          provinceCode: '1021',
+          provinceName: 'ระยอง',
+          districtCode: null,
+          districtName: 'ปลวกแดง',
+          subdistrictCode: null,
+          subdistrictName: 'มาบยางพร',
+        });
+      }
+      expect(stored.provinceName).toBe(blank);
+      expect(stored.districtName).toBe(blank);
+      expect(stored.subdistrictName).toBe(blank);
+      expect(stored.address).toBe(readableAddress);
+    },
+  );
+
+  it('fills an existing blank province alias without adding fields absent from a factory DTO', async () => {
+    const factory = Object.freeze({
+      ...storedFactory(),
+      address: readableAddress,
+      province: null,
+      districtCode: null,
+      districtName: null,
+    });
+    mockGeneral.mockImplementation(async () => factory);
+    const result = await connectionRequestsService.getFactoryGeneral(
+      registration,
+      42,
+      'OWN_FACTORY',
+    );
+    expect(result).toMatchObject({
+      address: readableAddress,
+      province: 'ระยอง',
+      districtCode: null,
+      districtName: 'ปลวกแดง',
+    });
+    expect(result).not.toHaveProperty('provinceName');
+    expect(result).not.toHaveProperty('subdistrictName');
+    expect(factory.province).toBeNull();
+    expect(factory.districtName).toBeNull();
+  });
+
+  it('uses a recorded nonblank province alias when the primary name is whitespace', async () => {
+    const address = readableAddress.replace(' จังหวัดระยอง', '');
+    const factory = Object.freeze({
+      ...storedFactory(),
+      address,
+      provinceName: '   ',
+      province: 'ระยอง',
+      districtName: null,
+      districtCode: '6',
+      subdistrictName: null,
+      subdistrictCode: '5',
+    });
+    mockGeneral.mockImplementation(async () => factory);
+    const result = await connectionRequestsService.getFactoryGeneral(
+      registration,
+      42,
+      'OWN_FACTORY',
+    );
+    expect(result).toMatchObject({
+      address,
+      provinceName: 'ระยอง',
+      province: 'ระยอง',
+      districtName: 'ปลวกแดง',
+      districtCode: '6',
+      subdistrictName: 'มาบยางพร',
+      subdistrictCode: '5',
+    });
+    expect(factory.provinceName).toBe('   ');
+    expect(factory.province).toBe('ระยอง');
+  });
+
+  it('retains the request province with its address when factory detail falls back to the request', async () => {
+    mockFactoryMap.mockImplementation(async () => new Map());
+    const result = await connectionRequestsService.getDetail(1, 42, 'OWN_FACTORY');
+    expect(result.factory).toMatchObject({ address: readableAddress, province: 'ระยอง' });
+  });
+
+  it('keeps split names together with a request address used as a nested factory fallback', async () => {
+    const factory = Object.freeze({
+      ...storedFactory(),
+      address: null,
+      province: null,
+      provinceName: null,
+      districtName: null,
+      districtCode: null,
+    });
+    mockFindRequest.mockImplementation(async () => ({
+      ...storedRequest(),
+      address: readableAddress,
+      districtName: 'ปลวกแดง',
+      subdistrictName: 'มาบยางพร',
+    }));
+    mockFactoryMap.mockImplementation(async () => new Map([[registration, factory]]));
+    const result = await connectionRequestsService.getDetail(1, 42, 'OWN_FACTORY');
+    expect(result.factory).toMatchObject({
+      address: readableAddress,
+      province: 'ระยอง',
+      provinceName: 'ระยอง',
+      districtName: 'ปลวกแดง',
+    });
+    expect(factory.address).toBeNull();
+    expect(factory.provinceName).toBeNull();
+    expect(factory.districtName).toBeNull();
+  });
+
   it('normalizes both request and nested factory detail using province/registration aliases', async () => {
     const result = await connectionRequestsService.getDetail(1, 42, 'OWN_FACTORY');
     expect(result.address).toBe(readableAddress);

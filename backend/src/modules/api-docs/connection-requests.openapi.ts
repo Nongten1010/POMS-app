@@ -19,10 +19,16 @@ import {
 type OpenApiObject = Record<string, unknown>;
 type EnumLabelMap = Record<string, string>;
 
+export const factoryAreaNameCompletionDescription =
+  'provinceName, districtName และ subdistrictName ที่มี property เดิมแต่เป็น null/undefined/สตริงว่าง เติมได้เฉพาะชื่อที่ยืนยันจากจังหวัด/รหัส/ชื่อพื้นที่ใน address ที่บันทึกไว้กับทะเบียน TUMBOL. ยึดพื้นที่ในข้อมูลเดิม ไม่ใช้ตำแหน่งปัจจุบันของ Fac60k มาเติมช่องว่างของประวัติ แม้มี factoryId; ถ้ามีเพียงจังหวัดที่ยืนยันได้และไม่มีข้อมูลอำเภอ/ตำบล เติมจังหวัดจาก mapping ที่ระบบรู้จักได้โดยคงชื่อท้องถิ่นว่าง. เมื่อมีข้อมูลอำเภอ/ตำบล ต้องมีแถวทะเบียนที่ตรงกับข้อมูลพื้นที่ทั้งหมดก่อน; ข้อมูลท้องถิ่นขัดแย้งหรือไม่มีแถวตรงให้คงชื่อว่างทั้งหมด แม้พอระบุจังหวัดได้. เมื่อมีหลายแถวที่ตรงกัน เติมแยกตามชื่อที่ไม่กำกวม จึงอาจเติมจังหวัด/อำเภอได้แต่ตำบลยังว่าง. เมื่อข้อมูลไม่พอหรือชื่อยังกำกวม คงช่องว่าง; ไม่เพิ่ม property ที่ไม่มีเดิม ไม่เปลี่ยนชื่อที่อ่านได้หรือช่องรหัส และไม่เติม address ที่เป็น null';
 export const factoryAreaWriteDescription =
-  'ก่อนบันทึก address, districtName และ subdistrictName ที่เป็นรหัสตัวเลข Backend ตรวจชื่อกับทะเบียน TUMBOL ด้วยจังหวัด+อำเภอ+ตำบล และเปลี่ยนเฉพาะป้ายพื้นที่/ช่องชื่อที่เป็นตัวเลข. รองรับเลขไทยและป้าย ตำบล/อำเภอ/แขวง/เขต/ต./อ.; เก็บเลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์ ข้อความที่อ่านได้ และช่องรหัสพื้นที่เดิม; ไม่ตีความอักษรในชื่อซอย เช่น ซอยเอ.6 เป็นป้ายรหัสอำเภอ. ใช้กติกาเดียวกันทั้ง legacy/canonical. รหัสไม่ตรง หาชื่อไม่ได้ หรือชื่อกำกวมตอบ 400 BAD_REQUEST พร้อม details.path และ details.reason = UNRESOLVED_ADMINISTRATIVE_AREA โดยไม่บันทึกการเปลี่ยนแปลง; อ่านทะเบียนสำหรับค่าตัวเลขไม่ได้ชั่วคราวตอบ 503 FACTORY_AREA_LOOKUP_UNAVAILABLE ให้ลองใหม่ภายหลัง';
+  'ก่อนบันทึก address, districtName และ subdistrictName ที่เป็นรหัสตัวเลข Backend ตรวจชื่อกับทะเบียน TUMBOL ด้วยจังหวัด+อำเภอ+ตำบล และเปลี่ยนเฉพาะป้ายพื้นที่/ช่องชื่อที่เป็นตัวเลข. รองรับเลขไทยและป้าย ตำบล/อำเภอ/แขวง/เขต/ต./อ.; เก็บเลขบ้าน หมู่ ซอย ถนน รหัสไปรษณีย์ ข้อความที่อ่านได้ และช่องรหัสพื้นที่เดิม; ไม่ตีความอักษรในชื่อซอย เช่น ซอยเอ.6 เป็นป้ายรหัสอำเภอ. ใช้กติกาเดียวกันทั้ง legacy/canonical. สำหรับป้าย/ชื่อที่เป็นตัวเลข รหัสไม่ตรง หาชื่อไม่ได้ หรือชื่อกำกวมตอบ 400 BAD_REQUEST พร้อม details.path และ details.reason = UNRESOLVED_ADMINISTRATIVE_AREA โดยไม่บันทึกการเปลี่ยนแปลง. ' +
+  factoryAreaNameCompletionDescription +
+  '. อ่านทะเบียนสำหรับค่าตัวเลข หรือสำหรับช่องชื่อว่างที่รหัสหรือชื่อใน address ระบุพื้นที่เดิมได้ชัดเจนไม่ได้ชั่วคราว ตอบ 503 FACTORY_AREA_LOOKUP_UNAVAILABLE ให้ลองใหม่ภายหลัง';
 export const factoryAreaReadDescription =
-  'การอ่านข้อมูลทั้ง legacy/canonical แปลงเฉพาะป้ายพื้นที่หรือช่องชื่ออำเภอ/ตำบลที่เป็นตัวเลขเมื่อยืนยันชื่อจากทะเบียน TUMBOL ด้วย PROV+AMP+TUMBOL ได้; ถ้ายืนยันไม่ได้จะละป้ายพื้นที่ตัวเลขและคืน null ในช่องชื่อที่เป็นตัวเลข โดยรักษารายละเอียดที่อยู่ ชื่อที่อ่านได้ และช่องรหัสเดิม. GET ไม่เขียนกลับฐานข้อมูลหรือ snapshot JSON/event history';
+  'การอ่านข้อมูลทั้ง legacy/canonical แปลงป้ายพื้นที่หรือช่องชื่ออำเภอ/ตำบลที่เป็นตัวเลขเมื่อยืนยันชื่อจากทะเบียน TUMBOL ด้วย PROV+AMP+TUMBOL ได้; ถ้ายืนยันไม่ได้จะละป้ายพื้นที่ตัวเลขและคืน null ในช่องชื่อที่เป็นตัวเลข โดยรักษารายละเอียดที่อยู่ ชื่อที่อ่านได้ และช่องรหัสเดิม. ' +
+  factoryAreaNameCompletionDescription +
+  '. หากอ่านทะเบียนไม่ได้ ให้คงช่องชื่อว่าง ไม่เดาชื่อ. GET ไม่เขียนกลับฐานข้อมูลหรือ snapshot JSON/event history';
 
 export function describeFactoryAreaWriteOperation(operation: OpenApiObject): void {
   operation.description = `${String(operation.description ?? '')}\n\n${factoryAreaWriteDescription}`;
@@ -43,7 +49,7 @@ export function describeFactoryAreaWriteOperation(operation: OpenApiObject): voi
     ],
     [
       '503',
-      'FACTORY_AREA_LOOKUP_UNAVAILABLE เมื่ออ่านทะเบียนชื่อพื้นที่สำหรับค่าตัวเลขไม่ได้ชั่วคราว; ไม่บันทึกชื่อพื้นที่เป็นรหัสและให้ลองใหม่ภายหลัง',
+      'FACTORY_AREA_LOOKUP_UNAVAILABLE เมื่ออ่านทะเบียนสำหรับค่าตัวเลข หรือช่องชื่อว่างที่รหัสหรือชื่อใน address ระบุพื้นที่เดิมได้ชัดเจนไม่ได้ชั่วคราว; ไม่บันทึกชื่อพื้นที่เป็นรหัสและให้ลองใหม่ภายหลัง',
       'factoryAreaLookupUnavailable',
       {
         success: false,
@@ -822,7 +828,7 @@ const operatorFormProperties: Record<string, OpenApiObject> = {
   regionCode: nullableString(64, 'Optional'),
   regionName: nullableString(128, 'Optional'),
   provinceCode: nullableString(32, 'Optional'),
-  provinceName: nullableString(128, 'Optional'),
+  provinceName: nullableString(128, `Optional. ${factoryAreaNameCompletionDescription}`),
   districtCode: nullableString(32, 'Optional'),
   districtName: nullableString(
     128,
@@ -1967,6 +1973,34 @@ const componentSchemas: Record<string, OpenApiObject> = {
     example: {
       ...addPointExample,
       requestType: 'ADD_MEASUREMENT_POINT',
+      industryMainOrder: null,
+      industryMainOrderLabel: null,
+      industrySubOrder: null,
+      businessActivity: null,
+      eia: null,
+      eiaOther: null,
+      hasEia: null,
+      projectName: null,
+      regionCode: null,
+      regionName: null,
+      industrialEstateCode: null,
+      industrialEstateName: null,
+      latitude: null,
+      longitude: null,
+      contactName: 'สมชาย ใจดี',
+      contactPhone: '0812345678',
+      contactEmail: 'ops@example.com',
+      notificationEmails: [],
+      officerNotificationEmails: [],
+      informationProviderName: null,
+      informationProviderPosition: null,
+      address: '7/507 หมู่ 6 ตำบลมาบยางพร อำเภอปลวกแดง จังหวัดระยอง 21140',
+      provinceCode: null,
+      provinceName: 'ระยอง',
+      districtCode: null,
+      districtName: 'ปลวกแดง',
+      subdistrictCode: null,
+      subdistrictName: 'มาบยางพร',
     },
   },
   ConnectionRequestFormResponse: {
@@ -2467,7 +2501,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       regionCode: nullableString(64, 'Optional'),
       regionName: nullableString(128, 'Optional'),
       provinceCode: nullableString(32, 'Optional'),
-      provinceName: nullableString(128, 'Optional'),
+      provinceName: nullableString(128, `Optional. ${factoryAreaNameCompletionDescription}`),
       districtCode: nullableString(32, 'Optional'),
       districtName: nullableString(
         128,
@@ -4224,6 +4258,20 @@ for (const [path, method] of [
   const operation = connectionRequestPaths[path]?.[method] as OpenApiObject | undefined;
   if (operation) describeFactoryAreaWriteOperation(operation);
 }
+
+const formResponse = (
+  (connectionRequestPaths['/cems-wpms-requests/{id}/form'].get as OpenApiObject)
+    .responses as OpenApiObject
+)['200'] as OpenApiObject;
+const formResponseContent = (formResponse.content as OpenApiObject)[
+  'application/json'
+] as OpenApiObject;
+formResponseContent.examples = {
+  verifiedAreaNames: {
+    summary: 'เติมช่องชื่อว่างจากพื้นที่ใน address เดิม โดยคงช่องรหัส null',
+    value: { success: true, data: componentSchemas.ConnectionRequestForm.example },
+  },
+};
 
 export const connectionRequestsOpenApiDocument: OpenApiObject = {
   openapi: '3.0.3',

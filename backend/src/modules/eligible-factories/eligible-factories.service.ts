@@ -154,8 +154,8 @@ export const eligibleFactoriesService = {
       });
     }
 
-    const provinceName = factory.provinceName ?? factory.province ?? 'ไม่ระบุจังหวัด';
-    const requestedFactory = await normalizeFactoryAreaNamesForWrite<CreateEligibleFactoryInput>({
+    const provinceName = factory.provinceName ?? factory.province ?? '';
+    const verifiedFactory = await normalizeFactoryAreaNamesForWrite<CreateEligibleFactoryInput>({
       sourceSystem: 'eligible_factory_add_requests',
       sourceFactoryId: factory.factoryId,
       factoryName: factory.factoryName,
@@ -186,6 +186,10 @@ export const eligibleFactoriesService = {
       projectName: factoryDetails?.projectName ?? factory.projectName ?? null,
       selectedReason: input.reason,
     });
+    const requestedFactory = {
+      ...verifiedFactory,
+      provinceName: verifiedFactory.provinceName.trim() || 'ไม่ระบุจังหวัด',
+    };
 
     try {
       return await eligibleFactoriesRepository.createAddRequest(
@@ -194,7 +198,7 @@ export const eligibleFactoriesService = {
           factoryId: factory.factoryId,
           factoryName: factory.factoryName,
           factoryRegistrationNo: factory.oldRegistrationNo ?? factory.newRegistrationNo,
-          provinceName,
+          provinceName: requestedFactory.provinceName,
           reason: input.reason,
           contactName: input.contactName?.trim() || null,
           contactPhone: input.contactPhone?.trim() || null,

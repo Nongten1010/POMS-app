@@ -122,7 +122,11 @@ async function normalizeReadFactoryAreas<T extends FactoryAreaReadContext>(
   const resolved = await normalizeFactoryAreaNamesForRead(
     rows.map((row) => ({
       ...row,
-      provinceName: row.provinceName ?? row.province,
+      provinceName: row.provinceName?.trim()
+        ? row.provinceName
+        : row.province?.trim()
+          ? row.province
+          : row.provinceName,
       factoryRegistrationNoNew:
         row.factoryRegistrationNoNew ??
         row.newRegistrationNo ??
@@ -134,6 +138,10 @@ async function normalizeReadFactoryAreas<T extends FactoryAreaReadContext>(
   return rows.map((row, index) => ({
     ...row,
     ...(Object.hasOwn(row, 'address') ? { address: resolved[index].address } : {}),
+    ...(Object.hasOwn(row, 'provinceName') ? { provinceName: resolved[index].provinceName } : {}),
+    ...(Object.hasOwn(row, 'province') && !row.province?.trim()
+      ? { province: resolved[index].provinceName ?? row.province }
+      : {}),
     ...(Object.hasOwn(row, 'districtName') ? { districtName: resolved[index].districtName } : {}),
     ...(Object.hasOwn(row, 'subdistrictName')
       ? { subdistrictName: resolved[index].subdistrictName }
@@ -2662,6 +2670,19 @@ function findFactorySummary(
       eia: summary.eia ?? toLegacyEiaLabel(request.hasEia),
       projectName: summary.projectName ?? request.projectName,
       address: summary.address ?? request.address,
+      ...(summary.address == null
+        ? {
+            province: summary.province?.trim()
+              ? summary.province
+              : (request.provinceName ?? summary.province),
+            ...(Object.hasOwn(summary, 'provinceName') && !summary.provinceName?.trim()
+              ? { provinceName: request.provinceName ?? summary.provinceName }
+              : {}),
+            ...(Object.hasOwn(summary, 'districtName') && !summary.districtName?.trim()
+              ? { districtName: request.districtName ?? summary.districtName }
+              : {}),
+          }
+        : {}),
       latitude: summary.latitude ?? (request.latitude === null ? null : String(request.latitude)),
       longitude:
         summary.longitude ?? (request.longitude === null ? null : String(request.longitude)),
@@ -2688,7 +2709,7 @@ function findFactorySummary(
     address: request.address,
     latitude: request.latitude === null ? null : String(request.latitude),
     longitude: request.longitude === null ? null : String(request.longitude),
-    province: null,
+    province: request.provinceName ?? null,
   };
 }
 

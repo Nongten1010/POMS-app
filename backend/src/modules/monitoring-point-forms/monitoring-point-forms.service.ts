@@ -113,10 +113,10 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     if (isCanonicalFactoryProfilesEnabled() && normalizedInput.factory.factoryRegistrationNoNew) {
       assertCanonicalFactoryEia(normalizedInput.factory.eiaInfo);
     }
-    normalizedInput = {
+    normalizedInput = normalizeMonitoringPointFormAddress({
       ...normalizedInput,
       factory: await normalizeFactoryAreaNamesForWrite(normalizedInput.factory),
-    };
+    });
     const saved = await db.transaction(async (trx) => {
       const created = await monitoringPointFormsRepository.create(
         normalizedInput,
@@ -154,10 +154,10 @@ export const monitoringPointFormsService: MonitoringPointFormsService = {
     ) {
       throw new NotFoundError('Monitoring point form not found');
     }
-    normalizedInput = {
+    normalizedInput = normalizeMonitoringPointFormAddress({
       ...normalizedInput,
       factory: await normalizeFactoryAreaNamesForWrite(normalizedInput.factory),
-    };
+    });
     const saved = await db.transaction(async (trx) => {
       if (isCanonicalFactoryProfilesEnabled()) {
         const selected = await eligibleFactoriesRepository.findByMonitoringPointFormId(id, trx);
@@ -263,7 +263,14 @@ async function syncEligibleFactoryFromForm(
 ): Promise<EligibleFactoryDTO | null> {
   const builtInput = buildEligibleFactoryInput(form, options);
   if (!builtInput) return null;
-  const rawInput = await normalizeFactoryAreaNamesForWrite(builtInput);
+  const normalizedFactoryInput = await normalizeFactoryAreaNamesForWrite({
+    ...builtInput,
+    provinceName: form.factory.provinceName?.trim() ?? '',
+  });
+  const rawInput = {
+    ...normalizedFactoryInput,
+    provinceName: normalizedFactoryInput.provinceName.trim() || '-',
+  };
   const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(
     form.id,
     trx,

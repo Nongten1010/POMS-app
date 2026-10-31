@@ -703,6 +703,61 @@ describe('eligibleFactoriesService', () => {
     expect(mockedRepository.createAddRequest).not.toHaveBeenCalled();
   });
 
+  it.each(['', null])(
+    'stores a verified missing province (%s) in both the add-request row and its new snapshot',
+    async (provinceName) => {
+      const factory = { ...ownedFactorySummary(), provinceName, province: provinceName };
+      mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(factory);
+      mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue(null);
+      mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+      mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
+      mockedNormalizeAreasWrite.mockImplementationOnce(async (value) => ({
+        ...value,
+        provinceName: 'น่าน',
+      }));
+      mockedRepository.createAddRequest.mockResolvedValue(pendingAddRequest());
+
+      await eligibleFactoriesService.createAddRequest(
+        { factoryId: factory.factoryId, reason: 'ขอเพิ่มโรงงาน' },
+        42,
+        addRequestAccess(),
+      );
+
+      expect(mockedRepository.createAddRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provinceName: 'น่าน',
+          requestedFactory: expect.objectContaining({ provinceName: 'น่าน' }),
+        }),
+        42,
+      );
+      expect(factory.provinceName).toBe(provinceName);
+    },
+  );
+
+  it('retains the existing unknown-province contract when an add-request province cannot be verified', async () => {
+    const factory = { ...ownedFactorySummary(), provinceName: null, province: null };
+    mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(factory);
+    mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue(null);
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
+    mockedRepository.createAddRequest.mockResolvedValue(pendingAddRequest());
+    await eligibleFactoriesService.createAddRequest(
+      { factoryId: factory.factoryId, reason: 'ขอเพิ่มโรงงาน' },
+      42,
+      addRequestAccess(),
+    );
+    expect(mockedNormalizeAreasWrite).toHaveBeenCalledWith(
+      expect.objectContaining({ provinceName: '' }),
+    );
+    expect(mockedRepository.createAddRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provinceName: 'ไม่ระบุจังหวัด',
+        requestedFactory: expect.objectContaining({ provinceName: 'ไม่ระบุจังหวัด' }),
+      }),
+      42,
+    );
+  });
+
   it('returns not found when the factory is outside either required scope', async () => {
     mockedConnectionRequestsRepository.findFactorySummaryForAccess
       .mockResolvedValueOnce(ownedFactorySummary())

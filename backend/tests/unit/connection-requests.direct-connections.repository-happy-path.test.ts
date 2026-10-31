@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
+const mockFactorySourceDb = jest.fn();
+jest.mock('../../src/config/factory-source-database', () => ({
+  factorySourceDb: mockFactorySourceDb,
+  factorySourceTableName: () => 'dbo.Fac60k',
+}));
+
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), {
     transaction: jest.fn(),
@@ -30,6 +36,24 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
   beforeEach(() => {
     jest.clearAllMocks();
     env.FACTORY_PROFILE_MODE = 'legacy';
+    mockFactorySourceDb.mockImplementation((table) => {
+      if (table !== `${env.FACTORY_DB_SCHEMA}.TUMBOL`) {
+        throw new Error(`Unexpected factory-source query: ${table}`);
+      }
+      return {
+        whereIn: jest.fn().mockReturnThis(),
+        timeout: jest.fn().mockReturnThis(),
+        select: jest.fn(async () => [
+          {
+            PROV: 10,
+            AMP: 11,
+            TUMBOL: 4,
+            AMPNAME: 'ลาดกระบัง',
+            TUMNAME: 'ลำปลาทิว',
+          },
+        ]),
+      };
+    });
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-07-21T03:04:05.000Z'));
   });
@@ -235,6 +259,8 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
           region_name: 'ภาคกลาง',
           province_code: '10',
           province_name: 'กรุงเทพมหานคร',
+          district_name: 'ลาดกระบัง',
+          subdistrict_name: 'ลำปลาทิว',
           industrial_estate_code: 'IE-01',
           industrial_estate_name: 'นิคมทดสอบ',
           created_by: 42,
@@ -730,9 +756,9 @@ function factorySnapshotRow() {
     province_code: '10',
     province_name: 'กรุงเทพมหานคร',
     district_code: null,
-    district_name: null,
+    district_name: 'ลาดกระบัง',
     subdistrict_code: null,
-    subdistrict_name: null,
+    subdistrict_name: 'ลำปลาทิว',
     industrial_estate_code: 'IE-01',
     industrial_estate_name: 'นิคมทดสอบ',
     factory_main_type_code: null,
