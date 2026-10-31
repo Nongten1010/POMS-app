@@ -30,6 +30,18 @@ jobs:
       run:
         shell: powershell
     steps:
+      - name: Read runner resource and isolated test process status
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $os = Get-CimInstance Win32_OperatingSystem
+          $cpu = @(Get-CimInstance Win32_Processor | Select-Object LoadPercentage, NumberOfLogicalProcessors)
+          $nodes = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | ForEach-Object {
+            $kind = if ($_.CommandLine -match 'jest[\/]+bin[\/]+jest|jest\.js') { 'jest' } elseif ($_.CommandLine -match 'server\.js') { 'server' } else { 'other-node' }
+            [ordered]@{ id=$_.ProcessId; parent=$_.ParentProcessId; created=$_.CreationDate.ToUniversalTime().ToString('o'); kind=$kind; cpuUser100ns=$_.UserModeTime; cpuKernel100ns=$_.KernelModeTime; memoryBytes=$_.WorkingSetSize }
+          })
+          $cache = Join-Path $env:GITHUB_WORKSPACE 'backend\node_modules\.cache\jest'
+          $cacheInfo = if (Test-Path $cache) { Get-ChildItem $cache -File -Recurse | Measure-Object Length -Sum } else { $null }
+          [ordered]@{ utc=(Get-Date).ToUniversalTime().ToString('o'); freeMemoryKB=$os.FreePhysicalMemory; totalMemoryKB=$os.TotalVisibleMemorySize; cpu=$cpu; nodes=$nodes; cachePath=$cache; cacheFiles=$cacheInfo.Count; cacheBytes=$cacheInfo.Sum } | ConvertTo-Json -Depth 5 -Compress | ForEach-Object { Write-Host "[factory-area-runner-status] $_" }
       - name: Inspect blank factory geography names without changing data
         env:
           POMS_AUDIT_PHASE: ${{ inputs.audit_phase }}
