@@ -67,21 +67,24 @@ jobs:
           const code=value=>{const s=String(value??'').trim().replace(/[\u0e50-\u0e59]/gu,x=>String(x.charCodeAt(0)-0x0e50));return /^\d+$/u.test(s)?String(Number(s)):null;};
           const sameName=(a,b)=>String(a??'').trim().replace(/^(\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e15\u0e33\u0e1a\u0e25|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15|\u0e08\.|\u0e2d\.|\u0e15\.)\s*/u,'')===String(b??'').trim();
           const usableName=value=>!blank(value)&&/[\u0e01-\u0e2e]/u.test(String(value))&&!/^(?:-|\u0e44\u0e21\u0e48\u0e23\u0e30\u0e1a\u0e38|\u0e23\u0e2b\u0e31\u0e2a\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14)/u.test(String(value).trim());
-          function labels(address){
+          function labels(address,provinceName){
            const text=String(address??'');const result={province:[],district:[],subdistrict:[]};
+           const bangkok=String(provinceName??'').includes('\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23')||text.includes('\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23');
+           const explicitAmphoe=text.includes('\u0e2d\u0e33\u0e40\u0e20\u0e2d');
            for(const m of text.matchAll(/(\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14|(?<![\u0e01-\u0e59a-zA-Z])\u0e08\.|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e40\u0e02\u0e15|(?<![\u0e01-\u0e59a-zA-Z])\u0e2d\.|\u0e15\u0e33\u0e1a\u0e25|\u0e41\u0e02\u0e27\u0e07|(?<![\u0e01-\u0e59a-zA-Z])\u0e15\.)\s*([\u0e01-\u0e590-9]+?)(?=\s|$|[,;()]|\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e15\u0e33\u0e1a\u0e25|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15)/gu)){
+            if(m[1]==='\u0e40\u0e02\u0e15'&&!bangkok&&(explicitAmphoe||/^(?:\u0e1b\u0e23\u0e30\u0e01\u0e2d\u0e1a\u0e01\u0e32\u0e23|\u0e2d\u0e38\u0e15\u0e2a\u0e32\u0e2b\u0e01\u0e23\u0e23\u0e21|\u0e19\u0e34\u0e04\u0e21)/u.test(m[2])))continue;
             const key=['\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14','\u0e08.'].includes(m[1])?'province':['\u0e2d\u0e33\u0e40\u0e20\u0e2d','\u0e40\u0e02\u0e15','\u0e2d.'].includes(m[1])?'district':'subdistrict';result[key].push(m[2]);
            }
            if(text.includes('\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23'))result.province.push('\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23');return result;
           }
           function areaCodeMatches(value,area,subdistrict){
            const n=code(value),local=code(subdistrict?area.TUMBOL:area.AMP);if(n==null||local==null)return false;if(n===local)return true;
-           const p=code(area.PROV),d=code(area.AMP);return n===(subdistrict?`${p.padStart(2,'0')}${d.padStart(2,'0')}${local.padStart(2,'0')}`:`${p.padStart(2,'0')}${local.padStart(2,'0')}`);
+           const p=code(area.PROV),d=code(area.AMP);if(!p||!d)return false;return n===(subdistrict?`${p.padStart(2,'0')}${d.padStart(2,'0')}${local.padStart(2,'0')}`:`${p.padStart(2,'0')}${local.padStart(2,'0')}`);
           }
           function resolve(row,areas,localProvinces){
            const addressEvidenceAllowed=row.table!=='cems_wpms_request_factory_snapshots'||row.deleted_at_exact==null;
            const address=row.address??row.factory_address??(addressEvidenceAllowed?row.request_address:null);
-           const parts=labels(address),pc=[];const conflicts=[];
+           const parts=labels(address,row.province_name),pc=[];const conflicts=[];
            if(usableName(row.province_name)){const p=provinceByName.get(String(row.province_name).trim().replace(/^\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14\s*/u,''));if(p)pc.push(p);else conflicts.push('UNKNOWN_RECORDED_PROVINCE_NAME');}
            for(const name of parts.province){const p=provinceByName.get(name);if(p)pc.push(p);else conflicts.push('UNKNOWN_ADDRESS_PROVINCE_NAME');}
            const rawP=code(row.province_code);if(rawP&&rawP.length===2&&provinces[rawP])pc.push(rawP);
@@ -156,9 +159,11 @@ jobs:
              if(baseTables.includes(table)&&candidates.length){
               const unchanged=cols.map(x=>x.COLUMN_NAME).filter(x=>!existingNames.includes(x));
               const hashSql="CONVERT(VARCHAR(64),HASHBYTES('SHA2_256',(SELECT "+unchanged.map(()=> '??').join(',')+" FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER)),2) AS non_name_hash";
+              const allColumns=cols.map(x=>x.COLUMN_NAME);
+              const allHashSql="CONVERT(VARCHAR(64),HASHBYTES('SHA2_256',(SELECT "+allColumns.map(()=> '??').join(',')+" FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER)),2) AS all_row_hash";
               for(let offset=0;offset<candidates.length;offset+=250){
-               const chunk=candidates.slice(offset,offset+250);const hashes=await db(table+' as row').whereIn('row.id',chunk.map(x=>x.id)).select('row.id').select(db.raw(hashSql,unchanged.map(x=>'row.'+x))).timeout(20000);
-               for(const row of chunk)row.non_name_hash=hashes.find(x=>String(x.id)===String(row.id))?.non_name_hash??null;
+               const chunk=candidates.slice(offset,offset+250);const hashes=await db(table+' as row').whereIn('row.id',chunk.map(x=>x.id)).select('row.id').select(db.raw(hashSql,unchanged.map(x=>'row.'+x))).select(db.raw(allHashSql,allColumns.map(x=>'row.'+x))).timeout(20000);
+               for(const row of chunk){const hash=hashes.find(x=>String(x.id)===String(row.id));row.non_name_hash=hash?.non_name_hash??null;row.all_row_hash=hash?.all_row_hash??null;}
               }
              }
              baselines.push(...candidates);
@@ -167,10 +172,102 @@ jobs:
             for(const table of [...baseTables,...viewTables]){const rows=baselines.filter(x=>x.table===table);if(rows.length)output('baseline',{table,rows});}
             const artifact={clock,schema:inventory,table_summaries:summaries,rows:baselines,master_rows:areas,local_province_mappings:[...localProvinces],mutations:false,
              history_policy:'Deleted snapshots resolve from own codes/names only. Current request address is reference-only for deleted snapshots; request/snapshot timestamps included. No Fac60k current-location fallback.'};
-            const artifactPath=path.join(process.env.RUNNER_TEMP||process.env.TEMP||process.cwd(),'poms-area-missing-audit.json');fs.writeFileSync(artifactPath,JSON.stringify(artifact));
+            const artifactPath=path.join(process.env.RUNNER_TEMP||process.env.TEMP||require('os').tmpdir(),'poms-area-missing-audit.json');fs.writeFileSync(artifactPath,JSON.stringify(artifact));
             output('artifact',{path:artifactPath,bytes:fs.statSync(artifactPath).size,baseline_rows:baselines.length,master_rows:areas.length});
             output('result',{complete:true,mutations:false,base_missing_rows:summaries.filter(x=>baseTables.includes(x.table)).reduce((n,x)=>n+x.missing_rows,0),base_conflict_rows:summaries.filter(x=>baseTables.includes(x.table)).reduce((n,x)=>n+x.conflict_rows,0)});
            }finally{clearTimeout(guard);await Promise.allSettled([db.destroy(),source.destroy()]);}
+          })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
+          '@ | node
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Inspect historic geography evidence without changing data
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          Set-Location 'C:\apps\POMS-app\backend'
+          @'
+          const {env}=require('./dist/config/env');
+          const knex=require('knex');const fs=require('fs'),path=require('path');
+          const makePool=(source=false)=>knex({client:'mssql',acquireConnectionTimeout:10000,connection:{server:source?(env.FACTORY_DB_HOST??env.DB_HOST):env.DB_HOST,
+           port:source?(env.FACTORY_DB_PORT??env.DB_PORT):env.DB_PORT,user:source?(env.FACTORY_DB_USER??env.DB_USER):env.DB_USER,
+           password:source?(env.FACTORY_DB_PASSWORD??env.DB_PASSWORD):env.DB_PASSWORD,database:source?env.FACTORY_DB_NAME:env.DB_NAME,
+           connectionTimeout:10000,requestTimeout:20000,options:{encrypt:source?(env.FACTORY_DB_ENCRYPT??env.DB_ENCRYPT):env.DB_ENCRYPT,
+           trustServerCertificate:source?(env.FACTORY_DB_TRUST_SERVER_CERTIFICATE??env.DB_TRUST_SERVER_CERTIFICATE):env.DB_TRUST_SERVER_CERTIFICATE}},pool:{min:0,max:1}});
+          const db=makePool(),sourceDb=makePool(true);const report={};
+          const output=(stage,value)=>{report[stage]=value;console.log('[factory-area-missing-history-'+stage+'] '+JSON.stringify(value));};
+          const guard=setTimeout(()=>{output('failure',{code:'TIME_LIMIT'});process.exit(1);},210000);guard.unref();
+          const geoKeys=new Set(['address','factoryAddress','factory_address','province_name','provinceName','provinceCode','province_code','districtCode','district_code','districtName','district_name','subdistrictCode','subdistrict_code','subdistrictName','subdistrict_name','factoryId','factory_id','factoryRegistrationNo','factoryRegistrationNoNew','factory_registration_no','factory_registration_no_new','eligibleFactoryId','eligible_factory_id','requestId','request_id']);
+          function geoProjection(raw){
+           let value;try{value=typeof raw==='string'?JSON.parse(raw):raw;}catch{return{valid_json:false,values:[]};}
+           const values=[];function walk(node,at,depth){if(!node||typeof node!=='object'||depth>6)return;for(const [key,item]of Object.entries(node)){
+            if(geoKeys.has(key)&&(item===null||['string','number'].includes(typeof item)))values.push({path:at+'.'+key,value:item});
+            else if(item&&typeof item==='object')walk(item,at+'.'+key,depth+1);
+           }}walk(value,'$',0);return{valid_json:true,values};
+          }
+          const qrows=async(table,fields,where)=>{let q=db(table+' as row');if(where)q=where(q);const columns=meta.filter(x=>x.TABLE_NAME===table);const available=new Set(columns.map(x=>x.COLUMN_NAME));
+           q.select(fields.filter(x=>available.has(x)).map(x=>'row.'+x));for(const field of ['created_at','updated_at','deleted_at','changed_at'])if(available.has(field))q.select(db.raw('CONVERT(VARCHAR(33),??,126) AS ??',['row.'+field,field+'_exact']));return q.timeout(20000);};
+          const identityFields=['id','request_id','eligible_factory_id','source_request_id','monitoring_point_form_id','factory_id','source_factory_id','factory_name','factory_registration_no','factory_registration_no_new','factory_registration_no_old','request_no','status','province_name','district_name','subdistrict_name','province_code','district_code','subdistrict_code','address','factory_address'];
+          let meta=[];
+          (async()=>{
+           try{
+            const [clock]=await db.raw('SELECT CONVERT(VARCHAR(33),SYSDATETIME(),126) AS server_time,CONVERT(VARCHAR(33),SYSUTCDATETIME(),126) AS server_utc').timeout(10000);output('clock',clock);
+            meta=await db('INFORMATION_SCHEMA.COLUMNS').where('TABLE_SCHEMA','dbo').orderBy('TABLE_NAME').orderBy('ORDINAL_POSITION').select('TABLE_NAME','COLUMN_NAME','DATA_TYPE','ORDINAL_POSITION').timeout(15000);
+            const schemaTables=[...new Set(meta.map(x=>x.TABLE_NAME))];
+            const historicalTables=schemaTables.filter(name=>/(snapshot|history|revision|backup|event)/i.test(name)&&/(factory|poms|request|monitoring)/i.test(name));
+            output('history-schema',historicalTables.map(table=>({table,columns:meta.filter(x=>x.TABLE_NAME===table).map(x=>({name:x.COLUMN_NAME,type:x.DATA_TYPE,ordinal:x.ORDINAL_POSITION}))})));
+            const snapshots=await qrows('cems_wpms_request_factory_snapshots',identityFields,q=>q.whereNotNull('row.deleted_at'));
+            const requestIds=[...new Set(snapshots.map(x=>String(x.request_id)))];
+            output('deleted-snapshots-summary',{rows:snapshots.length,request_ids:requestIds.length,rows_without_own_district_or_subdistrict_codes:snapshots.filter(x=>!x.district_code&&!x.subdistrict_code).length,policy:'No inference from current request address or current factory location'});
+            const requests=await qrows('cems_wpms_connection_requests',identityFields,q=>q.whereIn('row.id',requestIds));
+            output('related-current-request-reference',requests);
+            output('deleted-snapshot-own-context',snapshots);
+            const forms=await qrows('factory_monitoring_point_forms',identityFields,q=>q.whereIn('row.id',[4,15]));
+            output('blank-forms',forms);
+            output('blank-form-eligible-links',await qrows('eligible_factories',identityFields,q=>q.whereIn('row.monitoring_point_form_id',[4,15])));
+            const registrationKeys=[...new Set(forms.flatMap(x=>[x.factory_registration_no_new,x.factory_registration_no_old]).filter(x=>typeof x==='string'&&x.trim()))];
+            if(registrationKeys.length){
+             const matches=await sourceDb(`${env.FACTORY_DB_SCHEMA}.${env.FACTORY_DB_TABLE}`).where(builder=>builder.whereIn('FID',registrationKeys).orWhereIn('FACREG',registrationKeys).orWhereIn('DISPFACREG',registrationKeys))
+              .select('FID','FACREG','DISPFACREG','FNAME','PROV','AMP','TUMBOL').timeout(15000);
+             output('blank-form-current-source-reference',{keys:registrationKeys,matches,history_proof:false});
+            }
+            const backups=[];
+            for(const table of ['factory_address_names_repair_backup_0149','factory_address_history_repair_backup_0151']){
+             if(!schemaTables.includes(table))continue;
+             const rows=await qrows(table,['target_table','entity_id','registration_no','original_address','resolved_address','original_status','administrative_area_key'],q=>q.where('row.target_table','cems_wpms_connection_requests').whereIn('row.entity_id',requestIds));
+             backups.push({table,created_at_basis:'SYSUTCDATETIME according to migration; other persisted DATETIME2 fields may have different writer conventions',rows});
+            }output('address-repair-backups',backups);
+            const linkedEligibleIds=[...new Set(requests.map(x=>String(x.eligible_factory_id||'')).filter(Boolean))];
+            const jsonSources=[];
+            for(const table of historicalTables){
+             const columns=meta.filter(x=>x.TABLE_NAME===table);const names=new Set(columns.map(x=>x.COLUMN_NAME));
+             const jsonColumns=columns.filter(x=>/(?:factory_snapshot_json|current_factory_json|proposed_factory_json|before_json|after_json|original_row_json|before_row_json|row_json)$/i.test(x.COLUMN_NAME)).map(x=>x.COLUMN_NAME);
+             if(!jsonColumns.length)continue;
+             let linkage=null;if(names.has('request_id')&&table!=='poms_factory_edit_request_events')linkage={column:'request_id',values:requestIds,exact_request:true};
+             else if(names.has('eligible_factory_id')&&linkedEligibleIds.length)linkage={column:'eligible_factory_id',values:linkedEligibleIds,exact_request:false};
+             else continue;
+             const selected=['id',linkage.column,...jsonColumns].filter((x,i,a)=>a.indexOf(x)===i);
+             const rows=await qrows(table,selected,q=>q.whereIn('row.'+linkage.column,linkage.values));
+             const projected=rows.map(row=>{const value={};for(const [key,item]of Object.entries(row))value[key]=jsonColumns.includes(key)?geoProjection(item):item;return value;});
+             jsonSources.push({table,linkage:linkage.column,exact_request_link:linkage.exact_request,rows:projected});
+            }
+            const pomsIds=[];
+            if(schemaTables.includes('poms_factory_edit_requests')&&linkedEligibleIds.length){
+             const poms=await qrows('poms_factory_edit_requests',['id','eligible_factory_id','status'],q=>q.whereIn('row.eligible_factory_id',linkedEligibleIds));
+             pomsIds.push(...poms.map(x=>String(x.id)));
+            }
+            if(pomsIds.length&&schemaTables.includes('poms_factory_edit_request_events')){
+             const rows=await qrows('poms_factory_edit_request_events',['id','request_id','factory_snapshot_json'],q=>q.whereIn('row.request_id',pomsIds));
+             jsonSources.push({table:'poms_factory_edit_request_events',exact_request_link:false,linkage:'POMS edit request for same eligible factory only; not CEMS request ID',rows:rows.map(({factory_snapshot_json,...row})=>({...row,factory_snapshot_json:geoProjection(factory_snapshot_json)}))});
+            }
+            output('archived-geography-candidates',jsonSources);
+            const history=await qrows('cems_wpms_request_status_history',['id','request_id','status','note'],q=>q.whereIn('row.request_id',requestIds));
+            output('status-history-geography-only',history.map(({note,...row})=>({...row,geography_labels:[...String(note??'').matchAll(/(\u0e08\u0e31\u0e07\u0e2b\u0e27\u0e31\u0e14|\u0e2d\u0e33\u0e40\u0e20\u0e2d|\u0e15\u0e33\u0e1a\u0e25|\u0e41\u0e02\u0e27\u0e07|\u0e40\u0e02\u0e15)\s*([\u0e01-\u0e59]+)/gu)].map(x=>({label:x[1],value:x[2]}))})));
+            const targetSnapshots=snapshots.filter(x=>['10626','10627'].includes(String(x.id)));
+            output('target-deleted-snapshots',{rows:targetSnapshots,request_reference:requests.filter(x=>['10376','10377'].includes(String(x.id))),backup_evidence:backups.map(x=>({...x,rows:x.rows.filter(r=>['10376','10377'].includes(String(r.entity_id)))})),automatic_resolution_allowed:false});
+            output('conclusion',{mutations:false,deleted_snapshots:snapshots.length,blank_forms:forms.map(x=>({id:String(x.id),has_factory_identity:Boolean(x.factory_registration_no_new||x.factory_registration_no_old),has_address:Boolean(x.address),has_province:Boolean(x.province_name)})),
+             caution:'Same-factory JSON/current-source or matching-looking addresses alone do not prove historic snapshot location. No automatic filling without exact request-linked historical address/codes and reliable time provenance.'});
+            const outPath=path.join(process.env.RUNNER_TEMP||process.env.TEMP||require('os').tmpdir(),'poms-area-missing-history-audit.json');fs.writeFileSync(outPath,JSON.stringify(report));output('artifact',{path:outPath,bytes:fs.statSync(outPath).size});
+           }finally{clearTimeout(guard);await Promise.allSettled([db.destroy(),sourceDb.destroy()]);}
           })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
           '@ | node
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -178,6 +275,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: factory-area-missing-${{ github.run_id }}
-          path: ${{ runner.temp }}/poms-area-missing-audit.json
+          path: |
+            ${{ runner.temp }}/poms-area-missing-audit.json
+            ${{ runner.temp }}/poms-area-missing-history-audit.json
           if-no-files-found: error
           retention-days: 3
