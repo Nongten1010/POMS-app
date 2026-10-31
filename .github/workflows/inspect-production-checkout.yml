@@ -199,7 +199,7 @@ jobs:
             const file=path.join(process.env.RUNNER_TEMP||process.env.TEMP||require('os').tmpdir(),'poms-area-missing-postverify.json');fs.writeFileSync(file,JSON.stringify(report));output('artifact',{path:file,bytes:fs.statSync(file).size});
            }finally{env.FACTORY_PROFILE_MODE=originalMode;clearTimeout(guard);await Promise.allSettled([...new Set([db,source,appDb,factoryDb,paramDb].filter(Boolean))].map(pool=>pool.destroy()));}
           })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
-          
+
           }else{
           const {env}=require('./dist/config/env');
           const knex=require('knex');
@@ -333,7 +333,7 @@ jobs:
             output('result',{complete:true,mutations:false,base_missing_rows:summaries.filter(x=>baseTables.includes(x.table)).reduce((n,x)=>n+x.missing_rows,0),base_conflict_rows:summaries.filter(x=>baseTables.includes(x.table)).reduce((n,x)=>n+x.conflict_rows,0)});
            }finally{clearTimeout(guard);await Promise.allSettled([db.destroy(),source.destroy()]);}
           })().catch(error=>{output('failure',{code:error.code||error.name,number:error.number||error.originalError?.info?.number||null});process.exitCode=1;});
-          
+
           }
           '@ | node
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
