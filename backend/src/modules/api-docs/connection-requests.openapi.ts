@@ -6,6 +6,8 @@ import {
   CONNECTION_REQUEST_DOCUMENT_TITLE,
   CONNECTION_REQUEST_STATUS_LABELS,
   CONNECTION_REQUEST_TYPE_LABELS,
+  MAX_MEASUREMENT_PARAMETER_NAME_LENGTH,
+  MAX_MEASUREMENT_POINT_PARAMETERS,
   MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS,
   PREVIOUS_REQUEST_GENERAL_FIELDS,
 } from '../connection-requests/connection-requests.types';
@@ -18,6 +20,15 @@ import {
 
 type OpenApiObject = Record<string, unknown>;
 type EnumLabelMap = Record<string, string>;
+
+const measurementPointParametersSchema = {
+  type: 'array',
+  minItems: 0,
+  maxItems: MAX_MEASUREMENT_POINT_PARAMETERS,
+  items: { type: 'string', minLength: 1, maxLength: MAX_MEASUREMENT_PARAMETER_NAME_LENGTH },
+  description:
+    'Optional; รับ 0-100 รายการ ชื่อละ 1-128 ตัวอักษรหลัง trim. รับ [] และคืน [] เมื่อไม่มีพารามิเตอร์ รวมจุดที่ได้รับการยกเว้นทั้งหมดหรืออยู่ระหว่างขยายเวลา. ใช้ข้อจำกัดเดียวกับ measurementInstruments.parameters เพื่อให้ส่งแบบแก้ไขผ่าน validation ซ้ำได้; details.requestedParameters มีลำดับความสำคัญก่อนข้อมูลพารามิเตอร์อื่น',
+};
 
 export const factoryAreaNameCompletionDescription =
   'provinceName, districtName และ subdistrictName ที่มี property เดิมแต่เป็น null/undefined/สตริงว่าง เติมได้เฉพาะชื่อที่ยืนยันจากจังหวัด/รหัส/ชื่อพื้นที่ใน address ที่บันทึกไว้กับทะเบียน TUMBOL. ยึดพื้นที่ในข้อมูลเดิม ไม่ใช้ตำแหน่งปัจจุบันของ Fac60k มาเติมช่องว่างของประวัติ แม้มี factoryId; ถ้ามีเพียงจังหวัดที่ยืนยันได้และไม่มีข้อมูลอำเภอ/ตำบล เติมจังหวัดจาก mapping ที่ระบบรู้จักได้โดยคงชื่อท้องถิ่นว่าง. เมื่อมีข้อมูลอำเภอ/ตำบล ต้องมีแถวทะเบียนที่ตรงกับข้อมูลพื้นที่ทั้งหมดก่อน; ข้อมูลท้องถิ่นขัดแย้งหรือไม่มีแถวตรงให้คงชื่อว่างทั้งหมด แม้พอระบุจังหวัดได้. เมื่อมีหลายแถวที่ตรงกัน เติมแยกตามชื่อที่ไม่กำกวม จึงอาจเติมจังหวัด/อำเภอได้แต่ตำบลยังว่าง. เมื่อข้อมูลไม่พอหรือชื่อยังกำกวม คงช่องว่าง; ไม่เพิ่ม property ที่ไม่มีเดิม ไม่เปลี่ยนชื่อที่อ่านได้หรือช่องรหัส และไม่เติม address ที่เป็น null';
@@ -1011,6 +1022,22 @@ const wholeStackExtensionExample = {
     },
   ],
 };
+const resubmitEmptyPointExample = {
+  ...wholeStackExtensionExample,
+  measurementPoints: [
+    {
+      ...wholeStackExtensionExample.measurementPoints[0],
+      monitoringPointStatus: 'ได้รับการยกเว้นทั้งหมด',
+      parameters: [],
+      details: {
+        ...wholeStackExtensionExample.measurementPoints[0].details,
+        stackLatitude: 13.643351,
+        stackLongitude: 100.584545,
+      },
+    },
+  ],
+  remarks: 'แก้ไขพิกัดตามเจ้าหน้าที่แจ้ง',
+};
 const noDeviceSetupApprovalExamples = {
   wholeStackExtension: {
     summary: 'หลังอนุมัติขยายระยะเวลาทั้งปล่อง (แสดง field สำคัญ)',
@@ -1770,7 +1797,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       parameter: {
         type: 'string',
         minLength: 1,
-        maxLength: 128,
+        maxLength: MAX_MEASUREMENT_PARAMETER_NAME_LENGTH,
         example: 'CO (ppm)',
         description: 'ชื่อพารามิเตอร์พร้อมหน่วย',
       },
@@ -1794,7 +1821,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       converterModel: nullableString(255, 'Optional'),
       parameters: {
         type: 'array',
-        maxItems: 100,
+        maxItems: MAX_MEASUREMENT_POINT_PARAMETERS,
         items: schemaRef('MeasurementInstrumentParameter'),
         default: [],
       },
@@ -1905,11 +1932,10 @@ const componentSchemas: Record<string, OpenApiObject> = {
       latitude: nullableNumber(-90, 90, 'Optional'),
       longitude: nullableNumber(-180, 180, 'Optional'),
       parameters: {
-        type: 'array',
-        minItems: 1,
-        maxItems: 50,
-        items: { type: 'string', minLength: 1, maxLength: 64 },
-        description: 'Backend split comma, dedupe และตัดค่า ไม่มี',
+        ...measurementPointParametersSchema,
+        description:
+          measurementPointParametersSchema.description +
+          '. ฟอร์มทั่วไป backend split comma, dedupe และตัดค่า ไม่มี',
       },
       description: nullableString(1000, 'Optional'),
       monitoringPointStatus: monitoringPointStatusSchema(
@@ -2228,14 +2254,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       latitude: nullableNumber(-90, 90, 'Optional'),
       longitude: nullableNumber(-180, 180, 'Optional'),
-      parameters: {
-        type: 'array',
-        minItems: 0,
-        maxItems: 50,
-        items: { type: 'string', minLength: 1, maxLength: 64 },
-        description:
-          'Response ส่ง [] ได้สำหรับจุดที่ monitoringPointStatus = ได้รับการยกเว้นทั้งหมด หรืออยู่ระหว่างขยายเวลา; request ใช้ details.requestedParameters: [] โดยไม่ส่ง parameters ที่ระดับจุด',
-      },
+      parameters: measurementPointParametersSchema,
       description: nullableString(1000, 'Optional'),
       monitoringPointStatus: monitoringPointStatusSchema(noDeviceSetupApprovalDescription),
       details: {
@@ -2270,12 +2289,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       pointType: { ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels) },
       latitude: nullableNumber(-90, 90, 'Optional'),
       longitude: nullableNumber(-180, 180, 'Optional'),
-      parameters: {
-        type: 'array',
-        minItems: 1,
-        maxItems: 50,
-        items: { type: 'string', minLength: 1, maxLength: 64 },
-      },
+      parameters: measurementPointParametersSchema,
       description: nullableString(1000, 'Optional'),
       monitoringPointStatus: monitoringPointStatusSchema(
         'สถานะระดับจุดเดิมหรือสถานะใหม่หลังเพิ่มพารามิเตอร์',
@@ -2408,6 +2422,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: { ...operatorFormProperties, expectedUpdatedAt: expectedUpdatedAtProperty },
     description:
       'ใช้ requestType เดิมของคำขอ validate; factoryId, factoryRegistrationNo, systemType และ requestType ต้องตรงของเดิม ผู้เรียกมี cems_wpms_requests:edit ตาม data scope และคำขออยู่สถานะ WAITING_FACTORY_REVISION; OWN_FACTORY ต้องได้รับมอบหมายโรงงานผ่าน user_juristics หรือ user_factory_access แม้เป็นผู้สร้างเดิม. ' +
+      'รองรับจุดพารามิเตอร์ว่าง ทั้ง CEMS/WPMS และฟอร์มหลายจุด รวมกรณีแก้เฉพาะพิกัด; parameters รับ 0-100 รายการ ชื่อละ 1-128 ตัวอักษร และคง monitoringPointStatus กับพิกัดที่ส่งมาเมื่อบันทึกสำเร็จ. ' +
       resubmitPointReplacementDescription +
       ' ' +
       addParameterOwnershipDescription,
@@ -2434,12 +2449,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       latitude: nullableNumber(-90, 90, 'Optional'),
       longitude: nullableNumber(-180, 180, 'Optional'),
-      parameters: {
-        type: 'array',
-        maxItems: 50,
-        nullable: true,
-        items: { type: 'string', minLength: 1, maxLength: 64 },
-      },
+      parameters: { ...measurementPointParametersSchema, nullable: true },
       description: nullableString(1000, 'Optional'),
       monitoringPointStatus: monitoringPointStatusSchema('Optional สถานะระดับจุด'),
       details: nullableRef('MeasurementPointDetails'),
@@ -3498,7 +3508,21 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         ' ' +
         addParameterOwnershipDescription,
       parameters: [idPathParameter],
-      requestBody: jsonRequestBody(schemaRef('ResubmitConnectionRequest'), addPointExample),
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: schemaRef('ResubmitConnectionRequest'),
+            examples: {
+              normal: { summary: 'ส่งแบบแก้ไขที่มีพารามิเตอร์ตรวจวัด', value: addPointExample },
+              emptyParameters: {
+                summary: 'แก้พิกัดปล่องที่ได้รับการยกเว้นทั้งหมด โดยไม่มีพารามิเตอร์',
+                value: resubmitEmptyPointExample,
+              },
+            },
+          },
+        },
+      },
       successDescription: 'ส่งแบบแก้ไขแล้วและเปลี่ยนเป็น REVISED_PENDING_DESIGN_REVIEW',
       successSchema: schemaRef('ConnectionRequestResponse'),
       extraResponses: {

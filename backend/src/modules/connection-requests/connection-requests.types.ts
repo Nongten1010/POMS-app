@@ -89,6 +89,9 @@ export type PointCodeAssignmentInput =
 
 export type MeasurementPointDetailsInput = Record<string, unknown>;
 
+export const MAX_MEASUREMENT_POINT_PARAMETERS = 100;
+export const MAX_MEASUREMENT_PARAMETER_NAME_LENGTH = 128;
+
 export const CONNECTION_REQUEST_DOCUMENT_TITLE = {
   FACTORY_FRONT_PHOTO: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
   FACTORY_LOGO: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
