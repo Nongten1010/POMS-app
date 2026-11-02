@@ -1,5 +1,12 @@
 import { describe, expect, it } from '@jest/globals';
 import fixtures from '../fixtures/upload-archives.json';
+import pdfArchiveFixtures from '../fixtures/pdf-upload-archives.json';
+import { pdfFixture } from '../helpers/pdf-fixture';
+import {
+  jpegUploadFixture,
+  pngUploadFixture,
+  storedZipFixture,
+} from '../helpers/raster-upload-fixture';
 import {
   validateGeneralUpload,
   uploadContentDisposition,
@@ -9,6 +16,19 @@ const LIMIT = 5 * 1024 * 1024;
 const archive = (key: keyof typeof fixtures): Buffer => Buffer.from(fixtures[key], 'base64');
 function upload(name: string, buffer: Buffer, mimeType = 'application/octet-stream') {
   return { originalName: name, buffer, size: buffer.length, mimeType };
+}
+
+function convertedPdfArchive(key: 'safeZip' | 'activeZip' | 'embeddedZip'): Buffer {
+  const buffer = Buffer.from(pdfArchiveFixtures[key], 'base64');
+  const centralHeader = buffer.indexOf(Buffer.from('PK\x01\x02'));
+  const originalName = Buffer.from('manual.pdf');
+  const convertedName = Buffer.from('ab.doc.pdf');
+  expect(buffer.subarray(30, 40)).toEqual(originalName);
+  expect(buffer.subarray(centralHeader + 46, centralHeader + 56)).toEqual(originalName);
+  // Filenames have equal byte lengths; entry data, sizes, offsets and CRC stay intact.
+  convertedName.copy(buffer, 30);
+  convertedName.copy(buffer, centralHeader + 46);
+  return buffer;
 }
 
 describe('general upload risk filter', () => {
@@ -34,6 +54,122 @@ describe('general upload risk filter', () => {
       mime,
     );
   });
+
+  it.each([
+    ['photo.png', pngUploadFixture('<script>example</script>'), 'image/png'],
+    ['photo.jpg', jpegUploadFixture('<svg>example</svg>'), 'image/jpeg'],
+    ['photo.png', pngUploadFixture('%PDF-1.7 in a comment'), 'image/png'],
+    ['photo.jpg', jpegUploadFixture('%PDF-1.7 in a comment'), 'image/jpeg'],
+    ['photo.png', jpegUploadFixture(), 'image/jpeg'],
+    ['photo.jpg', pngUploadFixture(), 'image/png'],
+    ['photo.jfif', jpegUploadFixture(), 'image/jpeg'],
+  ])(
+    'identifies raster content in %s without treating metadata as code',
+    async (name, buffer, mime) => {
+      await expect(validateGeneralUpload(upload(name, buffer), LIMIT)).resolves.toBe(mime);
+    },
+  );
+
+  it.each(['photo.png', 'photo.jpg', 'photo.jfif', 'photo.gif', 'photo.webp'])(
+    'rejects an actual PDF behind image filename %s',
+    async (name) => {
+      await expect(validateGeneralUpload(upload(name, pdfFixture()), LIMIT)).rejects.toThrow(
+        'Uploaded file content does not match its declared type',
+      );
+    },
+  );
+
+  it.each([Buffer.from('<script>void(0)</script>'), Buffer.from('unrecognised image bytes')])(
+    'requires a recognised image signature for JFIF uploads',
+    async (buffer) => {
+      await expect(validateGeneralUpload(upload('photo.jfif', buffer), LIMIT)).rejects.toThrow(
+        'Uploaded file content does not match its declared type',
+      );
+    },
+  );
+
+  it.each([false, true])(
+    'does not classify a PNG/PDF polyglot as PDF, active=%s',
+    async (active) => {
+      const pdf = pdfFixture(
+        active ? { catalogEntries: '/OpenAction << /S /JavaScript /JS (void\\(0\\)) >>' } : {},
+      );
+      const buffer = Buffer.concat([pngUploadFixture(), pdf]);
+      await expect(validateGeneralUpload(upload('report.pdf', buffer), LIMIT)).rejects.toThrow(
+        'Uploaded file content does not match its declared type',
+      );
+      await expect(validateGeneralUpload(upload('photo.jpg', buffer), LIMIT)).resolves.toBe(
+        'image/png',
+      );
+    },
+  );
+
+  it('inspects raster entries as image data inside ZIP archives', async () => {
+    const image = jpegUploadFixture('<script>example</script> %PDF-1.7 macroenabled');
+    const buffer = storedZipFixture('photo.png', image);
+    await expect(validateGeneralUpload(upload('pictures.zip', buffer), LIMIT)).resolves.toBe(
+      'application/zip',
+    );
+  });
+
+  it('inspects nested raster archives without interpreting their binary bytes as macro XML', async () => {
+    const image = jpegUploadFixture('<script>example</script> %PDF-1.7 macroenabled');
+    const inner = storedZipFixture('photo.png', image);
+    const outer = storedZipFixture('photos.zip', inner);
+    await expect(validateGeneralUpload(upload('nested.zip', outer), LIMIT)).resolves.toBe(
+      'application/zip',
+    );
+  });
+
+  it('rejects a PDF disguised as an image inside a ZIP', async () => {
+    const buffer = storedZipFixture('photo.png', pdfFixture());
+    await expect(validateGeneralUpload(upload('pictures.zip', buffer), LIMIT)).rejects.toThrow(
+      'Uploaded file content does not match its declared type',
+    );
+  });
+
+  it.each(['doc.pdf', 'r.pdf'])('treats the basename of %s as a display name', async (name) => {
+    await expect(validateGeneralUpload(upload(name, pdfFixture()), LIMIT)).resolves.toBe(
+      'application/pdf',
+    );
+  });
+
+  it('does not mistake a plain-text basename for a script extension', async () => {
+    await expect(
+      validateGeneralUpload(upload('sql.txt', Buffer.from('ordinary notes')), LIMIT),
+    ).resolves.toBe('text/plain');
+  });
+
+  it.each(['script', 'svg'])('accepts an inline %s tag example in TXT prose', async (tag) => {
+    const buffer = Buffer.from(`This guide explains the <${tag}> tag as ordinary text.`);
+    await expect(validateGeneralUpload(upload('guide.txt', buffer), LIMIT)).resolves.toBe(
+      'text/plain',
+    );
+  });
+
+  it.each(['guide.xml', 'guide.dat'])(
+    'keeps active-content marker checks for non-TXT file %s',
+    async (name) => {
+      await expect(
+        validateGeneralUpload(upload(name, Buffer.from('Notes: <script>void(0)</script>')), LIMIT),
+      ).rejects.toThrow('Script or active web content is not allowed');
+    },
+  );
+
+  it('accepts a genuine converted PDF filename inside a ZIP', async () => {
+    await expect(
+      validateGeneralUpload(upload('documents.zip', convertedPdfArchive('safeZip')), LIMIT),
+    ).resolves.toBe('application/zip');
+  });
+
+  it.each(['activeZip', 'embeddedZip'] as const)(
+    'still inspects converted PDF entries inside %s',
+    async (key) => {
+      await expect(
+        validateGeneralUpload(upload('documents.zip', convertedPdfArchive(key)), LIMIT),
+      ).rejects.toThrow('PDF active content or embedded files are not allowed');
+    },
+  );
 
   it.each([
     'payload.EXE',

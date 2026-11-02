@@ -118,8 +118,7 @@ curl --request POST \
 
 ### Validation And Business Rules
 
-- รับเฉพาะ `application/pdf`, `image/png`, `image/jpeg`
-- Backend ตรวจ signature ของไฟล์จริงให้ตรงกับ MIME type; ไฟล์ปลอม extension จะถูก reject
+- Backend ตรวจเนื้อหาตาม [นโยบายอัปโหลดไฟล์ทั่วไป](../../shared/file-uploads/README.md#contract-ร่วม) และรองรับการกำหนด MIME กับนามสกุลจัดเก็บของภาพตามชนิดจริง ให้ใช้ metadata ที่ upload response คืน
 - `attachmentType = GENERAL`, `RATA_REPORT` และ `CALIBRATION_PHOTO` อัปโหลดได้สูงสุด 10 MB
 - ถ้าไม่ส่ง `attachmentType` หรือส่งค่าอื่น จำกัดที่ 5 MB
 - multer transport limit เปิดไว้ 10 MB เพื่อให้ประเภทข้างต้นผ่านได้
@@ -131,7 +130,7 @@ curl --request POST \
 
 | HTTP status | Code | Condition | Client action |
 | --- | --- | --- | --- |
-| `400` | `BAD_REQUEST` | ไม่ส่งไฟล์, file type ไม่รองรับ, ขนาดเกินเพดานตาม `attachmentType`, หรือ signature ไม่ตรง MIME type | ให้ client แจ้งผู้ใช้และอัปโหลดใหม่ |
+| `400` | `BAD_REQUEST` | ไม่ส่งไฟล์, เนื้อหาไม่ผ่านนโยบายอัปโหลด, ขนาดเกินเพดานตาม `attachmentType`, หรือ metadata ไม่ตรงกับไฟล์ที่อัปโหลด | ให้ client แจ้งผู้ใช้และอัปโหลดใหม่ |
 | `400` | `UPLOAD_ERROR` | ไฟล์เกิน transport limit 10 MB หรือ multipart ส่งไฟล์เกิน 1 ไฟล์ | ลดขนาดหรือจำนวนไฟล์แล้วส่งใหม่ |
 | `401` | `UNAUTHORIZED` | ไม่ได้ login | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี `kwp_forms:edit` | ปิดปุ่มหรือแจ้งสิทธิ์ไม่พอ |

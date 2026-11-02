@@ -13,6 +13,52 @@ import {
 const temporaryDirectories: string[] = [];
 
 describe('KWP form attachment storage', () => {
+  it('revalidates an uploaded JPEG whose display name still has a PNG extension', async () => {
+    const uploadDir = await mkdtemp(path.join(tmpdir(), 'kwp-image-owner-'));
+    temporaryDirectories.push(uploadDir);
+    const options = { uploadDir, publicPath: '/uploads', publicBaseUrl: 'https://example.com' };
+    const buffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]);
+    const saved = await new LocalKwpAttachmentStorage(options).save({
+      actorUserId: 42,
+      attachmentType: 'GENERAL',
+      buffer,
+      originalName: 'photo.png',
+      mimeType: 'image/png',
+      size: buffer.length,
+    });
+    expect(saved).toMatchObject({ originalFileName: 'photo.png', mimeType: 'image/jpeg' });
+    expect(saved.storedFileName).toMatch(/\.jpg$/);
+    const attachment = { ...saved, attachmentType: 'GENERAL' };
+    await expect(
+      validateStoredKwpAttachments([attachment], [], 42, options),
+    ).resolves.toBeUndefined();
+    await expect(
+      validateStoredKwpAttachments([attachment], [attachment], 42, options),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects new attachment MIME metadata that differs from its stored bytes', async () => {
+    const uploadDir = await mkdtemp(path.join(tmpdir(), 'kwp-image-metadata-'));
+    temporaryDirectories.push(uploadDir);
+    const options = { uploadDir, publicPath: '/uploads', publicBaseUrl: 'https://example.com' };
+    const buffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]);
+    const saved = await new LocalKwpAttachmentStorage(options).save({
+      actorUserId: 42,
+      attachmentType: 'GENERAL',
+      buffer,
+      originalName: 'photo.jpg',
+      mimeType: 'image/jpeg',
+      size: buffer.length,
+    });
+    const altered = { ...saved, attachmentType: 'GENERAL', mimeType: 'image/png' };
+    await expect(validateStoredKwpAttachments([altered], [], 42, options)).rejects.toThrow(
+      'metadata',
+    );
+    await expect(
+      validateStoredKwpAttachments([{ ...altered, mimeType: undefined }], [], 42, options),
+    ).resolves.toBeUndefined();
+  });
+
   it('binds new general attachments to the uploader and validates stored bytes', async () => {
     const uploadDir = await mkdtemp(path.join(tmpdir(), 'kwp-owner-'));
     temporaryDirectories.push(uploadDir);

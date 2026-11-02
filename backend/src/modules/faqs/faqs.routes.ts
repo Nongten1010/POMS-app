@@ -4,10 +4,15 @@ import { authorize } from '../../shared/middlewares/authorize';
 import { faqsController } from './faqs.controller';
 import multer from 'multer';
 import { FAQ_MAX_FILES, FAQ_MAX_FILE_SIZE } from './faqs-file-storage';
+import { captureUploadFileMetadata } from '../../shared/middlewares/upload-rejection-observer';
 
 const upload = multer({
   storage: multer.memoryStorage(),
   defParamCharset: 'utf8',
+  fileFilter: (req, file, callback) => {
+    captureUploadFileMetadata(req, file);
+    callback(null, true);
+  },
   limits: {
     files: FAQ_MAX_FILES,
     fileSize: FAQ_MAX_FILE_SIZE,

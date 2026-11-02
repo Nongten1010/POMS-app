@@ -63,6 +63,39 @@ describe('monitoring point form attachment upload route', () => {
     });
   }
 
+  it('stores and serves the detected JPEG type while preserving a PNG display filename', async () => {
+    await withTempUploadDir(async () => {
+      const app = createApp();
+      const jpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]);
+      const uploadResponse = await request(app)
+        .post('/api/v1/monitoring-point-forms/attachments')
+        .set('Authorization', `Bearer ${accessToken()}`)
+        .attach('file', jpegBuffer, { filename: 'photo.png', contentType: 'image/png' });
+
+      expect(uploadResponse.status).toBe(201);
+      expect(uploadResponse.body.data).toMatchObject({
+        fileName: 'photo.png',
+        fileType: 'image/jpeg',
+        fileSize: jpegBuffer.length,
+      });
+      expect(insertedRows).toHaveLength(1);
+      expect(insertedRows[0]).toMatchObject({
+        original_file_name: 'photo.png',
+        mime_type: 'image/jpeg',
+        file_size: jpegBuffer.length,
+      });
+      expect(insertedRows[0].storage_path).toMatch(/\.jpg$/);
+
+      claimInsertedAttachment();
+      const access = buildMonitoringPointAttachmentFileAccess(insertedRows[0].public_id);
+      const download = await request(app).get(access.fileUrl);
+      expect(download.status).toBe(200);
+      expect(download.headers['content-type']).toMatch(/^image\/jpeg/);
+      expect(download.headers['x-content-type-options']).toBe('nosniff');
+      expect(download.body).toEqual(jpegBuffer);
+    });
+  });
+
   it('stores one valid file as a pending private upload and returns a claim token', async () => {
     await withTempUploadDir(async () => {
       const pngBuffer = validPng();
@@ -101,8 +134,8 @@ describe('monitoring point form attachment upload route', () => {
         file_size: pngBuffer.length,
         sort_order: null,
         claimed_at: null,
-        created_by: 42,
-        updated_by: 42,
+        created_by: currentActorUserId,
+        updated_by: currentActorUserId,
       });
       expect(insertedRows[0].claim_token_hash).toHaveLength(32);
       expect(insertedRows[0].storage_path).toMatch(

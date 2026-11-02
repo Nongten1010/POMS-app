@@ -1,4 +1,4 @@
-import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
+import { uploadFileExtension, validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -51,7 +51,7 @@ export class LocalDocumentFileStorage implements DocumentFileStorage {
     const now = new Date();
     const yyyy = String(now.getFullYear());
     const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const extension = path.extname(file.originalName).toLowerCase();
+    const extension = uploadFileExtension(file.originalName, file.mimeType);
     const storageKey = path.posix.join(STORAGE_PREFIX, yyyy, mm, `${randomUUID()}${extension}`);
     const absolutePath = path.join(this.options.uploadDir, storageKey);
 

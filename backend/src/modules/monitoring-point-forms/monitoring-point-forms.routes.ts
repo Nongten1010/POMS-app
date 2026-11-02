@@ -1,4 +1,4 @@
-import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
+import { validateUploadMetadataFileFilter } from '../../shared/middlewares/upload-rejection-observer';
 import { RequestHandler, Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { StatusCodes } from 'http-status-codes';
@@ -21,14 +21,7 @@ const monitoringPointFormAttachmentUpload = multer({
     files: 1,
     fields: 0,
   },
-  fileFilter: (_req, file, callback) => {
-    try {
-      validateUploadFileMetadata(file.originalname, file.mimetype);
-      callback(null, true);
-    } catch (error) {
-      callback(error instanceof Error ? error : new Error('Invalid uploaded file'));
-    }
-  },
+  fileFilter: validateUploadMetadataFileFilter,
 });
 const monitoringPointFormAttachmentUploadRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

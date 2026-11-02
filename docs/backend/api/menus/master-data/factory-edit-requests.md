@@ -511,7 +511,7 @@ response คืนทั้ง 7 fields ใน `data` ทุกครั้ง �
 
 client ใช้ `data` ทั้ง object เป็นสมาชิกของ `factoryFrontPhotos` หรือเป็นค่า `factoryLogo`: `factoryFrontPhotos` รับมากสุด 10 objects ส่วน `factoryLogo` รับได้หนึ่ง object หรือ `null` เท่านั้น การเรียก upload ไม่เปลี่ยนค่าเดิมจนกว่าจะส่งคำขอแก้ไข
 
-Multer failure เช่นเกิน 5 MiB หรือส่งไฟล์/part เกิน limit ตอบ `400 FILE_UPLOAD_FAILED`; กรณีไม่ส่งไฟล์ ไฟล์ว่าง ชนิด/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ `http`/`https` ตอบ `400 BAD_REQUEST`
+Multer failure เช่นเกิน 5 MiB หรือส่งไฟล์/part เกิน limit ตอบ `400 FILE_UPLOAD_FAILED`; กรณีไม่ส่งไฟล์ ไฟล์ว่าง ชื่อหรือเนื้อหาไม่ผ่าน [นโยบายอัปโหลดไฟล์ทั่วไป](../../shared/file-uploads/README.md#contract-ร่วม) หรือ `link` ไม่ใช่ `http`/`https` ตอบ `400 BAD_REQUEST` ภาพในกลุ่มที่ตรวจชนิดได้สามารถปรับนามสกุลจัดเก็บตามชนิดจริงได้โดยไม่เปลี่ยนชื่อที่แสดง
 
 ### Shared Basic-info Fields
 
@@ -1428,7 +1428,7 @@ State transitions:
 | ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | `400`       | `VALIDATION_ERROR` | path/query/body ไม่ตรง strict schema, `BASIC_INFO` ไม่มี editable field, พิกัดไม่ส่งเป็นคู่, `eiaOther` ผิดเงื่อนไข หรือมี field นอก allowlist                                | แสดง validation ตาม `error.issues[].pathString` |
 | `400`       | `FILE_UPLOAD_FAILED` | multipart upload เกิน limit เช่นไฟล์เกิน 5 MiB หรือส่งไฟล์/part เกินจำนวน                                                            | แสดงข้อผิดพลาดอัปโหลดและให้เลือกไฟล์ใหม่        |
-| `400`       | `BAD_REQUEST`      | แก้ข้อมูลติดต่อโดยเลือกจุดข้าม CEMS/WPMS, upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
+| `400`       | `BAD_REQUEST`      | แก้ข้อมูลติดต่อโดยเลือกจุดข้าม CEMS/WPMS, upload ไม่ส่งไฟล์ ไฟล์ว่าง ชื่อหรือเนื้อหาไม่ผ่านนโยบายอัปโหลด หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
 | `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกอยู่นอก edit scope/assignment, reviewer ไม่มี `factories:approve` หรือคำขอหลุดจาก approval scope หลังล็อก | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |

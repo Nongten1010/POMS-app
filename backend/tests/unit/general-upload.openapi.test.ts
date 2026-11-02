@@ -47,6 +47,17 @@ describe('general upload runtime contract', () => {
     expect(operation.description).toContain('PDF active content or embedded files are not allowed');
     expect(operation.description).toContain('Invalid, encrypted or unsupported PDF file');
     expect(operation.description).toContain('details.files');
+    expect(operation.description).toContain('report.doc.pdf');
+    expect(operation.description).toContain('รวมไฟล์ใน ZIP');
+    expect(operation.description).toContain('ยังคงบล็อก .exe.pdf, .docm.pdf, .pdf.exe');
+    expect(operation.description).toContain('TXT ต้องเป็น UTF-8 และไม่มี NUL');
+    expect(operation.description).toContain('เฉพาะ .txt ไม่รวม XML/ไฟล์ชนิดอื่น');
+    expect(operation.description).toContain('TXT ดาวน์โหลดเป็น attachment พร้อม nosniff');
+    expect(operation.description).toContain('ภาพ JPEG/PNG/GIF/WebP ที่ตรวจลายเซ็นได้');
+    expect(operation.description).toContain('โดยคงชื่อไฟล์เดิมสำหรับแสดงผล');
+    expect(operation.description).toContain(
+      'PDF, HTML หรือโปรแกรมที่เปลี่ยนชื่อเป็นรูปยังถูกปฏิเสธ',
+    );
     expect(schemas).toContain('ZIP');
   });
 });

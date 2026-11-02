@@ -1,4 +1,4 @@
-import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
+import { validateUploadMetadataFileFilter } from '../../shared/middlewares/upload-rejection-observer';
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../../shared/middlewares/authenticate';
@@ -20,14 +20,7 @@ const documentImageUpload = multer({
     fieldNameSize: 64,
     fieldSize: 4096,
   },
-  fileFilter: (_req, file, callback) => {
-    try {
-      validateUploadFileMetadata(file.originalname, file.mimetype);
-      callback(null, true);
-    } catch (error) {
-      callback(error instanceof Error ? error : new Error('Invalid uploaded file'));
-    }
-  },
+  fileFilter: validateUploadMetadataFileFilter,
 });
 
 connectionRequestsRoutes.use(authenticate);

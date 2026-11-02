@@ -1,4 +1,5 @@
 import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
+import { captureUploadFileMetadata } from '../../shared/middlewares/upload-rejection-observer';
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../../shared/middlewares/authenticate';
@@ -17,7 +18,8 @@ const lawUpload = multer({
     fieldNameSize: 64,
     fieldSize: 4096,
   },
-  fileFilter: (_req, file, callback) => {
+  fileFilter: (req, file, callback) => {
+    captureUploadFileMetadata(req, file);
     try {
       validateUploadFileMetadata(file.originalname, file.mimetype);
       callback(null, true);

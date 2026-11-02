@@ -1,4 +1,4 @@
-import { validateUploadFileMetadata } from '../../shared/utils/upload-file-policy';
+import { validateUploadMetadataFileFilter } from '../../shared/middlewares/upload-rejection-observer';
 import { pomsStatusManagementRoutes } from './poms-status-management.routes';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
@@ -19,14 +19,7 @@ const documentImageUpload = multer({
     fieldNameSize: 64,
     fieldSize: 4096,
   },
-  fileFilter: (_req, file, callback) => {
-    try {
-      validateUploadFileMetadata(file.originalname, file.mimetype);
-      callback(null, true);
-    } catch (error) {
-      callback(error instanceof Error ? error : new Error('Invalid uploaded file'));
-    }
-  },
+  fileFilter: validateUploadMetadataFileFilter,
 });
 
 pomsFactoriesRoutes.use(authenticate);

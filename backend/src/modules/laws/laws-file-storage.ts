@@ -1,4 +1,4 @@
-import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
+import { uploadFileExtension, validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { randomUUID } from 'node:crypto';
 import { mkdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -32,7 +32,7 @@ export class LocalLawFileStorage implements LawFileStorage {
     const now = this.now();
     const year = String(now.getUTCFullYear()).padStart(4, '0');
     const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const storedFileName = `${this.generateId()}${path.extname(file.originalName).toLowerCase()}`;
+    const storedFileName = `${this.generateId()}${uploadFileExtension(file.originalName, mimeType)}`;
     const storagePath = path.posix.join(LAW_STORAGE_PREFIX, year, month, storedFileName);
     const lexicalPath = resolveLawStoragePath(this.options.uploadDir, storagePath);
 

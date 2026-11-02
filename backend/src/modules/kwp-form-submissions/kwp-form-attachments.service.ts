@@ -1,4 +1,4 @@
-import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
+import { uploadFileExtension, validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -48,7 +48,7 @@ export class LocalKwpAttachmentStorage {
     const now = new Date();
     const yyyy = String(now.getFullYear());
     const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const extension = path.extname(file.originalName).toLowerCase();
+    const extension = uploadFileExtension(file.originalName, file.mimeType);
     const storedFileName = `${randomUUID()}${extension}`;
     const ownerDirectory = file.actorUserId === undefined ? [] : [String(file.actorUserId)];
     const storagePath = path.posix.join(
@@ -118,13 +118,15 @@ export async function validateStoredKwpAttachments(
         attachment.fileSize !== buffer.length
       )
         throw new BadRequestError('Attachment metadata does not match the uploaded file');
-      await validateKwpAttachmentFile({
+      const actualMimeType = await validateKwpAttachmentFile({
         attachmentType: attachment.attachmentType,
         buffer,
         originalName: attachment.originalFileName,
         mimeType: attachment.mimeType ?? '',
         size: buffer.length,
       });
+      if (attachment.mimeType && attachment.mimeType !== actualMimeType)
+        throw new BadRequestError('Attachment metadata does not match the uploaded file');
     } catch (error) {
       if (error instanceof BadRequestError) throw error;
       throw new BadRequestError('Uploaded attachment is unavailable; upload it again');

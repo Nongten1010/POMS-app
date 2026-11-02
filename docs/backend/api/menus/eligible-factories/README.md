@@ -634,7 +634,7 @@ Success response fields (`201 Created`):
 
 Validation and business rules:
 
-- รองรับนามสกุล `.jpg`, `.jpeg`, `.png` และ `.pdf` โดย MIME type และ signature ของไฟล์จริงต้องตรงกับชนิดที่รองรับ.
+- ชนิดไฟล์และการตรวจเนื้อหาใช้ [นโยบายอัปโหลดไฟล์ทั่วไป](../../shared/file-uploads/README.md#contract-ร่วม) รวมการกำหนด MIME ของภาพตามชนิดจริงเมื่อชื่อภาพไม่ตรงนามสกุล ให้ใช้ metadata ที่ upload response คืนโดยไม่สร้าง MIME หรือ URL เอง.
 - 10 MiB เท่ากับ 10,485,760 bytes และเป็นเพดานต่อไฟล์; ไฟล์ว่างถูกปฏิเสธ.
 - Multipart body รับเฉพาะ field `file` และไม่รับ text field เพิ่มเติม.
 - Endpoint รับหนึ่งไฟล์ต่อ request แต่เรียกซ้ำได้ และไม่มี explicit count cap สำหรับจำนวนรายการใน `points[].attachments[]`.

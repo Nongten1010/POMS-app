@@ -17,6 +17,7 @@ const blockedExtensions = new Set(
 );
 const blockedMime =
   /(?:javascript|ecmascript|x-(?:msdownload|dosexec|executable|sharedlib|shellscript|php|python|perl|ruby)|macroenabled|text\/html|image\/svg\+xml)/i;
+const convertedPdfSourceExtensions = new Set(['doc', 'xls', 'ppt']);
 const officeMimeTypes: Record<string, string> = {
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -26,13 +27,23 @@ const officeMimeTypes: Record<string, string> = {
   '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
   '.odp': 'application/vnd.oasis.opendocument.presentation',
 };
-const ordinaryMimeTypes: Record<string, string> = {
-  '.pdf': 'application/pdf',
+const rasterImageMimeTypes: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.jfif': 'image/jpeg',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
+};
+const rasterImageExtensions: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+};
+const ordinaryMimeTypes: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  ...rasterImageMimeTypes,
   '.bmp': 'image/bmp',
   '.tif': 'image/tiff',
   '.tiff': 'image/tiff',
@@ -62,6 +73,34 @@ export interface GeneralUploadedFile {
   size: number;
 }
 
+export interface DetectedUploadImageType {
+  mimeType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  extension: '.jpg' | '.png' | '.gif' | '.webp';
+}
+
+export function detectUploadImageType(buffer: Buffer): DetectedUploadImageType | undefined {
+  const hex = buffer.subarray(0, 8).toString('hex');
+  if (hex === '89504e470d0a1a0a') return { mimeType: 'image/png', extension: '.png' };
+  if (hex.startsWith('ffd8ff')) return { mimeType: 'image/jpeg', extension: '.jpg' };
+  if (/^GIF8[79]a/.test(buffer.subarray(0, 6).toString('ascii'))) {
+    return { mimeType: 'image/gif', extension: '.gif' };
+  }
+  if (
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return { mimeType: 'image/webp', extension: '.webp' };
+  }
+  return undefined;
+}
+
+export function uploadFileExtension(originalName: string, mimeType: string): string {
+  const extension = path.extname(originalName).toLowerCase();
+  if (!rasterImageMimeTypes[extension]) return extension;
+  if (rasterImageMimeTypes[extension] === mimeType && extension !== '.jfif') return extension;
+  return rasterImageExtensions[mimeType] ?? extension;
+}
+
 export function validateUploadFileMetadata(originalName: string, mimeType: string): string {
   const name = path.posix.basename(originalName.replace(/\\/g, '/'));
   if (!name || name.length > 1024 || /[\u0000-\u001f\u007f:]/.test(name) || /[. ]$/.test(name)) {
@@ -75,7 +114,13 @@ export function validateUploadFileMetadata(originalName: string, mimeType: strin
     name
       .toLowerCase()
       .split('.')
-      .some((part) => blockedExtensions.has(part)) ||
+      .slice(1)
+      .some(
+        (part) =>
+          blockedExtensions.has(part) &&
+          // PDF converters can preserve the source suffix; content inspection remains mandatory.
+          !(extension === '.pdf' && convertedPdfSourceExtensions.has(part)),
+      ) ||
     blockedMime.test(mimeType)
   ) {
     throw new BadRequestError(
@@ -101,17 +146,22 @@ export async function validateGeneralUpload(
     );
   }
   const extension = validateUploadFileMetadata(file.originalName, file.mimeType);
-  await inspectContent(file.buffer, extension);
+  const detectedMimeType = await inspectContent(file.buffer, extension);
   if (isZip(file.buffer)) {
     await inspectZip(file.buffer, { entries: 0, bytes: 0 }, 0);
   } else if (officeMimeTypes[extension] || extension === '.zip') {
     throw new BadRequestError('Uploaded file content does not match its declared type');
   }
   // Ignore client MIME when determining what will be sent back on download.
-  return officeMimeTypes[extension] ?? ordinaryMimeTypes[extension] ?? 'application/octet-stream';
+  return (
+    detectedMimeType ??
+    officeMimeTypes[extension] ??
+    ordinaryMimeTypes[extension] ??
+    'application/octet-stream'
+  );
 }
 
-async function inspectContent(buffer: Buffer, extension: string): Promise<void> {
+async function inspectContent(buffer: Buffer, extension: string): Promise<string | undefined> {
   const hex = buffer.subarray(0, 8).toString('hex');
   if (
     buffer.subarray(0, 2).toString('ascii') === 'MZ' ||
@@ -124,7 +174,16 @@ async function inspectContent(buffer: Buffer, extension: string): Promise<void> 
       'Executable, legacy Office or uninspectable archive content is not allowed',
     );
   }
-  const isPdf = buffer.subarray(0, 1024).includes(Buffer.from('%PDF-'));
+  const imageType = detectUploadImageType(buffer);
+  if (rasterImageMimeTypes[extension]) {
+    if (!imageType) {
+      throw new BadRequestError('Uploaded file content does not match its declared type');
+    }
+    // Raster metadata is binary data, and must not be interpreted as web or PDF code.
+    return imageType.mimeType;
+  }
+  const isArchive = isZip(buffer);
+  const isPdf = !imageType && !isArchive && buffer.subarray(0, 1024).includes(Buffer.from('%PDF-'));
   // Also recognise UTF-16 scripts, including files renamed to ordinary text extensions.
   const head = buffer.subarray(0, 65536);
   const text = (
@@ -133,27 +192,21 @@ async function inspectContent(buffer: Buffer, extension: string): Promise<void> 
     .replace(/\0/g, '')
     .replace(/^\uFEFF/, '')
     .trimStart();
+  // TXT downloads use attachment + nosniff; inline tag examples in prose remain inert.
+  const isPlainTextProse = extension === '.txt' && !text.startsWith('<');
   if (
     !isPdf &&
+    !imageType &&
+    !isArchive &&
     (/^(#!|<\?php\b|<\?=|<!doctype\s+html\b|<html\b|<svg\b|@echo\s+off\b)/i.test(text) ||
-      /<(?:[\w.-]+:)?(?:script|svg)\b/i.test(text) ||
+      (!isPlainTextProse && /<(?:[\w.-]+:)?(?:script|svg)\b/i.test(text)) ||
       /^(?:["']use strict["']\s*;|(?:const|let|var)\s+\w+\s*=|(?:def|function)\s+\w+\s*\(|(?:import|from)\s+[\w.]+\s+(?:import|as)|(?:console|document|window|process)\s*\.|(?:alert|eval|require)\s*\()/i.test(
         text,
       ))
   ) {
     throw new BadRequestError('Script or active web content is not allowed');
   }
-  const signatures: Record<string, boolean> = {
-    '.pdf': isPdf,
-    '.png': hex === '89504e470d0a1a0a',
-    '.jpg': hex.startsWith('ffd8ff'),
-    '.jpeg': hex.startsWith('ffd8ff'),
-    '.gif': /^GIF8[79]a/.test(buffer.subarray(0, 6).toString('ascii')),
-    '.webp':
-      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
-      buffer.subarray(8, 12).toString('ascii') === 'WEBP',
-  };
-  if (signatures[extension] === false) {
+  if (extension === '.pdf' && !isPdf) {
     throw new BadRequestError('Uploaded file content does not match its declared type');
   }
   if (extension === '.txt') {
@@ -165,6 +218,7 @@ async function inspectContent(buffer: Buffer, extension: string): Promise<void> 
     if (buffer.includes(0)) throw new BadRequestError('TXT files must contain text');
   }
   if (isPdf) await validatePdfUpload(buffer);
+  return undefined;
 }
 
 function isZip(buffer: Buffer): boolean {
@@ -292,6 +346,8 @@ async function inspectZipEntry(
   });
   await inspectContent(contents, extension);
   if (
+    !detectUploadImageType(contents) &&
+    !isZip(contents) &&
     /macroenabled|vnd\.ms-office\.vbaproject|vnd\.ms-excel\.(?:macrosheet|intlmacrosheet)/i.test(
       contents.toString('latin1').replace(/\0/g, ''),
     )

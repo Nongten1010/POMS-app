@@ -1,4 +1,4 @@
-import { validateGeneralUpload } from '../../shared/utils/upload-file-policy';
+import { uploadFileExtension, validateGeneralUpload } from '../../shared/utils/upload-file-policy';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -135,7 +135,7 @@ export class LocalMonitoringPointFormAttachmentStorage {
     const publicId = randomUUID();
     const yyyy = String(now.getFullYear());
     const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const extension = path.extname(file.originalName).toLowerCase();
+    const extension = uploadFileExtension(file.originalName, fileType);
     const storedFileName = `${randomUUID()}${extension}`;
     const storagePath = path.posix.join(STORAGE_PREFIX, yyyy, mm, storedFileName);
     const absolutePath = resolveMonitoringPointAttachmentStoragePath(

@@ -8,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { env } from './config/env';
 import { errorHandler, notFoundHandler } from './shared/middlewares/errorHandler';
+import { createUploadRejectionObserver } from './shared/middlewares/upload-rejection-observer';
 import { authRoutes } from './modules/auth/auth.routes';
 import { usersRoutes } from './modules/users/users.routes';
 import { eligibleFactoriesRoutes } from './modules/eligible-factories/eligible-factories.routes';
@@ -55,6 +56,7 @@ export function createApp(): Application {
   );
   app.use(compression());
   app.use(cookieParser());
+  app.use(createUploadRejectionObserver(env.API_PREFIX));
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
   const privateUploadPublicPath = `${env.UPLOAD_PUBLIC_PATH.replace(/\/+$/, '')}/.private`;

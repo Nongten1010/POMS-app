@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
@@ -78,6 +78,36 @@ describe.each(storageAdapters.slice(0, 3))('%s uploaded filename', (_name, save)
 });
 
 describe.each(storageAdapters)('%s upload storage', (_name, save) => {
+  it('stores a JPEG named PNG using the detected MIME and a matching storage extension', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'poms-general-image-'));
+    try {
+      const buffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]);
+      const result = (await save(root, {
+        originalName: 'photo.png',
+        mimeType: 'image/png',
+        buffer,
+        size: buffer.length,
+      })) as {
+        fileType?: string;
+        mimeType?: string;
+        storageKey?: string;
+        storagePath?: string;
+      };
+
+      expect(result.fileType ?? result.mimeType).toBe('image/jpeg');
+      const storagePath = result.storageKey ?? result.storagePath ?? '';
+      expect(storagePath).not.toBe('');
+      expect(path.extname(storagePath)).toBe(_name === 'FAQ' ? '' : '.jpg');
+      const filePath =
+        _name === 'FAQ'
+          ? path.join(root, '.private', 'faqs', storagePath)
+          : path.join(root, storagePath);
+      await expect(readFile(filePath)).resolves.toEqual(buffer);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('accepts ordinary text without client MIME restrictions', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'poms-general-'));
     try {
