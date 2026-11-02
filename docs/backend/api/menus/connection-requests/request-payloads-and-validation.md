@@ -118,7 +118,7 @@ curl --request POST \
 | `pointType`              | body     | Conditional   | No                 | enum     | `STACK`, `WASTEWATER`, `OTHER`; ละได้เมื่อ backend infer ได้จาก `details.monitoringPointKind` หรือ point-level `type` |
 | `latitude`               | body     | No            | Yes                | number   | `-90..90`                                                                                                             |
 | `longitude`              | body     | No            | Yes                | number   | `-180..180`                                                                                                           |
-| `parameters`             | body     | No            | No after normalize | string[] | 1-50 entries เมื่อส่ง; trim ต่อ item; backend split comma, dedupe, และตัดค่า `ไม่มี`                                  |
+| `parameters`             | body     | No            | No after normalize | string[] | 0-100 รายการ; ชื่อละ 1-128 ตัวอักษรหลัง trim; รับ `[]`; backend split comma, dedupe และตัดค่า `ไม่มี` ใช้ขอบเขตเดียวกับเครื่องมือวัด |
 | `description`            | body     | No            | Yes                | string   | trim <=1000                                                                                                           |
 | `monitoringPointStatus`  | body     | No            | Yes                | enum     | สถานะระดับจุด 1 ใน 7 ค่าที่รองรับ; `ได้รับการยกเว้นทั้งหมด` หรือ `อยู่ระหว่างขยายเวลา` ใช้กับ active point ที่ยังไม่มีพารามิเตอร์ได้             |
 | `details`                | body     | Flow-specific | Yes                | object   | schema เป็น generic JSON record; business validation อยู่ใน service/validator                                         |
@@ -418,7 +418,7 @@ Frontend ต้องแยกตัวเลือกสถานะทั้�
 | --- | --- | --- |
 | `details.requestedParameters` | `[]` ใน request | ห้ามส่งข้อความตัวเลือกเป็นชื่อพารามิเตอร์ |
 | `measurementInstruments.parameters` | `[]` ใน request | ยังส่ง object เครื่องมือได้ โดยไม่มีรายการพารามิเตอร์ |
-| `parameters` ระดับจุด | ไม่ส่งใน request; response เป็น `[]` | Backend derive จากรายการที่ขอเชื่อมต่อ |
+| `parameters` ระดับจุด | ละ field หรือส่ง `[]` ใน request; response เป็น `[]` | Backend derive จากรายการที่ขอเชื่อมต่อ และรองรับการตรวจซ้ำตอนส่งแบบแก้ไข |
 | `measurementPoints[].pointCode` | ไม่ส่งในคำขอปกติ; อ่านค่าจาก response หลังอนุมัติ | ใช้รหัสเดิมเพิ่มพารามิเตอร์ภายหลัง |
 | `data.status` | `CONNECTED` หลังอนุมัติ | จบขั้นตอนคำขอโดยไม่เปิด flow ตั้งค่าอุปกรณ์ |
 | `data.verifiedAt` | เวลาอนุมัติ | ใช้กติกาเดียวกับยกเว้นทั้งหมด |
@@ -749,6 +749,40 @@ Frontend ต้องแยกตัวเลือกสถานะทั้�
 | `measurementPoints[].pointCode` | body | ตามเงื่อนไข | Yes | string | จุดที่มีรหัสให้ส่งรหัสเดิมจาก GET form เพื่อระบุจุด; เปลี่ยนรหัสเองไม่ได้ จุดใหม่ไม่ส่งหรือส่ง `null` |
 | other body fields | body     | ตาม request type เดิม | ตาม shared contract | object  | backend inject `requestType` เดิมเข้า validation อีกครั้ง     |
 
+### พารามิเตอร์และพิกัดเมื่อส่งแบบแก้ไข
+
+- ใช้ได้กับทั้ง `CEMS` และ `WPMS` สำหรับ `NEW_CONNECTION` และ `ADD_MEASUREMENT_POINT` เดิม รวมฟอร์มหลายจุดที่มีทั้งจุดพารามิเตอร์จริงและจุดพารามิเตอร์ว่าง
+- จุด `ได้รับการยกเว้นทั้งหมด` หรือ `อยู่ระหว่างขยายเวลา` ทั้งจุด ใช้ `details.requestedParameters: []` และ `measurementInstruments.parameters: []`; `parameters` ระดับจุดละได้หรือส่ง `[]` ได้ การ normalize รอบแรกไม่ทำให้ validation รอบถัดไปปฏิเสธรายการว่าง
+- ทุกแหล่งข้อมูลพารามิเตอร์ใช้ขอบเขตเดียวกัน: สูงสุด 100 รายการ ชื่อละ 1-128 ตัวอักษรหลัง trim ถ้าไม่มี `details.requestedParameters` ระบบ derive จากเครื่องมือวัดก่อน fallback ไป `parameters` ระดับจุด จึงรองรับชื่อยาว 65-128 ตัวอักษรและรายการ 51-100 รายการตอนส่งกลับด้วย
+- เมื่อส่ง `details.requestedParameters` ระบบใช้รายการนี้เป็นหลัก รวมกรณี `[]`; ห้ามเติมพารามิเตอร์สมมติเพื่อให้ส่งแบบผ่าน รายการเครื่องมือต้องตรงกับรายการที่ขอเชื่อมต่อตามกฎของประเภทคำขอ
+- แก้พิกัดโรงงานด้วย `latitude`/`longitude`; แก้พิกัดจุด CEMS ด้วย `details.stackLatitude`/`details.stackLongitude` หรือ WPMS ด้วย `details.instrumentLatitude`/`details.instrumentLongitude` ระบบส่งค่าที่ผ่าน validation พร้อม `monitoringPointStatus` ไปบันทึก และเปลี่ยนคำขอเป็น `REVISED_PENDING_DESIGN_REVIEW` เมื่อสำเร็จ
+- สิทธิ์ ขอบเขตโรงงาน ประเภทคำขอเดิม สถานะ `WAITING_FACTORY_REVISION` และ `expectedUpdatedAt` ยังถูกตรวจตามกติกาเดิม ชื่อว่าง ชื่อเกิน 128 ตัวอักษร หรือเกิน 100 รายการ ตอบ `400 VALIDATION_ERROR` ก่อนบันทึก
+
+ตัวอย่าง field ของจุดที่ได้รับยกเว้นทั้งหมดในฟอร์ม CEMS (ส่งร่วมกับข้อมูลโรงงาน ผู้ติดต่อ และเอกสารตาม shared contract):
+
+```json
+{
+  "pointName": "ปล่องระบาย A",
+  "pointType": "STACK",
+  "monitoringPointStatus": "ได้รับการยกเว้นทั้งหมด",
+  "parameters": [],
+  "details": {
+    "monitoringPointKind": "CEMS",
+    "stackShape": "วงกลม",
+    "stackDiameter": 1.2,
+    "requestedParameters": [],
+    "stackLatitude": 13.643351,
+    "stackLongitude": 100.584545
+  },
+  "documentsAndImages": [
+    { "title": "ภาพถ่ายปล่อง", "fileUrl": "https://example.com/stack.jpg" }
+  ],
+  "measurementInstruments": { "parameters": [] }
+}
+```
+
+เทสกันปัญหาซ้ำ: [เส้นทาง PUT ผ่าน controller/service จริง](../../../../../backend/tests/unit/connection-requests.resubmit-validation.route.test.ts) และ [ขอบเขตพารามิเตอร์กับ runtime OpenAPI](../../../../../backend/tests/unit/connection-requests.parameter-limits.openapi.test.ts)
+
 ### Minimal Valid Request
 
 ```json
@@ -919,7 +953,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 | `pointType`              | body     | No       | Yes      | enum     | ถ้าไม่ส่ง backend default เป็น `STACK` สำหรับ `CEMS` หรือ `WASTEWATER` สำหรับ `WPMS` |
 | `latitude`               | body     | No       | Yes      | number   | `-90..90`                                                                            |
 | `longitude`              | body     | No       | Yes      | number   | `-180..180`                                                                          |
-| `parameters`             | body     | No       | Yes      | string[] | max 50                                                                               |
+| `parameters`             | body     | No       | Yes      | string[] | 0-100 รายการ; ชื่อละ 1-128 ตัวอักษรหลัง trim ใช้ขอบเขตเดียวกับเครื่องมือวัดและฟอร์มส่งกลับ |
 | `description`            | body     | No       | Yes      | string   | trim <=1000                                                                          |
 | `details`                | body     | No       | Yes      | object   | nullable; CEMS/WPMS rules บางส่วนยังมีผล                                             |
 | `documentsAndImages`     | body     | No       | Yes      | array    | nullable; placeholder rows ถูกละทิ้งได้                                              |

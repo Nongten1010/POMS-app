@@ -9,6 +9,8 @@ import {
   CONNECTION_REQUEST_DOCUMENT_TITLE,
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_TYPE,
+  MAX_MEASUREMENT_PARAMETER_NAME_LENGTH,
+  MAX_MEASUREMENT_POINT_PARAMETERS,
   MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS,
   POINT_CODE_ASSIGNMENT_MODE,
 } from './connection-requests.types';
@@ -16,6 +18,10 @@ import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
+const measurementParameterNameSchema = trimmedString(MAX_MEASUREMENT_PARAMETER_NAME_LENGTH);
+const measurementPointParametersSchema = z
+  .array(measurementParameterNameSchema)
+  .max(MAX_MEASUREMENT_POINT_PARAMETERS);
 const INVISIBLE_EMAIL_FORMATTING_CHARACTERS = /[\u200B-\u200D\u2060\uFEFF]/g;
 const normalizeRequestEmail = (value: unknown): unknown =>
   typeof value === 'string'
@@ -379,7 +385,7 @@ function hasCriteriaValue(
 
 const measurementInstrumentParameterSchema = z
   .object({
-    parameter: trimmedString(128),
+    parameter: measurementParameterNameSchema,
     technique: optionalNullableTrimmedString(255),
     range: optionalNullableTrimmedString(255),
     brand: optionalNullableTrimmedString(255),
@@ -410,7 +416,10 @@ export const measurementInstrumentsSchema = z
   .object({
     converterBrand: optionalNullableTrimmedString(255),
     converterModel: optionalNullableTrimmedString(255),
-    parameters: z.array(measurementInstrumentParameterSchema).max(100).optional(),
+    parameters: z
+      .array(measurementInstrumentParameterSchema)
+      .max(MAX_MEASUREMENT_POINT_PARAMETERS)
+      .optional(),
   })
   .strict()
   .transform((instruments) => ({
@@ -624,7 +633,7 @@ const measurementPointSchema = z
         pointType: z.enum(['STACK', 'WASTEWATER', 'OTHER']),
         latitude: z.number().min(-90).max(90).nullable().optional(),
         longitude: z.number().min(-180).max(180).nullable().optional(),
-        parameters: z.array(trimmedString(64)).min(1).max(50).optional(),
+        parameters: measurementPointParametersSchema.optional(),
         description: optionalNullableTrimmedString(1000),
         monitoringPointStatus: z.enum(MONITORING_POINT_STATUSES).nullable().optional(),
         details: measurementPointDetailsSchema.nullable().optional(),
@@ -1481,7 +1490,7 @@ const directConnectionMeasurementPointSchema = z
     pointType: z.enum(['STACK', 'WASTEWATER', 'OTHER']).nullable().optional(),
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
-    parameters: z.array(trimmedString(64)).max(50).nullable().optional(),
+    parameters: measurementPointParametersSchema.nullable().optional(),
     description: optionalNullableTrimmedString(1000),
     details: measurementPointDetailsSchema.nullable().optional(),
     documentsAndImages: z.preprocess(
