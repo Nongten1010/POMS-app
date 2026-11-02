@@ -2,6 +2,11 @@ import type { AlertEventDTO } from '../alert-events/alert-events.types';
 import { isAlertEventExceedance } from '../alert-events/alert-event-exceedance';
 
 const TIME_ZONE = 'Asia/Bangkok';
+const TEST_NOTICE_PARAGRAPHS = [
+  'ขณะนี้อยู่ระหว่างการทดสอบระบบแจ้งเตือน ข้อความแจ้งเตือนที่ท่านได้รับเป็นเพียงส่วนหนึ่งของการทดสอบระบบเท่านั้น ไม่มีผลผูกพันหรือผลทางกฎหมายใด ๆ',
+  'จึงขอความร่วมมือผู้ประกอบการโรงงานทุกท่าน ไม่จำเป็นต้องดำเนินการใด ๆ ภายหลังได้รับข้อความแจ้งเตือนนี้',
+  'ขออภัยในความไม่สะดวก และขอขอบคุณในความร่วมมือ',
+];
 const ACTION = 'โปรดดำเนินการตรวจสอบ และแก้ไขโดยเร็ว';
 const LAB_NOTICE =
   'โรงงานต้องดำเนินการตรวจวัดพารามิเตอร์ที่ไม่สามารถรายงานผลได้ด้วยห้องปฏิบัติการวิเคราะห์ที่ขึ้นทะเบียนกับกรมโรงงานอุตสาหกรรม และรายงานผลการตรวจวัดแก่กรมโรงงานอุตสาหกรรมอย่างน้อยเดือนละ 1 ครั้ง (รายงาน กวภ.02)';
@@ -47,12 +52,22 @@ export function renderAlertEmail(input: RenderAlertEmailInput): RenderedAlertEma
   const first = input.events[0];
   const factories = groupEvents(input.events);
   const heading = subjectFor(first, factories.size);
-  const text = ['เรียน เจ้าหน้าที่ที่เกี่ยวข้อง', 'เรื่อง ' + heading.text, ''];
+  const text = [
+    'เรียน เจ้าหน้าที่ที่เกี่ยวข้อง',
+    'เรื่อง ' + heading.text,
+    '',
+    ...TEST_NOTICE_PARAGRAPHS.flatMap((paragraph) => [paragraph, '']),
+  ];
   const sections = [
     '<p style="margin:0 0 14px;font-size:15px;color:#526980;"><strong>เรียน</strong> เจ้าหน้าที่ที่เกี่ยวข้อง</p>',
     '<p style="margin:0 0 26px;font-size:21px;line-height:1.7;font-weight:600;color:#16324f;"><strong>เรื่อง</strong> ' +
       heading.html +
       '</p>',
+    '<div style="margin:0 0 26px;color:#c62828;font-size:15px;line-height:1.9;">' +
+      TEST_NOTICE_PARAGRAPHS.map(
+        (paragraph) => '<p style="margin:0 0 14px;">' + escapeHtml(paragraph) + '</p>',
+      ).join('') +
+      '</div>',
   ];
   let factoryNumber = 0;
   for (const factory of factories.values()) {

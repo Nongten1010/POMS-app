@@ -31,6 +31,21 @@ describe('safe alert email simulation', () => {
     expect(report.policy.hourlyDelayMinutes).toBe(0);
     expect(report.emails).toHaveLength(7);
     expect(messages).toHaveLength(7);
+    const noticeParagraphs = [
+      'ขณะนี้อยู่ระหว่างการทดสอบระบบแจ้งเตือน ข้อความแจ้งเตือนที่ท่านได้รับเป็นเพียงส่วนหนึ่งของการทดสอบระบบเท่านั้น ไม่มีผลผูกพันหรือผลทางกฎหมายใด ๆ',
+      'จึงขอความร่วมมือผู้ประกอบการโรงงานทุกท่าน ไม่จำเป็นต้องดำเนินการใด ๆ ภายหลังได้รับข้อความแจ้งเตือนนี้',
+      'ขออภัยในความไม่สะดวก และขอขอบคุณในความร่วมมือ',
+    ];
+    for (const message of messages) {
+      const redNotice = message.html.match(/<div style="[^"]*color:#c62828;[^"]*">(.*?)<\/div>/s);
+      expect(redNotice).not.toBeNull();
+      for (const paragraph of noticeParagraphs) expect(redNotice?.[1]).toContain(paragraph);
+      expect(message.text).toContain(noticeParagraphs.join('\n\n'));
+      for (const content of [message.html, message.text]) {
+        for (const paragraph of noticeParagraphs) expect(content.split(paragraph)).toHaveLength(2);
+        expect(content.indexOf(noticeParagraphs[2])).toBeLessThan(content.indexOf('1) '));
+      }
+    }
     expect(messages.every((message) => message.cc.includes('diw.iemc@gmail.com'))).toBe(true);
     expect(report.checks.find((check) => check.id === 'hourly-before-due')?.passed).toBe(true);
     expect(report.checks.find((check) => check.id === 'daily-before-nine')?.passed).toBe(true);
