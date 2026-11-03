@@ -34,6 +34,7 @@ export async function createKnexSqliteFixture(
   });
   const sqlite = new SQL.Database();
   sqlite.create_function('SYSDATETIME', () => new Date().toISOString());
+  sqlite.create_function('SYSUTCDATETIME', () => new Date().toISOString());
   try {
     for (const table of new Set([...Object.keys(tables), ...Object.keys(schemas)])) {
       const rows = tables[table] ?? [];

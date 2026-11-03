@@ -123,6 +123,8 @@
 
 ## Notifications
 
+- [ตัวตรวจค่าเกิน อก./EIA ภายใน: การทดสอบและการเปิดใช้](./notifications/hourly-exceedance-detector.md)
+
 - [อีเมลแจ้งเตือนมลพิษ: TDD, ขอบเขตสิทธิ์ และการกันส่งซ้ำ](./notifications/alert-email.tdd.md)
 - [ตรวจค่าเกินก่อนรับเหตุการณ์: TDD และ validation ทั้ง batch](./notifications/alert-event-exceedance-validation.tdd.md)
 - [ตรวจความถูกต้องก่อนส่งและประวัติ activation พร้อมชุดจำลองอีเมล](./notifications/alert-email-correctness.tdd.md)

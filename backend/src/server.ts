@@ -8,6 +8,7 @@ import { closeBoilerSourceDatabase } from './config/boiler-source-database';
 import { startConnectionRequestAutoCancelWorker } from './modules/connection-requests/connection-request-auto-cancel.worker';
 import { startMonitoringPointAttachmentCleanupWorker } from './modules/monitoring-point-forms/monitoring-point-attachment-cleanup.worker';
 import { startAlertEmailWorker } from './modules/alert-emails/alert-email-runtime';
+import { startExceedanceSupervisor } from './modules/alert-exceedances/exceedance-supervisor';
 
 const REQUEST_TIMEOUT_MS = 300000;
 
@@ -19,6 +20,7 @@ async function bootstrap(): Promise<void> {
   }
 
   const alertEmailWorker = startAlertEmailWorker();
+  const exceedanceSupervisor = startExceedanceSupervisor();
   const app = createApp();
   const server = app.listen(env.PORT, () => {
     logger.info(`[boot] POMS backend listening on http://localhost:${env.PORT}${env.API_PREFIX}`);
@@ -35,6 +37,7 @@ async function bootstrap(): Promise<void> {
     clearInterval(autoCancelWorker);
     clearInterval(attachmentCleanupWorker);
     server.close(async () => {
+      await exceedanceSupervisor.stop();
       await alertEmailWorker.stop();
       await closeDatabase();
       await closeFactorySourceDatabase();

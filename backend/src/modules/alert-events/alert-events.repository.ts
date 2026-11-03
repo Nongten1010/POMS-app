@@ -3,6 +3,7 @@ import {
   isCanonicalFactoryProfilesEnabled,
 } from '../factory-profiles/factory-profile-mode';
 import { db } from '../../config/database';
+import { toAlertEventInsertPayload } from './alert-event-persistence';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
@@ -126,7 +127,7 @@ export const alertEventsRepository = {
   },
 
   async createFromIntegration(input: CreateIntegrationAlertEventInput): Promise<AlertEventDTO> {
-    const payload = toInsertPayload(input);
+    const payload = toAlertEventInsertPayload(input);
     const inserted = await db<AlertEventRow>('alert_events').insert(payload).returning('*');
     const row = Array.isArray(inserted) ? inserted[0] : inserted;
 
@@ -370,35 +371,6 @@ export function buildAlertEventsListQueryForTests(
   access: AlertEventAccess,
 ) {
   return buildListRowsQuery(query, access);
-}
-
-function toInsertPayload(input: CreateIntegrationAlertEventInput) {
-  return {
-    idempotency_key: input.idempotencyKey,
-    alert_type: input.alertType,
-    system_type: input.systemType,
-    display_system_type: input.displaySystemType,
-    factory_id: input.factoryId ?? null,
-    factory_name: input.factoryName ?? '',
-    factory_registration_no: input.factoryRegistrationNo ?? null,
-    connected_measurement_point_id: input.connectedMeasurementPointId ?? null,
-    station_id: input.stationId,
-    point_code: input.pointCode ?? null,
-    point_name: input.pointName,
-    point_type: input.pointType ?? null,
-    parameter_code: input.parameterCode,
-    parameter_name: input.parameterName,
-    parameter_label: input.parameterLabel,
-    unit: input.unit,
-    event_date: input.eventDate,
-    started_at: input.startedAt,
-    ended_at: input.endedAt,
-    measured_value: input.measuredValue,
-    threshold_value: input.thresholdValue,
-    threshold_type: input.thresholdType,
-    notification_status: input.notificationStatus ?? 'AUTO',
-    source_payload_json: input.sourcePayload ? JSON.stringify(input.sourcePayload) : null,
-  };
 }
 
 function toAlertPointType(value: string) {
