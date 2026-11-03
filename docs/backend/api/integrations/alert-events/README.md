@@ -1,12 +1,10 @@
-# Integration Alert Events
+# ประวัติรับข้อมูลแจ้งเตือนจากระบบภายนอก
 
-[กลับไป Integration API Index](../README.md)
+[กลับไป Integration API Index](../README.md) · [การแจ้งเตือนใน POMS](../../menus/notifications/README.md)
 
-API สำหรับ Worker หรือระบบภายนอกส่งเหตุการณ์ค่ารายชั่วโมงที่เกินเกณฑ์เข้าสู่ POMS แบบ batch โดย backend ตรวจ API key, ตรวจว่า `measuredValue > thresholdValue`, ผูกจุดตรวจวัดกับโรงงานที่เชื่อมต่อแล้ว และสร้างช่วงเต็มชั่วโมงให้เอง
+`POST /api/v1/integrations/alert-events` ใช้แบบ `STORE_ONLY`: ระบบภายนอกส่งเข้าที่ URL และ API key เดิมได้ Backend เก็บ JSON เป็นประวัติรับเข้าใน `integration_alert_receipts` แล้วตอบ `200 OK` โดยไม่สร้าง `alert_events`, ไม่แสดงในหน้าแจ้งเตือน, ไม่เข้าคิวหรือส่งอีเมล และไม่ใช้ข้อมูลนี้แก้ไขหรือกันซ้ำกับผลของ [ตัวตรวจค่าเกินภายใน](../../../guides/hourly-exceedance-detector.md)
 
-ระบบต้นทางเป็นผู้ตรวจข้อมูลรายชั่วโมงและเลือกเกณฑ์กับหน่วยให้ตรงกับพารามิเตอร์ Endpoint นี้ตรวจความสัมพันธ์ของตัวเลขที่ส่งมา แต่ยังไม่ได้ยืนยัน `thresholdValue` กับเกณฑ์ใน registered config หรืออ่านข้อมูลตรวจวัดดิบมาสร้างเหตุการณ์เอง
-
-POMS มี [worker ตรวจค่าเกินภายใน](../../../guides/hourly-exceedance-detector.md) เป็น process แยก ปิดเป็นค่าเริ่มต้น และสร้าง event ได้เมื่อเปิด `active` ตาม allowlist เท่านั้น ใช้ identity เดียวกับ endpoint นี้สำหรับ canonical `stationId` และหน่วยที่ตรงกัน ก่อนเปิดร่วมกันต้องยืนยันรหัสจุดกับ producer ภายนอก; ไม่รองรับการเดา alias หรือแก้ event เดิมเมื่อค่า/เกณฑ์ขัดแย้ง ระบบรับ API นี้และนโยบายอีเมลเดิมยังใช้ต่อได้ตามเดิม
+รายการแจ้งเตือนใหม่ของ POMS มาจากตัวตรวจภายในที่เปิด `active` ซึ่งอ่านข้อมูลตรวจวัด `60m` และเกณฑ์ที่ลงทะเบียนไว้ การเปลี่ยน endpoint นี้ไม่เปลี่ยนวิธีนำเข้าค่าตรวจวัดต้นทาง ไม่ลบประวัติ alert/อีเมลเดิม และไม่ยกเลิกคิวอีเมลเดิมที่สร้างไว้แล้ว
 
 ## Quick Start
 
@@ -15,261 +13,86 @@ curl --request POST \
   --url '<BASE_URL>/api/v1/integrations/alert-events' \
   --header 'X-API-Key: <ALERT_EVENT_API_KEY>' \
   --header 'Content-Type: application/json' \
-  --data '{
-    "events": [
-      {
-        "systemType": "CEMS",
-        "stationId": "S0001",
-        "pointCode": "S0001",
-        "parameterCode": "so2",
-        "unit": "ppm",
-        "eventDate": "2026-03-02",
-        "time": "20:00",
-        "measuredValue": 150,
-        "thresholdValue": 60,
-        "thresholdType": "STANDARD"
-      }
-    ]
-  }'
+  --data '{"events":[{"systemType":"CEMS","stationId":"S0001","parameterCode":"so2","unit":"ppm","eventDate":"2026-11-03","time":"11:00","measuredValue":125,"thresholdValue":120,"thresholdType":"STANDARD"}]}'
 ```
-
-ใช้ key จาก `ALERT_EVENT_API_KEYS` สำหรับ endpoint นี้ หาก deployment เดิมยังไม่ได้กำหนด scoped key ระบบ fallback ไปอ่าน `INTEGRATION_API_KEYS` ชั่วคราว ห้ามเก็บ key จริงใน source code เอกสาร หรือ log
 
 ## `POST /api/v1/integrations/alert-events`
 
-รับเหตุการณ์ตั้งแต่ 1 ถึง 500 รายการและตอบ `200 OK` พร้อมผลลัพธ์ของแต่ละรายการ การสร้างสำเร็จและรายการซ้ำสามารถอยู่ใน batch เดียวกันได้ Backend validate ทั้ง `events[]` ก่อนเรียก service หรือเขียนฐานข้อมูล หากมีรายการใดไม่ผ่าน validation จะตอบ `400 VALIDATION_ERROR` และไม่มีรายการใน batch นั้นถูกบันทึก
+### Authentication และขอบเขต
 
-### Authentication And Permission
+ใช้ header `X-API-Key` จาก `ALERT_EVENT_API_KEYS`; ถ้า scoped-key list ว่าง fallback ไป `INTEGRATION_API_KEYS` ตามเดิม ไม่บันทึก key หรือ request headers ในประวัติรับเข้า ไม่ต้องมี connected measurement point เพื่อเก็บ receipt และไม่มี endpoint ใหม่สำหรับเปิดอ่าน archive ผ่านหน้าแจ้งเตือน
 
-- Authentication: required ผ่าน header `X-API-Key`
-- Permission: alert-event integration key
-- Data scope: จุดตรวจวัด active ใน `cems_wpms_connected_measurement_points`
+### Request fields
 
-### Request Fields
-
-#### Request Root
-
-| Field | Location | Type | Required | Description |
+| Field | Location | Type | Required | ความหมาย |
 | --- | --- | --- | --- | --- |
-| `X-API-Key` | header | string | Yes | key ใน `ALERT_EVENT_API_KEYS`; fallback เป็น `INTEGRATION_API_KEYS` เมื่อ scoped-key list ว่าง |
-| `events` | body | object[] | Yes | รายการแจ้งเตือน 1-500 รายการ |
+| `X-API-Key` | header | string | Yes | integration key เดิม |
+| `events` | body | object[] | Yes | JSON objects 1–500 รายการ |
+| field อื่นที่ root | body | JSON value | No | เก็บพร้อม payload โดยไม่ตีความ |
+| field ภายใน `events[]` | body | JSON value | No | เก็บตามที่รับมา ไม่บังคับ field ทางธุรกิจ |
 
-#### `events[]`
+field เดิม เช่น `systemType`, `stationId`, `pointCode`, `parameterCode`, `unit`, `eventDate`, `time`, `measuredValue`, `thresholdValue` และ `thresholdType` ส่งได้ตามเดิม รวม field เพิ่มเติม Numeric strings และหน่วยคงค่าต้นฉบับ ไม่แปลงตัวเลข/ชื่อพารามิเตอร์ ไม่ตรวจวันที่ ชั่วโมง สถานะจุด หรือว่าเกินเกณฑ์จริง จึงรับทั้งค่าต่ำกว่า เท่ากับ และเกินเกณฑ์เพื่อเก็บประวัติได้
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `systemType` | `CEMS` \| `WPMS` | Yes | ระบบต้นทาง; BOD/COD Online ใช้ `WPMS` |
-| `stationId` | string | Yes | รหัสจุดตรวจวัดที่ต้องตรงกับ active connected measurement point |
-| `pointCode` | string \| null | No | รหัสจุดตรวจวัด; เมื่อไม่ส่ง backend ใช้ `stationId` สำหรับค้นหา |
-| `parameterCode` | string | Yes | รหัสพารามิเตอร์ เช่น `so2`, `nox`, `cod` หรือ `bod`; backend normalize เป็น lowercase |
-| `unit` | string | Yes | หน่วยของค่าตรวจวัด เช่น `ppm` หรือ `mg/l` |
-| `eventDate` | string | Yes | วันที่ของชั่วโมงที่ตรวจพบ รูปแบบ `YYYY-MM-DD` และต้องเป็นวันที่มีอยู่จริงในปฏิทิน |
-| `time` | string | Yes | เวลาเริ่มชั่วโมง รูปแบบ `HH:00` ตั้งแต่ `00:00` ถึง `23:00` |
-| `measuredValue` | number \| numeric string | Yes | ค่ารายชั่วโมงที่ตรวจวัดได้ ต้องเป็น finite number และมากกว่า `thresholdValue`; numeric string ที่ไม่ว่างแปลงเป็น number ก่อนตรวจ |
-| `thresholdValue` | number \| numeric string | Yes | ค่าเกณฑ์ที่ใช้เปรียบเทียบ หน่วยเดียวกับ `unit` ต้องเป็น finite number; numeric string ที่ไม่ว่างแปลงเป็น number ก่อนตรวจ |
-| `thresholdType` | `STANDARD` \| `EIA` | Yes | ประเภทเกณฑ์ที่ค่าเกิน |
+เก็บ JSON values ไม่ใช่ whitespace/รูปแบบไบต์ของ HTTP ต้นฉบับ ขนาด HTTP body ใช้ขีดจำกัด JSON เดิมของระบบ
 
-`startTime` และ `endTime` ไม่อยู่ใน contract ปัจจุบันและจะถูกปฏิเสธ เพราะ request ใช้ strict schema
-
-### Request Example
+### Request example
 
 ```json
-{
-  "events": [
-    {
-      "systemType": "WPMS",
-      "stationId": "WEMS-0003/2571",
-      "pointCode": "WEMS-0003/2571",
-      "parameterCode": "cod",
-      "unit": "mg/l",
-      "eventDate": "2026-03-02",
-      "time": "23:00",
-      "measuredValue": 125,
-      "thresholdValue": 120,
-      "thresholdType": "EIA"
-    }
-  ]
-}
+{"events":[{"systemType":"WPMS","stationId":"P0260","parameterCode":"bod","unit":"mg/l","measuredValue":"27.00","thresholdValue":27,"thresholdType":"STANDARD"}]}
 ```
 
-### Success Response Fields
+### Response fields
 
-#### Response Root
-
-| Field | Type | Nullable | Description |
+| Field | Type | Nullable | ความหมาย |
 | --- | --- | --- | --- |
-| `success` | boolean | No | `true` เมื่อ request-level validation ผ่านและประมวลผล batch แล้ว |
-| `data.total` | number | No | จำนวนรายการทั้งหมดใน `events` |
-| `data.created` | number | No | จำนวนรายการที่สร้างใหม่ |
-| `data.duplicate` | number | No | จำนวนรายการที่มี `idempotencyKey` อยู่แล้ว |
-| `data.failed` | number | No | จำนวนรายการที่เกิด business หรือ persistence error ระหว่างประมวลผล |
-| `data.results` | object[] | No | ผลลัพธ์เรียงตาม index ของ request |
+| `success` | boolean | No | `true` หลังบันทึก batch สำเร็จ |
+| `data.mode` | `STORE_ONLY` | No | เก็บข้อมูลอย่างเดียว |
+| `data.receiptId` | UUID string | No | ID ประวัติรับเข้าของ batch ไม่ใช่ alert event ID |
+| `data.receivedAt` | ISO datetime | No | เวลารับเข้า UTC |
+| `data.total` | integer | No | จำนวน JSON objects ที่รับ |
+| `data.stored` | integer | No | จำนวนที่เก็บสำเร็จ เท่ากับ `total` |
+| `data.created` | integer | No | `0` เสมอ: ไม่สร้าง alert |
+| `data.duplicate` | integer | No | `0` เสมอ: ไม่ค้นหาหรือใช้ identity ของ alert |
+| `data.failed` | integer | No | `0` ในคำตอบสำเร็จ; batch บันทึกด้วย INSERT เดียว |
+| `data.results` | object[] | No | ผลเรียงตาม index ของ `events` |
+| `data.results[].index` | integer | No | index เริ่ม 0 |
+| `data.results[].success` | boolean | No | `true` |
+| `data.results[].created` | boolean | No | `false` |
+| `data.results[].duplicate` | boolean | No | `false` |
+| `data.results[].event` | null | Yes | `null` เสมอ ไม่สร้างหรือค้น event |
 
-#### `data.results[]`
-
-| Field | Type | Nullable | Description |
-| --- | --- | --- | --- |
-| `index` | number | No | ตำแหน่งรายการใน `events` เริ่มที่ `0` |
-| `success` | boolean | No | `true` เมื่อสร้างได้หรือเป็นรายการซ้ำ |
-| `created` | boolean | Conditional | มีเมื่อ `success=true`; `true` เมื่อสร้างใหม่ |
-| `duplicate` | boolean | Conditional | มีเมื่อ `success=true`; `true` เมื่อพบรายการเดิม |
-| `event` | object | Conditional | alert event ที่สร้างใหม่หรือรายการเดิม |
-| `error.code` | string | Conditional | code ของรายการที่ไม่สำเร็จ เช่น `BAD_REQUEST` |
-| `error.message` | string | Conditional | ข้อความที่ปลอดภัยสำหรับ integration client |
-| `error.details` | unknown | Yes | รายละเอียดประกอบ error เมื่อมี |
-
-#### ฟิลด์หลักใน `event`
-
-| Field | Type | Nullable | Description |
-| --- | --- | --- | --- |
-| `id` | number | No | ID ของ alert event |
-| `idempotencyKey` | string | No | opaque key ที่ backend สร้างเพื่อกันเหตุการณ์ซ้ำ; client ห้ามแยกองค์ประกอบหรือสร้าง key เอง |
-| `alertType` | `STANDARD_EXCEEDED` \| `EIA_EXCEEDED` | No | derive จาก `thresholdType` |
-| `systemType` | `CEMS` \| `WPMS` | No | ระบบต้นทาง |
-| `displaySystemType` | `CEMS` \| `BOD_COD_ONLINE` | No | ชื่อระบบสำหรับแสดงผล |
-| `factoryId` | string | Yes | ID โรงงานจาก connected measurement point |
-| `factoryName` | string | No | ชื่อโรงงาน current/live POMS |
-| `factoryRegistrationNo` | string | Yes | เลขทะเบียนโรงงาน |
-| `stationId` | string | No | station ID จาก request |
-| `pointCode` | string | Yes | canonical point code ของ connected point |
-| `pointName` | string | No | ชื่อจุดตรวจวัดจาก connected point |
-| `pointType` | `STACK` \| `WASTEWATER` \| `OTHER` | Yes | ประเภทจุดตรวจวัด |
-| `parameterCode` | string | No | รหัสพารามิเตอร์ lowercase |
-| `parameterName` | string | No | ชื่อพารามิเตอร์ uppercase |
-| `parameterLabel` | string | No | ชื่อพร้อมหน่วย เช่น `SO2 (ppm)` หรือ `COD (mg/l)` |
-| `unit` | string | Yes | หน่วยของค่าตรวจวัด |
-| `eventDate` | string | No | วันที่รูปแบบ `YYYY-MM-DD` |
-| `eventDateText` | string | No | วันที่ย่อสำหรับแสดงผล |
-| `timeRange` | string | Yes | ช่วงเวลาสำหรับแสดงผล เช่น `20.00 - 20.59` |
-| `startedAt` | string | Yes | ต้นชั่วโมงที่ backend สร้างใน timezone `+07:00` |
-| `endedAt` | string | Yes | วินาทีสุดท้ายของชั่วโมงที่ backend สร้างใน timezone `+07:00` |
-| `measuredValue` | number | Yes | ค่าที่ตรวจวัดได้ |
-| `thresholdValue` | number | Yes | ค่าเกณฑ์ หน่วยเดียวกับ `unit` |
-| `thresholdType` | `STANDARD` \| `EIA` | Yes | ประเภทเกณฑ์ |
-| `notificationStatus` | string | No | สถานะเริ่มต้น `AUTO` |
-| `sourcePayload` | object | Yes | payload ที่ผ่าน validation รวม `eventDate` และ `time` |
-| `detectedAt` | string | No | เวลาที่ backend บันทึกเหตุการณ์ |
-
-### Success Response Example
+### Response example
 
 ```json
 {
   "success": true,
   "data": {
+    "mode": "STORE_ONLY",
+    "receiptId": "53d1d6a8-3742-428c-b57b-ceab4de998b1",
+    "receivedAt": "2026-11-03T10:30:00.000Z",
     "total": 1,
-    "created": 1,
+    "stored": 1,
+    "created": 0,
     "duplicate": 0,
     "failed": 0,
-    "results": [
-      {
-        "index": 0,
-        "success": true,
-        "created": true,
-        "duplicate": false,
-        "event": {
-          "id": 1001,
-          "alertType": "STANDARD_EXCEEDED",
-          "systemType": "CEMS",
-          "factoryName": "บริษัทตัวอย่าง จำกัด",
-          "stationId": "S0001",
-          "pointName": "ปล่องระบาย A",
-          "parameterCode": "so2",
-          "parameterName": "SO2",
-          "parameterLabel": "SO2 (ppm)",
-          "unit": "ppm",
-          "eventDate": "2026-03-02",
-          "timeRange": "20.00 - 20.59",
-          "startedAt": "2026-03-02T20:00:00+07:00",
-          "endedAt": "2026-03-02T20:59:59+07:00",
-          "measuredValue": 150,
-          "thresholdValue": 60,
-          "thresholdType": "STANDARD",
-          "notificationStatus": "AUTO",
-          "sourcePayload": {
-            "systemType": "CEMS",
-            "stationId": "S0001",
-            "pointCode": "S0001",
-            "parameterCode": "so2",
-            "unit": "ppm",
-            "eventDate": "2026-03-02",
-            "time": "20:00",
-            "measuredValue": 150,
-            "thresholdValue": 60,
-            "thresholdType": "STANDARD"
-          }
-        }
-      }
-    ]
+    "results": [{"index": 0,"success": true,"created": false,"duplicate": false,"event": null}]
   }
 }
 ```
 
-### Validation And Business Rules
+ส่งซ้ำเก็บเป็น receipt ใหม่แต่ละ request ไม่มีการแจ้งเตือนหรืออีเมลซ้ำเพราะ archive ไม่ถูกอ่านโดย detector หรือ email worker และไม่ใช้ receipt เป็นหลักฐาน config/threshold
 
-- request root และแต่ละ `events[]` ใช้ strict schema; field ที่ไม่รู้จักทำให้ทั้ง request ตอบ `400 VALIDATION_ERROR`
-- `events` ต้องมี 1-500 รายการ Backend validate ทั้ง batch ก่อนเรียก service หากรายการใดมีรูปแบบหรือค่าที่ไม่ถูกต้อง จะตอบ `400 VALIDATION_ERROR` และไม่มีรายการใน batch นั้นถูกบันทึก แม้รายการอื่นจะผ่าน validation
-- `measuredValue` และ `thresholdValue` รับ number หรือ numeric string ที่ไม่ว่างและแปลงเป็น finite number ได้ เช่น `125` หรือ `"125"`; ไม่รับ `null`, boolean, empty/whitespace-only string, array, object, `NaN` หรือ infinity
-- ทั้ง `STANDARD` และ `EIA` ต้องมี `measuredValue > thresholdValue` หลังแปลงตัวเลข ค่าเท่ากับหรือต่ำกว่าเกณฑ์ไม่ใช่เหตุการณ์ค่าเกินและตอบ `400 VALIDATION_ERROR` โดย `error.issues[].pathString` ระบุ `events.<index>.measuredValue`
-- ต้นทางต้องเลือกพารามิเตอร์ หน่วย และเกณฑ์ที่ถูกต้องเอง การตรวจข้างต้นยืนยันเฉพาะความสัมพันธ์ตัวเลขจาก request ยังไม่ได้ตรวจ `thresholdValue` กับ registered config และไม่มี raw-measurement polling สำหรับสร้างเหตุการณ์ใน endpoint นี้
-- `time` ต้องเป็นต้นชั่วโมง `HH:00`; ค่าอย่าง `20:30`, `24:00` หรือ `20` ไม่ผ่าน validation
-- `eventDate` ต้องเป็นวันที่จริง เช่น `2026-02-30` ไม่ผ่าน validation; กฎเดียวกันใช้กับวันที่ filter รายการ
-- Backend แปลง `eventDate=2026-03-02` และ `time=20:00` เป็น `startedAt=2026-03-02T20:00:00+07:00` และ `endedAt=2026-03-02T20:59:59+07:00`
-- `idempotencyKey` เป็น opaque key ที่คำนวณจาก `systemType`, `stationId`, normalized `parameterCode`, normalized `unit`, derived `alertType` และ `startedAt`; การส่งเหตุการณ์เดิมซ้ำไม่สร้าง row ใหม่ หน่วยใช้ trim และ lowercase ใน identity ดังนั้น `CO (ppm)` กับ `CO (%)` ไม่รวมเป็นเหตุการณ์เดียวกัน
-- เมื่อสอง request ส่งเหตุการณ์เดียวกันพร้อมกัน backend ใช้ unique constraint กันซ้ำและคืนรายการเดิมให้ request ที่แข่ง insert แพ้ ไม่รายงานเป็น persistence failure เพียงเพราะเป็น duplicate race
-- เหตุการณ์ที่บันทึกด้วย key รุ่นเดิมยังอ่านและรับการส่งซ้ำได้เมื่อหน่วยตรงกัน รูปแบบ key ของรายการใหม่อาจต่างจากรายการเดิม Client ใช้ `event.id` อ้างอิงและไม่พึ่งโครงสร้าง string ของ `idempotencyKey`
-- `stationId` หรือ `pointCode` ต้องตรงกับ active row ใน `cems_wpms_connected_measurement_points`; backend ใช้ข้อมูล current/live POMS จาก row นั้นเติมโรงงาน ชื่อจุด และประเภทจุด
-- `thresholdType=STANDARD` derive เป็น `STANDARD_EXCEEDED`; `thresholdType=EIA` derive เป็น `EIA_EXCEEDED`
-- Client ห้ามส่ง `alertType` หรือ `notificationStatus`; backend เป็นผู้กำหนดและตั้งสถานะแรกเป็น `AUTO`
-- การรับเหตุการณ์ไม่ส่งอีเมลทันทีและไม่ตีความ `notificationStatus` เป็นผล SMTP รอบ/ผลการส่งอยู่ใน [อีเมลแจ้งเตือนมลพิษ](../../menus/notifications/email-notifications.md)
-- Business error ของรายการหนึ่งไม่หยุดรายการอื่น ผลลัพธ์จะอยู่ใน `data.results[index].error` และนับใน `data.failed`
+### Errors และ migration ของ client
 
-### Errors
+ใช้ [shared error envelope](../../shared/README.md): `401` เมื่อ key ไม่ผ่าน, `400 VALIDATION_ERROR` เมื่อไม่มี `events`, ไม่ใช่ array, มีสมาชิกที่ไม่ใช่ object หรือจำนวนอยู่นอก 1–500; JSON เสีย/HTTP body เกินขนาดใช้ middleware เดิม หากบันทึกฐานข้อมูลไม่ได้ตอบ `500 INTERNAL_ERROR` โดยไม่เปิดเผย payload/SQL และไม่ตอบสำเร็จก่อนบันทึก
 
-ใช้ [shared error envelope](../../shared/README.md):
+พฤติกรรมและ response เปลี่ยนจากการสร้าง event: client ที่ใช้ `event.id` ต้องเลิกใช้และอ่าน `data.receiptId` แทน; การรับสำเร็จดู `success=true`, `mode=STORE_ONLY`, `stored=total` อย่าใช้ `created` เป็นจำนวนข้อมูลที่รับ ดู [breaking change](../../CHANGELOG.md#integration-alert-receipts-only)
 
-| HTTP status | Code | Condition | Client action |
-| --- | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | body ผิดรูปแบบ, batch ว่าง/เกิน 500, `time` ไม่ใช่ `HH:00`, มี field ที่ไม่รู้จัก, ตัวเลขไม่ใช่ finite number หรือ `measuredValue <= thresholdValue` | แก้ request ทั้ง batch ก่อนส่งใหม่; กรองค่าที่ไม่เกินเกณฑ์ออกจากช่อง alert event |
-| `401` | `UNAUTHORIZED` | ไม่มี `X-API-Key` หรือ key ไม่ถูกต้อง | ตรวจ scoped integration key โดยไม่ log ค่า key |
-| `200` | item-level code | Request ผ่าน schema แต่บางรายการไม่ผูกกับ connected point หรือบันทึกไม่สำเร็จ | ตรวจ `data.failed` และ `data.results[].error` แล้ว retry เฉพาะรายการที่เหมาะสม |
+## สำหรับผู้ดูแล Backend
 
-### Validation Error Example
-
-เมื่อ `events[0]` ส่ง `measuredValue: 120` และ `thresholdValue: 120` backend ตอบ `400` ดังนี้ และไม่บันทึกรายการใดใน batch:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Request validation failed",
-    "details": {
-      "events": ["measuredValue must be greater than thresholdValue"]
-    },
-    "issues": [
-      {
-        "code": "custom",
-        "path": ["events", 0, "measuredValue"],
-        "pathString": "events.0.measuredValue",
-        "message": "measuredValue must be greater than thresholdValue"
-      }
-    ]
-  }
-}
-```
-
-การปฏิเสธค่าที่ไม่เกินเกณฑ์และชนิดข้อมูลที่แปลงเป็นตัวเลขโดยไม่ได้ตั้งใจเป็น breaking change ดูวิธี migrate ที่ [การตรวจเหตุการณ์ค่าเกิน](../../CHANGELOG.md#alert-event-exceedance-validation) การแทน `startTime` และ `endTime` ด้วย `time` ดูประวัติใน [API breaking-change log](../../CHANGELOG.md)
-
-## Backend Maintainer Links
-
-- Route: [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts)
-- Authentication: [`integration-api-key.middleware.ts`](../../../../../backend/src/modules/integrations/integration-api-key.middleware.ts)
-- Controller: [`alert-events.controller.ts`](../../../../../backend/src/modules/alert-events/alert-events.controller.ts)
-- Validator: [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts)
-- กฎเปรียบเทียบค่าเกิน: [`alert-event-exceedance.ts`](../../../../../backend/src/modules/alert-events/alert-event-exceedance.ts)
-- Types: [`alert-events.types.ts`](../../../../../backend/src/modules/alert-events/alert-events.types.ts)
-- Service and repository: [`alert-events.service.ts`](../../../../../backend/src/modules/alert-events/alert-events.service.ts), [`alert-events.repository.ts`](../../../../../backend/src/modules/alert-events/alert-events.repository.ts)
-- การเรียก service โดยตรงมี guard ก่อนค้นฐานข้อมูล: ตัวเลขไม่เป็น finite number ใช้ `BAD_REQUEST` พร้อม `details.reason=INVALID_NUMBER`; ค่าไม่เกินใช้ `BAD_REQUEST` พร้อม `details.field=measuredValue` และ `details.reason=NOT_EXCEEDED` ส่วน HTTP endpoint ผ่าน batch validator ก่อนเสมอและใช้ `VALIDATION_ERROR` ตามตัวอย่างข้างต้น
-- Tests: [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`alert-events.service.test.ts`](../../../../../backend/tests/unit/alert-events.service.test.ts)
-- Tests ค่าเกินและ runtime contract: [`alert-events.exceedance-validation.test.ts`](../../../../../backend/tests/unit/alert-events.exceedance-validation.test.ts), [`alert-events.exceedance.openapi.test.ts`](../../../../../backend/tests/unit/alert-events.exceedance.openapi.test.ts)
-- Evidence: [สัญญาเวลารายชั่วโมง](../../../evidence/integrations/alert-event-hourly-time.tdd.md), [ตรวจค่าเกินก่อนรับเหตุการณ์](../../../evidence/notifications/alert-event-exceedance-validation.tdd.md)
+- Route/auth เดิม: [integrations.routes.ts](../../../../../backend/src/modules/integrations/integrations.routes.ts), [integration-api-key.middleware.ts](../../../../../backend/src/modules/integrations/integration-api-key.middleware.ts)
+- Controller: [alert-events.controller.ts](../../../../../backend/src/modules/alert-events/alert-events.controller.ts)
+- Boundary/schema/persistence: [integration-alert-receipts.ts](../../../../../backend/src/modules/integrations/integration-alert-receipts.ts)
+- Migration: [0156_create_integration_alert_receipts.ts](../../../../../backend/src/db/migrations/0156_create_integration_alert_receipts.ts) เพิ่มตารางเดียวและ index ตาม received time ไม่แก้ alert/source/outbox
+- Tests HTTP + SQL fixture: [integration-alert-receipts.test.ts](../../../../../backend/tests/unit/integration-alert-receipts.test.ts); [migration](../../../../../backend/tests/unit/integration-alert-receipts.migration.test.ts); [runtime OpenAPI](../../../../../backend/tests/unit/alert-events.exceedance.openapi.test.ts)
+- Runtime contract: [poms.openapi.ts](../../../../../backend/src/modules/api-docs/poms.openapi.ts)

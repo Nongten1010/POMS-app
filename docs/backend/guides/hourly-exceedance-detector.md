@@ -31,7 +31,7 @@
 - ต้องมี `measuredValue > thresholdValue` โดยไม่ปัดก่อนเปรียบเทียบ เกณฑ์ `0` ใช้ได้; เกณฑ์ช่วงหรือข้อความที่ไม่ใช่ตัวเลขเดี่ยวยังไม่รองรับ
 - หากความละเอียด `DECIMAL(18,6)` ของ `alert_events` ทำให้ค่าเกินกลายเป็นเท่ากันหลังบันทึก จะพักด้วย `DECIMAL_PRECISION` เพื่อให้ตรวจนโยบาย precision ไม่สร้าง event ที่คิวอีเมลจะปฏิเสธ
 
-ชื่อพารามิเตอร์ใน event มีหน่วย เช่น `CO (ppm)` และ `CO (%)` และใช้ schema/identity ชุดเดียวกับ [API integration](../api/integrations/alert-events/README.md)
+ชื่อพารามิเตอร์ใน event มีหน่วย เช่น `CO (ppm)` และ `CO (%)` โดยใช้ canonical identity และกันซ้ำกับ alert เดิม; [API integration](../api/integrations/alert-events/README.md) ปัจจุบันเก็บ receipt อย่างเดียว ไม่สร้าง event และไม่ใช้ receipt เพื่อกันซ้ำหรือปรับ state ของ detector
 
 ## การเริ่มติดตามและ config history
 
@@ -94,7 +94,7 @@ ALERT_EXCEEDANCE_RECHECK_HOURS=3
 
 4. รอ config epoch และชั่วโมงแรกจบ ตรวจผลจาก log `[alert-exceedance] RUN` และตารางด้านล่าง เทียบ candidate กับข้อมูลและเกณฑ์จริง ไม่ใช้การไม่มี event จาก integration เป็นผลเฉลย
 5. วัด elapsed time, source query plan/logical reads, SQL CPU/IO/blocking, API p95/error rate และงานค้าง ภายในงบและเกณฑ์หยุดที่ตกลงตาม [แผน](./hourly-exceedance-detector-plan.md#งบทรัพยากรและเป้าหมายทดลอง)
-6. เปิด `active` เฉพาะ allowlist ที่ผ่าน review หลังยืนยัน policy ทั้งสามข้อ โดยยังคง API ภายนอกไว้ ติดตาม native unique-key race/lease takeover และ query cancellation บน SQL Server; ผล fixture ไม่ใช่หลักฐานของ native concurrency
+6. เปิด `active` เฉพาะ allowlist ที่ผ่าน review หลังยืนยัน policy ทั้งสามข้อ โดย API ภายนอกรับเก็บ receipt อย่างเดียว ติดตาม native unique-key race/lease takeover และ query cancellation บน SQL Server; ผล fixture ไม่ใช่หลักฐานของ native concurrency
 7. ขยาย allowlist ตามผลวัด ชุดแรกยังไม่มี benchmark ยืนยันว่าครบ 500 จุดจะเสร็จทันทุกชั่วโมง
 
 ## สถานะงานและการติดตาม

@@ -1,42 +1,38 @@
 import { describe, expect, it } from '@jest/globals';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
-
 function asObject(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Expected an OpenAPI object');
-  }
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('Expected object');
   return value as Record<string, unknown>;
 }
-
-describe('integration alert exceedance runtime contract', () => {
-  it('publishes the strict numeric comparison and whole-batch validation behavior', () => {
-    const paths = asObject(pomsOpenApiDocument.paths);
-    const operation = asObject(asObject(paths['/integrations/alert-events']).post);
-    expect(operation.description).toEqual(
-      expect.stringContaining('measuredValue > thresholdValue'),
+describe('integration alert receipt runtime contract', () => {
+  it('publishes passive receipt behavior and an explicit receipt response', () => {
+    const operation = asObject(
+      asObject(asObject(pomsOpenApiDocument.paths)['/integrations/alert-events']).post,
     );
-    expect(operation.description).toEqual(expect.stringContaining('400 VALIDATION_ERROR'));
-    expect(operation.description).toEqual(expect.stringContaining('ทั้ง batch'));
-    expect(asObject(operation.responses)['400']).toBeDefined();
+    expect(operation.description).toEqual(expect.stringContaining('STORE_ONLY'));
+    expect(operation.description).toEqual(expect.stringContaining('ไม่เขียน alert_events'));
+    const response = asObject(asObject(operation.responses)['200']);
+    const schema = asObject(asObject(asObject(response.content)['application/json']).schema);
+    expect(schema.$ref).toBe('#/components/schemas/IntegrationAlertReceiptBatchResponse');
+    expect(operation.security).toEqual([{ alertEventApiKey: [] }]);
   });
-
-  it('documents finite numbers and compatible numeric strings for both fields', () => {
+  it('requires only the bounded JSON events envelope, without business field validation', () => {
     const schemas = asObject(asObject(pomsOpenApiDocument.components).schemas);
     const batch = asObject(schemas.IntegrationAlertEventBatchRequest);
     const events = asObject(asObject(batch.properties).events);
-    const properties = asObject(asObject(events.items).properties);
-    for (const field of ['measuredValue', 'thresholdValue']) {
-      const schema = asObject(properties[field]);
-      expect(schema.oneOf).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ type: 'number' }),
-          expect.objectContaining({ type: 'string', minLength: 1 }),
-        ]),
-      );
-      expect(schema.description).toEqual(expect.stringContaining('finite'));
-    }
-    expect(asObject(properties.measuredValue).description).toEqual(
-      expect.stringContaining('thresholdValue'),
+    expect(batch.required).toEqual(['events']);
+    expect(batch.additionalProperties).toBe(true);
+    expect(events).toMatchObject({ minItems: 1, maxItems: 500 });
+    expect(asObject(events.items)).toMatchObject({ type: 'object', additionalProperties: true });
+    expect(asObject(events.items).required).toBeUndefined();
+    const data = asObject(
+      asObject(asObject(schemas.IntegrationAlertReceiptBatchResponse).properties).data,
     );
+    const properties = asObject(data.properties);
+    expect(asObject(properties.mode).enum).toEqual(['STORE_ONLY']);
+    expect(asObject(properties.created).enum).toEqual([0]);
+    const item = asObject(asObject(properties.results).items);
+    expect(asObject(asObject(item.properties).event).enum).toEqual([null]);
   });
 });

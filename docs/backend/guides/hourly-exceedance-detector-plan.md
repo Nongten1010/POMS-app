@@ -6,6 +6,8 @@
 
 สถานะ implementation ปัจจุบันดูที่ [คู่มือตัวตรวจค่าเกินภายใน](./hourly-exceedance-detector.md) มี process แยก, state/lease, shadow และ active แบบ allowlist แล้ว แต่ยังไม่ได้ apply migration หรือเปิดใช้ production ข้อเสนอในแผนที่เกินขอบเขตคู่มือยังไม่ถือว่าพัฒนาเสร็จหรือผ่าน benchmark
 
+> นโยบายรับข้อมูลภายนอกปัจจุบันเปลี่ยนเป็น [STORE_ONLY](../api/integrations/alert-events/README.md): รับเก็บ receipt โดยไม่สร้างแจ้งเตือนหรืออีเมล ส่วนที่กล่าวถึงการกันซ้ำกับ external producer ในแผนนี้ใช้กับ alert ประวัติเดิมเท่านั้น ตัวตรวจภายในไม่อ่าน receipt มาใช้ประมวลผล
+
 ## เป้าหมายและขอบเขต
 
 ให้ backend ตรวจค่ารายชั่วโมงที่เกินเกณฑ์ได้เอง โดยไม่ต้องรอระบบภายนอกส่ง alert event และใช้ `alert_events` กับคิวอีเมลเดิมต่อ ข้อมูลตรวจวัดต้นทางยังต้องเข้าระบบตามปกติ

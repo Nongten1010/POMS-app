@@ -2,9 +2,9 @@ import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { getScopeDetails } from '../../shared/middlewares/authorize';
 import { alertEventsService } from './alert-events.service';
+import { integrationAlertReceipts } from '../integrations/integration-alert-receipts';
 import {
   alertEventIdParamsSchema,
-  createIntegrationAlertEventBatchSchema,
   listAlertEventsQuerySchema,
   updateAlertEventStatusSchema,
 } from './alert-events.validator';
@@ -12,8 +12,7 @@ import {
 export const alertEventsController = {
   async createFromIntegration(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { events } = createIntegrationAlertEventBatchSchema.parse(req.body);
-      const data = await alertEventsService.createBatchFromIntegration(events);
+      const data = await integrationAlertReceipts.storeBatch(req.body);
       res.status(StatusCodes.OK).json({
         success: true,
         data,
