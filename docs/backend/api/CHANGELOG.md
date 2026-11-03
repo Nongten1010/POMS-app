@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="integration-alert-receipts-only"></a>
+
+## 2026-11-03 — รับข้อมูลแจ้งเตือนภายนอกเพื่อเก็บประวัติเท่านั้น
+
+- **Affected canonical docs:** [Integration Alert Events](./integrations/alert-events/README.md), [การแจ้งเตือน](./menus/notifications/README.md), [อีเมล](./menus/notifications/email-notifications.md)
+- **Impact:** `POST /integrations/alert-events` เป็น `STORE_ONLY` เก็บ JSON batch ใน `integration_alert_receipts` โดยไม่สร้าง alert หรืออีเมลและไม่กันซ้ำกับตัวตรวจภายใน; ทุก business value รับเก็บได้ รวมไม่เกินเกณฑ์/ไม่รู้จักจุด/วันที่ไม่ถูกต้อง แต่ API key และ envelope 1–500 objects ยังคงตรวจ
+- **Migration:** apply migration 0156 ก่อนเริ่ม backend รุ่นใหม่; producer ใช้ URL/key/envelope เดิมได้ แต่ต้องอ่าน `receiptId`, `stored` และ `mode` แทน `event.id`/`created`; `created/duplicate/failed=0` และ `results[].event=null` ส่งซ้ำได้ receipt ใหม่. คง detector Active/SMTP policy เดิมและไม่ลบ history/outbox เก่า. หลัง deploy ตรวจ runtime OpenAPI และยืนยัน receipt โดยไม่เพิ่ม alert/outbox
+- **Old contract:** validate ค่าเกินและ connected station แล้วสร้างหรือคืน alert event
+- **New contract:** ตอบ `200` หลังเก็บข้อมูลรับเข้าอย่างเดียว โดยตัวตรวจ POMS เป็นผู้สร้างแจ้งเตือนใหม่
+- **Breaking change:** yes — พฤติกรรมและ response ของ integration เปลี่ยน; frontend GET/PATCH alert contract ไม่เปลี่ยน
+
 <a id="abnormal-hourly-five-hours"></a>
 
 ## 2026-11-03 — แจ้งค่าผิดปกติรายชั่วโมงเมื่อครบ 5 ชั่วโมงจริง

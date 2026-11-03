@@ -58,9 +58,9 @@ import {
   updateManagedUserSchema,
 } from '../../src/modules/users/users.validator';
 import {
-  createIntegrationAlertEventBatchSchema,
   updateAlertEventStatusSchema,
 } from '../../src/modules/alert-events/alert-events.validator';
+import { integrationAlertReceiptBatchSchema } from '../../src/modules/integrations/integration-alert-receipts';
 import { sendEmailTestSchema } from '../../src/modules/email-test/email-test.validator';
 import {
   addOfficerNotificationEmailSchema,
@@ -340,7 +340,7 @@ describe('POMS OpenAPI contract', () => {
     ['/bod-cod-deviation-reports/{id}/resubmission', 'put', resubmitBodCodDeviationReportSchema],
     ['/bod-cod-deviation-reports/{id}/workflow-actions', 'post', changeBodCodWorkflowStatusSchema],
     ['/bod-cod-deviation-reports/{id}/result-notice', 'post', upsertBodCodResultNoticeSchema],
-    ['/integrations/alert-events', 'post', createIntegrationAlertEventBatchSchema],
+    ['/integrations/alert-events', 'post', integrationAlertReceiptBatchSchema],
     ['/alert-events/{id}/status', 'patch', updateAlertEventStatusSchema],
     ['/email-test/send', 'post', sendEmailTestSchema],
     [

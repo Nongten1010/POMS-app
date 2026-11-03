@@ -6,7 +6,7 @@ API นี้ใช้ดูตัวอย่างอีเมลจากเ�
 
 สำหรับ batch รายชั่วโมงกรณี `STANDARD_EXCEEDED`/`EIA_EXCEEDED` ที่สร้างใหม่ `scheduledAt` คือรอบที่จัดคิวส่ง ไม่ใช่เวลาตรวจวัด เมื่อกำหนด `ALERT_EMAIL_HOURLY_DELAY_MINUTES=0` รอบคือ 12:00, 13:00, 14:00 น. ข้อมูลที่เข้ามาหลังเวลาเริ่มรอบรอรอบถัดไปภายในขอบเขตย้อนหลัง 24 ชั่วโมง เช่น ข้อมูลชั่วโมง 11:00 น. ที่รับตอน 12:06 น. จะมี `scheduledAt` รอบ 13:00 น. แต่เรื่องยังแสดง `เวลา 11.00 น.` แต่ละรอบอาจมีหลายฉบับตามประเภท ผู้รับ และช่วงตรวจวัด Worker ใช้เวลาเริ่มรอบที่ timer กำหนด แม้ callback ช้าหรือยังมีงานก่อนหน้าจนต้องเริ่มเมื่อว่าง โดยคง `scheduledAt` และ cutoff ของรอบนั้น เวลาเริ่มส่งจริงและเวลาใน Inbox จึงอาจช้ากว่ารอบที่ตั้งไว้
 
-ค่าเกิน อก./EIA ของ CEMS/WPMS ใช้ event รูปแบบเดิมทั้งที่รับจาก integration และที่ [detector ภายใน](../../../guides/hourly-exceedance-detector.md) สร้างเมื่อเปิด active เท่านั้น โหมด off/shadow ไม่สร้าง event หรืออีเมลจาก detector; API preview/delivery, permissions, ผู้รับและนโยบายส่งเดิมไม่เปลี่ยน
+ค่าเกิน อก./EIA ใหม่ของ CEMS/WPMS ใช้ event จาก [detector ภายใน](../../../guides/hourly-exceedance-detector.md) ที่เปิด active; [integration API](../../integrations/alert-events/README.md) เก็บ receipt เท่านั้น ไม่สร้าง event/outbox และไม่ส่งอีเมล. คงประวัติและคิวที่สร้างไว้ก่อนเปลี่ยน API ตามเดิม รวมผู้รับ รอบส่ง permissions และ preview/delivery contract เดิม
 
 ## เงื่อนไขค่าผิดปกติ `ABNORMAL_VALUE`
 

@@ -5269,7 +5269,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
   },
   IntegrationAlertEventBatchRequest: {
     type: 'object',
-    additionalProperties: false,
+    additionalProperties: true,
     required: ['events'],
     properties: {
       events: {
@@ -5278,42 +5278,76 @@ const componentSchemas: Record<string, OpenApiObject> = {
         maxItems: 500,
         items: {
           type: 'object',
-          additionalProperties: false,
-          required: [
-            'systemType',
-            'stationId',
-            'parameterCode',
-            'unit',
-            'eventDate',
-            'time',
-            'measuredValue',
-            'thresholdValue',
-            'thresholdType',
-          ],
-          properties: {
-            systemType: { type: 'string', enum: systemTypeValues },
-            stationId: alertMonitoringPointCodeSchema,
-            pointCode: { ...alertMonitoringPointCodeSchema, nullable: true },
-            parameterCode: {
-              type: 'string',
-              minLength: 1,
-              maxLength: 128,
-              pattern: '^[A-Za-z0-9_-]+$',
+          additionalProperties: true,
+          description:
+            'JSON object ที่เก็บตามค่าที่รับมา ไม่ตรวจหรือ normalize field ทางธุรกิจ ไม่ต้องมี connected station และไม่เปรียบเทียบค่าเกิน',
+        },
+      },
+    },
+  },
+  IntegrationAlertReceiptBatchResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'mode',
+          'receiptId',
+          'receivedAt',
+          'total',
+          'stored',
+          'created',
+          'duplicate',
+          'failed',
+          'results',
+        ],
+        properties: {
+          mode: { type: 'string', enum: ['STORE_ONLY'] },
+          receiptId: {
+            type: 'string',
+            format: 'uuid',
+            description: 'ID ของ batch receipt ไม่ใช่ alert event ID',
+          },
+          receivedAt: { type: 'string', format: 'date-time' },
+          total: { type: 'integer', minimum: 1, maximum: 500 },
+          stored: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 500,
+            description: 'จำนวนรายการที่เก็บใน receipt สำเร็จ เท่ากับ total',
+          },
+          created: { type: 'integer', enum: [0], description: 'ไม่สร้าง alert event' },
+          duplicate: {
+            type: 'integer',
+            enum: [0],
+            description: 'ไม่ตรวจ identity; request ซ้ำเก็บเป็น receipt ใหม่',
+          },
+          failed: { type: 'integer', enum: [0] },
+          results: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 500,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['index', 'success', 'created', 'duplicate', 'event'],
+              properties: {
+                index: { type: 'integer', minimum: 0, maximum: 499 },
+                success: { type: 'boolean', enum: [true] },
+                created: { type: 'boolean', enum: [false] },
+                duplicate: { type: 'boolean', enum: [false] },
+                event: {
+                  type: 'object',
+                  nullable: true,
+                  enum: [null],
+                  description: 'เป็น null เสมอ เพราะไม่สร้างหรือค้น alert event',
+                },
+              },
             },
-            unit: { type: 'string', minLength: 1, maxLength: 64 },
-            eventDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-            time: { type: 'string', pattern: '^([01]\\d|2[0-3]):00$' },
-            measuredValue: {
-              oneOf: [{ type: 'number' }, { type: 'string', minLength: 1 }],
-              description:
-                'ค่าตรวจวัดต้องเป็น finite number หรือ numeric string ที่ไม่ว่างและแปลงเป็น finite number ได้; หลังแปลงต้องมี measuredValue > thresholdValue ไม่ปัดเศษก่อนเปรียบเทียบ; ไม่รับ null, boolean, array หรือ object',
-            },
-            thresholdValue: {
-              oneOf: [{ type: 'number' }, { type: 'string', minLength: 1 }],
-              description:
-                'เกณฑ์ต้องเป็น finite number หรือ numeric string ที่ไม่ว่างและแปลงเป็น finite number ได้ หน่วยเดียวกับค่าตรวจวัด; ไม่รับ null, boolean, array หรือ object; ต้นทางเลือกเกณฑ์เอง backend ยังไม่ยืนยันกับ registered config',
-            },
-            thresholdType: { type: 'string', enum: ['STANDARD', 'EIA'] },
           },
         },
       },
@@ -7309,10 +7343,18 @@ const extraPaths: Record<string, OpenApiObject> = {
   '/integrations/alert-events': {
     post: apiKeyOperation('alertEventApiKey', {
       tag: 'Integrations',
-      summary: 'Submit integration alert events',
+      summary: 'Store integration alert receipts only',
       operationId: 'createIntegrationAlertEvents',
       description:
-        'รับเหตุการณ์รายชั่วโมงจาก integration; measuredValue และ thresholdValue ต้องเป็น finite number (รองรับ numeric string ที่ไม่ว่างและแปลงได้) และ measuredValue > thresholdValue ทั้ง STANDARD และ EIA; validate ทั้ง batch ก่อนเรียก service หากรายการใดไม่ผ่านตอบ 400 VALIDATION_ERROR และไม่มีรายการใน batch ถูกบันทึก; ระบบต้นทางตรวจข้อมูลรายชั่วโมงและเลือกเกณฑ์/หน่วยเอง backend ยังไม่ยืนยันกับ registered config หรืออ่าน raw measurements มาสร้างเหตุการณ์; eventDate ต้องเป็นวันที่จริง; backend สร้าง opaque idempotencyKey รวมหน่วยเพื่อกันซ้ำและรองรับ concurrent requests โดยไม่สร้างรายการซ้ำ; client ใช้ event.id อ้างอิงและห้ามพึ่งรูปแบบ key เดิม; รายการเก่ายังคง key เดิม ไม่มีการส่งอีเมลทันที',
+        'STORE_ONLY: รับข้อมูลจาก integration และเก็บเป็น batch receipt ใน integration_alert_receipts เท่านั้น; ตอบ 200 หลังบันทึกสำเร็จ ไม่เขียน alert_events ไม่แสดงในหน้าแจ้งเตือน ไม่เข้าคิวหรือส่งอีเมล และไม่ใช้ข้อมูลนี้กันซ้ำหรือแก้ไขผลของตัวตรวจภายใน; รับ events เป็น JSON objects 1–500 รายการพร้อม field เพิ่มเติม เก็บค่าเดิมโดยไม่ normalize ไม่ตรวจ connected station/date/time และไม่เปรียบเทียบ measuredValue กับ thresholdValue; request ซ้ำได้ receiptId ใหม่; API key เดิมยังบังคับใช้ รูปแบบ envelope ผิดตอบ 400 VALIDATION_ERROR และบันทึกไม่ได้ตอบ 500 โดยไม่ตอบสำเร็จลวง; response created/duplicate/failed เป็น 0 และ results[].event เป็น null ใช้ receiptId สำหรับการรับข้อมูล ไม่ใช่ event.id',
+      successSchema: schemaRef('IntegrationAlertReceiptBatchResponse'),
+      successDescription: 'เก็บข้อมูลรับเข้าแล้ว โดยไม่สร้างแจ้งเตือนหรืออีเมล',
+      extraResponses: {
+        '500': errorResponse('บันทึก receipt ไม่สำเร็จ ไม่มีการตอบรับสำเร็จ', {
+          success: false,
+          error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+        }),
+      },
       requestBody: jsonRequestBody(
         schemaRef('IntegrationAlertEventBatchRequest'),
         alertEventBatchExample,
@@ -7325,7 +7367,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List alert events',
       operationId: 'listAlertEvents',
       description:
-        'STANDARD_EXCEEDED/EIA_EXCEEDED รับจาก integration ได้ตามเดิม หรือสร้างโดย worker ภายในเมื่อเปิด ALERT_EXCEEDANCE_MODE=active สำหรับจุดใน allowlist; ตัวตรวจอ่านข้อมูล 60m เฉพาะสถานะ Normal เทียบเกณฑ์ อก./EIA พร้อมหน่วย โดย measuredValue > thresholdValue ใช้ identity เดียวกับ integration; ค่าเริ่มต้น off และ shadow ไม่สร้าง alert event หรืออีเมล; รูปแบบ response และนโยบายอีเมลเดิมคงเดิม; ถ้าส่ง dateFrom และ dateTo ต้องมี dateTo ไม่น้อยกว่า dateFrom; ABNORMAL_VALUE ตรวจทุกชั่วโมง ใช้เฉพาะสถานะ Normal ที่ผิดปกติต่อเนื่องอย่างน้อย 5 ชั่วโมงจริงและอย่างน้อย 6 ค่ารายชั่วโมง เช่น 08:00–13:00; ZERO คือศูนย์, NEGATIVE คือติดลบต่อเนื่องโดยค่าต่างกันได้, CONSTANT คือค่าบวกเท่ากันจริง; ชั่วโมงขาด ค่าไม่มี สถานะอื่น หรือข้อมูลซ้ำขัดแย้งกันตัดลำดับ; แจ้ง 1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วัน Asia/Bangkok รวมทุกประเภทและ episode ข้ามวันนับลำดับต่อและใช้โควตาใหม่เมื่อมีค่าผิดปกติใหม่ของวันนั้น; เริ่มนับตั้งแต่ activation จริงและไม่ใช้ข้อมูลอนาคต; client ใช้ event.id และไม่แยกองค์ประกอบ idempotencyKey',
+        'STANDARD_EXCEEDED/EIA_EXCEEDED ใหม่สร้างโดย worker ภายในเมื่อเปิด ALERT_EXCEEDANCE_MODE=active สำหรับจุดใน allowlist; POST /integrations/alert-events เก็บ receipt อย่างเดียว ไม่สร้างแจ้งเตือนหรืออีเมล; ประวัติ alert เดิมยังอยู่ตามเดิม; ตัวตรวจอ่านข้อมูล 60m เฉพาะสถานะ Normal เทียบเกณฑ์ อก./EIA พร้อมหน่วย โดย measuredValue > thresholdValue ใช้ identity เดียวกับ integration; ค่าเริ่มต้น off และ shadow ไม่สร้าง alert event หรืออีเมล; รูปแบบ response และนโยบายอีเมลเดิมคงเดิม; ถ้าส่ง dateFrom และ dateTo ต้องมี dateTo ไม่น้อยกว่า dateFrom; ABNORMAL_VALUE ตรวจทุกชั่วโมง ใช้เฉพาะสถานะ Normal ที่ผิดปกติต่อเนื่องอย่างน้อย 5 ชั่วโมงจริงและอย่างน้อย 6 ค่ารายชั่วโมง เช่น 08:00–13:00; ZERO คือศูนย์, NEGATIVE คือติดลบต่อเนื่องโดยค่าต่างกันได้, CONSTANT คือค่าบวกเท่ากันจริง; ชั่วโมงขาด ค่าไม่มี สถานะอื่น หรือข้อมูลซ้ำขัดแย้งกันตัดลำดับ; แจ้ง 1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วัน Asia/Bangkok รวมทุกประเภทและ episode ข้ามวันนับลำดับต่อและใช้โควตาใหม่เมื่อมีค่าผิดปกติใหม่ของวันนั้น; เริ่มนับตั้งแต่ activation จริงและไม่ใช้ข้อมูลอนาคต; client ใช้ event.id และไม่แยกองค์ประกอบ idempotencyKey',
       parameters: [
         queryEnum('systemType', systemTypeValues, 'กรอง systemType'),
         queryEnum(
