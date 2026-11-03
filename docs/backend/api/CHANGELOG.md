@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="abnormal-hourly-five-hours"></a>
+
+## 2026-11-03 — แจ้งค่าผิดปกติรายชั่วโมงเมื่อครบ 5 ชั่วโมงจริง
+
+- **Affected canonical docs:** [การแจ้งเตือน](./menus/notifications/README.md), [อีเมลแจ้งเตือน](./menus/notifications/email-notifications.md#เงื่อนไขค่าผิดปกติ-abnormal_value), [คู่มือปฏิบัติการ](../guides/alert-email-operations.md#ค่าผิดปกติรายชั่วโมง), [ชุดทดสอบในเครื่อง](../guides/alert-email-test.md)
+- **Impact:** `ABNORMAL_VALUE` ใหม่ใช้ `cadence: "HOURLY"` และสร้างแจ้งเตือนในรอบที่ Normal hourly readings ผิดปกติต่อเนื่องอย่างน้อย 5 ชั่วโมงจริง โดยไม่รอ 09:00 น. หรือ delay ของค่าเกินมาตรฐาน จำกัด 1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วันตาม `Asia/Bangkok` รวมทุกประเภทและ episode; ลำดับข้ามวันนับต่อและใช้โควตาวันใหม่เมื่อมีค่าผิดปกติใหม่ของวันนั้น การนับรายงานครบและรายงานต่ำต่อเนื่องยังเป็นรายวัน 09:00 น.
+- **Migration:** หยุด worker รุ่นเดิมก่อนเริ่มรุ่นใหม่ ไม่เปิด `ALERT_EMAIL_ENABLED` โดยอัตโนมัติ ตรวจนโยบายผู้รับและ migrations เดิมตามคู่มือ; `ALERT_EMAIL_ABNORMAL_MODE` และ `ALERT_EMAIL_ABNORMAL_READINGS` เดิมไม่จำเป็นและไม่มีผล override เกณฑ์แล้ว โหมดใช้งานเป็น `HOURLY` และ `abnormalHours: 5` โดยตัวตรวจความผิดปกติต้องมีอย่างน้อย 6 ค่ารายชั่วโมงเสมอ ไม่ต้องแก้ field คำขอ preview หรือสิทธิ์ ให้ client รองรับประวัติใหม่ของ ABNORMAL เป็น HOURLY และอ้างอิงเหตุการณ์ด้วย `id` เท่านั้น คิว ABNORMAL แบบ DAILY เดิมไม่ผ่าน eligibility ของรุ่นใหม่; ประวัติเดิมไม่ถูกเขียนทับ หลัง deploy ที่ได้รับอนุญาตตรวจ `/api/v1/openapi.json` ให้ตรงกับเอกสารนี้
+- **Old contract:** ใช้ข้อมูลวันก่อนหน้า ส่งรอบ 09:00 น. จำนวนค่าต่อเนื่องตาม setting และอาจแจ้งหลาย episode ของพารามิเตอร์/จุด/วันเดียวกัน
+- **New contract:** ตรวจรายชั่วโมง ครบระยะ 5 ชั่วโมงจริงจึงแจ้ง เช่น 08:00–13:00 น. จำนวน 6 ค่าต่อเนื่อง; timestamp ที่ยังห่างไม่ถึง 5 ชั่วโมงไม่ผ่านแม้ครบ 6 ชั่วโมงตรวจวัด และไม่แจ้งซ้ำตามโควตาวันไทย
+- **Breaking change:** yes — รอบส่ง เกณฑ์ยืนยัน การกันซ้ำ และ cadence ของ delivery ใหม่เปลี่ยน; API payload และ permissions คงเดิม
+
 <a id="kwp-current-region-authorization"></a>
 
 ## 2026-11-03 — กวภ.01–05 ใช้พื้นที่โรงงานปัจจุบันร่วมกันทุกเส้นทาง

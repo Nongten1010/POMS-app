@@ -5418,14 +5418,19 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: {
       id: { type: 'integer', minimum: 1 },
       batchId: { type: 'integer', minimum: 1 },
-      cadence: { type: 'string', enum: ['HOURLY', 'DAILY'] },
+      cadence: {
+        type: 'string',
+        enum: ['HOURLY', 'DAILY'],
+        description:
+          'ABNORMAL_VALUE ใหม่ใช้ HOURLY: ตรวจทุกชั่วโมงและแจ้งเมื่อ Normal readings ผิดปกติต่อเนื่องครบ 5 ชั่วโมงจริง เช่น 08:00–13:00 รวม 6 ค่า; ไม่รอ 09:00 หรือ delay ของค่าเกินมาตรฐาน; จำกัด 1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วัน Asia/Bangkok รวมทุกประเภทและ episode; ข้ามวันนับต่อและใช้โควตาใหม่เมื่อมีค่าผิดปกติใหม่ของวันนั้น ส่วน STANDARD_EXCEEDED/EIA_EXCEEDED ใช้ HOURLY และรายงานครบ/ต่อเนื่องใช้ DAILY; ประวัติเดิมคง snapshot',
+      },
       alertType: { type: 'string', enum: [...ALERT_EVENT_ALERT_TYPES] },
       systemType: { type: 'string', enum: systemTypeValues, nullable: true },
       scheduledAt: {
         type: 'string',
         format: 'date-time',
         description:
-          'รอบที่จัดคิวส่ง ไม่ใช่เวลาเริ่มตรวจวัด; batch รายชั่วโมงใหม่อิงนาทีรอบส่ง โดย delay 0 ใช้ต้นชั่วโมงและรวมเหตุการณ์ที่ detectedAt ไม่เกินเวลาเริ่มรอบ; callback ช้าหรืองานก่อนหน้ายังไม่จบให้เริ่มเมื่อพร้อมโดยคงรอบและ cutoff เดิม; ข้อมูลชั่วโมง 11:00 รับตอน 12:06 รอรอบ 13:00 แต่เรื่องยังแสดง 11.00; คิวเดิมเป็น immutable snapshot ไม่เปลี่ยนรอบย้อนหลัง; SMTP retry อาจเกิดระหว่างรอบและเวลา Inbox ขึ้นอยู่กับ SMTP',
+          'รอบที่จัดคิวส่ง ไม่ใช่เวลาเริ่มตรวจวัด; batch STANDARD_EXCEEDED/EIA_EXCEEDED รายชั่วโมงใหม่อิงนาทีรอบส่ง โดย delay 0 ใช้ต้นชั่วโมงและรวมเหตุการณ์ที่ detectedAt ไม่เกินเวลาเริ่มรอบ; callback ช้าหรืองานก่อนหน้ายังไม่จบให้เริ่มเมื่อพร้อมโดยคงรอบและ cutoff เดิม; ข้อมูลชั่วโมง 11:00 รับตอน 12:06 รอรอบ 13:00 แต่เรื่องยังแสดง 11.00; ABNORMAL_VALUE ใช้รอบที่ตรวจพบว่าผิดปกติครบ 5 ชั่วโมงจริงโดยไม่รอ delay; คิวเดิมเป็น immutable snapshot ไม่เปลี่ยนรอบย้อนหลัง; SMTP retry อาจเกิดระหว่างรอบและเวลา Inbox ขึ้นอยู่กับ SMTP',
         example: '2026-10-05T13:00:00+07:00',
       },
       ...Object.fromEntries(
@@ -7319,7 +7324,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Notifications',
       summary: 'List alert events',
       operationId: 'listAlertEvents',
-      description: 'ถ้าส่ง dateFrom และ dateTo ต้องมี dateTo ไม่น้อยกว่า dateFrom',
+      description:
+        'ถ้าส่ง dateFrom และ dateTo ต้องมี dateTo ไม่น้อยกว่า dateFrom; ABNORMAL_VALUE ตรวจทุกชั่วโมง ใช้เฉพาะสถานะ Normal ที่ผิดปกติต่อเนื่องอย่างน้อย 5 ชั่วโมงจริงและอย่างน้อย 6 ค่ารายชั่วโมง เช่น 08:00–13:00; ZERO คือศูนย์, NEGATIVE คือติดลบต่อเนื่องโดยค่าต่างกันได้, CONSTANT คือค่าบวกเท่ากันจริง; ชั่วโมงขาด ค่าไม่มี สถานะอื่น หรือข้อมูลซ้ำขัดแย้งกันตัดลำดับ; แจ้ง 1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วัน Asia/Bangkok รวมทุกประเภทและ episode ข้ามวันนับลำดับต่อและใช้โควตาใหม่เมื่อมีค่าผิดปกติใหม่ของวันนั้น; เริ่มนับตั้งแต่ activation จริงและไม่ใช้ข้อมูลอนาคต; client ใช้ event.id และไม่แยกองค์ประกอบ idempotencyKey',
       parameters: [
         queryEnum('systemType', systemTypeValues, 'กรอง systemType'),
         queryEnum(
@@ -7391,7 +7397,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Preview an alert email without sending',
       operationId: 'previewAlertEmail',
       description:
-        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน, eventDate เดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; รายชั่วโมงต้อง startedAt เดียวกัน และเป็น finite measuredValue > thresholdValue พร้อม thresholdType ตรงประเภท; ผสมวัน/เวลาเริ่มตรวจวัดหรือข้อมูลไม่ผ่านตอบ 400 BAD_REQUEST รวมข้อมูลเดิม; เรื่องและจดหมายตามแม่แบบ PDF ทั้ง 6 แบบ แสดง eventDate แบบ d-m-พ.ศ. และ startedAt เวลาไทย HH.mm ไม่ใช้รอบส่ง scheduledAt; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; preview ไม่บังคับนาทีตาม policy ของ worker; ไม่มี SMTP หรือการเข้าคิว',
+        'ต้องมี notifications:edit และเข้าถึงทุก eventIds ตาม scope; จำกัด 1–100 ID ไม่ซ้ำ; ประเภทเดียวกัน, eventDate เดียวกัน และ CONSECUTIVE_NO_REPORT ระบบเดียวกัน; STANDARD_EXCEEDED/EIA_EXCEEDED ต้อง startedAt เดียวกัน และเป็น finite measuredValue > thresholdValue พร้อม thresholdType ตรงประเภท; ผสมวัน/เวลาเริ่มตรวจวัดหรือข้อมูลไม่ผ่านตอบ 400 BAD_REQUEST รวมข้อมูลเดิม; เรื่องและจดหมายตามแม่แบบ PDF ทั้ง 6 แบบ แสดง eventDate แบบ d-m-พ.ศ. และ startedAt เวลาไทย HH.mm ไม่ใช้รอบส่ง scheduledAt; ไม่รับผู้รับ/เนื้อหาจาก client; วันที่จริงพร้อม timezone; รอบหลังช่วงตรวจวัดสิ้นสุด; preview ไม่บังคับนาทีตาม policy ของ worker; ABNORMAL_VALUE ใช้รอบรายชั่วโมงเมื่อผิดปกติต่อเนื่องครบ 5 ชั่วโมงจริง ไม่รอ 09:00 หรือ delay และจำกัด 1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วัน Asia/Bangkok; ไม่มี SMTP หรือการเข้าคิว',
       requestBody: jsonRequestBody(schemaRef('AlertEmailPreviewRequest'), {
         eventIds: [51],
         scheduledAt: '2026-10-05T12:00:00+07:00',
@@ -7405,7 +7411,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get scoped alert email delivery evidence',
       operationId: 'getAlertEmailDelivery',
       description:
-        'ต้องมี notifications:view_status และเข้าถึงทุกเหตุการณ์ใน batch; นอก scope หรือไม่พบคืน 404; batch รายชั่วโมงใหม่อิงรอบที่กำหนด โดย delay 0 ตรงต้นชั่วโมง ข้อมูลที่รับหลังเริ่มรอบรอรอบถัดไปภายใน 24 ชั่วโมง และ scheduledAt แสดงรอบนั้นโดยคงเวลาตรวจวัดในเรื่อง; callback ช้าหรืองานก่อนหน้ายังไม่จบเริ่มเมื่อพร้อมโดยคงรอบและ cutoff เดิม; หนึ่งรอบอาจมีหลายฉบับตามประเภท/ผู้รับ/ช่วงตรวจวัด; คิวเดิม immutable และ retry คงเดิม; SMTP_ACCEPTED ไม่รับรองการเข้ากล่องปลายทาง; ไม่คืน lease หรือ key ภายใน; ไม่เปลี่ยนสถานะติดตามของเจ้าหน้าที่',
+        'ต้องมี notifications:view_status และเข้าถึงทุกเหตุการณ์ใน batch; นอก scope หรือไม่พบคืน 404; batch STANDARD_EXCEEDED/EIA_EXCEEDED รายชั่วโมงใหม่อิงรอบที่กำหนด โดย delay 0 ตรงต้นชั่วโมง ข้อมูลที่รับหลังเริ่มรอบรอรอบถัดไปภายใน 24 ชั่วโมง และ scheduledAt แสดงรอบนั้นโดยคงเวลาตรวจวัดในเรื่อง; callback ช้าหรืองานก่อนหน้ายังไม่จบเริ่มเมื่อพร้อมโดยคงรอบและ cutoff เดิม; หนึ่งรอบอาจมีหลายฉบับตามประเภท/ผู้รับ/ช่วงตรวจวัด; คิวเดิม immutable และ retry คงเดิม; ABNORMAL_VALUE ใหม่ใช้ cadence HOURLY เมื่อผิดปกติต่อเนื่องครบ 5 ชั่วโมงจริงและไม่รอ hourly delay จำกัด 1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วัน Asia/Bangkok; ประวัติเก่าคง snapshot เดิม; SMTP_ACCEPTED ไม่รับรองการเข้ากล่องปลายทาง; ไม่คืน lease หรือ key ภายใน; ไม่เปลี่ยนสถานะติดตามของเจ้าหน้าที่',
       parameters: [alertEventIdParameter],
       successSchema: schemaRef('AlertEmailDeliveryResponse'),
     }),

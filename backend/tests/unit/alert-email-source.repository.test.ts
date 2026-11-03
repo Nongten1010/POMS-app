@@ -376,15 +376,44 @@ describe('alert email source repository', () => {
     const compiled = database.__queries[0];
     expect(compiled.sql).toContain('[event_date] = ?');
     expect(compiled.bindings).toEqual(
-      expect.arrayContaining([
-        'DAILY_COMPLETENESS_LOW',
-        'CONSECUTIVE_NO_REPORT',
-        'ABNORMAL_VALUE',
-        '2026-10-04',
-      ]),
+      expect.arrayContaining(['DAILY_COMPLETENESS_LOW', 'CONSECUTIVE_NO_REPORT', '2026-10-04']),
     );
     expect(compiled.bindings).not.toContain('STANDARD_EXCEEDED');
+    expect(compiled.bindings).not.toContain('ABNORMAL_VALUE');
     expect(compiled.sql).not.toContain('[started_at] >= ?');
+  });
+
+  it('loads current hourly abnormal facts without integration payloads and excludes legacy daily facts', async () => {
+    database.__results.push([
+      eventRow({
+        id: 20,
+        alert_type: 'ABNORMAL_VALUE',
+        idempotency_key: 'ABNORMAL_HOURLY:v1:one',
+        source_payload_json: null,
+        started_at: '2026-10-03T23:00:00+07:00',
+        ended_at: '2026-10-04T04:00:00+07:00',
+      }),
+      eventRow({
+        id: 21,
+        alert_type: 'ABNORMAL_VALUE',
+        idempotency_key: 'DAILY_ALERT:v2:old',
+        source_payload_json: null,
+      }),
+      eventRow({
+        id: 22,
+        alert_type: 'ABNORMAL_VALUE',
+        idempotency_key: 'ABNORMAL_HOURLY:v1:previous',
+        event_date: '2026-10-03',
+        source_payload_json: null,
+      }),
+    ]);
+    const events = await repository().listEvents({
+      cadence: 'HOURLY',
+      startAt: '2026-10-03T20:00:00.000Z',
+      endAt: '2026-10-03T21:00:00.001Z',
+    });
+    expect(events.map((item) => item.id)).toEqual([20]);
+    expect(database.__queries[0].bindings).toContain('ABNORMAL_VALUE');
   });
 
   it('binds an event to its current station, system and factory without accepting arbitrary recipients', async () => {

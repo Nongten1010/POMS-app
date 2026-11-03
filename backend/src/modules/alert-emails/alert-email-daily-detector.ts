@@ -2,11 +2,7 @@ import { createHash } from 'node:crypto';
 import type { AlertEventRow } from '../alert-events/alert-events.types';
 import type { AlertEmailPoint } from './alert-email-source.repository';
 import { normalizeAlertActivationStationIdentity } from './alert-parameter-activations';
-import {
-  countConsecutiveLowReportingDays,
-  detectAbnormalHourlyEpisodes,
-  summarizeAlertDay,
-} from './alert-email-rules';
+import { countConsecutiveLowReportingDays, summarizeAlertDay } from './alert-email-rules';
 import type {
   AlertCompletenessPolicy,
   AlertDaySummary,
@@ -127,34 +123,6 @@ export function buildDailyAlertCandidates(
           ...consecutive,
           consecutiveThreshold,
           includesMissingAndLowReportingDays: true,
-        }),
-      });
-    }
-
-    const episodes = detectAbnormalHourlyEpisodes(relevantSamples, input.abnormalReadings);
-    for (const episode of episodes) {
-      if (Date.parse(episode.endedAt) < start || Date.parse(episode.confirmedAt) >= end) continue;
-      candidates.push({
-        ...base,
-        alert_type: 'ABNORMAL_VALUE',
-        idempotency_key: candidateKey(
-          input,
-          parameter,
-          'ABNORMAL_VALUE',
-          `${episode.abnormalType}:${parameter.activationVerified ? new Date(timestamp(episode.startedAt, 'startedAt')).toISOString() : episode.startedAt}`,
-        ),
-        started_at: episode.startedAt,
-        ended_at: episode.endedAt,
-        measured_value: episode.measuredValue,
-        abnormal_type: episode.abnormalType,
-        abnormal_streak_count: episode.streakCount,
-        first_abnormal_at: episode.startedAt,
-        confirmed_abnormal_at: episode.confirmedAt,
-        evidence_json: JSON.stringify({
-          ...sharedEvidence,
-          abnormalReadings: input.abnormalReadings,
-          ...episode,
-          elapsedMilliseconds: Date.parse(episode.endedAt) - Date.parse(episode.startedAt),
         }),
       });
     }

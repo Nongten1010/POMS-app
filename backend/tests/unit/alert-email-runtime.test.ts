@@ -27,6 +27,9 @@ jest.mock('../../src/modules/alert-emails/alert-email-outbox.repository', () => 
 jest.mock('../../src/modules/alert-emails/alert-email-measurements', () => ({
   loadAlertEmailParameters: jest.fn(),
 }));
+jest.mock('../../src/modules/alert-emails/alert-email-abnormal-detector', () => ({
+  buildHourlyAbnormalAlertCandidates: jest.fn(),
+}));
 jest.mock('../../src/modules/alert-emails/alert-email-daily-detector', () => ({
   buildDailyAlertCandidates: jest.fn(),
 }));
@@ -47,6 +50,7 @@ jest.mock('../../src/modules/alert-emails/alert-parameter-activations.repository
 }));
 jest.mock('../../src/modules/alert-events/alert-events.repository', () => ({
   toAlertEventDTO: jest.fn(),
+  alertEventsRepository: { findByIdempotencyKey: jest.fn() },
 }));
 
 import nodemailer from 'nodemailer';
@@ -59,10 +63,14 @@ import { createAlertEmailEngine } from '../../src/modules/alert-emails/alert-ema
 import { dispatchNextAlertEmail } from '../../src/modules/alert-emails/alert-email-dispatch';
 import { alertEmailSourceRepository } from '../../src/modules/alert-emails/alert-email-source.repository';
 import { loadAlertEmailParameters } from '../../src/modules/alert-emails/alert-email-measurements';
+import { buildHourlyAbnormalAlertCandidates } from '../../src/modules/alert-emails/alert-email-abnormal-detector';
 import { buildDailyAlertCandidates } from '../../src/modules/alert-emails/alert-email-daily-detector';
 import { alertEmailDailyRepository } from '../../src/modules/alert-emails/alert-email-daily.repository';
 import { isAlertEmailJobEligible } from '../../src/modules/alert-emails/alert-email-eligibility';
-import { toAlertEventDTO } from '../../src/modules/alert-events/alert-events.repository';
+import {
+  alertEventsRepository,
+  toAlertEventDTO,
+} from '../../src/modules/alert-events/alert-events.repository';
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
 import { listActiveAlertParameterActivations } from '../../src/modules/alert-emails/alert-parameter-activations.repository';
 import type { AlertEventDTO } from '../../src/modules/alert-events/alert-events.types';
@@ -140,6 +148,8 @@ describe('startAlertEmailWorker', () => {
     jest.mocked(dispatchNextAlertEmail).mockResolvedValue({ claimed: false });
     jest.mocked(loadAlertEmailParameters).mockResolvedValue([]);
     jest.mocked(buildDailyAlertCandidates).mockReturnValue([]);
+    jest.mocked(buildHourlyAbnormalAlertCandidates).mockReturnValue([]);
+    jest.mocked(alertEventsRepository.findByIdempotencyKey).mockResolvedValue(null);
     jest.mocked(alertEmailSourceRepository.listPoints).mockResolvedValue([point]);
     jest.mocked(isAlertEmailJobEligible).mockResolvedValue(true);
     jest.mocked(toAlertEventDTO).mockImplementation((row) => ({ ...event, id: Number(row.id) }));
@@ -247,6 +257,82 @@ describe('startAlertEmailWorker', () => {
         abnormalReadings: 5,
       }),
     );
+  });
+  it('loads the current Bangkok day as of now and persists hourly abnormal candidates', async () => {
+    startAlertEmailWorker(settings);
+    jest
+      .mocked(buildHourlyAbnormalAlertCandidates)
+      .mockReturnValue([{ idempotency_key: 'hourly' }] as never);
+    jest
+      .mocked(alertEmailDailyRepository.create)
+      .mockResolvedValueOnce({ id: 21 } as AlertEventDTO);
+    const policy = jest.mocked(createAlertEmailWorker).mock.calls[0][0];
+    if (!policy.enabled) throw new Error('Expected an enabled policy');
+    const now = new Date('2026-10-04T17:00:00.000Z');
+    expect(await engineDependencies().prepareAbnormal(point, policy as never, now)).toEqual([21]);
+    expect(loadAlertEmailParameters).toHaveBeenNthCalledWith(1, point, '2026-10-05', policy, {
+      asOf: now.toISOString(),
+      lookbackHours: 8,
+    });
+    expect(loadAlertEmailParameters).toHaveBeenNthCalledWith(2, point, '2026-10-05', policy, {
+      asOf: now.toISOString(),
+    });
+    expect(buildHourlyAbnormalAlertCandidates).toHaveBeenCalledWith({
+      point,
+      parameters: [],
+      detectedAt: now.toISOString(),
+    });
+  });
+  it('does not reload the entire history when the parameter already has its daily abnormal event', async () => {
+    startAlertEmailWorker(settings);
+    jest
+      .mocked(buildHourlyAbnormalAlertCandidates)
+      .mockReturnValue([{ idempotency_key: 'same-day-key' }] as never);
+    jest
+      .mocked(alertEventsRepository.findByIdempotencyKey)
+      .mockResolvedValueOnce({ id: 22 } as AlertEventDTO);
+    const policy = jest.mocked(createAlertEmailWorker).mock.calls[0][0];
+    if (!policy.enabled) throw new Error('Expected an enabled policy');
+    expect(
+      await engineDependencies().prepareAbnormal(point, policy, new Date('2026-10-05T06:00:00Z')),
+    ).toEqual([22]);
+    expect(loadAlertEmailParameters).toHaveBeenCalledTimes(1);
+    expect(alertEmailDailyRepository.create).not.toHaveBeenCalled();
+  });
+  it('persists the original streak start after the bounded hourly check qualifies', async () => {
+    startAlertEmailWorker(settings);
+    const recent = { idempotency_key: 'same-key', first_abnormal_at: '2026-10-05T00:00:00Z' };
+    const original = { ...recent, first_abnormal_at: '2026-10-01T00:00:00Z' };
+    jest
+      .mocked(buildHourlyAbnormalAlertCandidates)
+      .mockReturnValueOnce([recent] as never)
+      .mockReturnValueOnce([original] as never);
+    jest
+      .mocked(alertEmailDailyRepository.create)
+      .mockResolvedValueOnce({ id: 23 } as AlertEventDTO);
+    const policy = jest.mocked(createAlertEmailWorker).mock.calls[0][0];
+    if (!policy.enabled) throw new Error('Expected an enabled policy');
+    expect(
+      await engineDependencies().prepareAbnormal(point, policy, new Date('2026-10-05T06:00:00Z')),
+    ).toEqual([23]);
+    expect(alertEmailDailyRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining(original),
+    );
+  });
+  it('checks abnormal activation against the first reading rather than the hourly send window', async () => {
+    startAlertEmailWorker(settings);
+    await workerDependencies().dispatch();
+    await dispatchDependencies().isRecipientEligible(job);
+    const check = jest.mocked(isAlertEmailJobEligible).mock.calls[0][2].hasActiveParameter;
+    const abnormal = {
+      ...event,
+      alertType: 'ABNORMAL_VALUE' as const,
+      firstAbnormalAt: '2026-10-04T03:00:00.000Z',
+    };
+    registryActivations.mockResolvedValue([
+      { parameterCode: 'co2', unit: 'ppm', activatedAt: '2026-10-04T03:30:00.000Z' },
+    ]);
+    expect(await check(abnormal)).toBe(false);
   });
 
   it('fetches all event IDs in bounded SQL queries and delegates complete batch eligibility using fresh points', async () => {

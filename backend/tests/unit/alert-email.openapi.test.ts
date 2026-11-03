@@ -104,4 +104,19 @@ describe('alert email runtime contract', () => {
     expect(doc.components.schemas.AlertEmailDelivery.properties.status.enum).toContain('UNKNOWN');
     expect(doc.components.schemas.AlertEmailDelivery.properties).not.toHaveProperty('leaseToken');
   });
+  it('publishes hourly abnormal alerts with five elapsed hours and a Bangkok daily quota', () => {
+    const doc = pomsOpenApiDocument as unknown as RuntimeDocument;
+    const history = JSON.stringify(doc.paths['/alert-email-deliveries/{id}']?.get);
+    const cadence = JSON.stringify(doc.components.schemas.AlertEmailDelivery.properties.cadence);
+    const events = JSON.stringify(doc.paths['/alert-events']?.get);
+    expect(history).toContain('ABNORMAL_VALUE');
+    expect(history).toContain('HOURLY');
+    expect(history).toContain('5 ชั่วโมงจริง');
+    expect(cadence).toContain('08:00–13:00');
+    expect(cadence).toContain('6 ค่า');
+    expect(cadence).toContain('1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วัน Asia/Bangkok');
+    expect(events).toContain('Normal');
+    expect(events).toContain('ข้ามวัน');
+    expect(events).toContain('ชั่วโมงขาด');
+  });
 });

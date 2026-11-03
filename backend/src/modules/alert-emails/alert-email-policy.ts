@@ -8,8 +8,6 @@ const activePolicySchema = z.object({
   ALERT_EMAIL_COMPLETENESS_POLICY: z.enum(['ON_TIME', 'NORMAL_EXCLUDING_SHUTDOWN']),
   ALERT_EMAIL_EXEMPT_DAY_POLICY: z.enum(['RESET', 'PAUSE']),
   ALERT_EMAIL_DAILY_FORMAT: z.literal('BY_TYPE'),
-  ALERT_EMAIL_ABNORMAL_MODE: z.literal('PREVIOUS_DAY'),
-  ALERT_EMAIL_ABNORMAL_READINGS: integerSetting(2, 168),
   ALERT_EMAIL_HOURLY_DELAY_MINUTES: integerSetting(0, 59),
 });
 
@@ -19,7 +17,9 @@ export interface ActiveAlertEmailPolicy {
   completenessPolicy: 'ON_TIME' | 'NORMAL_EXCLUDING_SHUTDOWN';
   exemptDayPolicy: 'RESET' | 'PAUSE';
   dailyFormat: 'BY_TYPE';
-  abnormalMode: 'PREVIOUS_DAY';
+  abnormalMode: 'HOURLY';
+  abnormalHours: 5;
+  /** Retained only for stable legacy daily-event identities, never the abnormal threshold. */
   abnormalReadings: number;
   hourlyDelayMinutes: number;
 }
@@ -31,14 +31,16 @@ export function readAlertEmailPolicy(settings: NodeJS.ProcessEnv): AlertEmailPol
   const flag = z.enum(['true', 'false']).default('false').parse(settings.ALERT_EMAIL_ENABLED);
   if (flag === 'false') return { enabled: false };
   const value = activePolicySchema.parse(settings);
+  const legacyReadings = integerSetting(2, 168).safeParse(settings.ALERT_EMAIL_ABNORMAL_READINGS);
   return {
     enabled: true,
     recipientMode: value.ALERT_EMAIL_RECIPIENT_MODE,
     completenessPolicy: value.ALERT_EMAIL_COMPLETENESS_POLICY,
     exemptDayPolicy: value.ALERT_EMAIL_EXEMPT_DAY_POLICY,
     dailyFormat: value.ALERT_EMAIL_DAILY_FORMAT,
-    abnormalMode: value.ALERT_EMAIL_ABNORMAL_MODE,
-    abnormalReadings: value.ALERT_EMAIL_ABNORMAL_READINGS,
+    abnormalMode: 'HOURLY',
+    abnormalHours: 5,
+    abnormalReadings: legacyReadings.success ? legacyReadings.data : 5,
     hourlyDelayMinutes: value.ALERT_EMAIL_HOURLY_DELAY_MINUTES,
   };
 }

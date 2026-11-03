@@ -26,6 +26,8 @@ describe('alert email activation policy', () => {
       recipientMode: 'POINT_OFFICERS_AND_FACTORY',
       completenessPolicy: 'ON_TIME',
       exemptDayPolicy: 'RESET',
+      abnormalMode: 'HOURLY',
+      abnormalHours: 5,
       abnormalReadings: 5,
       hourlyDelayMinutes: 5,
     });
@@ -36,10 +38,22 @@ describe('alert email activation policy', () => {
       readAlertEmailPolicy({ ...configured, ALERT_EMAIL_RECIPIENT_MODE: 'ALL_USERS' }),
     ).toThrow();
     expect(() =>
-      readAlertEmailPolicy({ ...configured, ALERT_EMAIL_ABNORMAL_READINGS: '4.5' }),
-    ).toThrow();
-    expect(() =>
       readAlertEmailPolicy({ ...configured, ALERT_EMAIL_HOURLY_DELAY_MINUTES: '60' }),
     ).toThrow();
+  });
+  it('fixes abnormal alerts at five hours without requiring or honoring legacy overrides', () => {
+    for (const legacy of [undefined, '2', '5', '168', '4.5']) {
+      expect(
+        readAlertEmailPolicy({
+          ...configured,
+          ALERT_EMAIL_ABNORMAL_MODE: undefined,
+          ALERT_EMAIL_ABNORMAL_READINGS: legacy,
+        }),
+      ).toMatchObject({ abnormalMode: 'HOURLY', abnormalHours: 5 });
+    }
+    // Existing completeness/consecutive event identities must survive this upgrade.
+    expect(
+      readAlertEmailPolicy({ ...configured, ALERT_EMAIL_ABNORMAL_READINGS: '8' }),
+    ).toMatchObject({ abnormalReadings: 8 });
   });
 });

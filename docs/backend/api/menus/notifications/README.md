@@ -40,6 +40,7 @@ curl --request POST \
 
 - Query หลักของ `GET /api/v1/alert-events` คือ `systemType`, `displaySystemType`, `alertType`, `thresholdType`, `factoryId`, `stationId`, `parameterCode`, `dateFrom`, `dateTo`, `page`, `pageSize`
 - `alertType` รองรับ `STANDARD_EXCEEDED`, `EIA_EXCEEDED`, `DAILY_COMPLETENESS_LOW`, `CONSECUTIVE_NO_REPORT`, `ABNORMAL_VALUE`
+- `ABNORMAL_VALUE` ตรวจทุกชั่วโมงและแจ้งเมื่อผิดปกติต่อเนื่องครบ 5 ชั่วโมงจริง โดยจำกัด 1 ครั้งต่อพารามิเตอร์/หน่วย/จุด/วันไทย; ลำดับข้ามวันนับต่อได้ ดู [เงื่อนไขและผลต่อ delivery](./email-notifications.md#เงื่อนไขค่าผิดปกติ-abnormal_value)
 - `page` เป็น integer ขั้นต่ำ 1 ค่าเริ่มต้น 1; `pageSize` อยู่ในช่วง 1-100 ค่าเริ่มต้น 20
 - `dateFrom`/`dateTo` ใช้ `YYYY-MM-DD`; `stationId` และ `parameterCode` ต้องเป็น safe code หรือ annual monitoring point code ตาม validator
 - `dateTo` ต้องไม่น้อยกว่า `dateFrom`

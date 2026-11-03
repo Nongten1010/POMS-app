@@ -356,79 +356,62 @@ describe('buildDailyAlertCandidates', () => {
     ['ZERO', 0],
     ['NEGATIVE', -1],
   ])(
-    'detects %s only after the configured Normal hourly readings and preserves the actual window',
-    (abnormalType, value) => {
-      const readings = samples(5).map((sample) => ({ ...sample, value }));
+    'leaves %s detection to the hourly pipeline while retaining daily completeness alerts',
+    (_abnormalType, value) => {
+      const readings = samples(6).map((sample) => ({ ...sample, value }));
       const candidates = buildDailyAlertCandidates(
         input({
           parameters: [
-            { code: 'SO2', name: 'SO₂', unit: 'ppm', samples: readings, dailySummaries: [] },
+            {
+              code: 'SO2',
+              name: 'SO₂',
+              unit: 'ppm',
+              samples: readings,
+              dailySummaries: previousDays(15),
+            },
           ],
         }),
       );
-      const abnormal = candidates.find((candidate) => candidate.alert_type === 'ABNORMAL_VALUE');
-      expect(abnormal).toMatchObject({
-        abnormal_type: abnormalType,
-        abnormal_streak_count: 5,
-        measured_value: value,
-        first_abnormal_at: readings[0].measuredAt,
-        confirmed_abnormal_at: readings[4].measuredAt,
-        started_at: readings[0].measuredAt,
-        ended_at: readings[4].measuredAt,
-        threshold_type: null,
-        threshold_value: null,
-      });
+      expect(candidates.map((candidate) => candidate.alert_type).sort()).toEqual([
+        'CONSECUTIVE_NO_REPORT',
+        'DAILY_COMPLETENESS_LOW',
+      ]);
+      for (const candidate of candidates) {
+        expect(candidate.abnormal_type).toBeNull();
+        expect(candidate.abnormal_streak_count).toBeNull();
+      }
+      const complete = samples(24).map((sample) => ({ ...sample, value }));
+      expect(
+        buildDailyAlertCandidates(
+          input({
+            parameters: [
+              { code: 'SO2', name: 'SO₂', unit: 'ppm', samples: complete, dailySummaries: [] },
+            ],
+          }),
+        ),
+      ).toEqual([]);
     },
   );
 
-  it('includes episodes begun before the reporting day and cuts off future readings at the reporting day end', () => {
+  it('counts only the reporting day for completeness when an abnormal sequence spans adjacent days', () => {
     const dayStart = Date.parse(`${date}T00:00:00+07:00`);
     const readings = Array.from({ length: 28 }, (_, hour) => ({
       measuredAt: new Date(dayStart + (hour - 2) * 3_600_000).toISOString(),
-      reportedAt: null,
+      reportedAt: new Date(dayStart + (hour - 2) * 3_600_000 + 60_000).toISOString(),
       value: 0,
       status: 'Normal',
     }));
-    const abnormal = buildDailyAlertCandidates(
+    const candidates = buildDailyAlertCandidates(
       input({
         parameters: [
           { code: 'SO2', name: 'SO₂', unit: 'ppm', samples: readings, dailySummaries: [] },
         ],
       }),
-    ).find((candidate) => candidate.alert_type === 'ABNORMAL_VALUE');
-    expect(abnormal).toMatchObject({
-      first_abnormal_at: readings[0].measuredAt,
-      abnormal_streak_count: 26,
-      ended_at: readings[25].measuredAt,
-    });
+    );
+    expect(candidates).toEqual([]);
   });
 
-  it('does not alert for episodes ending before the day, fewer readings, gaps, or non-Normal statuses', () => {
-    const prior = samples(5, '2026-10-03').map((sample) => ({ ...sample, value: 0 }));
-    const readings = samples(5).map((sample, index) => ({
-      ...sample,
-      value: 0,
-      status: index === 2 ? 'Calibration' : 'Normal',
-    }));
-    const withGap = samples(6)
-      .filter((_, index) => index !== 2)
-      .map((sample) => ({ ...sample, value: 0 }));
-    for (const set of [
-      prior,
-      readings,
-      withGap,
-      samples(4).map((sample) => ({ ...sample, value: 0 })),
-    ]) {
-      const candidates = buildDailyAlertCandidates(
-        input({
-          parameters: [{ code: 'SO2', name: 'SO₂', unit: 'ppm', samples: set, dailySummaries: [] }],
-        }),
-      );
-      expect(candidates.some((candidate) => candidate.alert_type === 'ABNORMAL_VALUE')).toBe(false);
-    }
-  });
-
-  it('keeps separate episode and unit identities stable and changes daily recurrence and policy keys', () => {
+  it('keeps daily unit identities stable and separates reporting dates and policy keys', () => {
     const readings = samples(11).map((sample, index) => ({
       ...sample,
       value: index < 5 ? 0 : index === 5 ? 20 : -1,
@@ -447,9 +430,21 @@ describe('buildDailyAlertCandidates', () => {
     expect(
       buildDailyAlertCandidates({ ...common, parameters: [...common.parameters].reverse() }),
     ).toEqual(candidates);
+    expect(candidates).toHaveLength(2);
+    expect(candidates.every((candidate) => candidate.alert_type === 'DAILY_COMPLETENESS_LOW')).toBe(
+      true,
+    );
+    expect(candidates.map((candidate) => candidate.unit).sort()).toEqual(['%', 'ppm']);
+    const nextDay = buildDailyAlertCandidates({
+      ...common,
+      date: '2026-10-05',
+      detectedAt: '2026-10-06T09:00:00+07:00',
+    });
     expect(
-      candidates.filter((candidate) => candidate.alert_type === 'ABNORMAL_VALUE'),
-    ).toHaveLength(2);
+      nextDay.some((candidate) =>
+        candidates.some((previous) => previous.idempotency_key === candidate.idempotency_key),
+      ),
+    ).toBe(false);
     const alternate = buildDailyAlertCandidates({
       ...common,
       completenessPolicy: 'NORMAL_EXCLUDING_SHUTDOWN',

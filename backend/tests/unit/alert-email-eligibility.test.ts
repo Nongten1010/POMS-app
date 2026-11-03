@@ -74,6 +74,69 @@ function dependencies() {
   };
 }
 describe('recipient eligibility immediately before SMTP', () => {
+  it('allows hourly five-hour abnormal evidence and rejects legacy daily jobs or short durations', async () => {
+    const hourlyJob = { ...job, alertType: 'ABNORMAL_VALUE', cadence: 'HOURLY' } as AlertEmailJob;
+    const deps = dependencies();
+    deps.events.forEach((item) => {
+      Object.assign(item.event, {
+        alertType: 'ABNORMAL_VALUE',
+        eventDate: '2026-10-02',
+        firstAbnormalAt: '2026-10-02T08:00:00+07:00',
+        confirmedAbnormalAt: '2026-10-02T13:00:00+07:00',
+        endedAt: '2026-10-02T13:00:00+07:00',
+        abnormalType: 'ZERO',
+        abnormalStreakCount: 6,
+      });
+      item.evidence = {
+        abnormalMode: 'HOURLY',
+        abnormalHours: 5,
+        abnormalReadings: 6,
+        notificationDate: '2026-10-02',
+      };
+    });
+    expect(await isAlertEmailJobEligible(hourlyJob, policy, deps)).toBe(true);
+    expect(await isAlertEmailJobEligible({ ...hourlyJob, cadence: 'DAILY' }, policy, deps)).toBe(
+      false,
+    );
+    deps.events[0].event.firstAbnormalAt = '2026-10-02T09:00:00+07:00';
+    expect(await isAlertEmailJobEligible(hourlyJob, policy, deps)).toBe(false);
+  });
+  it("does not deliver yesterday's abnormal queue on a new Bangkok day", async () => {
+    const hourlyJob = {
+      ...job,
+      eventIds: [1],
+      alertType: 'ABNORMAL_VALUE',
+      cadence: 'HOURLY',
+    } as AlertEmailJob;
+    const deps = dependencies();
+    Object.assign(deps.events[0].event, {
+      alertType: 'ABNORMAL_VALUE',
+      eventDate: '2026-10-02',
+      firstAbnormalAt: '2026-10-02T18:00:00+07:00',
+      confirmedAbnormalAt: '2026-10-02T23:00:00+07:00',
+      endedAt: '2026-10-02T23:00:00+07:00',
+      abnormalType: 'ZERO',
+      abnormalStreakCount: 6,
+    });
+    deps.events[0].evidence = {
+      abnormalMode: 'HOURLY',
+      abnormalHours: 5,
+      abnormalReadings: 6,
+      notificationDate: '2026-10-02',
+    };
+    expect(
+      await isAlertEmailJobEligible(hourlyJob, policy, {
+        ...deps,
+        now: new Date('2026-10-02T23:59:00+07:00'),
+      }),
+    ).toBe(true);
+    expect(
+      await isAlertEmailJobEligible(hourlyJob, policy, {
+        ...deps,
+        now: new Date('2026-10-03T00:00:00+07:00'),
+      }),
+    ).toBe(false);
+  });
   it.each([
     ['STANDARD_EXCEEDED' as const, 'STANDARD' as const],
     ['EIA_EXCEEDED' as const, 'EIA' as const],

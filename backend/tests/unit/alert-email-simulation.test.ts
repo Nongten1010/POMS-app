@@ -5,7 +5,7 @@ import {
 } from '../../scripts/alert-email-test/simulation';
 
 describe('safe alert email simulation', () => {
-  it('runs the real pipeline for all six cases and rejects negative and boundary fixtures', async () => {
+  it('runs all six cases with immediate five-hour abnormal alerts and daily quotas', async () => {
     const messages: Array<{
       to: string;
       cc: string[];
@@ -50,6 +50,18 @@ describe('safe alert email simulation', () => {
     expect(report.checks.find((check) => check.id === 'hourly-before-due')?.passed).toBe(true);
     expect(report.checks.find((check) => check.id === 'daily-before-nine')?.passed).toBe(true);
     expect(report.checks.find((check) => check.id === 'restart-no-duplicate')?.passed).toBe(true);
+    for (const id of [
+      'abnormal-five-hours-elapsed',
+      'abnormal-hourly-cadence',
+      'abnormal-once-per-day-all-types',
+      'abnormal-new-day-first-hour',
+      'abnormal-new-day-once',
+    ]) {
+      expect(report.checks.find((check) => check.id === id)?.passed).toBe(true);
+    }
+    expect(report.emails.find((email) => email.caseNumber === 6)?.scheduledAt).toBe(
+      '2026-10-05T05:00:00.000Z',
+    );
     for (const id of [
       'hourly-round-cutoff',
       'hourly-same-round-restart',
