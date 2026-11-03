@@ -131,6 +131,7 @@ async function setup(mode: 'shadow' | 'active' = 'active', events: Record<string
         ...Object.keys(toAlertEventInsertPayload(evaluation.events[0])),
         'source_table',
         'evidence_json',
+        'detected_at',
         'deleted_at',
       ],
     },
@@ -280,6 +281,7 @@ describe('exceedance persistence using production queries on a SQL fixture', () 
       eventDate: '2026-11-03',
     });
     expect(events[0].started_at).toBe(hour.toISOString());
+    expect(events[0].detected_at).toBe(now.toISOString());
     expect(JSON.parse(events[0].evidence_json)).toMatchObject({ producer: 'POMS_HOURLY_DETECTOR' });
     expect(await database('alert_exceedance_points').first('next_hour')).toEqual({
       next_hour: new Date(hour.getTime() + 3600000).toISOString(),

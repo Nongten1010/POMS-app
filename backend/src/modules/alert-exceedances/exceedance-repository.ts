@@ -409,6 +409,8 @@ export function createExceedanceRepository(
                   }),
                   started_at: new Date(event.startedAt),
                   ended_at: new Date(event.endedAt),
+                  // The legacy SQL default uses server-local SYSDATETIME(), not UTC.
+                  detected_at: now,
                   source_table: `${point.stationId}_data_60m`,
                   evidence_json: JSON.stringify({
                     producer: 'POMS_HOURLY_DETECTOR',
