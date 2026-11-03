@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
     inputs:
       deploy_target:
@@ -27,14 +31,99 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: poms-prod-deploy
-  cancel-in-progress: true
-
 jobs:
+  detect:
+    name: Detect application changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      frontend_changed: ${{ steps.changes.outputs.frontend_changed }}
+      backend_changed: ${{ steps.changes.outputs.backend_changed }}
+      backend_ci_required: ${{ steps.changes.outputs.backend_ci_required }}
+      frontend_deps_changed: ${{ steps.changes.outputs.frontend_deps_changed }}
+      backend_deps_changed: ${{ steps.changes.outputs.backend_deps_changed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect changed paths
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          DEPLOY_TARGET: ${{ inputs.deploy_target }}
+          FORCE_FRONTEND: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[deploy-frontend]') }}
+        run: node backend/deploy/detect-changes.cjs
+
+  backend_ci:
+    name: Build and test backend on CI
+    needs: detect
+    if: needs.detect.outputs.backend_ci_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: poms-backend-ci-${{ github.ref }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_NAME: poms_ci
+      DB_USER: poms_ci
+      DB_PASSWORD: ""
+      BOILER_DB_HOST: 127.0.0.1
+      LOG_LEVEL: error
+      DIW_USER_LOGIN_ENABLED: "false"
+      DIW_OFFICER_LOGIN_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Generate isolated test keys
+        run: |
+          node -e 'const fs = require("node:fs"), crypto = require("node:crypto"); for (const key of ["JWT_SECRET", "JWT_REFRESH_SECRET"]) { const value = crypto.randomBytes(32).toString("hex"); console.log("::add-mask::" + value); fs.appendFileSync(process.env.GITHUB_ENV, key + "=" + value + "\n"); }'
+      - name: Install CI dependencies
+        run: npm ci
+      - name: Test deployment helpers
+        run: node --test deploy/detect-changes.test.cjs deploy/release-artifact.test.cjs
+      - name: Build backend once
+        run: npm run build
+      - name: Test backend once
+        timeout-minutes: 10
+        run: npm test -- --maxWorkers=2 --silent --verbose=false
+      - name: Package the verified backend
+        if: needs.detect.outputs.backend_changed == 'true'
+        run: node deploy/release-artifact.cjs create --backend . --release "$RUNNER_TEMP/poms-backend-release" --sha "$GITHUB_SHA"
+      - name: Upload verified backend
+        if: needs.detect.outputs.backend_changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: poms-backend-${{ github.sha }}
+          path: ${{ runner.temp }}/poms-backend-release/
+          if-no-files-found: error
+          retention-days: 3
+
   deploy:
-    name: Deploy changed app parts
-    if: github.ref == 'refs/heads/main'
+    name: Install verified release on production
+    needs: [detect, backend_ci]
+    if: >-
+      always() && !cancelled() && github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request' && needs.detect.result == 'success' &&
+      (needs.detect.outputs.frontend_changed == 'true' || needs.detect.outputs.backend_changed == 'true') &&
+      (needs.detect.outputs.backend_changed != 'true' || needs.backend_ci.result == 'success')
+    concurrency:
+      group: poms-prod-deploy
+      cancel-in-progress: false
     runs-on: [self-hosted, poms, windows, prod]
     timeout-minutes: 45
 
@@ -55,7 +144,7 @@ jobs:
         with:
           fetch-depth: 0
           clean: false
-          lfs: true
+          lfs: ${{ needs.detect.outputs.frontend_changed == 'true' }}
 
       - name: Trust runner workspace
         run: |
@@ -69,55 +158,28 @@ jobs:
           git clean -ffdx -e backend/node_modules/ -e frontend/node_modules/
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Detect changed paths
-        id: changes
+      - name: Download verified backend
+        if: needs.detect.outputs.backend_changed == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: poms-backend-${{ github.sha }}
+          path: ${{ runner.temp }}/poms-backend-artifact-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Verify and stage the backend artifact
+        if: needs.detect.outputs.backend_changed == 'true'
         run: |
-          $before = "${{ github.event.before }}"
-          $after = "${{ github.sha }}"
-          $manualFrontendDeploy = "${{ github.event_name }}" -eq 'workflow_dispatch' -and "${{ inputs.deploy_target }}" -eq 'frontend'
-          $manualBackendDeploy = "${{ github.event_name }}" -eq 'workflow_dispatch' -and "${{ inputs.deploy_target }}" -eq 'backend'
-          $pushFrontendDeploy = "${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[deploy-frontend]') }}" -eq 'true'
-          $forceFrontendDeploy = $manualFrontendDeploy -or $pushFrontendDeploy
-
-          if ($manualFrontendDeploy -or $manualBackendDeploy) {
-            Write-Host "Manual deployment requested; building and deploying the selected app part."
-            $files = @()
-          } elseif ([string]::IsNullOrWhiteSpace($before) -or $before -match '^0+$') {
-            $files = git ls-tree -r --name-only $after
-          } elseif (git cat-file -e "$before^{commit}" 2>$null) {
-            $files = git diff --name-only $before $after
-          } elseif (git rev-parse --verify HEAD~1 2>$null) {
-            Write-Host "Before commit $before is unavailable; falling back to HEAD~1..HEAD."
-            $files = git diff --name-only HEAD~1 HEAD
-          } else {
-            Write-Host "No previous commit is available; treating the current tree as changed."
-            $files = git ls-tree -r --name-only $after
+          $artifact = Join-Path $env:RUNNER_TEMP 'poms-backend-artifact-${{ github.run_id }}-${{ github.run_attempt }}'
+          node .\backend\deploy\release-artifact.cjs verify --release $artifact --sha "${{ github.sha }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in @('package.json', 'package-lock.json')) {
+            $expected = [System.IO.File]::ReadAllText((Join-Path $artifact $file)).Replace("`r`n", "`n")
+            $source = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "backend\$file")).Replace("`r`n", "`n")
+            if ($expected -cne $source) { throw "Artifact package metadata differs from checkout: $file" }
+            Copy-Item (Join-Path $artifact $file) '.\backend' -Force
           }
-
-          if ($pushFrontendDeploy) {
-            Write-Host "Commit message requested a frontend deployment."
-          }
-
-          $files | ForEach-Object { "Changed: $_" }
-
-          $frontendChanged = $files | Where-Object { $_ -like 'frontend/*' }
-          $backendChanged = $files | Where-Object { $_ -like 'backend/*' }
-          $frontendDepsChanged = $files | Where-Object {
-            $_ -eq 'frontend/package.json' -or $_ -eq 'frontend/package-lock.json'
-          }
-          $backendDepsChanged = $files | Where-Object {
-            $_ -eq 'backend/package.json' -or $_ -eq 'backend/package-lock.json'
-          }
-
-          $frontend = if ($frontendChanged -or $forceFrontendDeploy) { 'true' } else { 'false' }
-          $backend = if ($backendChanged -or $manualBackendDeploy) { 'true' } else { 'false' }
-          $frontendDeps = if ($frontendDepsChanged) { 'true' } else { 'false' }
-          $backendDeps = if ($backendDepsChanged) { 'true' } else { 'false' }
-
-          "frontend_changed=$frontend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "backend_changed=$backend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "frontend_deps_changed=$frontendDeps" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "backend_deps_changed=$backendDeps" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          robocopy (Join-Path $artifact 'dist') '.\backend\dist' /MIR /R:3 /W:5 /NFL /NDL /NP
+          if ($LASTEXITCODE -gt 7) { throw "Staging backend artifact failed: $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
 
       - name: Preserve inspected server edits before Git synchronization
         if: github.event_name == 'workflow_dispatch' && inputs.deploy_target == 'backend' && inputs.reconcile_server_changes
@@ -135,7 +197,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Update server git checkout
-        if: steps.changes.outputs.frontend_changed == 'true' || steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.frontend_changed == 'true' || needs.detect.outputs.backend_changed == 'true'
         run: |
           $repoRoot = Split-Path -Parent $env:BACKEND_TARGET
           $gitDir = Join-Path $repoRoot '.git'
@@ -166,7 +228,7 @@ jobs:
           }
 
       - name: Build frontend
-        if: steps.changes.outputs.frontend_changed == 'true'
+        if: needs.detect.outputs.frontend_changed == 'true'
         working-directory: frontend
         timeout-minutes: 15
         run: |
@@ -190,7 +252,7 @@ jobs:
 
           $frontendDepsReady = Test-Path ".\node_modules\.bin\vite.cmd"
 
-          if ("${{ steps.changes.outputs.frontend_deps_changed }}" -eq 'true' -or !$frontendDepsReady) {
+          if ("${{ needs.detect.outputs.frontend_deps_changed }}" -eq 'true' -or !$frontendDepsReady) {
             Write-Host "Installing frontend dependencies with npm ci."
             npm ci
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -202,7 +264,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Deploy frontend to IIS site root
-        if: steps.changes.outputs.frontend_changed == 'true'
+        if: needs.detect.outputs.frontend_changed == 'true'
         run: |
           New-Item -ItemType Directory -Force -Path $env:FRONTEND_TARGET | Out-Null
 
@@ -224,7 +286,7 @@ jobs:
           ) | Set-Content -Path (Join-Path $env:FRONTEND_TARGET 'DEPLOYED_SHA.txt') -Encoding utf8
 
       - name: Prepare backend environment
-        if: steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.backend_changed == 'true'
         run: |
           $sourceEnv = Join-Path $env:BACKEND_TARGET '.env'
           $workspaceEnv = '.\backend\.env'
@@ -235,40 +297,29 @@ jobs:
 
           Copy-Item $sourceEnv $workspaceEnv -Force
 
-      - name: Prepare backend dependencies
-        if: steps.changes.outputs.backend_changed == 'true'
+      - name: Prepare Windows runtime dependencies
+        if: needs.detect.outputs.backend_changed == 'true'
         working-directory: backend
         timeout-minutes: 10
         run: |
-          $backendDepsReady = Test-Path ".\node_modules\.bin\tsc.cmd"
-
-          if ("${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !$backendDepsReady) {
-            Write-Host "Installing backend dependencies with npm ci."
-            npm ci
+          $lockHash = (Get-FileHash '.\package-lock.json' -Algorithm SHA256).Hash
+          $runtime = node -p "process.platform + '-' + process.arch + '-' + process.versions.modules"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $key = "$lockHash-$runtime"
+          $stamp = '.\node_modules\.poms-deps-key'
+          $ready = (Test-Path '.\node_modules\express\package.json') -and (Test-Path '.\node_modules\.bin\knex.cmd')
+          $cached = if (Test-Path $stamp) { (Get-Content $stamp -Raw).Trim() } else { '' }
+          if (!$ready -or $cached -ne $key) {
+            npm ci --omit=dev
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Set-Content -Path $stamp -Value $key -Encoding ascii
           } else {
-            Write-Host "Reusing existing backend node_modules; package files did not change."
+            Write-Host 'Reusing Windows runtime dependencies for the exact lockfile and Node ABI.'
           }
-
-      - name: Build backend
-        if: steps.changes.outputs.backend_changed == 'true'
-        working-directory: backend
-        timeout-minutes: 10
-        run: |
-          npm run build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Test backend
-        if: steps.changes.outputs.backend_changed == 'true'
-        working-directory: backend
-        timeout-minutes: 15
-        run: |
-          npm test -- --runInBand
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Prepare backend release
         id: backend_release
-        if: steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.backend_changed == 'true'
         timeout-minutes: 15
         run: |
           if (Test-Path $env:BACKEND_RELEASE) {
@@ -282,22 +333,12 @@ jobs:
           Copy-Item ".\backend\package-lock.json" $env:BACKEND_RELEASE -Force
 
           $targetNodeModules = Join-Path $env:BACKEND_TARGET 'node_modules'
-          $productionDepsReady = (Test-Path (Join-Path $targetNodeModules '.package-lock.json')) -and (Test-Path (Join-Path $targetNodeModules 'express'))
-          $installProductionDeps = "${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !$productionDepsReady
+          $sourceKey = (Get-Content '.\backend\node_modules\.poms-deps-key' -Raw).Trim()
+          $targetStamp = Join-Path $targetNodeModules '.poms-deps-key'
+          $targetKey = if (Test-Path $targetStamp) { (Get-Content $targetStamp -Raw).Trim() } else { '' }
+          $productionDepsReady = Test-Path (Join-Path $targetNodeModules 'express\package.json')
+          $installProductionDeps = !$productionDepsReady -or $sourceKey -ne $targetKey
           "install_production_deps=$($installProductionDeps.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-
-          if ($installProductionDeps) {
-            Push-Location $env:BACKEND_RELEASE
-            try {
-              Write-Host "Installing backend production dependencies with npm ci --omit=dev."
-              npm ci --omit=dev
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            } finally {
-              Pop-Location
-            }
-          } else {
-            Write-Host "Reusing existing backend production node_modules; package files did not change."
-          }
 
           robocopy ".\backend\dist" (Join-Path $env:BACKEND_RELEASE 'dist') /MIR /R:3 /W:5 /NFL /NDL /NP
           $robocopyExit = $LASTEXITCODE
@@ -309,7 +350,7 @@ jobs:
           $global:LASTEXITCODE = 0
 
       - name: Stop backend before migrations
-        if: steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.backend_changed == 'true'
         timeout-minutes: 2
         run: |
           # Freeze config writes while activation history is backfilled and the new hooks are installed.
@@ -317,15 +358,17 @@ jobs:
           (Get-Service -Name $env:BACKEND_SERVICE).WaitForStatus('Stopped', '00:00:30')
 
       - name: Run backend database migrations
-        if: steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.backend_changed == 'true'
         working-directory: backend
         timeout-minutes: 5
+        env:
+          TS_NODE_TRANSPILE_ONLY: "true"
         run: |
           npm run db:migrate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify factory profile activation prerequisites
-        if: steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.backend_changed == 'true'
         working-directory: backend
         timeout-minutes: 2
         run: |
@@ -359,14 +402,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Deploy backend service files
-        if: steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.backend_changed == 'true'
         timeout-minutes: 15
         run: |
           Copy-Item (Join-Path $env:BACKEND_RELEASE 'package.json') $env:BACKEND_TARGET -Force
           Copy-Item (Join-Path $env:BACKEND_RELEASE 'package-lock.json') $env:BACKEND_TARGET -Force
 
           if ("${{ steps.backend_release.outputs.install_production_deps }}" -eq 'true') {
-            robocopy (Join-Path $env:BACKEND_RELEASE 'node_modules') (Join-Path $env:BACKEND_TARGET 'node_modules') /MIR /R:3 /W:5 /NFL /NDL /NP
+            robocopy '.\backend\node_modules' (Join-Path $env:BACKEND_TARGET 'node_modules') /MIR /R:3 /W:5 /NFL /NDL /NP
             $robocopyExit = $LASTEXITCODE
 
             if ($robocopyExit -gt 7) {
@@ -386,7 +429,7 @@ jobs:
           $global:LASTEXITCODE = 0
 
       - name: Restart backend and verify health
-        if: steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.backend_changed == 'true'
         run: |
           Start-Service -Name $env:BACKEND_SERVICE
 
@@ -408,7 +451,7 @@ jobs:
           throw "Backend health check did not pass within 60 seconds."
 
       - name: Write backend deploy marker
-        if: steps.changes.outputs.backend_changed == 'true'
+        if: needs.detect.outputs.backend_changed == 'true'
         run: |
           @(
             "sha=${{ github.sha }}"
@@ -419,7 +462,7 @@ jobs:
           ) | Set-Content -Path (Join-Path $env:BACKEND_TARGET 'DEPLOYED_SHA.txt') -Encoding utf8
 
       - name: Ensure backend service is running
-        if: always() && steps.changes.outputs.backend_changed == 'true'
+        if: always() && needs.detect.outputs.backend_changed == 'true'
         run: |
           $service = Get-Service -Name $env:BACKEND_SERVICE
           if ($service.Status -ne 'Running') {
@@ -427,11 +470,11 @@ jobs:
           }
 
       - name: Remove backend environment copy
-        if: always() && steps.changes.outputs.backend_changed == 'true'
+        if: always() && needs.detect.outputs.backend_changed == 'true'
         run: |
           Remove-Item ".\backend\.env" -Force -ErrorAction SilentlyContinue
 
       - name: Report skipped deploy
-        if: steps.changes.outputs.frontend_changed != 'true' && steps.changes.outputs.backend_changed != 'true'
+        if: needs.detect.outputs.frontend_changed != 'true' && needs.detect.outputs.backend_changed != 'true'
         run: |
           Write-Host "No frontend/ or backend/ changes detected. Nothing to deploy."
