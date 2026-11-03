@@ -35,5 +35,8 @@
 
 ## Notifications
 
+- [ตัวตรวจค่าเกิน อก./EIA ภายใน: ตั้งค่าและเปิดใช้งาน](./hourly-exceedance-detector.md)
+- [แผนตรวจค่าเกิน อก./EIA รายชั่วโมงสำหรับ CEMS/WPMS](./hourly-exceedance-detector-plan.md)
+
 - [อีเมลแจ้งเตือนมลพิษ: รอบ ผู้รับ นโยบาย และผล SMTP](./alert-email-operations.md)
 - [ลองอีเมลครบหกแบบในเครื่อง: ชุดจำลองและรายงานผล](./alert-email-test.md)

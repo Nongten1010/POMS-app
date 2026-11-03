@@ -2,6 +2,8 @@
 
 > Owner: Backend
 
+เหตุการณ์ค่าเกิน `STANDARD_EXCEEDED`/`EIA_EXCEEDED` ของ CEMS/WPMS อาจมาจาก [Integration Alert Events](../../integrations/alert-events/README.md) หรือ worker ภายในที่อ่านข้อมูล `60m` เมื่อเปิด `ALERT_EXCEEDANCE_MODE=active` สำหรับจุดที่กำหนด ตัวตรวจใช้เฉพาะสถานะ `Normal` และเกณฑ์ อก./EIA พร้อมหน่วยที่ตั้งไว้ โดยต้องมี `measuredValue > thresholdValue` ค่าเริ่มต้นเป็น `off`; โหมด `shadow` ไม่สร้าง event และไม่ส่งอีเมล รูปแบบ response, permissions และ policy อีเมลเดิมคงเดิม ดู [วิธีทดลองและเปิดใช้ตัวตรวจ](../../../guides/hourly-exceedance-detector.md)
+
 ## Frontend Quick Start
 
 เมนูนี้ใช้สำหรับดูรายการ `alert-events`, เปิดรายละเอียดรายเหตุการณ์ อัปเดตสถานะการติดตามของเจ้าหน้าที่ และตรวจตัวอย่าง/ผลการส่งอีเมลแจ้งเตือน
