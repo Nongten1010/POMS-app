@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { buildHourlyAbnormalAlertCandidates } from '../../src/modules/alert-emails/alert-email-abnormal-detector';
 import { createIntegrationAlertEventSchema } from '../../src/modules/alert-events/alert-events.validator';
 import type { AlertEventDTO } from '../../src/modules/alert-events/alert-events.types';
 import {
@@ -50,8 +51,9 @@ export const SIMULATION_POLICY: ActiveAlertEmailPolicy = {
   completenessPolicy: 'ON_TIME',
   exemptDayPolicy: 'RESET',
   dailyFormat: 'BY_TYPE',
-  abnormalMode: 'PREVIOUS_DAY',
+  abnormalMode: 'HOURLY',
   abnormalReadings: 5,
+  abnormalHours: 5,
   hourlyDelayMinutes: 0,
 };
 
@@ -278,7 +280,7 @@ export async function runAlertEmailSimulation(
     parameter(
       code,
       'ppm',
-      samples(24).map((sample, hour) => ({ ...sample, value: hour < 5 ? value : hour + 20 })),
+      abnormalSamples(17).map((sample) => ({ ...sample, value })),
     ),
   );
   const registered = new Map<number, DailyAlertParameter[]>([
@@ -363,32 +365,37 @@ export async function runAlertEmailSimulation(
     );
   }
 
+  const abnormalCandidates = (
+    parameters: DailyAlertParameter[],
+    detectedAt = '2026-10-05T12:00:00+07:00',
+  ) => buildHourlyAbnormalAlertCandidates({ point: points[2], parameters, detectedAt });
+
   for (const [type, value] of [
     ['CONSTANT', 12],
     ['ZERO', 0],
     ['NEGATIVE', -1],
   ] as const) {
-    for (const count of [4, 5]) {
-      const list = candidates(points[2], [
+    for (const count of [5, 6]) {
+      const list = abnormalCandidates([
         parameter(
           'SO2',
           'ppm',
-          samples(count).map((sample) => ({ ...sample, value })),
+          abnormalSamples(count).map((sample) => ({ ...sample, value })),
         ),
       ]);
       check(
         `abnormal-${type}-${count}`,
-        `${type} ต่อเนื่อง ${count} ค่า (กำหนด 5)`,
+        `${type} ต่อเนื่อง ${count - 1} ชั่วโมง (${count} ค่ารายชั่วโมง)`,
         6,
-        count === 5,
+        count === 6,
         list.some((item) => item.alert_type === 'ABNORMAL_VALUE' && item.abnormal_type === type),
       );
     }
   }
-  const gaps = samples(6)
+  const gaps = abnormalSamples(7)
     .filter((_, hour) => hour !== 2)
     .map((sample) => ({ ...sample, value: 0 }));
-  const calibration = samples(5).map((sample, hour) => ({
+  const calibration = abnormalSamples(6).map((sample, hour) => ({
     ...sample,
     value: 0,
     status: hour === 2 ? 'Calibration' : 'Normal',
@@ -396,18 +403,31 @@ export async function runAlertEmailSimulation(
   for (const [id, readings] of [
     ['gap', gaps],
     ['calibration', calibration],
-    ['normal', samples(24)],
+    ['normal', abnormalSamples(6)],
   ] as const) {
     check(
       `abnormal-${id}`,
       `ไม่เตือนความผิดปกติเมื่อ ${id}`,
       6,
       false,
-      candidates(points[2], [parameter('SO2', 'ppm', readings)]).some(
+      abnormalCandidates([parameter('SO2', 'ppm', readings)]).some(
         (item) => item.alert_type === 'ABNORMAL_VALUE',
       ),
     );
   }
+
+  const drifted = abnormalSamples(6).map((sample, index) => ({
+    ...sample,
+    value: 0,
+    ...(index === 0 ? { sourceMeasuredAt: '2026-10-05T07:59:00+07:00' } : {}),
+  }));
+  check(
+    'abnormal-five-hours-elapsed',
+    'หกค่ารายชั่วโมงที่เวลาจริงห่างไม่ครบห้าชั่วโมงยังไม่เตือน',
+    6,
+    false,
+    abnormalCandidates([parameter('SO2', 'ppm', drifted)]).length > 0,
+  );
 
   const outbox = new MemoryOutbox(clock);
   const dependencies = {
@@ -442,14 +462,32 @@ export async function runAlertEmailSimulation(
           .filter((event) =>
             cadence === 'DAILY'
               ? !isHourly(event) && event.eventDate === date
-              : isHourly(event) &&
-                Date.parse(event.startedAt ?? '') >= Date.parse(startAt) &&
-                Date.parse(event.endedAt ?? '') < Date.parse(endAt),
+              : event.alertType === 'ABNORMAL_VALUE'
+                ? event.eventDate === bangkokDate(Date.parse(endAt) - 1) &&
+                  Date.parse(event.endedAt ?? '') < Date.parse(endAt)
+                : isHourly(event) &&
+                  Date.parse(event.startedAt ?? '') >= Date.parse(startAt) &&
+                  Date.parse(event.endedAt ?? '') < Date.parse(endAt),
           );
       },
     },
     outbox,
     render: renderAlertEmail,
+    prepareAbnormal: async (
+      testPoint: AlertEmailPoint,
+      _policy: ActiveAlertEmailPolicy,
+      at: Date,
+    ) =>
+      buildHourlyAbnormalAlertCandidates({
+        point: testPoint,
+        parameters: registered.get(testPoint.id) ?? [],
+        detectedAt: at.toISOString(),
+      }).map((candidate) =>
+        addEvent(
+          dailyDTO(candidate),
+          JSON.parse(candidate.evidence_json ?? '{}') as Record<string, unknown>,
+        ),
+      ),
     prepareDaily: async (
       testPoint: AlertEmailPoint,
       date: string,
@@ -523,9 +561,9 @@ export async function runAlertEmailSimulation(
   await drain();
   check(
     'daily-at-nine',
-    '09:00 จัดคิวข้อ 3–6 ครบ 4 แบบ',
+    '09:00 จัดคิวข้อ 3–5 ครบ 3 แบบ โดยยังไม่ส่งค่าผิดปกติ',
     null,
-    { queued: 4, sends: 4, errors: 0 },
+    { queued: 3, sends: 3, errors: 0 },
     { queued: prepared.queued, sends: sendAttempts, errors: prepared.errors },
   );
   now = new Date('2026-10-05T11:59:59+07:00');
@@ -535,7 +573,7 @@ export async function runAlertEmailSimulation(
     'hourly-before-due',
     'ก่อน 12:00 ยังไม่ส่งข้อมูลรอบ 11:00–11:59',
     null,
-    { queued: 0, sends: 4 },
+    { queued: 0, sends: 3 },
     { queued: prepared.queued, sends: sendAttempts },
   );
   now = new Date('2026-10-05T12:00:00+07:00');
@@ -543,10 +581,20 @@ export async function runAlertEmailSimulation(
   await drain();
   check(
     'hourly-at-due',
-    '12:00 ส่งข้อ 1–2 ตรงรอบต้นชั่วโมง ไม่มีการหน่วง',
+    '12:00 ส่งข้อ 1–2 ตรงรอบ พร้อมค่าผิดปกติที่ครบห้าชั่วโมงจาก07:00',
     null,
-    { queued: 2, sends: 6, errors: 0 },
+    { queued: 3, sends: 6, errors: 0 },
     { queued: prepared.queued, sends: sendAttempts, errors: prepared.errors },
+  );
+  check(
+    'abnormal-hourly-cadence',
+    'ค่าผิดปกติใช้รอบรายชั่วโมงเมื่อครบห้าชั่วโมงโดยไม่หน่วง',
+    6,
+    { cadence: 'HOURLY', scheduledAt: now.toISOString() },
+    (() => {
+      const job = outbox.deliveries.find((item) => item.alertType === 'ABNORMAL_VALUE');
+      return { cadence: job?.cadence, scheduledAt: job?.scheduledAt };
+    })(),
   );
   check(
     'smtp-six-cases',
@@ -735,6 +783,76 @@ export async function runAlertEmailSimulation(
     { queued: prepared.queued, sends: sendAttempts },
   );
 
+  // Keep quota regressions on a synthetic transport without adding quota emails to the seven existing previews.
+  const initialNow = now;
+  const quotaOutbox = new MemoryOutbox(clock);
+  quotaOutbox.deliveries.push(
+    ...outbox.deliveries.map((job) => ({ ...job, eventIds: [...job.eventIds], cc: [...job.cc] })),
+  );
+  const quotaDependencies = { ...dependencies, outbox: quotaOutbox };
+  let quotaSends = 0;
+  const quotaTransport: AlertEmailTransport = {
+    send: async (input) => {
+      quotaSends += 1;
+      return { accepted: [input.to, ...input.cc], rejected: [] };
+    },
+  };
+  const drainQuota = async () => {
+    for (let iteration = 0; iteration < 30; iteration += 1) {
+      const result = await dispatchNextAlertEmail({
+        repository: quotaOutbox,
+        transport: quotaTransport,
+        isRecipientEligible: eligible,
+        now: clock,
+      });
+      if (!result.claimed) return;
+    }
+    throw new Error('Quota simulation dispatch exceeded its fixed limit');
+  };
+  const continuingParameters = (count: number) =>
+    abnormalParameters.map((param) => ({
+      ...param,
+      samples: abnormalSamples(count).map((sample, index) => ({
+        ...sample,
+        value: index < 6 ? param.samples[0].value : -index,
+      })),
+    }));
+  registered.set(points[2].id, continuingParameters(13));
+  now = new Date('2026-10-05T19:00:00+07:00');
+  let quotaPrepared = await createAlertEmailEngine(quotaDependencies).run(now, SIMULATION_POLICY);
+  await drainQuota();
+  check(
+    'abnormal-once-per-day-all-types',
+    'เปลี่ยนจากค่านิ่งหรือศูนย์เป็นติดลบแล้วครบห้าชั่วโมงในวันเดิมไม่ส่งซ้ำ',
+    6,
+    { queued: 0, sends: 0 },
+    { queued: quotaPrepared.queued, sends: quotaSends },
+  );
+  registered.set(points[2].id, continuingParameters(18));
+  now = new Date('2026-10-06T00:00:00+07:00');
+  quotaPrepared = await createAlertEmailEngine(quotaDependencies).run(now, SIMULATION_POLICY);
+  await drainQuota();
+  check(
+    'abnormal-new-day-first-hour',
+    'ผิดปกติต่อเนื่องข้ามวันแจ้งได้อีกหนึ่งครั้งเมื่อมีค่าของ00:00วันใหม่',
+    6,
+    { queued: 1, sends: 1, errors: 0 },
+    { queued: quotaPrepared.queued, sends: quotaSends, errors: quotaPrepared.errors },
+  );
+  registered.set(points[2].id, continuingParameters(19));
+  now = new Date('2026-10-06T01:00:00+07:00');
+  quotaPrepared = await createAlertEmailEngine(quotaDependencies).run(now, SIMULATION_POLICY);
+  await drainQuota();
+  check(
+    'abnormal-new-day-once',
+    'ชั่วโมงถัดไปของวันใหม่ไม่ส่งซ้ำแม้ engine เริ่มใหม่',
+    6,
+    { queued: 0, sends: 1 },
+    { queued: quotaPrepared.queued, sends: quotaSends },
+  );
+  registered.set(points[2].id, abnormalParameters);
+  now = initialNow;
+
   // A queue created before validation was tightened must be rechecked immediately before SMTP.
   const legacyOutbox = new MemoryOutbox(clock);
   const hourly = events.find((item) => item.event.alertType === 'STANDARD_EXCEEDED')!;
@@ -847,7 +965,7 @@ export async function runAlertEmailSimulation(
       'ฐานข้อมูลและคิวเป็น in-memory adapter ไม่ได้ทดสอบ SQL Server, query ข้อมูลจริง, migration, transaction, multi-worker race หรือความคงทนข้าม process',
       'restart จำลองด้วยการสร้าง engine ใหม่โดยใช้ adapter เดิม ไม่ใช่ restart backend หรือฐานข้อมูลจริง',
       'SMTP sink รับเฉพาะในเครื่องและไม่ส่งต่อออกภายนอก จึงไม่พิสูจน์การเข้า inbox จริงหรือ SMTP production',
-      'ใช้ ON_TIME, RESET, เจ้าหน้าที่ประจำจุด, 5 ค่าผิดปกติ และหน่วง 0 นาทีในชุดทดสอบ ไม่อ่านหรือเปลี่ยนค่าบน production; การรัน timer ของ worker แยกทดสอบด้วย fake clock ใน Jest',
+      'ใช้ ON_TIME, RESET และเจ้าหน้าที่ประจำจุดเพื่อทดสอบ; ค่าผิดปกติใช้เกณฑ์ห้าชั่วโมงจริง (อย่างน้อยหกค่ารายชั่วโมง) และแจ้งทันทีในรอบที่ครบเกณฑ์ ส่วนค่าเกินมาตรฐาน/EIA หน่วง 0 นาที ไม่อ่านหรือเปลี่ยนค่าบน production; timer ของ worker แยกทดสอบด้วย fake clock ใน Jest',
     ],
   };
 }
@@ -1008,6 +1126,20 @@ function samples(count: number, date = REPORTING_DATE): AlertHourlySample[] {
   }));
 }
 
+function abnormalSamples(count: number, date = '2026-10-05'): AlertHourlySample[] {
+  const start = Date.parse(`${date}T07:00:00+07:00`);
+  return Array.from({ length: count }, (_, hour) => ({
+    measuredAt: new Date(start + hour * HOUR).toISOString(),
+    reportedAt: new Date(start + hour * HOUR).toISOString(),
+    value: hour + 1,
+    status: 'Normal',
+  }));
+}
+
+function bangkokDate(at: number): string {
+  return new Date(at + 7 * HOUR).toISOString().slice(0, 10);
+}
+
 function history(previousDayCount: number): AlertDaySummary[] {
   return Array.from({ length: previousDayCount }, (_, index) => {
     const date = new Date(Date.parse(`${REPORTING_DATE}T00:00:00Z`) - (index + 1) * DAY)
@@ -1018,7 +1150,7 @@ function history(previousDayCount: number): AlertDaySummary[] {
 }
 
 function isHourly(event: AlertEventDTO) {
-  return event.alertType === 'STANDARD_EXCEEDED' || event.alertType === 'EIA_EXCEEDED';
+  return ['STANDARD_EXCEEDED', 'EIA_EXCEEDED', 'ABNORMAL_VALUE'].includes(event.alertType);
 }
 function numberOrNull(value: number | string | null) {
   return value === null ? null : Number(value);

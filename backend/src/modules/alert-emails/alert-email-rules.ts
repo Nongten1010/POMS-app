@@ -102,9 +102,13 @@ export interface AbnormalHourlyEpisode {
 export function detectAbnormalHourlyEpisodes(
   samples: AlertHourlySample[],
   minimumReadings: number,
+  minimumElapsedMilliseconds = 0,
 ): AbnormalHourlyEpisode[] {
   if (!Number.isInteger(minimumReadings) || minimumReadings < 2) {
     throw new Error('At least two hourly readings are required');
+  }
+  if (!Number.isFinite(minimumElapsedMilliseconds) || minimumElapsedMilliseconds < 0) {
+    throw new Error('Minimum abnormal duration must be nonnegative');
   }
   const unique = new Map<number, AlertHourlySample>();
   for (const sample of samples) {
@@ -117,12 +121,18 @@ export function detectAbnormalHourlyEpisodes(
   let previousAt: number | null = null;
   let type: AbnormalHourlyEpisode['abnormalType'] | null = null;
   const flush = (): void => {
-    if (type && streak.length >= minimumReadings) {
+    const started = Date.parse(streak[0]?.sourceMeasuredAt ?? streak[0]?.measuredAt ?? '');
+    const confirmedIndex = streak.findIndex(
+      (sample, index) =>
+        index >= minimumReadings - 1 &&
+        Date.parse(sample.sourceMeasuredAt ?? sample.measuredAt) - started >=
+          minimumElapsedMilliseconds,
+    );
+    if (type && confirmedIndex >= 0) {
       episodes.push({
         abnormalType: type,
         startedAt: streak[0].sourceMeasuredAt ?? streak[0].measuredAt,
-        confirmedAt:
-          streak[minimumReadings - 1].sourceMeasuredAt ?? streak[minimumReadings - 1].measuredAt,
+        confirmedAt: streak[confirmedIndex].sourceMeasuredAt ?? streak[confirmedIndex].measuredAt,
         endedAt: streak[streak.length - 1].sourceMeasuredAt ?? streak[streak.length - 1].measuredAt,
         streakCount: streak.length,
         measuredValue: streak[streak.length - 1].value as number,

@@ -12,6 +12,7 @@ import {
 } from './alert-email-rules';
 import type { RenderAlertEmailInput, AlertEmailRenderContext } from './alert-email-template';
 import { normalizeAlertActivationStationIdentity } from './alert-parameter-activations';
+import { ABNORMAL_MINIMUM_HOURS } from './alert-email-abnormal-detector';
 
 const timestampSchema = z.iso.datetime({ offset: true });
 
@@ -34,6 +35,11 @@ export interface AlertEmailEngineDependencies {
   prepareDaily(
     point: AlertEmailPoint,
     date: string,
+    policy: ActiveAlertEmailPolicy,
+    now: Date,
+  ): Promise<number[]>;
+  prepareAbnormal(
+    point: AlertEmailPoint,
     policy: ActiveAlertEmailPolicy,
     now: Date,
   ): Promise<number[]>;
@@ -81,7 +87,15 @@ export function createAlertEmailEngine(dependencies: AlertEmailEngineDependencie
       // Only retain today's preparation markers. A restart safely recomputes persisted identities.
       for (const key of prepared.keys()) if (!key.startsWith(`${date}:`)) prepared.delete(key);
       const dailyEventIds = new Set<number>();
+      const abnormalEventIds = new Set<number>();
       for (const point of points) {
+        // An empty result may be followed by a late hourly aggregate in this same clock hour.
+        try {
+          const ids = await dependencies.prepareAbnormal(point, policy, now);
+          ids.forEach((id) => abnormalEventIds.add(id));
+        } catch {
+          result.errors += 1;
+        }
         const key = `${date}:${point.id}:${policy.completenessPolicy}:${policy.exemptDayPolicy}:${policy.abnormalReadings}`;
         if (prepared.has(key)) {
           prepared.get(key)?.forEach((id) => dailyEventIds.add(id));
@@ -96,8 +110,12 @@ export function createAlertEmailEngine(dependencies: AlertEmailEngineDependencie
         }
       }
       for (const cadence of ['HOURLY', 'DAILY'] as const) {
-        // Persisted, unbatched events wait for the next configured clock-hour round.
-        if (cadence === 'HOURLY' && !isAlertEmailHourlyRoundDue(now, policy.hourlyDelayMinutes))
+        // Only abnormal alerts bypass the configured exceedance clock-hour round.
+        if (
+          cadence === 'HOURLY' &&
+          abnormalEventIds.size === 0 &&
+          !isAlertEmailHourlyRoundDue(now, policy.hourlyDelayMinutes)
+        )
           continue;
         const period = cadence === 'HOURLY' ? periods.hourly : periods.daily;
         const startAt =
@@ -107,16 +125,29 @@ export function createAlertEmailEngine(dependencies: AlertEmailEngineDependencie
         const events = await dependencies.source.listEvents({
           cadence,
           startAt,
-          endAt: period.endAt,
+          endAt:
+            cadence === 'HOURLY' && abnormalEventIds.size > 0
+              ? new Date(now.getTime() + 1).toISOString()
+              : period.endAt,
         });
         const groups = new Map<
           string,
           { recipient: string; events: AlertEventDTO[]; period: AlertEmailPeriod }
         >();
         for (const event of events) {
-          const daily = !['STANDARD_EXCEEDED', 'EIA_EXCEEDED'].includes(event.alertType);
+          const abnormal = event.alertType === 'ABNORMAL_VALUE';
+          const daily = ['DAILY_COMPLETENESS_LOW', 'CONSECUTIVE_NO_REPORT'].includes(
+            event.alertType,
+          );
           if (daily !== (cadence === 'DAILY')) continue;
           if (event.notificationStatus === 'DISMISSED' || (daily && !dailyEventIds.has(event.id)))
+            continue;
+          if (abnormal && !abnormalEventIds.has(event.id)) continue;
+          if (
+            !abnormal &&
+            cadence === 'HOURLY' &&
+            !isAlertEmailHourlyRoundDue(now, policy.hourlyDelayMinutes)
+          )
             continue;
           const point = points.find((item) => pointMatchesAlertEmailEvent(item, event));
           if (!point) {
@@ -124,7 +155,28 @@ export function createAlertEmailEngine(dependencies: AlertEmailEngineDependencie
             continue;
           }
           let eventPeriod = period;
-          if (cadence === 'HOURLY') {
+          if (abnormal) {
+            const first = Date.parse(event.firstAbnormalAt ?? '');
+            const confirmed = Date.parse(event.confirmedAbnormalAt ?? '');
+            const end = Date.parse(event.endedAt ?? '');
+            const today = new Date(now.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
+            if (
+              event.eventDate !== today ||
+              !Number.isFinite(first) ||
+              !Number.isFinite(confirmed) ||
+              !Number.isFinite(end) ||
+              confirmed - first < ABNORMAL_MINIMUM_HOURS * 3_600_000 ||
+              confirmed > end ||
+              end > now.getTime()
+            )
+              continue;
+            const hour = Math.floor(now.getTime() / 3_600_000) * 3_600_000;
+            eventPeriod = {
+              startAt: new Date(hour).toISOString(),
+              endAt: new Date(hour + 3_600_000).toISOString(),
+              scheduledAt: now.toISOString(),
+            };
+          } else if (cadence === 'HOURLY') {
             const detection = timestampSchema.safeParse(event.detectedAt);
             const detectedAt = detection.success ? Date.parse(detection.data) : NaN;
             const start = event.startedAt ? Date.parse(event.startedAt) : NaN;

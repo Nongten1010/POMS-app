@@ -174,23 +174,28 @@ export const alertEmailSourceRepository = {
       .whereNot('notification_status', 'DISMISSED');
     if (period.cadence === 'HOURLY') {
       query
-        .whereIn('alert_type', ['STANDARD_EXCEEDED', 'EIA_EXCEEDED'])
+        .whereIn('alert_type', ['STANDARD_EXCEEDED', 'EIA_EXCEEDED', 'ABNORMAL_VALUE'])
         .where('event_date', '>=', bangkokDate(start))
         .where('event_date', '<=', bangkokDate(end - 1));
     } else {
       query
-        .whereIn('alert_type', [
-          'DAILY_COMPLETENESS_LOW',
-          'CONSECUTIVE_NO_REPORT',
-          'ABNORMAL_VALUE',
-        ])
+        .whereIn('alert_type', ['DAILY_COMPLETENESS_LOW', 'CONSECUTIVE_NO_REPORT'])
         .where('event_date', bangkokDate(start));
     }
     const rows = await query.orderBy('id', 'asc').select('*');
     if (period.cadence === 'DAILY') return rows.map(toAlertEventDTO);
     // Legacy DATETIME2 values can lose their offset. The original validated
     // Bangkok event date/hour is the only safe reconstruction for hourly mail.
-    return rows.flatMap((row) => hourlyEventInPeriod(row, start, end));
+    return rows.flatMap((row) => {
+      if (row.alert_type === 'ABNORMAL_VALUE') {
+        const event = toAlertEventDTO(row);
+        return row.idempotency_key.startsWith('ABNORMAL_HOURLY:v1:') &&
+          event.eventDate === bangkokDate(end - 1)
+          ? [event]
+          : [];
+      }
+      return hourlyEventInPeriod(row, start, end);
+    });
   },
 
   async findPointForEvent(event: AlertEventDTO): Promise<AlertEmailPoint | null> {

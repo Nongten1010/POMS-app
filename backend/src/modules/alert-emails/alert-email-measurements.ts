@@ -19,6 +19,7 @@ export async function loadAlertEmailParameters(
   point: AlertEmailPoint,
   date: string,
   policy: ActiveAlertEmailPolicy,
+  options?: { asOf: string; lookbackHours?: number },
 ): Promise<DailyAlertParameter[]> {
   if (!point.connectedAt) return [];
   const connected = Date.parse(point.connectedAt);
@@ -26,6 +27,26 @@ export async function loadAlertEmailParameters(
   const end = Date.parse(`${date}T00:00:00+07:00`);
   if (!isoTimestamp.safeParse(`${date}T00:00:00+07:00`).success)
     throw new Error('Invalid reporting date');
+  const asOf = options ? Date.parse(options.asOf) : null;
+  if (
+    options &&
+    (!isoTimestamp.safeParse(options.asOf).success ||
+      asOf === null ||
+      asOf < end ||
+      asOf >= end + DAY_MS)
+  )
+    throw new Error('Hourly preparation time must belong to the reporting date');
+  if (
+    options?.lookbackHours !== undefined &&
+    (!Number.isSafeInteger(options.lookbackHours) || options.lookbackHours <= 0)
+  )
+    throw new Error('Hourly lookback must be a positive integer');
+  const lookbackStart =
+    asOf !== null && options?.lookbackHours !== undefined
+      ? asOf - options.lookbackHours * 3_600_000
+      : null;
+  if (lookbackStart !== null && !Number.isFinite(new Date(lookbackStart).getTime()))
+    throw new Error('Hourly lookback is outside the supported date range');
   const { parameterConfigs } = await integrationDeviceConfigsService.getByStationId(
     point.stationId,
   );
@@ -64,14 +85,21 @@ export async function loadAlertEmailParameters(
   if (!(await parameterValuesRepository.tableExists(tableName)))
     throw new Error('Hourly measurement source is unavailable');
   const rawRows: Record<string, unknown>[] = [];
-  // Complete connection history preserves the actual streak, including across year boundaries.
-  const historyStart = Math.min(
+  // Full history preserves the original episode. Bounded hourly probes only test eligibility.
+  const activationStart = Math.min(
     ...[...parameters.values()].map(
       (parameter) =>
-        Math.ceil((Date.parse(parameter.activatedAt) + 7 * 3_600_000) / DAY_MS) * DAY_MS -
+        (options ? Math.floor : Math.ceil)(
+          (Date.parse(parameter.activatedAt) + 7 * 3_600_000) / DAY_MS,
+        ) *
+          DAY_MS -
         7 * 3_600_000,
     ),
   );
+  const historyStart =
+    lookbackStart === null
+      ? activationStart
+      : Math.max(activationStart, Date.parse(`${bangkokDate(lookbackStart)}T00:00:00+07:00`));
   for (let start = historyStart; start <= end; start += 30 * DAY_MS) {
     const last = Math.min(start + 29 * DAY_MS, end);
     const source = await parameterValuesRepository.listRows({
@@ -86,19 +114,25 @@ export async function loadAlertEmailParameters(
   }
   return [...parameters.values()].map((parameter) => {
     const parameterStart =
-      Math.ceil((Date.parse(parameter.activatedAt) + 7 * 3_600_000) / DAY_MS) * DAY_MS -
+      (options ? Math.floor : Math.ceil)(
+        (Date.parse(parameter.activatedAt) + 7 * 3_600_000) / DAY_MS,
+      ) *
+        DAY_MS -
       7 * 3_600_000;
     const byHour = new Map<string, AlertHourlySample[]>();
     for (const row of rawRows) {
       const measured = sourceTimestamp(row.cdate, row.ctime);
       if (
         !measured ||
-        Date.parse(measured) < parameterStart ||
-        Date.parse(measured) >= end + DAY_MS
+        Date.parse(measured) < (options ? Date.parse(parameter.activatedAt) : parameterStart) ||
+        (lookbackStart !== null && Date.parse(measured) < lookbackStart) ||
+        Date.parse(measured) >= end + DAY_MS ||
+        (asOf !== null && Date.parse(measured) > asOf)
       )
         continue;
       const measuredAt = `${measured.slice(0, 13)}:00:00+07:00`;
       const reportedAt = sourceTimestamp(row.udate, row.utime);
+      if (asOf !== null && reportedAt && Date.parse(reportedAt) > asOf) continue;
       const reading = readRegisteredAlertMeasurement(row, parameter.label);
       const sample = {
         measuredAt,
@@ -145,7 +179,7 @@ export async function loadAlertEmailParameters(
       samplesByDate.set(sampleDate, [...(samplesByDate.get(sampleDate) ?? []), sample]);
     }
     const dailySummaries = [];
-    for (let at = parameterStart; at <= end; at += DAY_MS) {
+    for (let at = parameterStart; !options && at <= end; at += DAY_MS) {
       const day = bangkokDate(at);
       dailySummaries.push(
         summarizeAlertDay(day, samplesByDate.get(day) ?? [], policy.completenessPolicy),
@@ -169,8 +203,9 @@ function bangkokDate(at: number): string {
 
 function sourceTimestamp(date: unknown, time: unknown): string | null {
   if (typeof date !== 'string' || typeof time !== 'string') return null;
-  const match = time.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/);
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/);
   if (!match) return null;
-  const value = `${date}T${match[1].padStart(2, '0')}:${match[2]}:${match[3] ?? '00'}+07:00`;
+  const fraction = match[4] ? `.${match[4]}` : '';
+  const value = `${date}T${match[1].padStart(2, '0')}:${match[2]}:${match[3] ?? '00'}${fraction}+07:00`;
   return isoTimestamp.safeParse(value).success ? value : null;
 }

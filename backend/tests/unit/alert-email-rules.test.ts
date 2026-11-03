@@ -191,6 +191,19 @@ describe('alert email daily and hourly rules', () => {
     expect(() => detectAbnormalHourlyEpisodes(rows, 1)).toThrow();
   });
 
+  it('can require five actual elapsed hours in addition to six hourly readings', () => {
+    const rows = Array.from({ length: 7 }, (_, hour) =>
+      sample(hour, {
+        sourceMeasuredAt: `2026-10-01T0${hour}:${hour === 0 ? '32' : '15'}:00+07:00`,
+      }),
+    );
+    expect(detectAbnormalHourlyEpisodes(rows.slice(0, 6), 6, 5 * 3_600_000)).toEqual([]);
+    expect(detectAbnormalHourlyEpisodes(rows, 6, 5 * 3_600_000)[0].confirmedAt).toBe(
+      rows[6].sourceMeasuredAt,
+    );
+    expect(() => detectAbnormalHourlyEpisodes(rows, 6, -1)).toThrow();
+  });
+
   it('schedules 11:00 measurements after noon and daily mail at 09:00 Bangkok', () => {
     const periods = latestAlertEmailPeriods(new Date('2026-10-02T05:05:00Z'), 5);
     expect(periods.hourly).toEqual({

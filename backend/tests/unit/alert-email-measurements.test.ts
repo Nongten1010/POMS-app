@@ -24,6 +24,7 @@ import { integrationDeviceConfigsService } from '../../src/modules/integrations/
 import { parameterValuesRepository } from '../../src/modules/parameter-values/parameter-values.repository';
 import { readRegisteredAlertMeasurement } from '../../src/modules/parameter-values/parameter-values.service';
 import { loadAlertEmailParameters } from '../../src/modules/alert-emails/alert-email-measurements';
+import { buildHourlyAbnormalAlertCandidates } from '../../src/modules/alert-emails/alert-email-abnormal-detector';
 import type { AlertEmailPoint } from '../../src/modules/alert-emails/alert-email-source.repository';
 import type { ActiveAlertEmailPolicy } from '../../src/modules/alert-emails/alert-email-policy';
 
@@ -265,5 +266,168 @@ describe('daily alert measurement adapter', () => {
     });
     const result = await loadAlertEmailParameters(point, '2026-01-01', policy);
     expect(result[0].dailySummaries[2].receivedCount).toBe(1);
+  });
+
+  it('loads the activation day for hourly checks, excluding pre-activation and future source times', async () => {
+    activations.mockResolvedValue([
+      { parameterCode: 'co', unit: 'ppm', activatedAt: '2026-01-01T08:32:00+07:00' },
+    ]);
+    rows.mockResolvedValue({
+      tableName: 'S1_60m',
+      rows: ['08:15', '08:35', '13:00', '13:10', '14:00'].map((ctime) => ({
+        cdate: '2026-01-01',
+        ctime,
+        co_value: 0,
+        co_units: 'ppm',
+        co_status: 1,
+      })),
+    });
+    const result = await loadAlertEmailParameters(point, '2026-01-01', policy, {
+      asOf: '2026-01-01T13:05:00+07:00',
+    });
+    expect(result[0].samples).toEqual([
+      expect.objectContaining({
+        measuredAt: '2026-01-01T08:00:00+07:00',
+        sourceMeasuredAt: '2026-01-01T08:35:00+07:00',
+        value: 0,
+      }),
+      expect.objectContaining({ measuredAt: '2026-01-01T13:00:00+07:00', value: 0 }),
+    ]);
+    expect(result[0].dailySummaries).toEqual([]);
+    expect(rows).toHaveBeenCalledWith(
+      expect.objectContaining({ startDate: '2026-01-01', endDate: '2026-01-01' }),
+    );
+  });
+
+  it('excludes receipts from the future and rejects a mismatched hourly preparation date', async () => {
+    rows.mockResolvedValue({
+      tableName: 'S1_60m',
+      rows: [
+        {
+          cdate: '2026-01-01',
+          ctime: '13:00',
+          udate: '2026-01-01',
+          utime: '14:00',
+          co_value: 0,
+          co_units: 'ppm',
+          co_status: 1,
+        },
+      ],
+    });
+    const result = await loadAlertEmailParameters(point, '2026-01-01', policy, {
+      asOf: '2026-01-01T13:00:00+07:00',
+    });
+    expect(result[0].samples).toEqual([]);
+    await expect(
+      loadAlertEmailParameters(point, '2026-01-01', policy, {
+        asOf: '2026-01-02T00:00:00+07:00',
+      }),
+    ).rejects.toThrow('reporting date');
+  });
+
+  it('limits a seven-hour probe to the two Bangkok dates around midnight and clips actual source times', async () => {
+    rows.mockResolvedValue({
+      tableName: 'S1_60m',
+      rows: [
+        ['2025-12-31', '16:00'],
+        ['2025-12-31', '17:29'],
+        ['2025-12-31', '17:30'],
+        ['2025-12-31', '23:00'],
+        ['2026-01-01', '00:00'],
+        ['2026-01-01', '00:31'],
+      ].map(([cdate, ctime]) => ({
+        cdate,
+        ctime,
+        co_value: 0,
+        co_units: 'ppm',
+        co_status: 1,
+      })),
+    });
+    const result = await loadAlertEmailParameters(point, '2026-01-01', policy, {
+      asOf: '2026-01-01T00:30:00+07:00',
+      lookbackHours: 7,
+    });
+    expect(rows).toHaveBeenCalledTimes(1);
+    expect(rows).toHaveBeenCalledWith({
+      stationId: 'S1',
+      interval: '60m',
+      startDate: '2025-12-31',
+      endDate: '2026-01-01',
+    });
+    expect(result[0].samples.map((sample) => sample.sourceMeasuredAt ?? sample.measuredAt)).toEqual(
+      ['2025-12-31T17:30:00+07:00', '2025-12-31T23:00:00+07:00', '2026-01-01T00:00:00+07:00'],
+    );
+    expect(result[0].dailySummaries).toEqual([]);
+    expect(result[0].activatedAt).toBe('2025-12-30T00:00:00+07:00');
+  });
+
+  it.each([0, -1, 0.5, Infinity])(
+    'rejects invalid hourly lookback %s before reading data',
+    async (lookbackHours) => {
+      await expect(
+        loadAlertEmailParameters(point, '2026-01-01', policy, {
+          asOf: '2026-01-01T00:30:00+07:00',
+          lookbackHours,
+        }),
+      ).rejects.toThrow('positive integer');
+      expect(rows).not.toHaveBeenCalled();
+    },
+  );
+
+  it('preserves fractional source seconds so an episode cannot confirm 800 milliseconds early', async () => {
+    activations.mockResolvedValue([
+      { parameterCode: 'co', unit: 'ppm', activatedAt: '2026-01-01T08:00:00+07:00' },
+    ]);
+    rows.mockResolvedValue({
+      tableName: 'S1_60m',
+      rows: Array.from({ length: 7 }, (_, index) => ({
+        cdate: '2026-01-01',
+        ctime: `${String(8 + index).padStart(2, '0')}:00:00.${index === 0 ? '900' : '100'}`,
+        udate: '2026-01-01',
+        utime: `${String(8 + index).padStart(2, '0')}:00:00.${index === 0 ? '950' : '150'}`,
+        co_value: 0,
+        co_units: 'ppm',
+        co_status: 1,
+      })),
+    });
+    const currentPoint: AlertEmailPoint = {
+      ...point,
+      systemType: 'CEMS',
+      pointCode: 'S1',
+      pointName: 'ปล่อง 1',
+      pointType: 'STACK',
+      factoryId: 'factory-001',
+      factoryName: 'โรงงานตัวอย่าง',
+      factoryRegistrationNo: '3-001',
+      officerEmails: [],
+      factoryEmails: [],
+    };
+    const earlyAt = '2026-01-01T13:00:00.200+07:00';
+    const early = await loadAlertEmailParameters(currentPoint, '2026-01-01', policy, {
+      asOf: earlyAt,
+    });
+    expect(early[0].samples).toHaveLength(6);
+    expect(early[0].samples[0]).toMatchObject({
+      sourceMeasuredAt: '2026-01-01T08:00:00.900+07:00',
+      reportedAt: '2026-01-01T08:00:00.950+07:00',
+    });
+    expect(
+      buildHourlyAbnormalAlertCandidates({
+        point: currentPoint,
+        parameters: early,
+        detectedAt: earlyAt,
+      }),
+    ).toEqual([]);
+    const confirmedAt = '2026-01-01T14:00:00.200+07:00';
+    const confirmed = await loadAlertEmailParameters(currentPoint, '2026-01-01', policy, {
+      asOf: confirmedAt,
+    });
+    expect(
+      buildHourlyAbnormalAlertCandidates({
+        point: currentPoint,
+        parameters: confirmed,
+        detectedAt: confirmedAt,
+      })[0].confirmed_abnormal_at,
+    ).toBe('2026-01-01T14:00:00.100+07:00');
   });
 });

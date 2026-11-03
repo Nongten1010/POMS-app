@@ -3,11 +3,12 @@ import { z } from 'zod';
 import { db } from '../../config/database';
 import { logger } from '../../config/logger';
 import { buildSmtpTransportOptions, getDefaultMailFrom } from '../../config/smtp';
-import { toAlertEventDTO } from '../alert-events/alert-events.repository';
+import { alertEventsRepository, toAlertEventDTO } from '../alert-events/alert-events.repository';
 import type { AlertEventDTO, AlertEventRow } from '../alert-events/alert-events.types';
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
 import type { DeviceConnectionConfigDTO } from '../device-connections/device-connections.types';
 import { buildDailyAlertCandidates } from './alert-email-daily-detector';
+import { buildHourlyAbnormalAlertCandidates } from './alert-email-abnormal-detector';
 import { alertEmailDailyRepository } from './alert-email-daily.repository';
 import { dispatchNextAlertEmail } from './alert-email-dispatch';
 import { createAlertEmailEngine } from './alert-email-engine';
@@ -75,6 +76,45 @@ export function startAlertEmailWorker(
       for (const candidate of candidates) {
         const event = await alertEmailDailyRepository.create(candidate);
         eventIds.push(event.id);
+      }
+      return eventIds;
+    },
+    async prepareAbnormal(point, activePolicy, now) {
+      const date = new Date(now.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
+      const parameters = await loadAlertEmailParameters(point, date, activePolicy, {
+        asOf: now.toISOString(),
+        // Include a preceding-hour aggregate plus source-minute drift around the five-hour limit.
+        lookbackHours: 8,
+      });
+      const candidates = buildHourlyAbnormalAlertCandidates({
+        point,
+        parameters,
+        detectedAt: now.toISOString(),
+      });
+      const eventIds: number[] = [];
+      const missing = new Set<string>();
+      for (const candidate of candidates) {
+        const existing = await alertEventsRepository.findByIdempotencyKey(
+          candidate.idempotency_key,
+        );
+        if (existing) eventIds.push(existing.id);
+        else missing.add(candidate.idempotency_key);
+      }
+      if (missing.size > 0) {
+        // Read the complete streak only for new daily alerts, preserving its true start.
+        const history = await loadAlertEmailParameters(point, date, activePolicy, {
+          asOf: now.toISOString(),
+        });
+        const confirmed = buildHourlyAbnormalAlertCandidates({
+          point,
+          parameters: history,
+          detectedAt: now.toISOString(),
+        });
+        for (const candidate of confirmed) {
+          if (!missing.has(candidate.idempotency_key)) continue;
+          const event = await alertEmailDailyRepository.create(candidate);
+          eventIds.push(event.id);
+        }
       }
       return eventIds;
     },
@@ -151,11 +191,17 @@ async function checkCurrentEligibility(
   return isAlertEmailJobEligible(job, policy, {
     events,
     points,
+    now: new Date(),
     async hasActiveParameter(event: AlertEventDTO) {
       if (!event.unit?.trim()) return false;
       // Hourly legacy DATETIME2 offsets can be lost; this UTC period was reconstructed
       // from the original validated Bangkok payload when the batch was enqueued.
-      const startAt = job.cadence === 'HOURLY' ? job.periodStart : event.startedAt;
+      const startAt =
+        event.alertType === 'ABNORMAL_VALUE'
+          ? event.firstAbnormalAt
+          : job.cadence === 'HOURLY'
+            ? job.periodStart
+            : event.startedAt;
       if (!startAt || !timestampSchema.safeParse(startAt).success) return false;
       const point = points.find(
         (item) =>

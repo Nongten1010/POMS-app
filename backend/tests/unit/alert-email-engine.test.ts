@@ -15,7 +15,8 @@ const policy: ActiveAlertEmailPolicy = {
   completenessPolicy: 'ON_TIME',
   exemptDayPolicy: 'RESET',
   dailyFormat: 'BY_TYPE',
-  abnormalMode: 'PREVIOUS_DAY',
+  abnormalMode: 'HOURLY',
+  abnormalHours: 5,
   abnormalReadings: 5,
   hourlyDelayMinutes: 5,
 };
@@ -94,6 +95,11 @@ function dependencies(events = [event(1)]) {
         }
       >()
       .mockReturnValue({ subject: 'subject', text: 'text', html: '<p>text</p>' }),
+    prepareAbnormal: jest
+      .fn<
+        (point: AlertEmailPoint, policy: ActiveAlertEmailPolicy, now: Date) => Promise<number[]>
+      >()
+      .mockResolvedValue([]),
     prepareDaily: jest
       .fn<
         (
@@ -107,6 +113,84 @@ function dependencies(events = [event(1)]) {
   };
 }
 describe('alert email scheduled engine', () => {
+  it('keeps the exceedance clock gate when an abnormal alert expands the shared hourly query', async () => {
+    const abnormal = event(20, {
+      alertType: 'ABNORMAL_VALUE',
+      startedAt: '2026-10-02T08:00:00+07:00',
+      endedAt: '2026-10-02T13:00:00+07:00',
+      firstAbnormalAt: '2026-10-02T08:00:00+07:00',
+      confirmedAbnormalAt: '2026-10-02T13:00:00+07:00',
+    });
+    const deps = dependencies([abnormal, event(1)]);
+    deps.prepareAbnormal.mockResolvedValue([20]);
+    await createAlertEmailEngine(deps).run(new Date('2026-10-02T13:01:00+07:00'), policy);
+    expect(deps.outbox.enqueue).toHaveBeenCalledTimes(2);
+    expect(deps.outbox.enqueue.mock.calls.map(([batch]) => batch.alertType)).toEqual([
+      'ABNORMAL_VALUE',
+      'ABNORMAL_VALUE',
+    ]);
+  });
+  it('queues abnormal alerts immediately at five hours before 09:00 and bypasses the exceedance delay', async () => {
+    const abnormal = event(20, {
+      alertType: 'ABNORMAL_VALUE',
+      startedAt: '2026-10-01T23:00:00+07:00',
+      endedAt: '2026-10-02T04:00:00+07:00',
+      firstAbnormalAt: '2026-10-01T23:00:00+07:00',
+      confirmedAbnormalAt: '2026-10-02T04:00:00+07:00',
+    });
+    const deps = dependencies([abnormal]);
+    deps.prepareAbnormal.mockResolvedValue([20]);
+    const now = new Date('2026-10-02T04:00:00+07:00');
+    await createAlertEmailEngine(deps).run(now, policy);
+    expect(deps.outbox.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cadence: 'HOURLY',
+        alertType: 'ABNORMAL_VALUE',
+        scheduledAt: now.toISOString(),
+        periodStart: '2026-10-01T21:00:00.000Z',
+        periodEnd: '2026-10-01T22:00:00.000Z',
+        eventIds: [20],
+      }),
+    );
+  });
+  it('rechecks abnormal inputs within the hour so a late sixth reading is not cached away', async () => {
+    const abnormal = event(20, {
+      alertType: 'ABNORMAL_VALUE',
+      startedAt: '2026-10-02T08:00:00+07:00',
+      endedAt: '2026-10-02T13:00:00+07:00',
+      firstAbnormalAt: '2026-10-02T08:00:00+07:00',
+      confirmedAbnormalAt: '2026-10-02T13:00:00+07:00',
+    });
+    const deps = dependencies([abnormal]);
+    deps.prepareAbnormal.mockResolvedValueOnce([]).mockResolvedValue([20]);
+    const engine = createAlertEmailEngine(deps);
+    await engine.run(new Date('2026-10-02T13:00:00+07:00'), policy);
+    expect(deps.outbox.enqueue).not.toHaveBeenCalled();
+    await engine.run(new Date('2026-10-02T13:01:00+07:00'), policy);
+    expect(deps.prepareAbnormal).toHaveBeenCalledTimes(2);
+    expect(deps.prepareDaily).toHaveBeenCalledTimes(1);
+    expect(deps.outbox.enqueue).toHaveBeenCalledWith(expect.objectContaining({ eventIds: [20] }));
+  });
+  it.each([
+    { firstAbnormalAt: '2026-10-02T09:00:00+07:00' },
+    { endedAt: '2026-10-02T14:00:00+07:00' },
+    { eventDate: '2026-10-01' },
+    { notificationStatus: 'DISMISSED' as const },
+  ])('rejects an invalid or stale abnormal candidate: %j', async (changes) => {
+    const deps = dependencies([
+      event(20, {
+        alertType: 'ABNORMAL_VALUE',
+        startedAt: '2026-10-02T08:00:00+07:00',
+        endedAt: '2026-10-02T13:00:00+07:00',
+        firstAbnormalAt: '2026-10-02T08:00:00+07:00',
+        confirmedAbnormalAt: '2026-10-02T13:00:00+07:00',
+        ...changes,
+      }),
+    ]);
+    deps.prepareAbnormal.mockResolvedValue([20]);
+    await createAlertEmailEngine(deps).run(new Date('2026-10-02T13:00:00+07:00'), policy);
+    expect(deps.outbox.enqueue).not.toHaveBeenCalled();
+  });
   it('matches station case changes within the same factory and system without widening ownership', () => {
     expect(pointMatchesAlertEmailEvent({ ...point, stationId: 's1' }, event(1))).toBe(true);
     expect(

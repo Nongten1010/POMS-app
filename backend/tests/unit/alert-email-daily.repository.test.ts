@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { createHash } from 'node:crypto';
 import {
   buildDailyAlertCandidates,
   type DailyAlertCandidate,
@@ -161,10 +162,56 @@ function activationCandidate(
     exemptDayPolicy: 'RESET',
     abnormalReadings: 5,
   });
-  return candidates.find(
-    (candidate) =>
-      candidate.alert_type === (abnormal ? 'ABNORMAL_VALUE' : 'DAILY_COMPLETENESS_LOW'),
-  ) as DailyAlertCandidate;
+  const daily = candidates.find((candidate) => candidate.alert_type === 'DAILY_COMPLETENESS_LOW');
+  if (!daily) throw new Error('Expected a daily completeness fixture');
+  if (!abnormal) return daily;
+
+  // Historical abnormal events still need v1/v2 compatibility after detection moves hourly.
+  // Build their old contract explicitly instead of asking the daily detector to create them.
+  const episodeTimestamp = (hour: number): string =>
+    timestampFormat === 'UTC'
+      ? new Date(Date.parse(`2026-10-04T0${hour}:00:00+07:00`)).toISOString()
+      : `2026-10-04T0${hour}:${timestampFormat === 'SOURCE' ? '05' : '00'}:00+07:00`;
+  const startedAt = episodeTimestamp(4);
+  const confirmedAt = episodeTimestamp(8);
+  const identity = [
+    ...(verified
+      ? ['daily-alert-v2', 'factory-001', 'CEMS', 's0001', 'co']
+      : ['daily-alert-v1', pointId, 'CEMS', 'CO']),
+    'ppm',
+    new Date(activatedAt).toISOString(),
+    '2026-10-04',
+    completenessPolicy,
+    'RESET',
+    5,
+    'ABNORMAL_VALUE',
+    `ZERO:${verified ? new Date(startedAt).toISOString() : startedAt}`,
+  ];
+  return {
+    ...daily,
+    alert_type: 'ABNORMAL_VALUE',
+    idempotency_key: `DAILY_ALERT:${verified ? 'v2' : 'v1'}:${createHash('sha256')
+      .update(JSON.stringify(identity))
+      .digest('hex')}`,
+    started_at: startedAt,
+    ended_at: confirmedAt,
+    measured_value: 0,
+    completeness_percent: null,
+    abnormal_type: 'ZERO',
+    abnormal_streak_count: 5,
+    first_abnormal_at: startedAt,
+    confirmed_abnormal_at: confirmedAt,
+    evidence_json: JSON.stringify({
+      ...JSON.parse(daily.evidence_json ?? '{}'),
+      abnormalType: 'ZERO',
+      startedAt,
+      confirmedAt,
+      endedAt: confirmedAt,
+      streakCount: 5,
+      measuredValue: 0,
+      elapsedMilliseconds: Date.parse(confirmedAt) - Date.parse(startedAt),
+    }),
+  };
 }
 
 describe('daily alert event persistence', () => {
@@ -181,6 +228,24 @@ describe('daily alert event persistence', () => {
     lookup.mockResolvedValue(existing);
     await expect(repository().create(candidate())).resolves.toEqual(existing);
     expect(database.__queries).toHaveLength(0);
+  });
+  it('reuses the hourly abnormal daily key across changed types and concurrent insertions', async () => {
+    const first = candidate({
+      idempotency_key: 'ABNORMAL_HOURLY:v1:parameter-point-day',
+      alert_type: 'ABNORMAL_VALUE',
+      abnormal_type: 'ZERO',
+    });
+    const existing = toAlertEventDTO(row(first));
+    lookup.mockResolvedValueOnce(null).mockResolvedValueOnce(existing);
+    database.__failures.push({ number: 2627 });
+    await expect(repository().create(first)).resolves.toEqual(existing);
+    expect(database.__queries).toHaveLength(1);
+    expect(database.__queries[0].sql).toContain('insert into');
+    lookup.mockResolvedValue(existing);
+    await expect(repository().create({ ...first, abnormal_type: 'NEGATIVE' })).resolves.toEqual(
+      existing,
+    );
+    expect(database.__queries).toHaveLength(1);
   });
 
   it('reuses the exact legacy v1 event across point replacement without changing evidence or status', async () => {
