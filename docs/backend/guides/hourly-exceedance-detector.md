@@ -132,6 +132,14 @@ GROUP BY mode, system_type, status;
 
 `hour_at` และเวลาของ state/lease เป็น UTC; รูปแบบวัน/ชั่วโมงใน event payload เป็นเวลาไทยตาม contract เดิม Log แสดง counts และรหัสปัญหา ไม่ log connection strings, API key, device credentials หรือ raw database error
 
+### ถึงกำหนดแล้วแต่ยังไม่มีแจ้งเตือนหรืออีเมล
+
+หาก lease ยังเดิน แต่ `next_hour` ค้างและไม่มีผลใน `alert_exceedance_hours` อย่าสรุปว่าไม่มีค่าเกิน ให้ตรวจขั้นตอนบันทึกผลก่อนขั้นส่งอีเมล โดยเฉพาะ SQL Server error 319: hint `WITH (UPDLOCK)` ต้องอยู่หลังชื่อตาราง/alias และก่อน `JOIN ... ON` ตัวตรวจจึงระบุ hint ให้ทั้งสองตาราง metadata โดยตรง ส่วนการตรวจ error สำหรับ retry ต้องรับกรณี driver มี `originalError` อ้างกลับตัวเองได้
+
+หลังแก้และ restart ให้รักษา `valid_from`, `next_hour` และ fingerprint เดิม ตัวตรวจจะตรวจชั่วโมงที่ค้างตามขีดจำกัด 24 ชั่วโมงและกันสร้าง event ซ้ำด้วย identity เดิม ไม่เลื่อน checkpoint ด้วยมือหรือสร้าง event ปลอมเพื่อบังคับส่ง จากนั้นตรวจผลต่อเนื่องจาก hour receipt → `alert_events` → email batch/delivery ของ event IDs ชุดนั้น จนพบ `SMTP_ACCEPTED` ซึ่งยืนยันว่า SMTP รับข้อความแล้ว แต่ยังไม่ยืนยันการเข้า Inbox
+
+อีเมลค่าเกินใช้รอบชั่วโมงเดิมตามเวลาที่ตรวจพบ (`detectedAt`) งานที่เพิ่งกู้คืนหลังรอบส่งผ่านไปแล้วจะเข้ารอบถัดไป จึงต้องแยกสถานะ “สร้างแจ้งเตือนแล้ว รอรอบอีเมล” ออกจาก “บันทึกผลตรวจไม่สำเร็จ” และ “SMTP ส่งไม่สำเร็จ”
+
 ## หยุดและย้อนกลับ
 
 หยุดเฉพาะ process detector หรือเปลี่ยน mode เป็น `off` แล้ว restart detector ไม่ต้องหยุด API หรือ email worker; รักษา state ไว้สำหรับ resume การหยุดไม่ยกเลิก event หรืออีเมลที่เข้าคิว/ส่งไปแล้ว หากต้องพัก delivery ให้ตรวจ provenance และผู้รับจริงผ่านสิทธิ์เดิม ไม่ลบทั้งคิวหรือแก้ event ของ producer อื่น

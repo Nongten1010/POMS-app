@@ -146,6 +146,69 @@ afterEach(async () => {
 });
 
 describe('exceedance persistence using production queries on a SQL fixture', () => {
+  it('commits with SQL Server table hints before JOIN predicates, preserving event and progress', async () => {
+    const repository = await setup();
+    const fixtureRunner = jest.mocked(database.client.runner).getMockImplementation();
+    if (!fixtureRunner) throw new Error('SQL fixture runner missing');
+    const lockedQueries: string[] = [];
+    jest.mocked(database.client.runner).mockImplementation((builder: unknown) => {
+      const runner = fixtureRunner.call(database.client, builder) as { run(): Promise<unknown> };
+      return {
+        ...runner,
+        run: async () => {
+          const sql = (builder as Knex.QueryBuilder).toSQL().sql;
+          if (/\bjoin\b/i.test(sql) && /\bwith\s*\(UPDLOCK\)/i.test(sql)) {
+            lockedQueries.push(sql);
+            // SQL Server rejects a table hint appended after the JOIN's ON predicate.
+            if (/\bon\b[^]*\bwith\s*\(UPDLOCK\)/i.test(sql)) {
+              throw Object.assign(new Error('SQL Server 319: misplaced table hint'), {
+                number: 319,
+              });
+            }
+          }
+          return runner.run();
+        },
+      } as never;
+    });
+    await expect(repository.commit(lease, point, hour, evaluation, now)).resolves.toMatchObject({
+      created: 1,
+      issues: [],
+    });
+    expect(lockedQueries).toHaveLength(1);
+    expect(lockedQueries[0]).toMatch(/\[dc\]\s+with\s*\(UPDLOCK\)\s+inner join/i);
+    expect(lockedQueries[0]).toMatch(/\[ch\]\s+with\s*\(UPDLOCK\)\s+on/i);
+    expect(await database('alert_events').select('id')).toHaveLength(1);
+    expect((await database('alert_exceedance_hours').first('status')).status).toBe('COMPLETE');
+  });
+
+  it('propagates a driver error that references itself without overflowing or retrying', async () => {
+    const repository = await setup();
+    const error = Object.assign(new Error('SQL Server syntax error'), { number: 319 });
+    Object.assign(error, { originalError: error });
+    const transaction = jest.mocked(
+      (database as Knex & { context: { transaction: typeof database.transaction } }).context
+        .transaction,
+    );
+    transaction.mockRejectedValue(error);
+    await expect(repository.commit(lease, point, hour, evaluation, now)).rejects.toBe(error);
+    expect(transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries one deadlock when wrapped beside a circular driver error', async () => {
+    const repository = await setup();
+    const transaction = jest.mocked(
+      (database as Knex & { context: { transaction: typeof database.transaction } }).context
+        .transaction,
+    );
+    const error = new Error('wrapped deadlock');
+    Object.assign(error, { originalError: error, info: { number: 1205 } });
+    transaction.mockRejectedValueOnce(error);
+    await expect(repository.commit(lease, point, hour, evaluation, now)).resolves.toMatchObject({
+      created: 1,
+    });
+    expect(transaction).toHaveBeenCalledTimes(2);
+  });
+
   it('projects only enabled parameter columns from the source table', async () => {
     database = knex({ client: 'mssql' });
     const statements: string[] = [];
