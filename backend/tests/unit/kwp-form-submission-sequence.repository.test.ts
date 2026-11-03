@@ -11,7 +11,9 @@ describe('KWP form submission sequence repository', () => {
     const sql = compiled.sql.toLowerCase();
 
     expect(sql).toContain('from [factories] as [f]');
-    expect(sql).toContain('inner join [provinces] as [p]');
+    expect(sql).toContain('from provinces as p_source');
+    expect(sql).toContain('p_source.name_th = ef.province_name');
+    expect(sql).toContain('ef_source.factory_registration_no_old = f.code');
     expect(sql).toContain('[f].[fid] = ?');
     expect(sql).toContain('[f].[code] = ?');
     expect(sql).toContain('[f].[deleted_at] is null');

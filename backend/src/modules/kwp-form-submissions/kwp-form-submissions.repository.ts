@@ -1,7 +1,8 @@
+import { factoryProfileReadTable } from '../factory-profiles/factory-profile-mode';
 import {
-  factoryProfileReadTable,
-  isCanonicalFactoryProfilesEnabled,
-} from '../factory-profiles/factory-profile-mode';
+  joinKwpFactoryProfile,
+  joinKwpSubmissionFactoryProfile,
+} from '../../shared/utils/kwp-factory-location-query';
 import type { Knex } from 'knex';
 import {
   BadRequestError,
@@ -977,19 +978,7 @@ function buildEditableSubmissionQuery(
   knexOrTrx: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<EditableSubmissionRow, EditableSubmissionRow[]> {
   const builder = knexOrTrx<EditableSubmissionRow>('kwp_form_submissions as s')
-    .leftJoin('factories as f', function joinFactory() {
-      this.on('f.fid', '=', 's.factory_id')
-        .orOn('f.code', '=', 's.factory_id')
-        .orOn('f.code', '=', 's.factory_registration_no');
-    })
-    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
-      this.on(function joinFactoryIdentifiers() {
-        this.on('ef.factory_registration_no_new', '=', 's.factory_registration_no')
-          .orOn('ef.factory_registration_no_new', '=', 's.factory_id')
-          .orOn('ef.source_factory_id', '=', 's.factory_id');
-      }).andOnNull('ef.deleted_at');
-    })
-    .modify(joinSubmissionFactoryLocation)
+    .modify(joinKwpSubmissionFactoryProfile)
     .where('s.id', id)
     .where('s.form_type', access.formType)
     .whereNull('s.deleted_at')
@@ -1237,14 +1226,7 @@ function buildFactoryAccessQuery(
   access: KwpFormSubmissionAccess,
 ): Knex.QueryBuilder {
   const builder = knexOrTrx('factories as f')
-    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
-      this.on(function joinFactoryIdentifiers() {
-        this.on('ef.factory_registration_no_new', '=', 'f.code')
-          .orOn('ef.factory_registration_no_new', '=', 'f.fid')
-          .orOn('ef.source_factory_id', '=', 'f.fid')
-          .orOn('ef.source_factory_id', '=', 'f.code');
-      }).andOnNull('ef.deleted_at');
-    })
+    .modify(joinKwpFactoryProfile)
     .whereNull('f.deleted_at')
     .where((factoryBuilder) => {
       factoryBuilder.where('f.fid', factoryId).orWhere('f.code', factoryId);
@@ -1254,71 +1236,17 @@ function buildFactoryAccessQuery(
   if (scopeValue(access.scope) === 'OWN_FACTORY') {
     applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
-
-  applyFactoryLocationFilters(builder, access.scope);
-  if (scopeValue(access.scope) === 'IN_REGION') {
-    const regions = resolveAssignedRegions(
-      scopeDetails(access.scope)?.region,
-      access.regionalAccess,
-    );
-    builder.whereExists(function regionFilter() {
-      this.select(knexOrTrx.raw('1'))
-        .from('provinces as p')
-        .whereRaw(
-          isCanonicalFactoryProfilesEnabled()
-            ? '(p.name_th = ef.province_name OR (ef.id IS NULL AND p.id = f.province_id))'
-            : 'p.id = f.province_id',
-        )
-        .whereIn('p.region', regions);
-    });
-  }
+  applySubmissionLocationFilters(builder, access);
   if (!scopeValue(access.scope)) builder.whereRaw('1 = ?', [0]);
-
   return builder;
-}
-
-function joinSubmissionFactoryLocation(builder: Knex.QueryBuilder): void {
-  if (!isCanonicalFactoryProfilesEnabled()) {
-    builder
-      .leftJoin('provinces as p', 'p.id', 'f.province_id')
-      .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id');
-    return;
-  }
-  builder
-    .leftJoin('provinces as p', function currentProvince() {
-      this.on('p.name_th', '=', 'ef.province_name').orOn(function masterFallback() {
-        this.onNull('ef.id').andOn('p.id', '=', 'f.province_id');
-      });
-    })
-    .leftJoin('industrial_estates as ie', function currentEstate() {
-      this.on('ie.name_th', '=', 'ef.industrial_estate_name').orOn(function masterFallback() {
-        this.onNull('ef.id').andOn('ie.id', '=', 'f.industrial_estate_id');
-      });
-    });
 }
 
 function buildSubmissionRegionQuery(
   knexOrTrx: Knex | Knex.Transaction,
   factoryId: string,
 ): Knex.QueryBuilder<KwpSubmissionRegionRow, KwpSubmissionRegionRow[]> {
-  const builder = knexOrTrx<KwpSubmissionRegionRow>('factories as f');
-  if (isCanonicalFactoryProfilesEnabled()) {
-    builder.leftJoin(
-      factoryProfileReadTable('eligible_factories', 'ef'),
-      function currentEligibleFactory() {
-        this.on(function factoryIdentifiers() {
-          this.on('ef.factory_registration_no_new', '=', 'f.fid')
-            .orOn('ef.source_factory_id', '=', 'f.fid')
-            .orOn('ef.factory_registration_no_new', '=', 'f.code')
-            .orOn('ef.factory_registration_no_old', '=', 'f.code');
-        }).andOnNull('ef.deleted_at');
-      },
-    );
-    joinSubmissionFactoryLocation(builder);
-  } else {
-    builder.join('provinces as p', 'p.id', 'f.province_id');
-  }
-  return builder
+  return knexOrTrx('factories as f')
+    .modify(joinKwpFactoryProfile)
     .whereNull('f.deleted_at')
     .where((factoryBuilder) => {
       factoryBuilder.where('f.fid', factoryId).orWhere('f.code', factoryId);
@@ -1350,19 +1278,7 @@ function buildSubmissionDetailQuery(
   access: KwpFormSubmissionReadAccess,
 ): Knex.QueryBuilder<SubmissionDetailRow, SubmissionDetailRow[]> {
   const builder = db<SubmissionDetailRow>('kwp_form_submissions as s')
-    .leftJoin('factories as f', function joinFactory() {
-      this.on('f.fid', '=', 's.factory_id')
-        .orOn('f.code', '=', 's.factory_id')
-        .orOn('f.code', '=', 's.factory_registration_no');
-    })
-    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
-      this.on(function joinFactoryIdentifiers() {
-        this.on('ef.factory_registration_no_new', '=', 's.factory_registration_no')
-          .orOn('ef.factory_registration_no_new', '=', 's.factory_id')
-          .orOn('ef.source_factory_id', '=', 's.factory_id');
-      }).andOnNull('ef.deleted_at');
-    })
-    .modify(joinSubmissionFactoryLocation)
+    .modify(joinKwpSubmissionFactoryProfile)
     .where('s.id', id)
     .whereNull('s.deleted_at')
     .where('s.form_type', access.formType)
@@ -1412,19 +1328,7 @@ function buildWorkflowQuery(
   knexOrTrx: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<SubmissionWorkflowRow, SubmissionWorkflowRow[]> {
   const builder = knexOrTrx<SubmissionWorkflowRow>('kwp_form_submissions as s')
-    .leftJoin('factories as f', function joinFactory() {
-      this.on('f.fid', '=', 's.factory_id')
-        .orOn('f.code', '=', 's.factory_id')
-        .orOn('f.code', '=', 's.factory_registration_no');
-    })
-    .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
-      this.on(function joinFactoryIdentifiers() {
-        this.on('ef.factory_registration_no_new', '=', 's.factory_registration_no')
-          .orOn('ef.factory_registration_no_new', '=', 's.factory_id')
-          .orOn('ef.source_factory_id', '=', 's.factory_id');
-      }).andOnNull('ef.deleted_at');
-    })
-    .modify(joinSubmissionFactoryLocation)
+    .modify(joinKwpSubmissionFactoryProfile)
     .where('s.id', id)
     .whereNull('s.deleted_at')
     .select(
@@ -1476,11 +1380,7 @@ function applySubmissionReadAccessFilter(
 }
 
 function submissionRegionSelect(knexOrTrx: Knex | Knex.Transaction): Knex.Raw {
-  return knexOrTrx.raw('COALESCE(??, ??) as ??', [
-    's.submission_region_name',
-    'p.region',
-    'province_region',
-  ]);
+  return knexOrTrx.raw('?? as ??', ['p.region', 'province_region']);
 }
 
 function applySubmissionRegionFilter(builder: Knex.QueryBuilder, regions: string[]): void {
@@ -1488,12 +1388,7 @@ function applySubmissionRegionFilter(builder: Knex.QueryBuilder, regions: string
     builder.whereRaw('1 = ?', [0]);
     return;
   }
-  const placeholders = regions.map(() => '?').join(', ');
-  builder.whereRaw(`COALESCE(??, ??) IN (${placeholders})`, [
-    's.submission_region_name',
-    'p.region',
-    ...regions,
-  ]);
+  builder.whereIn('p.region', regions);
 }
 
 function applySubmissionLocationFilters(
@@ -1508,59 +1403,6 @@ function applySubmissionLocationFilters(
   const details = scopeDetails(access.scope);
   const regions = resolveAssignedRegions(details?.region, access.regionalAccess);
   applySubmissionRegionFilter(builder, regions);
-}
-
-function applyFactoryLocationFilters(
-  builder: Knex.QueryBuilder,
-  scope: KwpFormSubmissionAccess['scope'],
-): void {
-  if (scopeValue(scope) === 'FACTORY_TYPE_88') {
-    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
-    return;
-  }
-  const details = scopeDetails(scope);
-  if (!details) return;
-
-  if (details.scope === 'IN_PROVINCE') {
-    if (!details.province) {
-      builder.whereRaw('1 = ?', [0]);
-      return;
-    }
-    builder.whereExists(function provinceFilter() {
-      this.select(db.raw('1'))
-        .from('provinces as p')
-        .whereRaw(
-          isCanonicalFactoryProfilesEnabled()
-            ? '(p.name_th = ef.province_name OR (ef.id IS NULL AND p.id = f.province_id))'
-            : 'p.id = f.province_id',
-        )
-        .where('p.name_th', details.province);
-    });
-    return;
-  }
-
-  if (details.scope === 'IN_ESTATE') {
-    const estateCode = toEstateCode(scope);
-    const estateId = toEstateId(scope);
-    if (estateCode || estateId) {
-      builder.whereExists(function estateFilter() {
-        this.select(db.raw('1'))
-          .from('industrial_estates as ie')
-          .whereRaw(
-            isCanonicalFactoryProfilesEnabled()
-              ? '(ie.name_th = ef.industrial_estate_name OR (ef.id IS NULL AND ie.id = f.industrial_estate_id))'
-              : 'ie.id = f.industrial_estate_id',
-          );
-        if (estateCode) {
-          this.where('ie.code', estateCode);
-        } else if (estateId) {
-          this.where('ie.id', estateId);
-        }
-      });
-      return;
-    }
-    builder.whereRaw('1 = ?', [0]);
-  }
 }
 
 function applyLocationScopeFilter(

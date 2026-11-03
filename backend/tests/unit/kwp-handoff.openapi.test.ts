@@ -13,6 +13,21 @@ function objectAt(value: unknown, ...keys: string[]): ObjectSchema {
 const schemas = objectAt(pomsOpenApiDocument, 'components', 'schemas');
 
 describe('KWP handoff runtime contract', () => {
+  it('documents one current-location policy for every KWP read and workflow operation', () => {
+    const paths = objectAt(pomsOpenApiDocument, 'paths');
+    for (const [path, item] of Object.entries(paths)) {
+      if (!path.startsWith('/kwp-form-') || path.endsWith('/attachments')) continue;
+      for (const method of ['get', 'post', 'patch']) {
+        const operation = (item as ObjectSchema)[method];
+        if (!operation) continue;
+        const description = objectAt(operation).description;
+        expect(description).toEqual(expect.stringContaining('provinces.region'));
+        expect(description).toEqual(expect.stringContaining('ไม่ใช้กรองสิทธิ์'));
+        expect(description).toEqual(expect.stringContaining('scope ของ view/edit/approve'));
+      }
+    }
+  });
+
   it('restricts measurement attachments without narrowing general or legacy attachments', () => {
     const attachmentItems = objectAt(
       schemas,

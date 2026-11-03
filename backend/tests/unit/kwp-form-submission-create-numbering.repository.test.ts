@@ -123,6 +123,11 @@ function regionFirstBuilder(value: unknown) {
   });
   Object.assign(chain, {
     join: returnChain,
+    joinRaw: returnChain,
+    modify: jest.fn((callback: (builder: unknown) => void) => {
+      callback(chain);
+      return chain;
+    }),
     whereNull: returnChain,
     where: returnChain,
     select: returnChain,

@@ -65,10 +65,13 @@ describe('kwpFormReportsRepository access filters', () => {
       actorUserId: 88,
       scope: { scope: 'FACTORY_TYPE_88' },
     }).toSQL();
-    const requests = buildKwpFormRequestQueryForTests({}, {
-      actorUserId: 88,
-      scope: { scope: 'FACTORY_TYPE_88' },
-    }).toSQL();
+    const requests = buildKwpFormRequestQueryForTests(
+      {},
+      {
+        actorUserId: 88,
+        scope: { scope: 'FACTORY_TYPE_88' },
+      },
+    ).toSQL();
 
     expect(factories.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
     expect(factories.bindings).toContain('00088');
@@ -134,9 +137,7 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(sql).toContain('from [kwp_form_submissions] as [s]');
     expect(sql).toMatch(/outer apply\s*\(\s*select top \(1\) ef_source\.\*/);
     expect(sql).toMatch(/outer apply\s*\(\s*select top \(1\) f_source\.\*/);
-    expect(sql).toContain(
-      'coalesce([s].[submission_region_name], [p].[region]) as [province_region]',
-    );
+    expect(sql).toContain('[p].[region] as [province_region]');
     expect(sql).not.toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
     expect(compiled.bindings).toEqual(expect.arrayContaining(['KWP03', 'UNDER_REVIEW']));
   });

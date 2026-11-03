@@ -1,4 +1,17 @@
 type Schema = Record<string, unknown>;
+
+export function extendKwpCurrentLocationDocs(paths: Record<string, Schema>): void {
+  const policy =
+    'กวภ.01–05 ใช้จังหวัดปัจจุบันของโรงงานและ provinces.region ชุดเดียวกันสำหรับรายการ รายละเอียด การแก้ไข ส่งกลับหลังแก้ไข และ workflow ทั้ง legacy/canonical mode. หา active connected point และ eligible factory ปัจจุบันก่อน; fallback ไป factory master เฉพาะเมื่อไม่มี eligible row. ตรวจ scope ของ view/edit/approve แยกตาม action และใช้พื้นที่รายเมนูก่อน profile; ไม่มีพื้นที่ต้อง fail closed. submission_region_name เป็นประวัติตอนออกเลข ไม่ใช้กรองสิทธิ์. คำขอใหม่ออกเลขจากภาคปัจจุบัน ส่วนเลขเอกสารและ snapshot เดิมคงอยู่';
+  for (const [path, pathItem] of Object.entries(paths)) {
+    if (!path.startsWith('/kwp-form-') || path === '/kwp-form-submissions/attachments') continue;
+    for (const method of ['get', 'post', 'patch']) {
+      const operation = pathItem[method] as Schema | undefined;
+      if (operation) operation.description = `${String(operation.description ?? '')}\n\n${policy}`;
+    }
+  }
+}
+
 const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${name}` });
 const text = { type: 'string', nullable: true };
 const integer = { type: 'integer', nullable: true };

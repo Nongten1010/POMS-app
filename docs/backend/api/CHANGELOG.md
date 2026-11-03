@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="kwp-current-region-authorization"></a>
+
+## 2026-11-03 — กวภ.01–05 ใช้พื้นที่โรงงานปัจจุบันร่วมกันทุกเส้นทาง
+
+- **Affected canonical docs:** [แบบ กวภ.](./menus/kwp-forms/README.md#เลขที่คำขอ-requestno), [พื้นที่รับผิดชอบ](./shared/regional-jurisdictions/README.md#ผลต่อข้อมูลปัจจุบันและเอกสารเดิม)
+- **Impact:** รายการ รายละเอียด การแก้ไข ส่งกลับหลังแก้ไข และ workflow กวภ.01–05 ใช้ active connected point → eligible factory ปัจจุบัน → `provinces.region` เดียวกัน ทั้ง legacy/canonical mode; กรอง `view`, `edit`, `approve` ด้วย scope ของ action นั้น พื้นที่รายเมนูมีผลก่อน profile และขาดพื้นที่ต้อง fail closed. การสร้างคำขอและออกเลขใหม่ใช้พื้นที่ปัจจุบันเดียวกับรายการโรงงาน
+- **Migration:** ไม่ต้องเปลี่ยน schema หรือ backfill แบบเดิม; คงเลขเอกสาร running และ snapshot ตอนออกเลขไว้ทั้งหมด Deploy backend และโหลดรายการ/รายละเอียดใหม่ บัญชีภาคเดิมอาจหมดสิทธิ์ ส่วนบัญชีภาคปัจจุบันอาจได้รับสิทธิ์ จึงต้องตรวจสิทธิ์ใน/นอกภาคและ runtime OpenAPI หลัง deploy ที่ได้รับอนุญาต
+- **Old contract:** ตารางใช้ภาคปัจจุบัน แต่รายละเอียด การแก้ไข และ workflow ใช้ `COALESCE(submission_region_name, province.region)` และบางเส้นทางใช้จังหวัดจาก factory master ใน legacy mode จึงอาจเห็นรายการแต่เปิดไม่ได้
+- **New contract:** ทุกเส้นทางใช้พื้นที่ปัจจุบันชุดเดียวกัน; snapshot ภาคใช้เฉพาะประวัติเลขเอกสาร นโยบายนี้แทนข้อยกเว้น กวภ. ในรายการปรับพื้นที่วันที่ 2026-10-16
+- **Breaking change:** yes — ขอบเขตข้อมูลของแบบเดิมเปลี่ยนตามพื้นที่ปัจจุบันของโรงงาน โดยชื่อสิทธิ์ รูปแบบ payload สถานะ และ error codes คงเดิม
+
 <a id="integration-device-config-serial-port"></a>
 
 ## 2026-10-29 — รักษาชื่อ COM port ใน config สำหรับ Worker

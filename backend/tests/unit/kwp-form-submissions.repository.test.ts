@@ -150,9 +150,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('user_juristics');
     expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
-    expect(sql).toContain(
-      'coalesce([s].[submission_region_name], [p].[region]) as [province_region]',
-    );
+    expect(sql).toContain('[p].[region] as [province_region]');
   });
 
   it('limits KWP workflow reads to assigned regions only for IN_REGION scope', () => {
@@ -164,7 +162,7 @@ describe('kwpFormSubmissionsRepository', () => {
       .toSQL()
       .sql.toLowerCase();
 
-    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
+    expect(sql).toContain('[p].[region] in (?)');
   });
 
   it('uses the KWP menu region independently of assigned profile regions', () => {

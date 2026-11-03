@@ -1,5 +1,9 @@
 import { factoryProfileReadTable } from '../factory-profiles/factory-profile-mode';
 import type { Knex } from 'knex';
+import {
+  joinKwpFactoryProfile,
+  joinKwpSubmissionFactoryProfile,
+} from '../../shared/utils/kwp-factory-location-query';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
@@ -149,51 +153,7 @@ function buildFactoryQuery(
   access: KwpFormReportAccess,
 ): Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]> {
   const builder = db<FactoryTableRow>('factories as f')
-    .joinRaw(
-      `
-      OUTER APPLY (
-        SELECT TOP (1) ef_source.*
-        FROM ${factoryProfileReadTable('eligible_factories')} AS ef_source
-        WHERE ef_source.deleted_at IS NULL
-          AND (
-            ef_source.factory_registration_no_new = f.fid
-            OR ef_source.source_factory_id = f.fid
-            OR ef_source.factory_registration_no_new = f.code
-            OR ef_source.source_factory_id = f.code
-            OR ef_source.factory_registration_no_old = f.code
-          )
-        ORDER BY CASE
-          WHEN ef_source.factory_registration_no_new = f.fid THEN 0
-          WHEN ef_source.source_factory_id = f.fid THEN 1
-          WHEN ef_source.factory_registration_no_old = f.code THEN 2
-          WHEN ef_source.factory_registration_no_new = f.code THEN 3
-          ELSE 4
-        END, ef_source.id DESC
-      ) AS ef
-    `,
-    )
-    .joinRaw(
-      `
-      OUTER APPLY (
-        SELECT TOP (1) p_source.*
-        FROM provinces AS p_source
-        WHERE p_source.name_th = ef.province_name
-          OR (ef.id IS NULL AND p_source.id = f.province_id)
-        ORDER BY p_source.id
-      ) AS p
-    `,
-    )
-    .joinRaw(
-      `
-      OUTER APPLY (
-        SELECT TOP (1) ie_source.*
-        FROM industrial_estates AS ie_source
-        WHERE ie_source.name_th = ef.industrial_estate_name
-          OR (ef.id IS NULL AND ie_source.id = f.industrial_estate_id)
-        ORDER BY ie_source.id
-      ) AS ie
-    `,
-    )
+    .modify(joinKwpFactoryProfile)
     .join(
       factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
       function joinConnectedPoints() {
@@ -258,91 +218,7 @@ function buildRequestQuery(
   access: KwpFormReportAccess,
 ): Knex.QueryBuilder<SubmissionRow, SubmissionRow[]> {
   const builder = db<SubmissionRow>('kwp_form_submissions as s')
-    .leftJoin(
-      factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
-      function joinConnectedPoint() {
-        this.on('cp.id', '=', 's.connected_point_id').andOnNull('cp.deleted_at');
-      },
-    )
-    .joinRaw(
-      `
-      OUTER APPLY (
-        SELECT TOP (1) ef_source.*
-        FROM ${factoryProfileReadTable('eligible_factories')} AS ef_source
-        WHERE ef_source.deleted_at IS NULL
-          AND (
-            ef_source.id = cp.eligible_factory_id
-            OR ef_source.factory_registration_no_new = cp.factory_registration_no
-            OR ef_source.factory_registration_no_new = cp.factory_id
-            OR ef_source.source_factory_id = cp.factory_id
-            OR ef_source.factory_registration_no_old = s.factory_registration_no
-            OR ef_source.factory_registration_no_new = s.factory_registration_no
-            OR ef_source.factory_registration_no_new = s.factory_id
-            OR ef_source.source_factory_id = s.factory_id
-          )
-        ORDER BY CASE
-          WHEN ef_source.id = cp.eligible_factory_id THEN 0
-          WHEN ef_source.factory_registration_no_new = cp.factory_registration_no THEN 1
-          WHEN ef_source.factory_registration_no_new = cp.factory_id THEN 2
-          WHEN ef_source.source_factory_id = cp.factory_id THEN 3
-          WHEN ef_source.factory_registration_no_old = s.factory_registration_no THEN 4
-          WHEN ef_source.factory_registration_no_new = s.factory_registration_no THEN 5
-          WHEN ef_source.factory_registration_no_new = s.factory_id THEN 6
-          ELSE 7
-        END, ef_source.id DESC
-      ) AS ef
-    `,
-    )
-    .joinRaw(
-      `
-      OUTER APPLY (
-        SELECT TOP (1) f_source.*
-        FROM factories AS f_source
-        WHERE f_source.deleted_at IS NULL
-          AND (
-            f_source.fid = ef.source_factory_id
-            OR f_source.fid = ef.factory_registration_no_new
-            OR f_source.code = ef.factory_registration_no_old
-            OR f_source.fid = cp.factory_id
-            OR f_source.code = cp.factory_registration_no
-            OR f_source.fid = s.factory_id
-            OR f_source.code = s.factory_id
-            OR f_source.code = s.factory_registration_no
-          )
-        ORDER BY CASE
-          WHEN f_source.fid = ef.source_factory_id THEN 0
-          WHEN f_source.fid = ef.factory_registration_no_new THEN 1
-          WHEN f_source.code = ef.factory_registration_no_old THEN 2
-          WHEN f_source.fid = cp.factory_id THEN 3
-          WHEN f_source.fid = s.factory_id THEN 4
-          WHEN f_source.code = s.factory_registration_no THEN 5
-          ELSE 6
-        END, f_source.id DESC
-      ) AS f
-    `,
-    )
-    .joinRaw(
-      `
-      OUTER APPLY (
-        SELECT TOP (1) p_source.*
-        FROM provinces AS p_source
-        WHERE p_source.name_th = ef.province_name
-          OR (ef.id IS NULL AND p_source.id = f.province_id)
-        ORDER BY p_source.id
-      ) AS p
-    `,
-    )
-    .joinRaw(
-      `
-      OUTER APPLY (
-        SELECT TOP (1) ie_source.*
-        FROM industrial_estates AS ie_source
-        WHERE ie_source.name_th = ef.industrial_estate_name
-          OR (ef.id IS NULL AND ie_source.id = f.industrial_estate_id)
-        ORDER BY ie_source.id
-      ) AS ie
-    `,
-    )
+    .modify(joinKwpSubmissionFactoryProfile)
     .whereNull('s.deleted_at')
     .select(
       's.id',
@@ -372,7 +248,7 @@ function buildRequestQuery(
       ),
       'ef.factory_registration_no_old as old_registration_no',
       db.raw('COALESCE(ef.province_name, p.name_th) as current_province_name'),
-      submissionRegionSelect(),
+      'p.region as province_region',
       'cp.system_type',
     );
 
@@ -476,14 +352,6 @@ function toEstateCode(scope: KwpFormReportAccess['scope']): string | null {
     (scope as PermissionScopeDetails & { estateCode?: string | null }).estateCode ??
     (scope as PermissionScopeDetails & { estate?: string | null }).estate;
   return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function submissionRegionSelect(): Knex.Raw {
-  return db.raw('COALESCE(??, ??) as ??', [
-    's.submission_region_name',
-    'p.region',
-    'province_region',
-  ]);
 }
 
 async function listStatusHistoryForSubmissions(

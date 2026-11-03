@@ -33,8 +33,8 @@
 | โรงงานที่เข้าข่าย | `eligible_factories.province_name` คงเดิม; ภาคที่ใช้กรองคำนวณจาก `provinces` จึงเปลี่ยนตาม master ทันที |
 | snapshot คำขอเชื่อมต่อ | ปรับ `region_name` และ `region_code` เป็นชื่อภาคใหม่ของ snapshot ที่ไม่ถูกลบและมี parent request ที่ไม่ถูกลบ รวมคำขอที่เสร็จสิ้นแล้ว โดยไม่แก้เลขคำขอ สถานะ หรือจังหวัด |
 | การจับจังหวัดของ snapshot | ใช้ `province_name` ก่อน; ถ้าเป็น `null` หรือ `""` จึงใช้ `province_code` ที่ตรง `provinces.id` ไม่ใช้ชื่อภาคเดิมเดาจังหวัด |
-| แบบ กวภ. ที่มี `submission_region_name` | คงภาค snapshot เดิมสำหรับการแสดงผลและสิทธิ์ตามภาค ตาม [กติกาเลขเอกสาร กวภ.](../../menus/kwp-forms/README.md) |
-| แบบ กวภ. เดิมที่ไม่มีภาค snapshot | fallback ไปภาคปัจจุบันของโรงงานตามพฤติกรรมเดิม |
+| แบบ กวภ.01–05 ทั้งเก่าและใหม่ | รายการ รายละเอียด การแก้ไข ส่งกลับหลังแก้ไข และการพิจารณาใช้จังหวัดปัจจุบันของโรงงานและ `provinces.region` ชุดเดียวกัน; `submission_region_name` เก็บเฉพาะประวัติภาคตอนออกเลข ไม่ใช้ตรวจสิทธิ์ ตาม [กติกา กวภ.](../../menus/kwp-forms/README.md) |
+| การหาโรงงานและพื้นที่ของ กวภ. | ใช้ active connected point และ eligible factory ปัจจุบันก่อน; fallback ไป factory master เฉพาะเมื่อไม่มี eligible row ใช้กติกาเดียวกันทั้ง legacy/canonical mode |
 | เลขเอกสาร กวภ./BOD-COD ที่ออกแล้ว | คงเลขเอกสาร รหัสภาคที่ใช้ตอนออกเลข และ running เดิม; คำขอใหม่ออกเลขจากภาคใหม่ของจังหวัด |
 
 | จังหวัดที่เปลี่ยน | ภาคเดิม | ภาคใหม่ |
@@ -51,7 +51,7 @@
 1. รัน migration `0139_update_provincial_regional_jurisdictions` ผ่านกระบวนการ deploy ที่ได้รับอนุญาต Migration ทำเฉพาะ data updates ภายใน transaction เดียว; ไม่ต้องรัน seed ทั้งชุดกับฐานข้อมูลที่มีข้อมูลอยู่แล้ว
 2. ตรวจจำนวนจังหวัดจาก `provinces` ให้ตรงตาราง 77 จังหวัด และลองกรองจังหวัดที่ย้ายด้วยบัญชีของภาคเดิมกับภาคใหม่ ทั้งโรงงานที่เข้าข่าย โรงงานในระบบ POMS และคำขอเชื่อมต่อ
 3. ล้าง cache จังหวัด/ภาคฝั่ง client และโหลดรายการกับยอดสรุปใหม่ ไม่มี request field, validation rule, status, auth หรือ error code ใหม่
-4. หลัง production deployment ตรวจ `https://d-poms.diw.go.th/api/v1/openapi.json` และ Swagger UI ที่ `https://d-poms.diw.go.th/api/v1/docs/` ว่าแสดงจำนวนจังหวัดใหม่และข้อยกเว้นของแบบ กวภ. จึงถือว่าตรวจ release ครบ
+4. หลัง production deployment ตรวจ `https://d-poms.diw.go.th/api/v1/openapi.json` และ Swagger UI ที่ `https://d-poms.diw.go.th/api/v1/docs/` ว่าแสดงจำนวนจังหวัดใหม่และกติกาพื้นที่ปัจจุบันร่วมกันของแบบ กวภ. จึงถือว่าตรวจ release ครบ
 
 `down` คืน mapping ก่อน migration ของ 8 จังหวัด เฉพาะ master ที่ยังตรงภาคใหม่ และ snapshot ที่ทั้งสอง field ยังตรงภาคใหม่ โดยยังข้ามข้อมูลที่ถูกลบ ไม่ใช่การกู้ arbitrary custom region ที่เคยบันทึกก่อน migration ใน production ให้ใช้ forward migration สำหรับการย้อนนโยบาย และพิจารณาคำขอ/เลขเอกสารที่สร้างหลังเปลี่ยนพื้นที่ก่อนดำเนินการ
 

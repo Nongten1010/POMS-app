@@ -46,6 +46,13 @@ function expectCanonicalProvince(sql: string, provinceAlias = 'p'): void {
   );
 }
 
+function expectKwpCurrentProvince(sql: string): void {
+  expect(sql).toContain('current_eligible_factories');
+  expect(sql).toContain('p_source.name_th = ef.province_name');
+  expect(sql).toContain('ef.id is null and p_source.id = f.province_id');
+  expect(sql).not.toContain('submission_region_name');
+}
+
 describe('canonical current downstream factory readers', () => {
   it('uses shared current data for KWP factories while keeping outward factory IDs', () => {
     const sql = sqlOf(buildKwpFormFactoryQueryForTests(provinceAccess));
@@ -62,19 +69,20 @@ describe('canonical current downstream factory readers', () => {
     expect(sql).toContain('[s].[factory_name]');
     expect(sql).toContain('[s].[factory_address]');
     expect(sql).toContain('current_factory_name');
-    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region])');
+    expect(sql).toContain('[p].[region] as [province_region]');
+    expect(sql).not.toContain('submission_region_name');
   });
 
   it('allocates new KWP numbers from current province while preserving factory lookup IDs', () => {
     const query = buildKwpSubmissionRegionQueryForTests('FID-001');
-    expectCanonicalProvince(sqlOf(query));
+    expectKwpCurrentProvince(sqlOf(query));
     expect(query.toSQL().bindings).toEqual(expect.arrayContaining(['FID-001']));
   });
 
   it('checks submission access in current province without accepting an obsolete master province', () => {
     const sql = sqlOf(buildKwpFormSubmissionFactoryAccessQueryForTests('FID-001', provinceAccess));
     expect(sql).toContain('current_eligible_factories');
-    expect(sql).toContain('p.name_th = ef.province_name');
+    expect(sql).toContain('p_source.name_th = ef.province_name');
     expect(sql).toContain('ef.id is null');
   });
 
@@ -87,15 +95,16 @@ describe('canonical current downstream factory readers', () => {
         publicPath: '/uploads',
       }),
     );
-    expectCanonicalProvince(sql);
+    expectKwpCurrentProvince(sql);
     expect(sql).toContain('[s].[factory_name]');
     expect(sql).toContain('[s].[factory_address]');
   });
 
-  it('preserves the saved numbering region while using current province for KWP workflow access', () => {
+  it('uses the current region for KWP workflow access independently of the saved numbering region', () => {
     const sql = sqlOf(buildKwpFormSubmissionWorkflowQueryForTests(13, provinceAccess));
-    expectCanonicalProvince(sql);
-    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region])');
+    expectKwpCurrentProvince(sql);
+    expect(sql).toContain('[p].[region] as [province_region]');
+    expect(sql).not.toContain('submission_region_name');
   });
 
   it('uses canonical BOD factory scope and stable connected-point IDs', () => {
@@ -191,7 +200,8 @@ describe('legacy downstream compatibility', () => {
       buildAlertEventsAccessQueryForTests(provinceAccess),
     ].map(sqlOf);
     for (const sql of queries) expect(sql).not.toContain('current_eligible_factories');
-    expect(queries[1]).toContain('[p].[id] = [f].[province_id]');
+    expect(queries[1]).toContain('p_source.name_th = ef.province_name');
+    expect(queries[1]).toContain('ef.id is null and p_source.id = f.province_id');
     expect(queries[3]).toContain('[p].[id] = [f].[province_id]');
   });
 });

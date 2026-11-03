@@ -32,6 +32,7 @@ beforeEach(() => {
           reviewed_by: 21,
           reviewed_at: new Date('2026-09-01T00:00:00Z'),
           submission_region_name: 'ภาคกลาง',
+          region: 'ภาคกลาง',
           assigned_user_ids: [42],
         },
       ],
@@ -444,9 +445,11 @@ function query(name: string): Knex.QueryBuilder {
   };
   chain.whereRaw = (sql: string, bindings: unknown[] = []) => {
     if (sql === '1 = ?') filters.push(() => bindings[0] === 1);
-    else if (sql.startsWith('COALESCE(??, ??) IN (')) {
-      filters.push((row) => bindings.slice(2).includes(row.submission_region_name));
-    } else throw new Error(`Unsupported SQL filter in test database adapter: ${sql}`);
+    else throw new Error(`Unsupported SQL filter in test database adapter: ${sql}`);
+    return chain;
+  };
+  chain.whereIn = (column: string, values: unknown[]) => {
+    filters.push((row) => values.includes(row[key(column)]));
     return chain;
   };
   chain.first = async () => rows()[0];
