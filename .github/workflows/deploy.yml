@@ -77,6 +77,9 @@ jobs:
       DB_USER: poms_ci
       DB_PASSWORD: ""
       BOILER_DB_HOST: 127.0.0.1
+      PARAMETER_DB_HOST: 127.0.0.1
+      PARAMETER_DB_SCHEMA: ingest
+      PUBLIC_BASE_URL: http://poms-ci.invalid
       LOG_LEVEL: error
       DIW_USER_LOGIN_ENABLED: "false"
       DIW_OFFICER_LOGIN_ENABLED: "false"
@@ -111,6 +114,7 @@ jobs:
           name: poms-backend-${{ github.sha }}
           path: ${{ runner.temp }}/poms-backend-release/
           if-no-files-found: error
+          overwrite: true
           retention-days: 3
 
   deploy:

@@ -29,15 +29,23 @@ function expectSequence(names: string[]): void {
 }
 
 describe('production notification activation registry cutover', () => {
-  it('builds, tests and stages production dependencies before starting downtime', () => {
+  it('installs the CI-verified artifact and stages dependencies before starting downtime', () => {
+    expect(workflow).toContain('needs: [detect, backend_ci]');
+    expect(workflow).toContain("needs.backend_ci.result == 'success'");
     expectSequence([
-      'Build backend',
-      'Test backend',
+      'Build backend once',
+      'Test backend once',
+      'Upload verified backend',
+      'Download verified backend',
+      'Verify and stage the backend artifact',
+      'Prepare Windows runtime dependencies',
       'Prepare backend release',
       'Stop backend before migrations',
     ]);
     const prepare = body('Prepare backend release');
-    expect(prepare).toContain('npm ci --omit=dev');
+    expect(body('Prepare Windows runtime dependencies')).toContain('npm ci --omit=dev');
+    expect(body('Verify and stage the backend artifact')).toContain('verify --release $artifact');
+    expect(prepare).not.toContain('npm ci');
     expect(prepare).toContain('robocopy ".\\backend\\dist"');
     expect(prepare).not.toContain('Stop-Service');
   });
@@ -74,13 +82,13 @@ describe('production notification activation registry cutover', () => {
       'Deploy backend service files',
       'Restart backend and verify health',
     ]) {
-      expect(body(name)).toContain("if: steps.changes.outputs.backend_changed == 'true'");
+      expect(body(name)).toContain("if: needs.detect.outputs.backend_changed == 'true'");
     }
   });
 
   it('restores the service even when migration or post-migration readiness fails', () => {
     const recovery = body('Ensure backend service is running');
-    expect(recovery).toContain("if: always() && steps.changes.outputs.backend_changed == 'true'");
+    expect(recovery).toContain("if: always() && needs.detect.outputs.backend_changed == 'true'");
     expect(recovery).toContain("if ($service.Status -ne 'Running')");
     expect(recovery).toContain('Start-Service -Name $env:BACKEND_SERVICE');
     expectSequence([
