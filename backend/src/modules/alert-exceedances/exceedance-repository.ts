@@ -126,8 +126,20 @@ export function createExceedanceRepository(
       'cp.factory_registration_no',
     );
     if (rows.length === 0) return { rows, channels: [], activations: [] };
-    const configs = executor('device_connection_configs as dc')
-      .join('device_measurement_channels as ch', 'ch.config_id', 'dc.id')
+    // Knex appends forUpdate() after a JOIN's ON clause on MSSQL, which is invalid SQL.
+    // Bind each hint to its table and retain update locks on both metadata tables.
+    const configs = executor(
+      lock
+        ? executor.raw('?? as ?? with (UPDLOCK)', ['device_connection_configs', 'dc'])
+        : 'device_connection_configs as dc',
+    )
+      .join(
+        lock
+          ? executor.raw('?? as ?? with (UPDLOCK)', ['device_measurement_channels', 'ch'])
+          : 'device_measurement_channels as ch',
+        'ch.config_id',
+        'dc.id',
+      )
       .whereIn(
         'dc.station_id',
         rows.map((row) => row.point_code),
@@ -138,7 +150,6 @@ export function createExceedanceRepository(
       .orderBy('dc.id')
       .orderBy('ch.id')
       .limit(5001);
-    if (lock) configs.forUpdate();
     const channels = await configs.select<ExceedanceChannelRow[]>('dc.station_id', 'ch.data_type', {
       config_updated_at: 'dc.updated_at',
     });
@@ -492,12 +503,17 @@ export function createExceedanceRepository(
 }
 
 function isRetryableWrite(error: unknown, includeDeadlock: boolean): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const item = error as Record<string, unknown>;
-  if (item.number === 2601 || item.number === 2627 || (includeDeadlock && item.number === 1205))
-    return true;
-  return (
-    isRetryableWrite(item.originalError, includeDeadlock) ||
-    isRetryableWrite(item.info, includeDeadlock)
-  );
+  // The MSSQL driver can set originalError to the same error object.
+  const pending: unknown[] = [error];
+  const seen = new Set<object>();
+  while (pending.length) {
+    const value = pending.pop();
+    if (!value || typeof value !== 'object' || seen.has(value)) continue;
+    seen.add(value);
+    const item = value as Record<string, unknown>;
+    if (item.number === 2601 || item.number === 2627 || (includeDeadlock && item.number === 1205))
+      return true;
+    pending.push(item.originalError, item.info);
+  }
+  return false;
 }
