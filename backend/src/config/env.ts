@@ -6,6 +6,10 @@ const envSchema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
     API_PREFIX: z.string().default('/api/v1'),
+    OFFICER_WRITE_PERMISSION_CHECKS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     FACTORY_PROFILE_MODE: z.enum(['legacy', 'canonical']).default('legacy'),
     API_DOCS_ENABLED: z
       .enum(['true', 'false'])

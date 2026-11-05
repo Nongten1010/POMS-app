@@ -4,6 +4,8 @@
 
 ## Frontend Quick Start
 
+เจ้าหน้าที่ใช้[ข้อยกเว้นเฉพาะ edit/approve บนคำขอเขียนข้อมูล](../../shared/authentication/README.md#ยกเว้นเฉพาะ-edit-และ-approve-สำหรับเจ้าหน้าที่) เมื่อ `OFFICER_WRITE_PERMISSION_CHECKS_ENABLED=false` (ค่าเริ่มต้น). `view`, ขอบเขตพื้นที่ที่มองเห็น และสิทธิ์ที่ส่งให้ frontend คงเดิม; ตารางสิทธิ์ด้านล่างยังมีผลกับ read API, action อื่น, citizen/operator และเมื่อเปิดสวิตช์คืนการตรวจ write permission
+
 เมนูนี้ครอบคลุมการจัดการผู้ใช้, บทบาท และสิทธิ์รายคนที่ backend ใช้ตรวจ API จริง บทบาทให้สิทธิ์เริ่มต้น; หลังบันทึกสิทธิ์รายคน ระบบใช้ชุดที่บันทึกโดยไม่จำกัดด้วยบทบาท `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` คืนสิทธิ์ชุดเดียวกัน ผู้เรียกทุก endpoint ในหน้านี้ต้องส่ง Bearer token และมี `users:view`, `users:edit`, หรือ `permissions:manage` ตาม route ที่เรียก
 
 หน้านี้เป็น contract ที่ใช้งานจริงของ permission matrix ตั้งแต่ migration `0089_expand_auth_rbac_permission_scopes` และส่วนขยาย role กกพ. ใน migration `0103_add_erc_office_permissions` เป็นต้นไป

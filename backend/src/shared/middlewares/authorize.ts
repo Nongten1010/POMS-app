@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { ForbiddenError, UnauthorizedError } from '../errors/AppError';
 import type { PermissionScopeDetails } from '../../modules/auth/permissions';
+import { getOfficerWritePermissionScope } from '../../modules/auth/officer-write-permission-policy';
 
 /**
  * Middleware เช็คว่า user มี permission อย่างน้อย 1 ใน list หรือไม่
@@ -10,7 +11,11 @@ export function authorize(...requiredPermissions: string[]) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) return next(new UnauthorizedError('Authentication required'));
     const userPerms = Object.keys(req.user.scopes);
-    const hasAny = requiredPermissions.some((p) => userPerms.includes(p));
+    const hasAny = requiredPermissions.some(
+      (permission) =>
+        userPerms.includes(permission) ||
+        getOfficerWritePermissionScope(req.user, permission, req.method) !== undefined,
+    );
     if (!hasAny) {
       return next(
         new ForbiddenError(`Missing required permission: ${requiredPermissions.join(' or ')}`),
@@ -29,6 +34,8 @@ export function authorize(...requiredPermissions: string[]) {
  */
 export function getScope(req: Request, permission: string): string | null | undefined {
   if (!req.user) return undefined;
+  const writeScope = getOfficerWritePermissionScope(req.user, permission, req.method);
+  if (writeScope !== undefined) return writeScope;
   if (!(permission in req.user.scopes)) return undefined;
   return req.user.scopes[permission];
 }
@@ -37,6 +44,8 @@ export function getScopeDetails(
   req: Request,
   permission: string,
 ): PermissionScopeDetails | undefined {
+  const writeScope = getOfficerWritePermissionScope(req.user, permission, req.method);
+  if (writeScope !== undefined) return { scope: writeScope };
   const detailedScope = req.user?.scopeDetails?.[permission];
   if (detailedScope) return detailedScope;
   const scope = getScope(req, permission);

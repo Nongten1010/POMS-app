@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="officer-edit-approve-only-bypass"></a>
+
+## 2026-11-05 — ยกเว้น edit/approve เจ้าหน้าที่ โดยคง view เดิม
+
+- **Affected canonical docs:** [Authentication](./shared/authentication/README.md#ยกเว้นเฉพาะ-edit-และ-approve-สำหรับเจ้าหน้าที่), [สิทธิ์การใช้งาน](./menus/permissions/README.md)
+- **Impact:** `OFFICER_WRITE_PERMISSION_CHECKS_ENABLED=false` (ค่าเริ่มต้น) ยกเว้นเฉพาะ `:edit`/`:approve` บน POST/PUT/PATCH/DELETE ของ officer/admin โดยใช้ action scope ALL หรือ binary null. GET/HEAD, view guards และพื้นที่ที่มองเห็นคงเดิม ไม่แก้ account context หรือสิทธิ์ที่ frontend ได้รับ
+- **Migration:** ไม่เปลี่ยน schema หรือข้อมูลสิทธิ์; frontend ที่ใช้ flags edit/approve หรือ GET workflow allowedActions ควบคุมปุ่มต้องแยกนโยบาย action ตามความต้องการ คืนการตรวจด้วยสวิตช์ true และ restart; หลัง deploy ที่ได้รับอนุญาต ตรวจ runtime OpenAPI และเทียบ read operations ว่าคงเดิม
+- **Old contract:** ตรวจ edit/approve ตามสิทธิ์และพื้นที่ที่บันทึกบนทุกคำขอ
+- **New contract:** ยกเว้นสอง action นี้เฉพาะคำขอเขียนของเจ้าหน้าที่; permission อื่น, citizen/operator, Integration API, authentication และ workflow คงเดิม
+- **Breaking change:** yes — เปิด action เขียนให้เจ้าหน้าที่แม้ไม่มี grant หรือมี deny โดยไม่ขยายสิทธิ์ดูข้อมูล
+
 <a id="rollback-officer-permission-bypass"></a>
 
 ## 2026-11-05 — คืนการตรวจสิทธิ์เจ้าหน้าที่ตาม release เดิม

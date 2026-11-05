@@ -21,6 +21,20 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 
 เมื่อสำเร็จ backend คืน `200 OK` พร้อม `accessToken`, `user` และ `permissions` บัญชีที่ใช้ `role_default` รับสิทธิ์เริ่มต้นของ role; บัญชี `custom` รับชุดสิทธิ์รายคนที่บันทึกไว้ สำหรับบัญชี i-Industry citizen/operator ยังคงแยก persona ของ session ที่ผู้ใช้เลือก ไม่รวมสิทธิ์ operator เข้า citizen session
 
+## ยกเว้นเฉพาะ edit และ approve สำหรับเจ้าหน้าที่
+
+`OFFICER_WRITE_PERMISSION_CHECKS_ENABLED` มีค่าเริ่มต้น `false`: สำหรับบัญชี `officer`/`admin` ปัจจุบันจากฐานข้อมูล backend ยกเว้นเฉพาะ permission ที่ลงท้าย `:edit` หรือ `:approve` บน `POST`, `PUT`, `PATCH`, `DELETE` แม้สิทธิ์ที่บันทึกไม่มี grant หรือเป็น `deny` ตัวอ่าน scope ของ action เหล่านี้ใช้ `ALL` หรือ `null` สำหรับ binary permission โดยไม่แก้ `req.user.scopes`, `scopeDetails` หรือ `regionalAccess`
+
+- `GET`/`HEAD` และ permission `:view` ทุก method ยังคงตรวจสิทธิ์และกรองพื้นที่เดิมทั้งหมด จึงไม่ขยายรายการหรือรายละเอียดที่เจ้าหน้าที่มองเห็น แม้ read endpoint เดิมยอมรับ `view` หรือ `approve` แบบ OR ก็ยังต้องผ่านสิทธิ์ที่บันทึกจริง
+- Write endpoint ที่มี `view` guard แยกยังต้องผ่าน guard นั้น เช่น `view` + `approve`; ยกเว้นเฉพาะส่วน `approve` เท่านั้น ไม่เพิ่ม view guard ให้ endpoint ที่เดิมไม่มี
+- `permissions:manage`, `direct_connect`, `answer`, `ask`, `export`, `view_status` และ action อื่นยังตรวจตามเดิม รวมถึง authentication, สถานะบัญชี, payload และเงื่อนไข workflow
+- `citizen`/`operator` และ Integration API คงนโยบายเดิมทั้งหมด ชนิดบัญชีเก่าใน token ไม่ทำให้ผู้ใช้ที่เปลี่ยนชนิดแล้วได้ bypass
+- Login/me และข้อมูลที่ frontend อ่าน เช่น permission flags, menu badges และ `GET` workflow ยังคืนค่าที่บันทึกเดิม Frontend ที่ใช้ `edit`/`approve` หรือ `allowedActions` ซ่อนปุ่มต้องพิจารณานโยบายปุ่มแยกจากสิทธิ์ดูข้อมูล
+- คืนการตรวจ write permission ด้วย `OFFICER_WRITE_PERMISSION_CHECKS_ENABLED=true` แล้ว restart backend
+- Runtime OpenAPI แสดง `x-poms-officer-write-permission-checks-enabled`; เฉพาะ write operation ที่ได้รับข้อยกเว้นมี `x-poms-officer-bypassed-permissions` โดยคง `x-poms-permissions` และเงื่อนไข view เดิมไว้ Read operation ไม่ถูกแก้
+
+Implementation: [officer-write-permission-policy.ts](../../../../../backend/src/modules/auth/officer-write-permission-policy.ts), [authorize.ts](../../../../../backend/src/shared/middlewares/authorize.ts), [runtime OpenAPI policy](../../../../../backend/src/modules/api-docs/officer-write-permissions.openapi.ts). Tests: [HTTP/permission/scope](../../../../../backend/tests/unit/officer-write-permission-policy.route.test.ts), [OpenAPI](../../../../../backend/tests/unit/officer-write-permission-policy.openapi.test.ts)
+
 ## POST `/api/v1/auth/login`
 
 ### Request body
