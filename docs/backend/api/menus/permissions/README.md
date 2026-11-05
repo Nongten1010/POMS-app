@@ -4,7 +4,7 @@
 
 ## Frontend Quick Start
 
-เมนูนี้ครอบคลุมการจัดการผู้ใช้, บทบาท และสิทธิ์รายคนที่ backend ใช้ตรวจ API จริง บทบาทให้สิทธิ์เริ่มต้น; หลังบันทึกสิทธิ์รายคน ระบบใช้ชุดที่บันทึกโดยไม่จำกัดด้วยบทบาท `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` คืนสิทธิ์ชุดเดียวกัน ผู้เรียกทุก endpoint ในหน้านี้ต้องส่ง Bearer token และมี `users:view`, `users:edit`, หรือ `permissions:manage` ตาม route ที่เรียก
+เมนูนี้ครอบคลุมการจัดการผู้ใช้, บทบาท และสิทธิ์รายคน บทบาทให้สิทธิ์เริ่มต้น; หลังบันทึกสิทธิ์รายคน ระบบใช้ชุดที่บันทึกโดยไม่จำกัดด้วยบทบาท `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` คืนสิทธิ์ชุดเดียวกัน ผู้เรียกทุก endpoint ในหน้านี้ต้องส่ง Bearer token การบังคับ `users:view`, `users:edit`, หรือ `permissions:manage` สำหรับ officer/admin เป็นไปตาม[นโยบายตรวจสิทธิ์เจ้าหน้าที่ชั่วคราว](../../shared/authentication/README.md#นโยบายตรวจสิทธิ์เจ้าหน้าที่ชั่วคราว): ค่าเริ่มต้นปิดการตรวจใน backend และ frontend ใช้ค่าที่บันทึกจริงควบคุมเมนู/action
 
 หน้านี้เป็น contract ที่ใช้งานจริงของ permission matrix ตั้งแต่ migration `0089_expand_auth_rbac_permission_scopes` และส่วนขยาย role กกพ. ใน migration `0103_add_erc_office_permissions` เป็นต้นไป
 
@@ -61,7 +61,7 @@ curl --request PATCH \
 
 ### Approved permission model
 
-โมเดลสิทธิ์ของเมนูนี้คือ:
+โมเดลสิทธิ์ที่บันทึกและส่งให้ frontend รวมถึงการบังคับ API เมื่อเปิด `OFFICER_PERMISSION_CHECKS_ENABLED=true` คือ:
 
 1. managed officer/admin หนึ่งบัญชีต้องมี system role เดียวใน `user_roles`; login จะ fail closed หากบัญชี legacy มีหลาย role
 2. `permissionMode: "role_default"` ใช้ permission codes และ data scope เริ่มต้นของ role ตาม matrix ด้านล่าง

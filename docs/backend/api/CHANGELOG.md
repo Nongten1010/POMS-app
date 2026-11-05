@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="temporary-officer-permission-bypass"></a>
+
+## 2026-11-05 — ปิดการตรวจ permission เจ้าหน้าที่ใน backend ชั่วคราว
+
+- **Affected canonical docs:** [Authentication](./shared/authentication/README.md#นโยบายตรวจสิทธิ์เจ้าหน้าที่ชั่วคราว), [สิทธิ์การใช้งาน](./menus/permissions/README.md)
+- **Impact:** บัญชี officer/admin ทุกบทบาทเรียก API ได้แม้ไม่มี grant หรือมี deny เมื่อ `OFFICER_PERMISSION_CHECKS_ENABLED=false` (ค่าเริ่มต้น) ขอบเขตข้อมูลเป็น ALL; frontend ควบคุมเมนู/action จากสิทธิ์ login/me ที่บันทึกจริง ซึ่งไม่เปลี่ยนตาม bypass. การเรียก API ตรงข้ามเงื่อนไขสิทธิ์ของ frontend ได้
+- **Migration:** ไม่ต้อง migrate ข้อมูล ก่อนใช้ตรวจว่าระบบ frontend ควบคุมเมนู/action ตามสิทธิ์ที่ต้องการ คืนการบังคับ permission และพื้นที่ด้วย `OFFICER_PERMISSION_CHECKS_ENABLED=true` และ restart backend; หลัง deployment ที่ได้รับอนุญาต ตรวจค่า `x-poms-officer-permission-checks-enabled` ใน `/api/v1/openapi.json`
+- **Old contract:** ทุกคำขอใช้ permission/data scope ปัจจุบันจากฐานข้อมูล รวม deny ของเจ้าหน้าที่
+- **New contract:** ปิดการบังคับ permission/data scope สำหรับ officer/admin เฉพาะภายในคำขอ API; JWT, สถานะบัญชี, validation และ workflow ยังคงตรวจ citizen/operator และ Integration API คงนโยบายเดิม
+- **Breaking change:** yes — ขอบเขตสิทธิ์และข้อมูลของเจ้าหน้าที่กว้างขึ้น โดยรูปแบบ request/response และสิทธิ์ที่บันทึกคงเดิม
+
 <a id="integration-alert-receipts-only"></a>
 
 ## 2026-11-03 — รับข้อมูลแจ้งเตือนภายนอกเพื่อเก็บประวัติเท่านั้น
