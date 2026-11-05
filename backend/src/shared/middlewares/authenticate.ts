@@ -2,7 +2,6 @@ import { NextFunction, Request, Response } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
 import { UnauthorizedError } from '../errors/AppError';
 import { authService } from '../../modules/auth/auth.service';
-import { applyOfficerPermissionPolicy } from '../../modules/auth/officer-permission-policy';
 
 export async function authenticate(
   req: Request,
@@ -27,10 +26,9 @@ export async function authenticate(
   }
 
   try {
-    const user = await authService.getAuthorizationContext(userId, {
+    req.user = await authService.getAuthorizationContext(userId, {
       userType: payload.userType,
     });
-    req.user = applyOfficerPermissionPolicy(user);
     return next();
   } catch (err) {
     return next(err);

@@ -1,15 +1,15 @@
 # API Breaking Changes
 
-<a id="temporary-officer-permission-bypass"></a>
+<a id="rollback-officer-permission-bypass"></a>
 
-## 2026-11-05 — ปิดการตรวจ permission เจ้าหน้าที่ใน backend ชั่วคราว
+## 2026-11-05 — คืนการตรวจสิทธิ์เจ้าหน้าที่ตาม release เดิม
 
-- **Affected canonical docs:** [Authentication](./shared/authentication/README.md#นโยบายตรวจสิทธิ์เจ้าหน้าที่ชั่วคราว), [สิทธิ์การใช้งาน](./menus/permissions/README.md)
-- **Impact:** บัญชี officer/admin ทุกบทบาทเรียก API ได้แม้ไม่มี grant หรือมี deny เมื่อ `OFFICER_PERMISSION_CHECKS_ENABLED=false` (ค่าเริ่มต้น) ขอบเขตข้อมูลเป็น ALL; frontend ควบคุมเมนู/action จากสิทธิ์ login/me ที่บันทึกจริง ซึ่งไม่เปลี่ยนตาม bypass. การเรียก API ตรงข้ามเงื่อนไขสิทธิ์ของ frontend ได้
-- **Migration:** ไม่ต้อง migrate ข้อมูล ก่อนใช้ตรวจว่าระบบ frontend ควบคุมเมนู/action ตามสิทธิ์ที่ต้องการ คืนการบังคับ permission และพื้นที่ด้วย `OFFICER_PERMISSION_CHECKS_ENABLED=true` และ restart backend; หลัง deployment ที่ได้รับอนุญาต ตรวจค่า `x-poms-officer-permission-checks-enabled` ใน `/api/v1/openapi.json`
-- **Old contract:** ทุกคำขอใช้ permission/data scope ปัจจุบันจากฐานข้อมูล รวม deny ของเจ้าหน้าที่
-- **New contract:** ปิดการบังคับ permission/data scope สำหรับ officer/admin เฉพาะภายในคำขอ API; JWT, สถานะบัญชี, validation และ workflow ยังคงตรวจ citizen/operator และ Integration API คงนโยบายเดิม
-- **Breaking change:** yes — ขอบเขตสิทธิ์และข้อมูลของเจ้าหน้าที่กว้างขึ้น โดยรูปแบบ request/response และสิทธิ์ที่บันทึกคงเดิม
+- **Affected canonical docs:** [Authentication](./shared/authentication/README.md), [สิทธิ์การใช้งาน](./menus/permissions/README.md)
+- **Impact:** ยกเลิกการปิดตรวจ permission/data scope ของ officer/admin ใน commit `41e86f31`; backend กลับมาตรวจ grant, deny และพื้นที่ตามค่าปัจจุบันจากฐานข้อมูล รวมถึง `cems_wpms_requests:edit`
+- **Migration:** ไม่เปลี่ยน schema หรือข้อมูลสิทธิ์ผู้ใช้; deploy backend ที่ย้อนกลับไปใช้ source เดียวกับ release `5206adbb` แล้วโหลดหน้าใหม่ ตรวจ health และ runtime OpenAPI หลัง deploy
+- **Old contract:** เจ้าหน้าที่เรียก API ได้ทุก permission และพื้นที่ ALL ภายใต้นโยบาย bypass ชั่วคราว
+- **New contract:** ใช้การตรวจสิทธิ์แบบเดิมทั้ง backend และ frontend; token และสิทธิ์รายคนเดิมยังใช้ได้ตาม grant/deny ที่บันทึก
+- **Breaking change:** yes — สิทธิ์และพื้นที่ที่ถูกปฏิเสธกลับมาถูกบังคับใช้ตามเดิม
 
 <a id="integration-alert-receipts-only"></a>
 

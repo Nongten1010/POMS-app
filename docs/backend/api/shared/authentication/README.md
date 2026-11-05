@@ -21,21 +21,6 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 
 เมื่อสำเร็จ backend คืน `200 OK` พร้อม `accessToken`, `user` และ `permissions` บัญชีที่ใช้ `role_default` รับสิทธิ์เริ่มต้นของ role; บัญชี `custom` รับชุดสิทธิ์รายคนที่บันทึกไว้ สำหรับบัญชี i-Industry citizen/operator ยังคงแยก persona ของ session ที่ผู้ใช้เลือก ไม่รวมสิทธิ์ operator เข้า citizen session
 
-## นโยบายตรวจสิทธิ์เจ้าหน้าที่ชั่วคราว
-
-`OFFICER_PERMISSION_CHECKS_ENABLED` มีค่าเริ่มต้น `false`: backend ปิดการบังคับ permission และขอบเขตพื้นที่สำหรับบัญชี `officer`/`admin` ทุกบทบาท โดยใช้ชนิดบัญชีปัจจุบันจากฐานข้อมูลหลังตรวจ JWT แล้ว แต่ละคำขอ API ได้ permission ทั้งหมดใน catalog ของ backend พร้อม data scope `ALL` และ binary scope `null`; regional access ไม่จำกัดพื้นที่ แม้สิทธิ์รายคนที่บันทึกไว้จะมี `deny` หรือไม่มี grant
-
-Frontend ต้องตรวจเมนูและ action จาก `permissions` ที่ได้รับจาก login/me ตามเดิม ค่าตอบกลับเหล่านี้ยังคำนวณจากสิทธิ์ที่บันทึกจริง ไม่ใช่สิทธิ์ที่ขยายภายในคำขอ และนโยบายนี้ไม่แก้ `user_permissions`, `permission_mode` หรือ role grants ผู้ที่ล็อกอินเป็นเจ้าหน้าที่สามารถเรียก API ตรงโดยไม่ผ่านการตรวจของ frontend ได้
-
-- ยังต้องส่ง Bearer token ที่ถูกต้อง บัญชีต้องเปิดใช้งานและไม่ถูกลบ; validation, สถานะ workflow และกติกาธุรกิจยังถูกตรวจ
-- `citizen`/`operator` ยังตรวจ permission, scope และ factory access ตามเดิม การอ้าง `userType`/role เก่าใน token ไม่ทำให้บัญชีที่เปลี่ยนเป็น citizen/operator ได้สิทธิ์เจ้าหน้าที่
-- Integration API ที่ใช้ credential แยกยังใช้นโยบายเดิม
-- คืนการตรวจสิทธิ์เจ้าหน้าที่ด้วย `OFFICER_PERMISSION_CHECKS_ENABLED=true` แล้ว restart backend; ไม่ต้องเปลี่ยนข้อมูลสิทธิ์รายคน
-- ตาราง permission และ data scope ในเอกสาร API ทุกเมนูยังเป็น contract สำหรับโหมดเปิดตรวจสิทธิ์; นโยบายชั่วคราวในหัวข้อนี้มีผลก่อนสำหรับ officer/admin เมื่อสวิตช์เป็น `false`
-- Runtime OpenAPI แสดงค่าปัจจุบันที่ `x-poms-officer-permission-checks-enabled` ทั้งระดับเอกสารและ operation ที่ใช้ Bearer authentication
-
-Implementation: [officer-permission-policy.ts](../../../../../backend/src/modules/auth/officer-permission-policy.ts), [authenticate.ts](../../../../../backend/src/shared/middlewares/authenticate.ts), [runtime OpenAPI policy](../../../../../backend/src/modules/api-docs/officer-permissions.openapi.ts). Tests: [officer-permission-policy.route.test.ts](../../../../../backend/tests/unit/officer-permission-policy.route.test.ts)
-
 ## POST `/api/v1/auth/login`
 
 ### Request body

@@ -31,10 +31,6 @@ import {
   factoryAreaWriteDescription,
 } from './connection-requests.openapi';
 import { MENU_TAGS } from './openapi.shared';
-import {
-  decorateOfficerPermissionDocs,
-  officerPermissionPolicyDescription,
-} from './officer-permissions.openapi';
 import { decorateWriteRequestValidationDocs } from './request-validation-docs';
 import { extendKwpHandoffSchemas, extendKwpCurrentLocationDocs } from './kwp-handoff.openapi';
 import {
@@ -8081,7 +8077,6 @@ for (const [path, schemaName] of [
 }
 
 extendKwpCurrentLocationDocs(paths);
-decorateOfficerPermissionDocs(paths);
 
 for (const [uploadPath, method] of [
   ['/cems-wpms-requests/document-images', 'post'],
@@ -8110,8 +8105,6 @@ export const pomsOpenApiDocument: OpenApiObject = {
     version: '0.4.0',
     description:
       'Interactive contract สำหรับ HTTP endpoint ทั้ง 159 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 168 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
-      '\n\n' +
-      officerPermissionPolicyDescription +
       '\n\nการแบ่งจังหวัดตามภาค: ภาคกลาง 11 จังหวัด, ภาคตะวันตก 8 จังหวัด, ภาคตะวันออก 8 จังหวัด, ภาคเหนือ 16 จังหวัด, ภาคตะวันออกเฉียงเหนือ 20 จังหวัด และภาคใต้ 14 จังหวัด รวม 77 จังหวัด. นครนายกอยู่ภาคตะวันออก; ตาก กำแพงเพชร และนครสวรรค์อยู่ภาคเหนือ; สมุทรสาคร สมุทรสงคราม นครปฐม และสุพรรณบุรีอยู่ภาคตะวันตก; อุทัยธานียังคงอยู่ภาคกลาง. region/regionName สำหรับข้อมูลปัจจุบันและ snapshot คำขอเชื่อมต่อที่ยังใช้งานอยู่ใช้พื้นที่ใหม่นี้ โดย regionCode ของ snapshot คำขอเชื่อมต่อเก็บชื่อภาคเดียวกับ regionName. IN_REGION ยังคงใช้ qualifier รายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ และไม่มีการเปลี่ยนชื่อภาคหรือสิทธิ์ผู้ใช้. แบบ กวภ.01–05 ทั้งเก่าและใหม่ใช้จังหวัดปัจจุบันของโรงงานและ provinces.region ชุดเดียวกันสำหรับรายการ รายละเอียด การแก้ไข ส่งกลับหลังแก้ไข และการพิจารณา โดยตรวจ scope ของ view/edit/approve แยกตาม action; ใช้ active connected point และ eligible factory ปัจจุบันก่อน และ fallback ไป factory master เฉพาะเมื่อไม่มี eligible row ทั้ง legacy/canonical mode. submission_region_name เป็นประวัติตอนออกเลขเท่านั้น ไม่ใช้กรองสิทธิ์; คำขอใหม่ออกเลขจากภาคปัจจุบัน. เลขเอกสารและ running เดิมคงอยู่; รหัสภาคสำหรับออกเลขเอกสารยังเป็น 02-07. ต้องรัน migration 0139_update_provincial_regional_jurisdictions ก่อนใช้งาน',
   },
   servers: [{ url: env.API_PREFIX }],
@@ -8119,7 +8112,6 @@ export const pomsOpenApiDocument: OpenApiObject = {
   paths,
   components,
   'x-poms-canonical-operation-count': 159,
-  'x-poms-officer-permission-checks-enabled': env.OFFICER_PERMISSION_CHECKS_ENABLED,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

@@ -2,7 +2,6 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  setupFiles: ['<rootDir>/tests/setup-env.js'],
   // The self-hosted deploy runner preserves node_modules between jobs, while its temp
   // directory is cleared. Keep Jest's transform cache alongside the preserved install.
   cacheDirectory: '<rootDir>/node_modules/.cache/jest',
