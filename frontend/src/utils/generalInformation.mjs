@@ -47,7 +47,7 @@ export function summarySections(data, systemType) {
   const unit = systemType === 'CEMS' ? 'm³/hr' : 'm³/d'
   return [
     { title: '1. จำนวนโรงงานที่ติดตั้ง แยกตามภาค', headers: countHeaders, rows: data ? [...ordered(data.regions).map(counts), ['ทั่วประเทศ', data.total.factoryCount, data.total.pointCount]] : [], total: true },
-    { title: '2. จำนวนโรงงานในนิคมอุตสาหกรรมและนอกนิคมอุตสาหกรรม', headers: countHeaders, rows: data ? data.estates.map(counts) : [] },
+    { title: '2. จำนวนโรงงานในนิคมอุตสาหกรรมและนอกนิคมอุตสาหกรรม', headers: countHeaders, rows: data ? data.estates.map((row) => [row.label === 'ในนิคมฯ' ? 'ในนิคมอุตสาหกรรม' : row.label === 'นอกนิคมฯ' ? 'นอกนิคมอุตสาหกรรม' : row.label, row.factoryCount, row.pointCount]) : [] },
     { title: '3. จำนวนตามพารามิเตอร์ที่ตรวจวัด', headers: countHeaders, rows: data ? data.parameters.map(counts) : [] },
     { title: `4. ปริมาณอัตราการระบาย${systemType === 'CEMS' ? 'อากาศ' : 'น้ำทิ้ง'}`, headers: ['ภาค', `เฉลี่ย (${unit})`, `ต่ำสุด (${unit})`, `สูงสุด (${unit})`], rows: data ? [...ordered(data.flowRates).map(flow), ['ทั่วประเทศ', data.flowTotal.average, data.flowTotal.min, data.flowTotal.max]] : [], total: true },
   ]

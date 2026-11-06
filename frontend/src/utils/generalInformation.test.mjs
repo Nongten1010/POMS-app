@@ -53,3 +53,15 @@ test('request is authenticated, abortable and distinguishes unavailable/errors',
   assert.equal(await fetchGeneralInformation({ ...options, fetchImpl: async () => new Response('', { status: 404 }) }), null)
   await assert.rejects(fetchGeneralInformation({ ...options, fetchImpl: async () => new Response('', { status: 403 }) }), /ไม่มีสิทธิ์/)
 })
+
+test('expand estate labels for tables and exports without mutating the API data', () => {
+  for (const systemType of ['CEMS', 'WPMS']) {
+    const data = fixture(systemType)
+    const sections = summarySections(validateGeneralInformation(data, systemType), systemType)
+    assert.deepEqual(sections[1].rows, [
+      ['ในนิคมอุตสาหกรรม', 3, 6],
+      ['นอกนิคมอุตสาหกรรม', 3, 6],
+    ])
+    assert.deepEqual(data.estates.map((row) => row.label), ['ในนิคมฯ', 'นอกนิคมฯ'])
+  }
+})

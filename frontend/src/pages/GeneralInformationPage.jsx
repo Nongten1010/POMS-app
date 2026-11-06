@@ -63,7 +63,7 @@ export default function GeneralInformationPage({ accessToken }) {
           <Box component="section" key={section.title} sx={{ py: 2, borderBottom: 1, borderColor: 'divider' }}>
             <Typography component="h2" variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>{section.title}</Typography>
             <TableContainer>
-              <Table size="small" aria-label={section.title} sx={{ minWidth: 560, tableLayout: 'fixed', bgcolor: 'background.paper', '& th, & td': { py: 1.25 }, '& tr > :first-child': { width: '45%' } }}>
+              <Table size="small" aria-label={section.title} sx={{ minWidth: 560, tableLayout: 'fixed', bgcolor: 'background.paper', '& th, & td': { py: 1.25, border: 1, borderColor: 'divider' }, '& tr > :first-child': { width: '45%' } }}>
                 <TableHead><TableRow>{section.headers.map((header, index) => <TableCell key={header} align={index ? 'right' : 'left'} sx={{ fontWeight: 700, bgcolor: 'action.hover' }}>{header}</TableCell>)}</TableRow></TableHead>
                 <TableBody>
                   {section.rows.map((row, index) => <TableRow key={row[0]} sx={section.total && index === section.rows.length - 1 ? { bgcolor: 'action.hover', '& td, & th': { fontWeight: 700 } } : { '&:hover': { bgcolor: 'action.hover' } }}>
