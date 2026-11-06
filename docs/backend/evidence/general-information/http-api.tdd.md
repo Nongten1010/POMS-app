@@ -51,18 +51,18 @@ npm test -- --runInBand --coverage --collectCoverageFrom='src/modules/general-in
 | Types | PASS |
 | Lint | PASS; global lint รอบสุดท้าย 0 errors / 370 warnings เดิม; โค้ดใหม่ targeted lint ใช้ `--max-warnings 0` ผ่าน |
 | HTTP / OpenAPI ที่เกี่ยวข้อง | PASS: 5 suites / 107 tests รวม HTTP รายงาน 12 กรณี; coverage โค้ดใหม่ statements 98.33%, branches 88.88%, functions/lines 100% |
-| ชุดทดสอบรวม | รอบล่าสุด: 392 suites ผ่าน / 1 suite ล้มเหลว / 2 suites ข้าม; 5,091 tests ผ่าน / 1 ล้มเหลว / 18 ข้าม รวม 5,110 tests; กรณีล้มเหลวอยู่ใน `device-config-protocols.api.test.ts` (Serial ASCII connected point: คาด 200 ได้ 501) รัน suite นี้แยกผ่านครบ 25 tests โดยไม่แก้โค้ดอุปกรณ์ จึงยังไม่อ้างว่าชุดรวมผ่านในรอบเดียว |
+| ชุดทดสอบรวม | PASS บน GitHub CI ของ release: 412 suites ผ่าน / 2 ข้าม; 5,706 tests ผ่าน / 18 ข้าม รวม 5,724 tests; ไม่มี failures |
 | Security | ตรวจโค้ดเพิ่มใหม่: authentication/authorization จาก server, strict input validation, parameterized SQL, ไม่ส่งข้อมูลรายโรงงาน/บุคคล, ไม่มี secrets/SQL/stack trace ใน response และใช้ global rate limit |
 | Diff / docs | ตรวจ diff เฉพาะงานเทียบไฟล์ก่อนเริ่ม; frontend tracked diff คงเดิม; ลิงก์ canonical page และทะเบียน endpoint ตรงกับ runtime OpenAPI |
 
 รอบรวมแรกพบ assertion จำนวน endpoint เก่า 2 จุด ซึ่งแก้และตรวจผ่านในชุด HTTP/OpenAPI แล้ว และ Chat หนึ่งกรณีเกิด `socket hang up`; รัน Chat แยกผ่าน 62 tests โดยไม่แก้ Chat จึงตรวจชุดรวมซ้ำหลังแก้ contract counters
 
-ผลรวมการตรวจ: งาน API และ contract ที่เกี่ยวข้องผ่าน แต่ **NOT READY สำหรับการอ้างว่าชุดทดสอบรวมเป็น green ในรอบเดียว** เพราะยังมีผลล้มเหลวที่เกิดเป็นครั้งคราวในชุดทดสอบ HTTP อื่น ผลรันแยกไม่แทนผลผ่านของชุดรวม
+ผลรวมการตรวจ release: **READY** หลังชุดทดสอบทั้งหมดบน GitHub CI ผ่านในรอบเดียว และ production deployment/health check สำเร็จ ผลรัน local ก่อนหน้านี้มีความไม่แน่นอนในชุด HTTP อื่น จึงเก็บเป็นข้อจำกัดของหลักฐาน local โดยไม่ใช้ผลรันแยกแทน CI
 
-## ข้อจำกัดก่อนเผยแพร่
+## ขอบเขตหลักฐาน
 
-- ยังไม่ได้ deploy หรือยืนยัน response กับฐานข้อมูลจริง
-- หลัง deployment ต้องตรวจ `/api/v1/openapi.json` บน production ให้มี contract เดียวกัน และตรวจ flow หน้าเว็บกับ API จริง
+- เผยแพร่และตรวจ runtime OpenAPI/HTTP authentication บน production แล้วตามหลักฐานด้านล่าง
+- ยังไม่ได้ตรวจยอดสรุปจาก production ด้วย request ที่ใช้ token เจ้าหน้าที่หรือทดสอบ UI ครบ flow; การตรวจแบบไม่มี token ไม่ยืนยันความครบถ้วนของข้อมูลจริง
 - ถ้าข้อมูลจริงไม่มี metadata สำหรับจัดภาค/นิคม หรือมีหน่วยอัตราการระบายที่ไม่รองรับ API จะตอบ `503`; ต้องตรวจและแก้แหล่งข้อมูลโดยไม่เปลี่ยนหมวดรายงานเอง
 
 ## ตรวจชุด release บน main ล่าสุด
@@ -70,3 +70,14 @@ npm test -- --runInBand --coverage --collectCoverageFrom='src/modules/general-in
 แยกเฉพาะงานนี้ 18 ไฟล์บน commit ฐาน `4c3eef2a` โดยไม่รวมการแก้ API อื่นที่ยังค้างใน workspace เดิม Build, typecheck, lint โค้ดใหม่แบบไม่มี warning และ deployment-helper tests ผ่านทั้งหมด ชุดทดสอบรวมบน checkout นี้ผ่าน 5,705 tests, ล้มเหลว 1 กรณีจาก Chat (`read ECONNRESET`), ข้าม 18 tests; 411 suites ผ่าน / 1 ล้มเหลว / 2 ข้าม ต้องให้ GitHub CI ของ release ผ่านก่อน workflow จะติดตั้ง production
 
 รันตรวจซ้ำ 6 suites ที่เกี่ยวข้อง (รวม Chat) บน checkout สำหรับ release ผ่านครบ 176 tests โดยไม่แก้ Chat
+
+## ผลเผยแพร่ production
+
+- Release: [`27b7e094`](https://github.com/Nongten1010/POMS-app/commit/27b7e094421e27a2db3ce05dedb7e66fb38db0ba)
+- [GitHub Actions run 42184836878](https://github.com/Nongten1010/POMS-app/actions/runs/42184836878): detect, CI และ installation สำเร็จทั้งหมด
+- CI: 412 suites / 5,706 tests ผ่าน; ข้าม 2 suites / 18 tests; ไม่มี failures
+- Production: ติดตั้ง verified artifact, migration step, canonical-profile preflight และ restart/health check ผ่าน; workflow ข้ามการ build/deploy frontend
+- `GET /api/v1/openapi.json`: `200` และเทียบ operation ของ `/general-information` พร้อม schema ใหม่ทั้ง 5 ชุดกับ source release แล้วตรงกัน
+- `GET /api/v1`: `200`; `GET /api/v1/docs/`: `200`
+- `GET /api/v1/general-information?systemType=CEMS` โดยไม่มี token: `401 UNAUTHORIZED` ยืนยันว่า route ถูกติดตั้งและบังคับ authentication
+- ไม่สร้างบัญชี ไม่ออก token ของผู้ใช้จริง และไม่เปลี่ยนข้อมูลโรงงานในการตรวจรอบนี้

@@ -16,7 +16,7 @@ curl --get 'https://d-poms.diw.go.th/api/v1/general-information' \
 2. แสดงข้อมูลทั้ง 4 หัวข้อจากคำตอบเดียว ไม่คำนวณยอดโรงงานจากผลบวกยอดย่อย
 3. ส่งออก Excel/PDF จาก snapshot ที่แสดง โดยไม่มี endpoint ส่งออกแยก
 
-หน้านี้เป็นสัญญาที่รองรับโดย source ใน repository การเผยแพร่ production ต้องผ่าน deployment และตรวจ `/api/v1/openapi.json` หลัง deploy อีกครั้ง
+เปิดใช้งานบน production แล้วใน [release `27b7e094`](https://github.com/Nongten1010/POMS-app/commit/27b7e094421e27a2db3ce05dedb7e66fb38db0ba) ผ่าน [CI และ deployment](https://github.com/Nongten1010/POMS-app/actions/runs/42184836878) ตรวจ [runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) แล้วพบ endpoint และ schema ตรงกับสัญญานี้ หน้า [Swagger UI](https://d-poms.diw.go.th/api/v1/docs/) พร้อมใช้งาน การเรียกข้อมูลต้องใช้บัญชีเจ้าหน้าที่หรือแอดมินตามสิทธิ์ด้านล่าง
 
 ## สรุป Endpoint
 
