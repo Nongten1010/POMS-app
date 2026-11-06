@@ -16,6 +16,10 @@
 - [ข้อมูลทั่วไปโรงงานเข้าข่ายและ POMS: ผลตรวจและขอบเขตหลักฐาน](./master-data/factory-profile-consistency.md)
 - [แก้ชื่ออำเภอ/ตำบลที่เป็นตัวเลขทั้ง legacy และ canonical](./master-data/factory-address-area-names.md)
 
+## รายงานข้อมูลทั่วไปทั่วประเทศ
+
+- [HTTP API: TDD, OpenAPI และผลตรวจความปลอดภัย](./general-information/http-api.tdd.md)
+
 ## Chat
 
 - [Chat: เปิดเรื่องเฉพาะผู้ประกอบการและคงสิทธิ์อ่าน ตอบ ปิดเรื่องเดิม](./chat/operator-only-ticket-creation.md)

@@ -10,9 +10,9 @@ Backend เป็นเจ้าของ contract เหล่านี้ ห�
 
 เมื่อเปิด backend ให้เข้า `<BASE_URL>/api/v1/docs` เพื่อดู payload, data type, required/nullable, validation, auth และตัวอย่าง แล้วกด `Try it out` ทดสอบกับ backend ได้ ส่วนไฟล์ OpenAPI สำหรับเครื่องมืออื่นอยู่ที่ `<BASE_URL>/api/v1/openapi.json`
 
-- ทะเบียน route จริง: **159 endpoints**
-- รายการที่กดทดสอบได้: **168 operations** เนื่องจาก route จุดตรวจวัดแบบระบุปี พ.ศ. ถูกขยายเพิ่ม 9 รูปแบบ
-- กลุ่มงานในหน้า Swagger: **14 เมนู**
+- ทะเบียน route จริง: **160 endpoints**
+- รายการที่กดทดสอบได้: **169 operations** เนื่องจาก route จุดตรวจวัดแบบระบุปี พ.ศ. ถูกขยายเพิ่ม 9 รูปแบบ
+- กลุ่มงานในหน้า Swagger: **15 เมนู**
 - Endpoint ที่ต้อง login ให้กด `Authorize` แล้วใส่ access token ใน `bearerAuth`
 - Integration ใช้ `X-API-Key` ผ่าน scheme ที่ระบุในแต่ละ endpoint
 

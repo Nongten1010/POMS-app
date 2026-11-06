@@ -6,7 +6,7 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 159 รายการ ส่วน **Operations ใน Swagger** มี 168 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 160 รายการ ส่วน **Operations ใน Swagger** มี 169 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -24,7 +24,8 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 | คำถามที่พบบ่อย                          |             5 |                     5 | [คำถามที่พบบ่อย](./faqs/README.md)                                                                                                                       |
 | ระบบเชื่อมต่อภายนอก                     |             4 |                     5 | [Integrations](../integrations/README.md)                                                                                                                |
 | Chat | 9 | 9 | [Chat](./chat/README.md) |
-| **รวม**                                 |       **159** |               **168** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| ข้อมูลทั่วไป | 1 | 1 | [ข้อมูลทั่วไป](./general-information/README.md) |
+| **รวม**                                 |       **160** |               **169** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/
@@ -59,9 +60,11 @@ menus/
 | กฎหมายที่เกี่ยวข้อง                     | `laws/`                      | public law list, PDF download และ content management                        |
 | คำถามที่พบบ่อย                          | `faqs/`                      | public FAQ list และ content management                                      |
 | Chat | `chat/` | เปิด Ticket, ข้อความ, เหตุการณ์เปิด/ปิด และขอบเขตโรงงาน |
+| ข้อมูลทั่วไป | `general-information/` | สรุปข้อมูลทั่วประเทศแยก CEMS/WPMS |
 
 ## Canonical Menu Pages
 
+- [ข้อมูลทั่วไป](./general-information/README.md) — สรุปโรงงาน จุดตรวจวัด พารามิเตอร์ และอัตราการระบายทั่วประเทศ
 - [หน้าหลัก](./home/README.md) — โรงงานของผู้ประกอบการพร้อมสถานะ POMS, dashboard current/live, public map และ favorite
 - [ข้อมูลพื้นฐาน](./master-data/README.md) — โรงงาน current/live, จุดตรวจวัด, workflow คำขอแก้ไข profile, ประวัติ และ device config
 - [ขอเชื่อมต่อ](./connection-requests/README.md) — contract คำขอ CEMS/WPMS และการออกรหัสจุดตรวจวัด

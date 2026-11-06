@@ -11,10 +11,11 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **159**
+จำนวน explicit endpoints: **160**
 
 | Method   | Full path                                                                 | Canonical owner                                                                 | Guard                                                                           | Route source                                                                                                |
 | -------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET` | `/api/v1/general-information` | `docs/backend/api/menus/general-information/` | `authenticate + officer/admin or admin role; national scope` | `backend/src/modules/general-information/general-information.routes.ts` |
 | `GET`    | `/health`                                                                 | `docs/backend/api/shared/common-api/`                                           | `public`                                                                        | `backend/src/app.ts`                                                                                        |
 | `GET`    | `/api/v1`                                                                 | `docs/backend/api/shared/common-api/`                                           | `public`                                                                        | `backend/src/app.ts`                                                                                        |
 | `GET`    | `/api/v1/docs`                                                            | `docs/backend/api/shared/common-api/`                                           | `public when API_DOCS_ENABLED=true; API execution still requires endpoint auth` | `backend/src/modules/api-docs/api-docs.routes.ts`                                                           |

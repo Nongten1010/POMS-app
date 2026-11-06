@@ -1,5 +1,6 @@
 import { generalUploadPolicyDescription } from './upload-policy.openapi';
 import { menuBadgePaths, menuBadgeSchemas } from './menu-badges.openapi';
+import { generalInformationPaths, generalInformationSchemas } from './general-information.openapi';
 import { chatPaths, chatSchemas } from './chat.openapi';
 import {
   pomsManagedStatusProperties,
@@ -7529,6 +7530,11 @@ const tags: OpenApiObject[] = [
     description: 'สถิติ ค่าปฏิทิน และการส่งออก CSV ของจุดตรวจวัด',
   },
   {
+    name: MENU_TAGS.GENERAL_INFORMATION,
+    description:
+      'สรุปโรงงาน จุดตรวจวัด พารามิเตอร์ และอัตราการระบายทั่วประเทศสำหรับเจ้าหน้าที่/แอดมิน',
+  },
+  {
     name: MENU_TAGS.PERMISSIONS,
     description: 'ผู้ใช้ บัญชี local permission overrides และการระงับผู้ใช้',
   },
@@ -7596,6 +7602,7 @@ function menuTagForPath(path: string): string {
     return MENU_TAGS.MASTER_DATA;
   }
   if (path === '/connected-measurement-points') return MENU_TAGS.MASTER_DATA;
+  if (path === '/general-information') return MENU_TAGS.GENERAL_INFORMATION;
   if (path.startsWith('/poms-factories')) return MENU_TAGS.MASTER_DATA;
   if (
     path.startsWith('/cems-wpms-requests') ||
@@ -7630,6 +7637,7 @@ interface AuthorizationRequirement {
 }
 
 function authorizationRequirementFor(path: string, method: string): AuthorizationRequirement {
+  if (path === '/general-information') return { permissions: [], mode: 'any' };
   if (path.startsWith('/chat/')) {
     return {
       permissions:
@@ -8006,6 +8014,7 @@ const components: OpenApiObject = {
     ...buildHomeFactorySchemas(componentSchemas),
     ...homeHandoffSchemas,
     ...menuBadgeSchemas,
+    ...generalInformationSchemas,
     ...chatSchemas,
     ...statusManagementSchemas,
     ...baseSchemas,
@@ -8046,6 +8055,7 @@ const paths = decorateWriteRequestValidationDocs(
         extraPaths,
         statusManagementPaths,
         menuBadgePaths,
+        generalInformationPaths,
         chatPaths,
       ),
     ),
@@ -8111,14 +8121,14 @@ export const pomsOpenApiDocument: OpenApiObject = {
     description:
       officerWritePermissionDescription +
       '\n\n' +
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 159 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 168 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 160 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 169 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
       '\n\nการแบ่งจังหวัดตามภาค: ภาคกลาง 11 จังหวัด, ภาคตะวันตก 8 จังหวัด, ภาคตะวันออก 8 จังหวัด, ภาคเหนือ 16 จังหวัด, ภาคตะวันออกเฉียงเหนือ 20 จังหวัด และภาคใต้ 14 จังหวัด รวม 77 จังหวัด. นครนายกอยู่ภาคตะวันออก; ตาก กำแพงเพชร และนครสวรรค์อยู่ภาคเหนือ; สมุทรสาคร สมุทรสงคราม นครปฐม และสุพรรณบุรีอยู่ภาคตะวันตก; อุทัยธานียังคงอยู่ภาคกลาง. region/regionName สำหรับข้อมูลปัจจุบันและ snapshot คำขอเชื่อมต่อที่ยังใช้งานอยู่ใช้พื้นที่ใหม่นี้ โดย regionCode ของ snapshot คำขอเชื่อมต่อเก็บชื่อภาคเดียวกับ regionName. IN_REGION ยังคงใช้ qualifier รายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ และไม่มีการเปลี่ยนชื่อภาคหรือสิทธิ์ผู้ใช้. แบบ กวภ.01–05 ทั้งเก่าและใหม่ใช้จังหวัดปัจจุบันของโรงงานและ provinces.region ชุดเดียวกันสำหรับรายการ รายละเอียด การแก้ไข ส่งกลับหลังแก้ไข และการพิจารณา โดยตรวจ scope ของ view/edit/approve แยกตาม action; ใช้ active connected point และ eligible factory ปัจจุบันก่อน และ fallback ไป factory master เฉพาะเมื่อไม่มี eligible row ทั้ง legacy/canonical mode. submission_region_name เป็นประวัติตอนออกเลขเท่านั้น ไม่ใช้กรองสิทธิ์; คำขอใหม่ออกเลขจากภาคปัจจุบัน. เลขเอกสารและ running เดิมคงอยู่; รหัสภาคสำหรับออกเลขเอกสารยังเป็น 02-07. ต้องรัน migration 0139_update_provincial_regional_jurisdictions ก่อนใช้งาน',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 159,
+  'x-poms-canonical-operation-count': 160,
   'x-poms-officer-write-permission-checks-enabled': env.OFFICER_WRITE_PERMISSION_CHECKS_ENABLED,
 };
 

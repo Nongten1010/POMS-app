@@ -7,6 +7,7 @@ export const MENU_TAGS = {
   BOD_COD_REPORTS: 'รายงานค่าความคลาดเคลื่อน BOD/COD Online',
   NOTIFICATIONS: 'การแจ้งเตือน',
   STATISTICS: 'สถิติข้อมูล',
+  GENERAL_INFORMATION: 'ข้อมูลทั่วไป',
   PERMISSIONS: 'สิทธิ์การใช้งาน',
   ELIGIBLE_FACTORIES: 'โรงงานที่เข้าข่าย',
   LAWS: 'กฎหมายที่เกี่ยวข้อง',
