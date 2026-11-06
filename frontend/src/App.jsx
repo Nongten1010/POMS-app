@@ -7,6 +7,8 @@ import BodCodReportPage from './pages/BodCodReportPage'
 import ChatPage from './pages/ChatPage'
 import { getChatViewerId } from './utils/chatSession.mjs'
 import ConditionalSearchPage from './pages/ConditionalSearchPage'
+import GeneralInformationPage from './pages/GeneralInformationPage'
+import { canViewGeneralInformation } from './utils/generalInformation.mjs'
 import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import FaqPage from './pages/FaqPage'
@@ -234,7 +236,8 @@ function App() {
   const roleCode = getRoleCodeFromAuth(authResponse)
   const activePermissions = useMemo(() => getPermissionsFromAuth(authResponse), [authResponse])
   const [selectedMenu, setSelectedMenu] = useState('home')
-  const visibleSelectedMenu = canViewMenu(selectedMenu, activePermissions)
+  const generalInformationAllowed = Boolean(accessToken) && canViewGeneralInformation(userType, roleCodes)
+  const visibleSelectedMenu = (selectedMenu === 'general-information' ? generalInformationAllowed : canViewMenu(selectedMenu, activePermissions))
     ? selectedMenu
     : getFirstViewableMenu(activePermissions)
   const isWorkspacePage =
@@ -247,6 +250,7 @@ function App() {
     visibleSelectedMenu === 'notifications' ||
     visibleSelectedMenu === 'statistics' ||
     visibleSelectedMenu === 'conditional-search' ||
+    visibleSelectedMenu === 'general-information' ||
     visibleSelectedMenu === 'support-request' ||
     visibleSelectedMenu === 'feedback' ||
     visibleSelectedMenu === 'laws' ||
@@ -273,6 +277,7 @@ function App() {
         accessToken={accessToken}
         open={isMenuOpen}
         userType={userType}
+        generalInformationAllowed={generalInformationAllowed}
         selectedValue={visibleSelectedMenu}
         permissions={activePermissions}
         onSelect={setSelectedMenu}
@@ -328,6 +333,8 @@ function App() {
           <StatisticsPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'conditional-search' ? (
           <ConditionalSearchPage />
+        ) : visibleSelectedMenu === 'general-information' ? (
+          <GeneralInformationPage key={accessToken} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'support-request' ? (
           <SupportRequestPage />
         ) : visibleSelectedMenu === 'feedback' ? (

@@ -81,6 +81,12 @@ const menuItems = [
     icon: <SearchIcon />,
   },
   {
+    label: 'ข้อมูลทั่วไป',
+    value: 'general-information',
+    staffOnly: true,
+    icon: <AssessmentIcon />,
+  },
+  {
     label: 'แจ้งขอความช่วยเหลือ',
     value: 'support-request',
     permissionKey: 'helpdesk',
@@ -130,9 +136,9 @@ const menuItems = [
   },
 ]
 
-function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permissions, accessToken = '' }) {
+function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permissions, accessToken = '', generalInformationAllowed = false }) {
   const badges = useMenuBadges(accessToken)
-  const visibleMenuItems = menuItems.filter((item) => item.alwaysVisible || permissions?.[item.permissionKey]?.view === true)
+  const visibleMenuItems = menuItems.filter((item) => item.staffOnly ? generalInformationAllowed : item.alwaysVisible || permissions?.[item.permissionKey]?.view === true)
 
   return (
     <Drawer
