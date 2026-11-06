@@ -25,6 +25,22 @@ const annualStationPath = `${stationPath}/{buddhistYear}`;
 const responseSchema = (path: string): unknown => objectAt(responseFor(path), 'schema').$ref;
 
 describe('home handoff OpenAPI contract', () => {
+  it('publishes the next-hour receipt deadline for every device and both station path variants', () => {
+    for (const prefix of [stationPath, annualStationPath]) {
+      for (const suffix of [
+        '/measurement-statistics',
+        '/calendar-status',
+        '/calendar-status/details',
+      ]) {
+        const description = operationFor(`${prefix}${suffix}`).description;
+        expect(description).toContain('ทุกอุปกรณ์');
+        expect(description).toContain('09:00');
+        expect(description).toContain('10:59:59');
+        expect(description).toContain('11:00:00');
+      }
+    }
+  });
+
   it('documents completed Bangkok days for low-data counts and both detail aliases', () => {
     for (const schema of ['HomeMeasurementSummary', 'HomeParameterSummary']) {
       expect(objectAt(propertiesFor(schema), 'lowDataDays').description).toContain(

@@ -1,4 +1,5 @@
 import { resolvePomsClientParameterStatus } from '../parameter-values/parameter-status';
+import { hourlyMeasurementReceiptStatus } from '../../shared/utils/hourly-measurement-receipt';
 
 export type AlertCompletenessPolicy = 'ON_TIME' | 'NORMAL_EXCLUDING_SHUTDOWN';
 export type ExemptDayPolicy = 'RESET' | 'PAUSE';
@@ -52,7 +53,7 @@ export function summarizeAlertDay(
     } else {
       const reported = sample.reportedAt === null ? NaN : Date.parse(sample.reportedAt);
       const hourStart = start + hour * HOUR_MS;
-      if (Number.isFinite(reported) && reported < hourStart + HOUR_MS) received.add(hour);
+      if (hourlyMeasurementReceiptStatus(hourStart, reported) === 'onTime') received.add(hour);
     }
   }
   if (policy === 'NORMAL_EXCLUDING_SHUTDOWN') {

@@ -44,7 +44,7 @@ describe('calendar selected-date completeness', () => {
         ...hourlyRows('2026-09-27', 12),
         {
           ...hourlyRows('2026-09-27', 13)[12],
-          utime: '13:00:00',
+          utime: '14:00:00',
         },
         ...hourlyRows('2026-09-28', 10),
       ],

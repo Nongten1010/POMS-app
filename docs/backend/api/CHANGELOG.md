@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="hourly-receipt-next-hour-deadline"></a>
+
+## 2026-11-06 — ทุกอุปกรณ์ส่งข้อมูลรายชั่วโมงได้ถึงสิ้นสุดชั่วโมงถัดไป
+
+- **Affected canonical docs:** [หน้าหลัก](./menus/home/README.md), [สถิติ](./menus/statistics/README.md), [กติกาเวลาร่วม](./shared/connected-measurement-points/README.md#home-measurement-rules), [อีเมลแจ้งเตือน](./menus/notifications/email-notifications.md), [คู่มืออีเมล](../guides/alert-email-operations.md)
+- **Impact:** ทุกอุปกรณ์และทุก protocol ของ CEMS/WPMS ใช้เส้นตายส่งก่อนต้นรอบ `cdate`/`ctime` + 2 ชั่วโมง; รอบ 09:00 ส่งได้ถึง 10:59:59.999… และตั้งแต่ 11:00:00 เป็นย้อนหลัง ส่งผลต่อ `lateData`, เปอร์เซ็นต์ตรงเวลา/ย้อนหลัง, ปฏิทิน, low-data และอีเมลเฉพาะสูตร `ON_TIME` ข้อมูลวันเก่าที่อ่านใหม่ประเมินตามกติกาใหม่ โดยคง `warning`/`exceeded`, source operational status และเวลาต้นทางจริง
+- **Migration:** ไม่ต้อง migrate หรือ backfill ฐานข้อมูล; clients ใช้สถานะและเปอร์เซ็นต์จาก API และเลิกคำนวณเส้นตายเดิมเอง รอบล่าสุดยังเป็นเวลาปัจจุบันลบ 1 ชั่วโมงตาม `Asia/Bangkok` และ `freshness` แยกจากการส่งทันเวลา โครงสร้าง response, URL, permissions และ error codes คงเดิม อีเมลที่จัดเก็บแล้วไม่ถูกสร้างหรือส่งใหม่จากการเปลี่ยนกติกานี้ หลัง deploy ที่ได้รับอนุญาตต้องตรวจ runtime OpenAPI ว่าตรงกับสัญญานี้
+- **Old contract:** ส่งตั้งแต่ต้นชั่วโมงถัดจากรอบตรวจวัดถือว่าย้อนหลัง เช่นรอบ 09:00 ส่งเวลา 10:01 ถูกจัดเป็นย้อนหลัง
+- **New contract:** ส่งได้ตลอดชั่วโมงถัดจากรอบตรวจวัด โดยเทียบวันและเวลาครบรวมข้ามวัน/เดือน/ปี ไม่เปลี่ยนเวลาต้นทางและไม่ชดเชย timezone ซ้ำ
+- **Breaking change:** yes — เปลี่ยนความหมายเส้นตายที่เผยแพร่เดิม จึงเปลี่ยนสถานะและค่าความครบถ้วนที่ clients ได้รับ แม้ schema เดิม
+
 <a id="officer-edit-approve-only-bypass"></a>
 
 ## 2026-11-05 — ยกเว้น edit/approve เจ้าหน้าที่ โดยคง view เดิม

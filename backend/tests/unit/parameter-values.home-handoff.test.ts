@@ -16,6 +16,7 @@ import { parameterValuesRepository } from '../../src/modules/parameter-values/pa
 import {
   evaluateHomeMeasurementRow,
   evaluateHomeMeasurementRows,
+  homeMeasurementReceiptStatus,
   parameterValuesService,
 } from '../../src/modules/parameter-values/parameter-values.service';
 
@@ -63,10 +64,90 @@ describe('home handoff measurement calculations', () => {
     jest.useRealTimers();
   });
 
+  it.each([
+    ['2026-11-06', '09:00:00', '2026-11-06', '10:01:23', 'onTime'],
+    ['2026-11-06', '09:32:15', '2026-11-06', '10:59:59.999', 'onTime'],
+    ['2026-11-06', '09:00:00', '2026-11-06', '11:00:00', 'late'],
+    ['2026-11-06', '08:00:00', '2026-11-06', '09:59:59.999', 'onTime'],
+    ['2026-11-06', '08:00:00', '2026-11-06', '10:00:00', 'late'],
+    ['2026-11-06', '23:00:00', '2026-11-07', '00:59:59.999', 'onTime'],
+    ['2026-11-06', '23:00:00', '2026-11-07', '01:00:00', 'late'],
+    ['2026-11-30', '23:00:00', '2026-12-01', '00:59:59.999', 'onTime'],
+    ['2026-12-31', '23:00:00', '2027-01-01', '00:59:59.999', 'onTime'],
+    ['2026-12-31', '23:00:00', '2027-01-01', '01:00:00', 'late'],
+  ])(
+    'allows the next reporting hour for %s %s sent at %s %s',
+    (cdate, ctime, udate, utime, expected) => {
+      expect(homeMeasurementReceiptStatus({ cdate, ctime, udate, utime })).toBe(expected);
+    },
+  );
+
+  it.each([
+    { udate: null },
+    { utime: null },
+    { utime: '24:00:00' },
+    { utime: '10:60:00' },
+    { utime: '10:00:60' },
+    { udate: '2026-02-30' },
+    { cdate: '2026-02-30' },
+  ])('does not infer an on-time receipt from invalid source timestamps %j', (overrides) => {
+    expect(homeMeasurementReceiptStatus({ ...hourRow(9), ...overrides })).toBe('unknown');
+  });
+
+  it('counts the ten S1105 reporting hours as on time at 10:05 without displaying hour 10', async () => {
+    jest.setSystemTime(new Date('2026-11-06T03:05:00Z'));
+    const sentTimes = [
+      '01:01:46',
+      '02:01:31',
+      '03:01:11',
+      '04:01:19',
+      '05:01:28',
+      '06:01:49',
+      '07:03:15',
+      '08:01:29',
+      '09:01:20',
+      '10:01:23',
+    ];
+    repository.listRows.mockResolvedValue({
+      tableName: 'S1105_data_60m',
+      rows: sentTimes.map((utime, hour) => ({
+        ...hourRow(hour),
+        station_id: 'S1105',
+        cdate: '2026-11-06',
+        udate: '2026-11-06',
+        utime,
+      })),
+    });
+    const statistics = await parameterValuesService.measurementStatistics(
+      { stationId: 'S1105', date: '2026-11-06' },
+      access,
+      options,
+    );
+    const calendar = await parameterValuesService.calendarStatus(
+      { stationId: 'S1105', month: '2026-11', endDate: '2026-11-06' },
+      access,
+      options,
+    );
+    expect(statistics.data.summary).toMatchObject({
+      todayDataCompletenessPercent: 100,
+      lateDataPercent: 0,
+    });
+    expect(calendar.data.summary).toEqual(statistics.data.summary);
+    const rows = statistics.data.measurementPoints[0].rows;
+    expect(rows.slice(0, 10).map((row) => row.values['CO (ppm)'].status)).toEqual(
+      Array(10).fill('normal'),
+    );
+    expect(rows[10].values['CO (ppm)']).toEqual({
+      value: null,
+      displayValue: '-',
+      status: 'noData',
+    });
+  });
+
   it.each([6, '6', 'Shut Down'])(
     'returns lateData for late shutdown status %s while preserving its display label',
     async (status) => {
-      const row = { ...hourRow(3, 0), co_status: status, utime: '04:00:00' };
+      const row = { ...hourRow(3, 0), co_status: status, utime: '05:00:00' };
       repository.listRows.mockResolvedValue({ tableName: 'S1125_data_60m', rows: [row] });
       const result = await parameterValuesService.measurementStatistics(
         { stationId: 'S1125', date: '2026-09-23' },
@@ -85,9 +166,10 @@ describe('home handoff measurement calculations', () => {
 
   it.each([
     [6, '03:59:59', 'Shut Down', 'invalid'],
+    [6, '04:59:59.999', 'Shut Down', 'invalid'],
     [6, null, 'Shut Down', 'invalid'],
     [0, '04:00:00', 'NoData', 'noData'],
-    [2, '04:00:00', 'Calibration', 'lateData'],
+    [2, '05:00:00', 'Calibration', 'lateData'],
   ])(
     'keeps receipt and operational status controls for code %s sent at %s',
     (code, sentTime, label, status) => {
@@ -146,9 +228,9 @@ describe('home handoff measurement calculations', () => {
       tableName: 'S1125_data_60m',
       rows: [
         { ...hourRow(6), udate: '2026-09-23', utime: '06:59:59.999' },
-        { ...hourRow(7), udate: '2026-09-23', utime: '08:00:00' },
-        { ...hourRow(8, 90), udate: '2026-09-23', utime: '09:00:00' },
-        { ...hourRow(9, 150), udate: '2026-09-23', utime: '10:00:00' },
+        { ...hourRow(7), udate: '2026-09-23', utime: '09:00:00' },
+        { ...hourRow(8, 90), udate: '2026-09-23', utime: '10:00:00' },
+        { ...hourRow(9, 150), udate: '2026-09-23', utime: '11:00:00' },
       ],
     });
 
@@ -180,8 +262,8 @@ describe('home handoff measurement calculations', () => {
       tableName: 'S1125_data_60m',
       rows: [
         ...rows,
-        { ...hourRow(0), co_value: null, nox_value: 40, nox_status: 'Normal', utime: '01:00:00' },
-        { ...hourRow(1), utime: '02:00:00' },
+        { ...hourRow(0), co_value: null, nox_value: 40, nox_status: 'Normal', utime: '02:00:00' },
+        { ...hourRow(1), utime: '03:00:00' },
       ],
     });
     const calendar = await parameterValuesService.calendarStatus(
@@ -222,9 +304,12 @@ describe('home handoff measurement calculations', () => {
 
   it.each([
     ['2026-09-22', '2026-09-22', '23:59:59.999', 'normal', 100, 0],
-    ['2026-09-22', '2026-09-23', '00:00:00', 'lateData', 95.83, 4.17],
+    ['2026-09-22', '2026-09-23', '00:00:00', 'normal', 100, 0],
+    ['2026-09-22', '2026-09-23', '00:59:59.999', 'normal', 100, 0],
+    ['2026-09-22', '2026-09-23', '01:00:00', 'lateData', 95.83, 4.17],
     ['2026-09-22', '2026-09-23', '23:00:00', 'lateData', 95.83, 4.17],
-    ['2026-12-31', '2027-01-01', '00:00:00', 'lateData', 95.83, 4.17],
+    ['2026-12-31', '2027-01-01', '00:00:00', 'normal', 100, 0],
+    ['2026-12-31', '2027-01-01', '01:00:00', 'lateData', 95.83, 4.17],
   ])(
     'compares corrected local timestamps directly for %s 23:00 sent at %s %s',
     async (measuredDate, sentDate, sentTime, expectedStatus, completenessPercent, latePercent) => {
@@ -302,7 +387,9 @@ describe('home handoff measurement calculations', () => {
   });
 
   it('excludes a late normal receipt from both calendar completeness and delivery', async () => {
-    const rows = Array.from({ length: 9 }, (_, hour) => hourRow(hour));
+    const rows = Array.from({ length: 10 }, (_, hour) => hourRow(hour)).filter(
+      (_, hour) => hour !== 8,
+    );
     repository.listRows.mockResolvedValue({ tableName: 'S1125_data_60m', rows });
     const before = await parameterValuesService.calendarStatus(
       { stationId: 'S1125', month: '2026-09' },
@@ -311,7 +398,7 @@ describe('home handoff measurement calculations', () => {
     );
     repository.listRows.mockResolvedValue({
       tableName: 'S1125_data_60m',
-      rows: [...rows, { ...hourRow(9), utime: '10:05:00' }],
+      rows: [...rows, { ...hourRow(8), utime: '10:05:00' }],
     });
     const after = await parameterValuesService.calendarStatus(
       { stationId: 'S1125', month: '2026-09' },

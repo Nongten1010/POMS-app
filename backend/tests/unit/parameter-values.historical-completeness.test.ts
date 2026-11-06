@@ -19,11 +19,16 @@ const access = { actorUserId: 42, scope: 'OWN_FACTORY' };
 const date = '2026-10-06';
 
 function hourRow(hour: number, late = false): Record<string, unknown> {
+  const sentAt = new Date(
+    Date.parse(`${date}T${String(hour).padStart(2, '0')}:00:00Z`) +
+      (late ? 2 : 0) * 3_600_000 +
+      29_000,
+  ).toISOString();
   return {
     cdate: date,
     ctime: `${String(hour).padStart(2, '0')}:00:00`,
-    udate: late && hour === 23 ? '2026-10-07' : date,
-    utime: `${String(late ? (hour + 1) % 24 : hour).padStart(2, '0')}:00:29`,
+    udate: sentAt.slice(0, 10),
+    utime: sentAt.slice(11, 19),
     bod_value: '0',
     bod_units: 'mg/l',
     bod_status: '6',

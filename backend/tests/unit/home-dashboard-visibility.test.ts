@@ -119,6 +119,97 @@ afterEach(() => {
 });
 
 describe('home dashboard visibility projection', () => {
+  it.each([
+    ['dashboard', 'CEMS'],
+    ['map', 'CEMS'],
+    ['dashboard', 'WPMS'],
+    ['map', 'WPMS'],
+  ])('keeps next-hour receipts current and on time in %s for %s', async (surface, systemType) => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-11-06T03:05:00Z'));
+    const stationId = systemType === 'CEMS' ? 'S1105' : 'P0001';
+    const label = systemType === 'CEMS' ? 'CO (ppm)' : 'BOD (mg/l)';
+    pointRows = [
+      point({
+        point_code: stationId,
+        system_type: systemType,
+        parameters_json: JSON.stringify([label]),
+        instruments_json: null,
+      }),
+    ];
+    jest.mocked(parameterValuesService.latestHourly).mockResolvedValue({
+      data: [
+        {
+          station_id: stationId,
+          cdate: '2026-11-06',
+          ctime: '09:00:00',
+          udate: '2026-11-06',
+          utime: '10:01:23',
+          ...(systemType === 'CEMS'
+            ? { co_value: 50, co_units: 'ppm', co_status: 'Normal' }
+            : { bod_value: 50, bod_units: 'mg/l', bod_status: 'Normal' }),
+        },
+      ],
+      meta: {
+        stationId,
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: `${stationId}_data_60m`,
+        count: 1,
+        registeredParameters: [label],
+        returnedColumns: [],
+      },
+    });
+    const result =
+      surface === 'dashboard'
+        ? await connectionRequestsService.listOperatorFactoryDashboard(42, 'ALL')
+        : await connectionRequestsService.listPublicFactoryMapPoints();
+    expect(result.data[0].measurementPoints[0].latestMeasurement).toMatchObject({
+      date: '2026-11-06',
+      time: '09:00:00',
+      freshness: 'current',
+      values: { [label]: { value: 50, status: 'normal' } },
+    });
+    expect(result.data[0].hasLatestHourlyMeasurement).toBe(true);
+  });
+
+  it.each([
+    ['09:59:59.999', 'normal'],
+    ['10:00:00', 'lateData'],
+  ])(
+    'keeps freshness stale independently of the 08:00 receipt sent at %s',
+    async (utime, status) => {
+      jest.mocked(parameterValuesService.latestHourly).mockResolvedValue({
+        data: [
+          {
+            station_id: 'S0001',
+            cdate: '2026-09-23',
+            ctime: '08:00:00',
+            udate: '2026-09-23',
+            utime,
+            co_value: 50,
+            co_units: 'ppm',
+            co_status: 'Normal',
+          },
+        ],
+        meta: {
+          stationId: 'S0001',
+          interval: '60m',
+          schemaName: 'ingest',
+          tableName: 'S0001_data_60m',
+          count: 1,
+          registeredParameters: ['CO (ppm)'],
+          returnedColumns: [],
+        },
+      });
+      const result = await connectionRequestsService.listPublicFactoryMapPoints();
+      expect(result.data[0].measurementPoints[0].latestMeasurement).toMatchObject({
+        time: '08:00:00',
+        freshness: 'stale',
+        values: { 'CO (ppm)': { value: 50, status } },
+      });
+    },
+  );
+
   it.each(['dashboard', 'map'] as const)(
     'preserves the real timestamp and pollution status of stale data in %s',
     async (surface) => {

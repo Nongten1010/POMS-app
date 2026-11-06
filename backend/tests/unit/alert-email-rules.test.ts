@@ -19,6 +19,26 @@ function sample(hour: number, overrides: Partial<AlertHourlySample> = {}): Alert
 }
 
 describe('alert email daily and hourly rules', () => {
+  it.each([
+    ['2026-10-01', 9, '2026-10-01T10:59:59.999+07:00', 1],
+    ['2026-10-01', 9, '2026-10-01T11:00:00+07:00', 0],
+    ['2026-10-01', 23, '2026-10-02T00:59:59.999+07:00', 1],
+    ['2026-10-01', 23, '2026-10-02T01:00:00+07:00', 0],
+    ['2026-12-31', 23, '2027-01-01T00:59:59.999+07:00', 1],
+    ['2026-12-31', 23, '2027-01-01T01:00:00+07:00', 0],
+  ])(
+    'allows the next reporting hour for %s hour %s sent at %s',
+    (date, hour, reportedAt, count) => {
+      const rows = [
+        sample(hour, {
+          measuredAt: `${date}T${String(hour).padStart(2, '0')}:00:00+07:00`,
+          reportedAt,
+        }),
+      ];
+      expect(summarizeAlertDay(date, rows, 'ON_TIME').receivedCount).toBe(count);
+    },
+  );
+
   it('matches the existing home on-time classification for an earlier receipt bucket', () => {
     expect(
       summarizeAlertDay(

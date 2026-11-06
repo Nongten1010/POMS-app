@@ -8,6 +8,8 @@ API นี้ใช้ดูตัวอย่างอีเมลจากเ�
 
 ค่าเกิน อก./EIA ใหม่ของ CEMS/WPMS ใช้ event จาก [detector ภายใน](../../../guides/hourly-exceedance-detector.md) ที่เปิด active; [integration API](../../integrations/alert-events/README.md) เก็บ receipt เท่านั้น ไม่สร้าง event/outbox และไม่ส่งอีเมล. คงประวัติและคิวที่สร้างไว้ก่อนเปลี่ยน API ตามเดิม รวมผู้รับ รอบส่ง permissions และ preview/delivery contract เดิม
 
+การคำนวณรายงานครบเมื่อตั้ง `ALERT_EMAIL_COMPLETENESS_POLICY=ON_TIME` ใช้ [เส้นตายร่วมของทุกอุปกรณ์](../../shared/connected-measurement-points/README.md#home-measurement-rules): รอบ `09:00–09:59` ส่งได้ถึง `10:59:59.999…` และตั้งแต่ `11:00:00` เป็นย้อนหลัง ตาม [คู่มือปฏิบัติการ](../../../guides/alert-email-operations.md) โดยคงนโยบายผู้รับและรอบส่งเดิม ประวัติอีเมลที่จัดเก็บแล้วคงเป็น snapshot เดิม
+
 ## เงื่อนไขค่าผิดปกติ `ABNORMAL_VALUE`
 
 ตรวจค่าศูนย์ (`ZERO`) ค่าติดลบ (`NEGATIVE`) และค่านิ่ง (`CONSTANT`) ทุกชั่วโมง เมื่อสถานะ `Normal` ต่อเนื่องครบ **5 ชั่วโมงจริง** จะจัดคิวอีเมลในรอบนั้นด้วย `cadence: "HOURLY"` โดยไม่รอ 09:00 น. และไม่หน่วงตาม delay ของค่าเกินมาตรฐาน เช่น ค่ารายชั่วโมง 08:00–13:00 น. จำนวน 6 ค่า ยืนยันได้เวลา 13:00 น.

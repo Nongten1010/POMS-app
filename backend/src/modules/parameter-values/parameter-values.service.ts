@@ -1,5 +1,6 @@
 import { env } from '../../config/env';
 import { StatusCodes } from 'http-status-codes';
+import { hourlyMeasurementReceiptStatus } from '../../shared/utils/hourly-measurement-receipt';
 import {
   AppError,
   BadRequestError,
@@ -759,8 +760,8 @@ function selectHomeParameterRow(
 
 /**
  * cdate/ctime is the device measurement time; udate/utime is its send time.
- * Both source pairs already use Asia/Bangkok. Compare their stored local dates
- * and hours directly; applying another timezone offset would shift the deadline.
+ * Both source pairs already use Asia/Bangkok. Interpret that offset once, with
+ * the same next-hour deadline for every protocol (09:00 reports before 11:00).
  */
 export function homeMeasurementReceiptStatus(
   row: Record<string, unknown>,
@@ -772,14 +773,20 @@ export function homeMeasurementReceiptStatus(
   if (!measuredDate || measuredHour === null || !sentDate || sentHour === null) {
     return 'unknown';
   }
-  const measuredBucket = `${measuredDate} ${String(measuredHour).padStart(2, '0')}`;
-  const sentBucket = `${sentDate} ${String(sentHour).padStart(2, '0')}`;
-  return sentBucket <= measuredBucket ? 'onTime' : 'late';
+  const measuredAt = Date.parse(
+    `${measuredDate}T${String(measuredHour).padStart(2, '0')}:00:00+07:00`,
+  );
+  const sentAt = Date.parse(`${sentDate}T${String(sentHour).padStart(2, '0')}:00:00+07:00`);
+  return hourlyMeasurementReceiptStatus(measuredAt, sentAt);
 }
 
 function timestampDate(value: unknown): string | null {
   const date = stringValue(value);
-  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const timestamp = Date.parse(`${date}T00:00:00Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === date
+    ? date
+    : null;
 }
 
 function receiptTimestampHour(value: unknown): number | null {
@@ -1751,7 +1758,7 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
     status: {
       normal: 'สีเขียว ปกติ ค่ามลพิษ <= normalMax',
       lateData:
-        'ข้อมูลที่ส่งหลังสิ้นสุดชั่วโมงตาม ctime รวมสถานะเครื่องเช่น Shut Down; สถานะมลพิษ warning/exceeded ยังมีลำดับความสำคัญสูงกว่า',
+        'ทุกอุปกรณ์ส่งได้ถึงสิ้นสุดชั่วโมงถัดจากรอบ cdate/ctime; รอบ 09:00 ส่งได้ถึง 10:59:59 และตั้งแต่ 11:00:00 เป็นย้อนหลัง รวมสถานะเครื่องเช่น Shut Down; สถานะมลพิษ warning/exceeded ยังมีลำดับความสำคัญสูงกว่า',
       warning: 'สีส้ม เฝ้าระวัง ค่ามลพิษ <= warningMax',
       exceeded: 'สีแดง เกินมาตรฐาน ค่ามลพิษ > warningMax',
       insufficient: 'สีเทา ข้อมูลไม่เพียงพอ',
@@ -1772,7 +1779,8 @@ function calendarStatusValueDefinitions(): Record<string, unknown> {
       highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
     },
     pollutionStatus: {
-      lateData: 'ค่าปกติที่ Server ได้รับหลังสิ้นสุดชั่วโมงตาม ctime',
+      lateData:
+        'ค่าปกติที่ส่งตั้งแต่ต้นรอบ cdate/ctime + 2 ชั่วโมง ทุกอุปกรณ์ใช้เส้นตายเดียวกัน เช่นรอบ 09:00 ส่งตั้งแต่ 11:00:00 เป็นย้อนหลัง',
       normal:
         'ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 อยู่ในเกณฑ์ปกติ ใช้เส้นขอบสีเขียว',
       warning:
