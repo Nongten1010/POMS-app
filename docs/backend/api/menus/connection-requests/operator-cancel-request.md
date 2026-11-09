@@ -99,7 +99,9 @@
 - `CONNECTED` ยกเลิกไม่ได้; การเลิกใช้จุดที่เชื่อมต่อแล้วเป็นคนละ workflow.
 - หากคำขอเป็น `CANCELED` อยู่แล้ว endpoint ตอบ `409 CONFLICT` และไม่แก้เหตุผล, เวลา, actor หรือเพิ่ม history ซ้ำ รวมกรณีมีการยกเลิกอีกคำสั่งก่อน lock แถวสำเร็จ.
 - Backend lock แถวคำขอใน transaction ก่อนตรวจสถานะและเขียน history เพื่อไม่ให้ cancel แข่งกับ action อื่นแล้วสำเร็จทั้งคู่.
-- ไม่ลบ request, factory snapshot, measurement points, documents, point codes หรือ device configs.
+- เก็บ request, factory snapshot, measurement points, documents และ point codes เป็นประวัติ.
+- ปิดใช้งาน device configs ของคำขอ (`request_id`) และสำเนา current ที่ `source_request_id` ตรงคำขอ พร้อม `device_measurement_channels` ด้วย soft delete (`deleted_at`, `updated_at`, `updated_by`) ใน transaction เดียวกับสถานะและ history; ไม่ลบแถวหรือค่าตั้งค่าเดิมถาวร และไม่แตะ config ของคำขออื่นหรือ config อิสระ แม้ใช้ station เดียวกัน. การยกเลิกโดยเจ้าหน้าที่และหมดเวลาอัตโนมัติใช้กติกาเดียวกัน หากปิด config ไม่สำเร็จให้ rollback การยกเลิกทั้งหมด.
+- การบันทึก config ล็อกคำขอและตรวจ `WAITING_CONNECTION` ซ้ำใน transaction; คำสั่งที่มาถึงหลังยกเลิกตอบ `409 CONFLICT` แทนการสร้าง config กลับมา ดู [การบันทึก config](./device-configs.md#validation-and-business-rules).
 - แม้เก็บ device configs เป็นประวัติ [Integration device config](../../integrations/device-configs/README.md#สถานะคำขอและการเลือก-config) จะไม่ใช้ config ของคำขอ `CANCELED` รวมสำเนา current; ตรวจสถานะต้นทางทุกครั้งทั้งการยกเลิกโดยผู้ใช้และอัตโนมัติ
 - รหัสจากคำขอ `CANCELED` ที่ยังไม่เคยเชื่อมต่อ เช่น `P0267` สามารถนำไปใช้กับคำขอใหม่ของโรงงานเดิมและ `systemType` เดิมได้ รวมคำขอที่ยกเลิกไว้ก่อน deploy การยกเลิกยังเก็บการจองเดิมไว้; backend ตรวจและเปลี่ยนเจ้าของการจองอย่างปลอดภัยใน transaction ตอน [กำหนดรหัสให้คำขอใหม่](./request-payloads-and-validation.md#business-rules) หรือสร้าง direct connection โดยคงคำขอและจุดเก่าเป็นประวัติ รหัสที่เคยเชื่อมต่อแม้เลิกใช้งานแล้ว หรือยังมีจุดอื่น/live device config ใช้งานอยู่ ไม่เข้าเงื่อนไขนำกลับมาใช้
 - เวอร์ชันนี้ไม่ส่ง email, push notification หรือ notification อื่น.
@@ -123,6 +125,7 @@
 ## Backend Maintainer Links
 
 - การนำรหัสจากคำขอยกเลิกกลับมาใช้: [`reclaim-canceled-point-code.ts`](../../../../../backend/src/modules/connection-requests/reclaim-canceled-point-code.ts), [`0138_allow_canceled_point_code_reuse.ts`](../../../../../backend/src/db/migrations/0138_allow_canceled_point_code_reuse.ts), [regression tests](../../../../../backend/tests/unit/connection-requests.current-factory-profile.repository.test.ts)
+- การปิด config พร้อมการยกเลิก: [`retire-request-device-configs.ts`](../../../../../backend/src/modules/device-connections/retire-request-device-configs.ts), [transaction และ delayed-write tests](../../../../../backend/tests/unit/canceled-request-device-configs.repository.test.ts)
 - Workflow: [`workflows/operator-cancel-connection-request.md`](../../../../../workflows/operator-cancel-connection-request.md)
 - Route: [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts)
 - Controller: [`connection-requests.controller.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.controller.ts)

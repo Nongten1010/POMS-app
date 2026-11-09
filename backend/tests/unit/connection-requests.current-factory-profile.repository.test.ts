@@ -99,6 +99,7 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
     [CONNECTED]: structuredClone(connectedRows),
     [REGISTRY]: [],
     device_connection_configs: [],
+    device_measurement_channels: [],
   };
   if (canonical) {
     env.FACTORY_PROFILE_MODE = 'canonical';
@@ -559,7 +560,7 @@ function resubmissionFixture() {
   return { ...fixture, input, resubmit };
 }
 
-function canceledCodeFixture() {
+function canceledCodeFixture(pointCode = 'P0267') {
   const fixture = resubmissionFixture();
   const requests = fixture.tables.cems_wpms_connection_requests;
   Object.assign(requests[0], {
@@ -568,10 +569,10 @@ function canceledCodeFixture() {
     eligible_factory_id: 17,
     submission_source: 'OPERATOR_FORM',
   });
-  Object.assign(fixture.tables[POINTS][0], { point_code: 'P0267' });
+  Object.assign(fixture.tables[POINTS][0], { point_code: pointCode });
   Object.assign(fixture.tables[REGISTRY][0], {
-    point_code: 'P0267',
-    normalized_point_code: 'P0267',
+    point_code: pointCode,
+    normalized_point_code: pointCode,
   });
   requests.push({ ...requests[0], id: 10038, status: 'PENDING_DESIGN_REVIEW' });
   fixture.tables[POINTS].push({
@@ -592,7 +593,7 @@ function canceledCodeFixture() {
           {
             measurementPointId: 10042,
             assignmentMode: 'MANUAL_LEGACY',
-            pointCode: 'P0267',
+            pointCode: pointCode,
             reason: 'ใช้รหัสเดิมหลังยกเลิกคำขอที่ยังไม่เคยเชื่อมต่อ',
           },
         ],
@@ -1448,29 +1449,81 @@ describe('connection profile persistence with a stale submitted factory', () => 
     },
   );
 
-  it('cancels an issued request then reuses P0267 in a new request', async () => {
-    const fixture = canceledCodeFixture();
-    fixture.tables.cems_wpms_connection_requests[0].status = 'CONNECTION_CONFIRMED';
-    const oldConfig = { id: 31, request_id: 10037, station_id: 'P0267', deleted_at: null };
-    fixture.tables.device_connection_configs.push({ ...oldConfig });
-    const read = jest
-      .spyOn(connectionRequestsRepository, 'findById')
-      .mockResolvedValue({ id: 10037, status: 'CANCELED' } as never);
-    try {
-      await connectionRequestsRepository.cancelOperatorRequest(10037, 7, null, { scope: 'ALL' });
-      const approved = await fixture.approve();
-      expect(approved.measurementPoints[0].pointCode).toBe('P0267');
-      expect(fixture.tables.device_connection_configs).toEqual([oldConfig]);
-      expect(fixture.tables.cems_wpms_request_status_history).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ request_id: 10037, status: 'CANCELED' }),
-          expect.objectContaining({ request_id: 10038, status: 'WAITING_CONNECTION' }),
-        ]),
+  it.each(['operator', 'officer'])(
+    'cancels via %s then reuses P0302 while preserving config history',
+    async (action) => {
+      const fixture = canceledCodeFixture('P0302');
+      fixture.tables.cems_wpms_connection_requests[0].status = 'CONNECTION_CONFIRMED';
+      const configs = [
+        {
+          id: 3196,
+          request_id: 10037,
+          source_request_id: 10037,
+          station_id: 'P0302',
+          deleted_at: null,
+        },
+        {
+          id: 3197,
+          request_id: null,
+          source_request_id: 10037,
+          station_id: 'P0302',
+          deleted_at: null,
+        },
+        {
+          id: 3198,
+          request_id: null,
+          source_request_id: 999,
+          station_id: 'P0999',
+          deleted_at: null,
+        },
+      ];
+      fixture.tables.device_connection_configs.push(...structuredClone(configs));
+      fixture.tables.device_measurement_channels.push(
+        ...configs.map((config) => ({ id: config.id, config_id: config.id, deleted_at: null })),
       );
-    } finally {
-      read.mockRestore();
-    }
-  });
+      const oldPoint = structuredClone(fixture.tables[POINTS][0]);
+      const read = jest
+        .spyOn(connectionRequestsRepository, 'findById')
+        .mockResolvedValue({ id: 10037, status: 'CANCELED' } as never);
+      try {
+        if (action === 'operator') {
+          await connectionRequestsRepository.cancelOperatorRequest(10037, 7, null, {
+            scope: 'ALL',
+          });
+        } else {
+          await connectionRequestsRepository.updateStatus(10037, 'CANCELED', 7, {});
+        }
+        const approved = await fixture.approve();
+        expect(approved.measurementPoints[0].pointCode).toBe('P0302');
+        expect(fixture.tables[POINTS][0]).toEqual(oldPoint);
+        expect(fixture.tables.device_connection_configs).toEqual([
+          ...configs
+            .slice(0, 2)
+            .map((config) => ({
+              ...config,
+              deleted_at: '2026-09-11T00:00:00.000Z',
+              updated_at: '2026-09-11T00:00:00.000Z',
+              updated_by: 7,
+            })),
+          configs[2],
+        ]);
+        expect(fixture.tables.device_measurement_channels).toEqual([
+          ...configs
+            .slice(0, 2)
+            .map((config) => ({
+              id: config.id,
+              config_id: config.id,
+              deleted_at: '2026-09-11T00:00:00.000Z',
+              updated_at: '2026-09-11T00:00:00.000Z',
+              updated_by: 7,
+            })),
+          { id: 3198, config_id: 3198, deleted_at: null },
+        ]);
+      } finally {
+        read.mockRestore();
+      }
+    },
+  );
 
   it('reuses P0267 again after the replacement request is also canceled', async () => {
     const fixture = canceledCodeFixture();

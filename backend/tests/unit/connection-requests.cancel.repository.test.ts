@@ -122,6 +122,10 @@ function cancellationHarness(status: string, accessible = true) {
       ],
     ],
     ['cems_wpms_request_status_history', [makeChain({ insert: historyInsert })]],
+    [
+      'device_connection_configs',
+      [makeChain({ select: async () => [] }), makeChain({ select: async () => [] })],
+    ],
   ]);
   const trx = Object.assign(
     jest.fn((tableName: string) => {
@@ -144,6 +148,7 @@ function cancellationHarness(status: string, accessible = true) {
 }
 
 function makeChain(options: {
+  select?: () => Promise<unknown>;
   first?: () => Promise<unknown>;
   update?: (values: Record<string, unknown>) => Promise<unknown>;
   insert?: (values: Record<string, unknown>) => Promise<unknown>;
@@ -151,7 +156,7 @@ function makeChain(options: {
   const chain: Record<string, unknown> = {};
   Object.assign(chain, {
     where: jest.fn(() => chain),
-    select: jest.fn(() => chain),
+    select: jest.fn(options.select ?? (() => chain)),
     whereExists: jest.fn(() => chain),
     whereNull: jest.fn(() => chain),
     forUpdate: jest.fn(() => chain),

@@ -614,6 +614,7 @@ Client ที่เคยส่งทีละอุปกรณ์เพื่�
 
 - `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ของ measurement point ใน request
 - ผู้เรียกต้องผ่าน `cems_wpms_requests:edit` ตาม scope/assignment ของโรงงานและ `regionalAccess` และ request ต้องอยู่สถานะ `WAITING_CONNECTION`
+- ล็อกคำขอและตรวจสถานะซ้ำใน transaction ก่อนแทนที่ config; หากถูกยกเลิกหรือพ้น `WAITING_CONNECTION` ระหว่างบันทึก ตอบ `409 CONFLICT` พร้อม `error.details.requestId` และ `currentStatus` โดยไม่เปลี่ยน config/channels เพื่อป้องกันคำสั่งที่มาถึงช้าสร้าง config กลับหลังยกเลิก
 - เมื่อ `settings.dbPass` เป็น `********` backend จะใช้รหัสจริงของ active config ที่มี `stationId + protocol + deviceCode` เดียวกัน; หากไม่มีรหัสจริงให้รักษา ต้องตอบ `400 BAD_REQUEST` และ client ต้องให้ผู้ใช้กรอกรหัสใหม่
 - เมื่อเปลี่ยน protocol รหัสผ่านเดิมจะใช้ต่อได้เฉพาะเมื่อมี active config ของ protocol ใหม่นั้นตรงกันอยู่แล้ว มิฉะนั้นต้องกรอกรหัสจริงใหม่
 - ห้ามส่ง identity อุปกรณ์ซ้ำใน batch และห้ามส่งพารามิเตอร์พร้อมหน่วยซ้ำในอุปกรณ์เดียวกันตาม [กติกาด้านบน](#การป้องกันพารามิเตอร์ซ้ำ)
@@ -636,6 +637,7 @@ Client ที่เคยส่งทีละอุปกรณ์เพื่�
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี edit permission หรืออยู่นอก scope/assignment | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
 | `404` | `NOT_FOUND` | ไม่พบ request | refresh รายการ |
+| `409` | `CONFLICT` | request ถูกยกเลิกหรือพ้น `WAITING_CONNECTION` หลัง validation ก่อนบันทึกจริง | refresh request และไม่ retry อัตโนมัติ |
 
 ## `GET /api/v1/connected-measurement-points/:stationId/device-configs`
 

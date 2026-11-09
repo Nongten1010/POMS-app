@@ -127,7 +127,7 @@ export function describeFactoryAreaWriteOperation(operation: OpenApiObject): voi
 }
 
 const canceledPointCodeReuseDescription =
-  'รหัสเดิม เช่น P0267 จากคำขอ CANCELED ที่ยังไม่เคยเชื่อมต่อ ใช้กับคำขอใหม่ของโรงงานเดิมและ systemType เดิมได้. Backend ตรวจและเปลี่ยนเจ้าของการจองใน transaction ตอนกำหนดรหัส MANUAL_LEGACY หรือสร้าง direct connection โดยเก็บคำขอและจุดเดิมเป็นประวัติ; ใช้ได้กับคำขอที่ยกเลิกไว้ก่อน deploy ด้วย. ห้ามนำรหัสที่เคยเชื่อมต่อ รวมแถวที่เลิกใช้งานแล้ว รหัสที่มีจุดอื่นใช้อยู่หรือมี live device config กลับมาใช้; กรณีไม่เข้าเงื่อนไขยังตอบ 409 CONFLICT reason POINT_CODE_ALREADY_ASSIGNED. ช่วงรหัส legacy และการออกเลข AUTO ไม่เปลี่ยน';
+  'เมื่อยกเลิกโดยผู้ประกอบการ เจ้าหน้าที่ หรือหมดเวลาอัตโนมัติ ระบบ soft delete request device configs, current configs ที่ source_request_id ตรงกับคำขอ และ device_measurement_channels ใน transaction เดียวกับสถานะและประวัติ โดยเก็บแถวเดิมและไม่แตะ config ของคำขออื่นหรือ config อิสระ. รหัสเดิม เช่น P0267 จากคำขอ CANCELED ที่ยังไม่เคยเชื่อมต่อ ใช้กับคำขอใหม่ของโรงงานเดิมและ systemType เดิมได้. Backend ตรวจและเปลี่ยนเจ้าของการจองใน transaction ตอนกำหนดรหัส MANUAL_LEGACY หรือสร้าง direct connection โดยเก็บคำขอและจุดเดิมเป็นประวัติ; ใช้ได้กับคำขอที่ยกเลิกไว้ก่อน deploy ด้วย. ห้ามนำรหัสที่เคยเชื่อมต่อ รวมแถวที่เลิกใช้งานแล้ว รหัสที่มีจุดอื่นใช้อยู่หรือมี live device config กลับมาใช้; กรณีไม่เข้าเงื่อนไขยังตอบ 409 CONFLICT reason POINT_CODE_ALREADY_ASSIGNED. ช่วงรหัส legacy และการออกเลข AUTO ไม่เปลี่ยน';
 
 const noDeviceSetupApprovalDescription =
   'คำขอ ADD_MEASUREMENT_POINT ที่ทุกจุดได้รับการยกเว้นทั้งหมด หรืออยู่ระหว่างขยายเวลาโดยไม่มีพารามิเตอร์ จะใช้ flow อนุมัติเดียวกัน: APPROVE_DESIGN/APPROVE_FORM ออกรหัสจุดและสร้าง active POMS point parameters = [] พร้อมเปลี่ยนคำขอเป็น CONNECTED และ verifiedAt เป็นเวลาอนุมัติ โดยคง monitoringPointStatus เดิม ไม่ผ่าน WAITING_CONNECTION, device config, confirm หรือ verify และไม่เริ่มกำหนดตั้งค่าอุปกรณ์ 30 วัน. ตัวเลือกหน้าจอ อยู่ระหว่างขยายระยะเวลาทั้งปล่อง ให้ส่ง monitoringPointStatus = อยู่ระหว่างขยายเวลา, details.requestedParameters = [] และ measurementInstruments.parameters = []; ไม่ส่งข้อความตัวเลือกเป็นชื่อพารามิเตอร์. สถานะขยายเวลาที่มีพารามิเตอร์จริงหรือคำขอ ADD_PARAMETER ยังใช้ flow ตั้งค่าอุปกรณ์ปกติ';
@@ -3446,6 +3446,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       description:
         requestEditAccessDescription +
         'รับ config เดี่ยว, batch 1-50 หรือ structured form wrapper; คำขอต้องอยู่ WAITING_CONNECTION. ' +
+        'ล็อกคำขอและตรวจสถานะซ้ำใน transaction ก่อนแก้ config; หากคำขอถูกยกเลิกหรือพ้น WAITING_CONNECTION ระหว่างบันทึก ตอบ 409 CONFLICT พร้อม error.details.requestId และ currentStatus โดยไม่เปลี่ยน config หรือ channels. ' +
         requestDeviceConfigReplacementDescription +
         '. ' +
         deviceConfigWriteDescription,
@@ -3455,7 +3456,10 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         dconConnectionExample,
       ),
       successStatus: '201',
-      extraResponses: { '400': deviceConfigBadRequestResponse },
+      extraResponses: {
+        '400': deviceConfigBadRequestResponse,
+        '409': { $ref: '#/components/responses/Conflict' },
+      },
       successDescription: 'บันทึก config แล้ว',
     }),
   },

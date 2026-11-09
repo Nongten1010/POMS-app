@@ -31,4 +31,20 @@ describe('canceled point-code reuse published contract', () => {
       expect(property.description).toEqual(expect.stringContaining('โรงงานเดิม'));
     },
   );
+
+  it('publishes config retirement and delayed-write conflict handling', () => {
+    const paths = obj(pomsOpenApiDocument.paths);
+    const cancel = obj(obj(paths['/cems-wpms-requests/{id}/cancel']).post);
+    for (const text of [
+      'soft delete',
+      'source_request_id',
+      'device_measurement_channels',
+      'หมดเวลาอัตโนมัติ',
+    ]) {
+      expect(cancel.description).toEqual(expect.stringContaining(text));
+    }
+    const save = obj(obj(paths['/cems-wpms-requests/{id}/device-configs']).post);
+    expect(obj(save.responses)['409']).toBeDefined();
+    expect(save.description).toEqual(expect.stringContaining('currentStatus'));
+  });
 });

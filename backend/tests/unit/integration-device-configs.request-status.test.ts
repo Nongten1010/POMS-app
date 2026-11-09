@@ -200,6 +200,9 @@ describe('integration config request status with executable repository queries',
   });
 
   it('records the request source on a real save and stops returning it after cancellation', async () => {
+    await db('cems_wpms_connection_requests')
+      .where('id', 10191)
+      .update({ status: 'WAITING_CONNECTION' });
     await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(
       [
         {

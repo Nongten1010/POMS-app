@@ -153,6 +153,7 @@ export const deviceConnectionsRepository = {
     requestId: number | null = null,
   ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
+      if (requestId !== null) await lockWritableRequest(trx, requestId);
       const stationIds = [...new Set(inputs.map((input) => input.stationId))];
       if (requestId === null) await lockAlertActivationPoints(trx, stationIds);
       const saved = await insertConfigs(trx, inputs, actorUserId, requestId);
@@ -222,6 +223,7 @@ export const deviceConnectionsRepository = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
+      await lockWritableRequest(trx, requestId);
       for (const input of inputs) {
         await softDeleteRequestConfigByDeviceKey(trx, input, actorUserId, requestId);
       }
@@ -235,6 +237,7 @@ export const deviceConnectionsRepository = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
+      await lockWritableRequest(trx, requestId);
       const stationIds = [...new Set(inputs.map((input) => input.stationId))];
       await lockAlertActivationPoints(trx, stationIds);
       // Each submitted station is a complete form snapshot, including omitted devices.
@@ -252,6 +255,22 @@ export const deviceConnectionsRepository = {
 };
 
 type SensitiveSettingsMode = 'masked' | 'plaintext';
+
+async function lockWritableRequest(trx: Knex.Transaction, requestId: number): Promise<void> {
+  const request = await trx('cems_wpms_connection_requests')
+    .where('id', requestId)
+    .whereNull('deleted_at')
+    .forUpdate()
+    .first('status');
+  // Recheck after the same lock used by cancellation, before replacing any rows.
+  // A save that passed service validation before cancellation must not revive it.
+  if (!request || request.status !== 'WAITING_CONNECTION') {
+    throw new ConflictError('Connection request is no longer waiting for device configuration', {
+      requestId,
+      currentStatus: request?.status ?? null,
+    });
+  }
+}
 
 async function listIntegrationConfigs(
   query: ListDeviceConnectionConfigsQuery,

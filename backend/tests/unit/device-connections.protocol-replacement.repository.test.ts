@@ -46,6 +46,9 @@ describe('device configuration protocol replacement', () => {
 
   beforeEach(async () => {
     fixture = await createKnexSqliteFixture(db, {
+      cems_wpms_connection_requests: [
+        { id: 10195, status: 'WAITING_CONNECTION', deleted_at: null },
+      ],
       device_connection_configs: [
         config(1, 10195),
         config(2, null),

@@ -58,7 +58,8 @@ function harness() {
         return chain;
       };
       chain.returning = async () => [{ id: 99 }];
-      chain.first = async () => row;
+      chain.first = async () =>
+        table === 'cems_wpms_connection_requests' ? { status: 'WAITING_CONNECTION' } : row;
       chain.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve([]).then(resolve);
       return chain;
     },

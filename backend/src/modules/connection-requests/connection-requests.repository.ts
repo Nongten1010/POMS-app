@@ -13,6 +13,7 @@ import {
 import { normalizeAlertActivationStationIdentity } from '../alert-emails/alert-parameter-activations';
 import { db } from '../../config/database';
 import { reclaimCanceledPointCode } from './reclaim-canceled-point-code';
+import { retireRequestDeviceConfigs } from '../device-connections/retire-request-device-configs';
 import { clearNewConnectionMeasurements } from './connection-measurement-cleanup';
 import { clearAddedParameterMeasurements } from './added-parameter-measurement-cleanup';
 import { env } from '../../config/env';
@@ -1641,6 +1642,9 @@ export const connectionRequestsRepository = {
           updated_at: trx.fn.now(),
         });
 
+      if (status === CONNECTION_REQUEST_STATUS.CANCELED) {
+        await retireRequestDeviceConfigs(trx, id, actorUserId);
+      }
       await insertHistory(trx, id, status, actorUserId, buildStatusHistoryNote(update));
 
       const updated = await findByIdInTransaction(trx, id);
@@ -1778,6 +1782,7 @@ export const connectionRequestsRepository = {
         updated_at: trx.fn.now(),
       });
 
+      await retireRequestDeviceConfigs(trx, id, actorUserId);
       await insertHistory(trx, id, CONNECTION_REQUEST_STATUS.CANCELED, actorUserId, reason);
     });
 
@@ -1793,6 +1798,8 @@ export const connectionRequestsRepository = {
         .where('status', CONNECTION_REQUEST_STATUS.WAITING_CONNECTION)
         .whereNotNull('connection_due_at')
         .where('connection_due_at', '<', cutoffIso)
+        .orderBy('id')
+        .forUpdate()
         .select('id', 'created_by', 'updated_by');
 
       const rowsWithActors = expiredRows.filter((row) => Number.isFinite(findAuditActorId(row)));
@@ -1813,6 +1820,7 @@ export const connectionRequestsRepository = {
         });
 
       for (const row of rowsWithActors) {
+        await retireRequestDeviceConfigs(trx, Number(row.id), findAuditActorId(row));
         await insertHistory(
           trx,
           Number(row.id),
