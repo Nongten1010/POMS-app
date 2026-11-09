@@ -1,0 +1,29 @@
+name: Eligible operator production controls
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poms-prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, poms, windows, prod]
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          lfs: false
+          clean: false
+      - name: Inspect feature readiness without exposing user data
+        env:
+          AUDIT_RUN_ID: ${{ github.run_id }}
+        run: ./.github/scripts/inspect-eligible-operator-production.ps1
