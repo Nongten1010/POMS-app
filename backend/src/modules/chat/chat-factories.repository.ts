@@ -1,3 +1,4 @@
+import { factoryAccessReadTable } from '../../shared/utils/factory-access-query';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applySelectedFactoryAccessFilters } from '../eligible-factories/eligible-factories.access';
@@ -70,7 +71,7 @@ export function applyChatFactoryAccess(
     // shared helper separately requires that master and its grant to be active.
     // A recycled registration must not reassign historical tickets to new owners.
     builder.whereRaw(`(
-      SELECT COUNT(*) FROM factories AS chat_identity
+      SELECT COUNT(*) FROM ${factoryAccessReadTable('chat_identity')}
       WHERE (
         chat_identity.code = ef.factory_registration_no_new OR
         chat_identity.fid = ef.factory_registration_no_new OR

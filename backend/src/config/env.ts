@@ -10,6 +10,16 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('false')
       .transform((value) => value === 'true'),
+    ELIGIBLE_OPERATOR_ACCESS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    FACTORY_STATUS_SYNC_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    FACTORY_STATUS_MAX_AGE_SECONDS: z.coerce.number().int().min(60).max(86400).default(3600),
+    FACTORY_STATUS_SYNC_HOUR: z.coerce.number().int().min(0).max(23).default(2),
     FACTORY_PROFILE_MODE: z.enum(['legacy', 'canonical']).default('legacy'),
     API_DOCS_ENABLED: z
       .enum(['true', 'false'])

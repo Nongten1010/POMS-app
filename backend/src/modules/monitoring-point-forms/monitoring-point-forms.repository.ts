@@ -2,7 +2,10 @@ import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { factoryProfileReadTable } from '../factory-profiles/factory-profile-mode';
 import { BadRequestError, ConflictError } from '../../shared/errors/AppError';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter, isFactoryType88 } from '../../shared/utils/factory-type-scope';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import type {
@@ -297,7 +300,7 @@ export const monitoringPointFormsRepository = {
     }
     if (!registration) return false;
 
-    const query = db('factories as f')
+    const query = db(factoryAccessReadTable('f'))
       .whereNull('f.deleted_at')
       .where((builder) => {
         builder.where('f.fid', registration).orWhere('f.code', registration);
@@ -389,7 +392,7 @@ function applyFormAccessFilter(
       }
       builder.whereExists(function formEstateAccess() {
         this.select(db.raw('1'))
-          .from('factories as af')
+          .from(factoryAccessReadTable('af'))
           .join('industrial_estates as ie', 'ie.id', 'af.industrial_estate_id')
           .whereNull('af.deleted_at')
           .whereNull('ie.deleted_at')
@@ -407,7 +410,7 @@ function applyFormAccessFilter(
     case 'OWN_FACTORY':
       builder.whereExists(function formOwnerAccess() {
         this.select(db.raw('1'))
-          .from('factories')
+          .from(factoryAccessReadTable('factories'))
           .whereNull('factories.deleted_at')
           .where(function formFactoryIdentifier() {
             this.whereRaw('factories.fid = f.factory_registration_no_new').orWhereRaw(

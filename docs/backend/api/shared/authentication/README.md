@@ -5,6 +5,10 @@
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
 
+## สิทธิ์โรงงานที่ผูกเพิ่มเติม
+
+เมื่อเปิด `ELIGIBLE_OPERATOR_ACCESS_ENABLED` หลัง migration 0158 ผู้เลือกเข้าแบบ operator และยืนยันผ่าน i-industry สำเร็จจะได้โรงงานเดิมรวมโรงงานเข้าข่ายที่ผูกไว้และยังมีผล แม้ provider ส่ง `juristics: []` ก็เป็น operator ได้เมื่อมีรายการผูกที่ใช้ได้ ค่า `ownedFactoryIds` เป็น FID จริงและตัดซ้ำ ไม่ใช้ eligible row ID แทน เมื่อปิด flag ใช้ flow เดิมตามหัวข้อถัดไป ดู [contract สิทธิ์รายโรงงานและการสิ้นสุดสิทธิ์](../../menus/eligible-factories/operator-access.md) สำหรับเงื่อนไขสถานะ ความสด และ token เดิม
+
 ## Quick start
 
 แทนค่า placeholder ด้วย credential ของ environment ที่กำลังทดสอบ และห้ามบันทึกรหัสผ่านจริงลง source control หรือ log
@@ -72,7 +76,7 @@ Implementation: [officer-write-permission-policy.ts](../../../../../backend/src/
 บัญชีประชาชนและผู้ประกอบการใช้ credential ชุดเดียวกัน แต่ permission ของแต่ละ session แยกตาม `userType` ที่เลือก:
 
 1. เลือก `userType: "citizen"` จะได้ `user.userType: "citizen"`, `roleCodes: ["public_user"]`, ไม่มี `ownedFactoryIds` และไม่รับ permission จาก operator role แม้บัญชีนั้นเป็นเจ้าของนิติบุคคล
-2. เลือก `userType: "operator"` และ DIW ส่ง `juristics` อย่างน้อย 1 รายการ จะได้ `user.userType: "operator"` กับ `roleCodes: ["factory_operator"]`; นิติบุคคลที่มี `FactoryList: []` ยังนับว่าเป็นผู้ประกอบการ จึงอาจได้ `ownedFactoryIds: []`
+2. เมื่อไม่มีสิทธิ์ผูกเพิ่มเติมที่ใช้ได้ เลือก `userType: "operator"` และ DIW ส่ง `juristics` อย่างน้อย 1 รายการ จะได้ `user.userType: "operator"` กับ `roleCodes: ["factory_operator"]`; นิติบุคคลที่มี `FactoryList: []` ยังนับว่าเป็นผู้ประกอบการ จึงอาจได้ `ownedFactoryIds: []`
 3. เลือก `userType: "operator"` แต่ DIW ส่ง `juristics: []` จะ fallback เป็น citizen persona และคืน `200 OK` พร้อม `public_user`; กรณีนี้ไม่คืน `401`
 4. Backend ใช้ provider identity แถวเดียวต่อ `identity_provider = i_industry` และเลขประชาชนเดียวกัน. Login แบบ citizen ไม่ downgrade หรือลบ operator profile/access เดิม; เมื่อภายหลังพบนิติบุคคล operator login สามารถ promote stored `user_type` เดิมได้โดยไม่สร้าง user ซ้ำ
 5. Token เก็บ persona ที่เลือกของ session นั้น `GET /auth/me` และ authenticated requests โหลดสิทธิ์ปัจจุบันจากฐานข้อมูลพร้อมคง persona ที่เซ็นไว้ จึงรองรับ citizen session และ operator session ของ account เดียวกันพร้อมกัน

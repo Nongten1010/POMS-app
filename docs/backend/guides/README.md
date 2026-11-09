@@ -6,6 +6,10 @@
 
 - [Documentation templates](./documentation/README.md)
 
+## สิทธิ์ผู้ประกอบการและสถานะทะเบียน
+
+- [เปิดใช้สิทธิ์ผู้ประกอบการสำหรับโรงงานที่ยังไม่แจ้งประกอบ และตรวจสถานะ Fac60k ทุกวัน](./operator-eligible-factory-access.md)
+
 ## Frontend Handoffs
 
 - [ขอเชื่อมต่อ: ชื่อนิคมในรายการโรงงานผู้ประกอบการและเจ้าหน้าที่](./frontend-handoffs/connection-factory-estate-name/README.md)

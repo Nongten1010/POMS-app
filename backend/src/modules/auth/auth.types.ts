@@ -92,6 +92,7 @@ export interface OfficerProfileDTO {
 }
 
 export interface OperatorProfileDTO {
+  additionalFactoryIds?: string[];
   userCode: string | null;
   regisDate: string | null;
   juristics: Array<{

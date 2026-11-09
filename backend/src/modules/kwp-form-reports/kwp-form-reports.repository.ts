@@ -5,7 +5,10 @@ import {
   joinKwpSubmissionFactoryProfile,
 } from '../../shared/utils/kwp-factory-location-query';
 import { db } from '../../config/database';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { splitFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import type { PermissionScopeDetails } from '../auth/permissions';
@@ -152,7 +155,7 @@ export function toKwpFormStatusHistoryDTOForTests(row: StatusHistoryRow): KwpFor
 function buildFactoryQuery(
   access: KwpFormReportAccess,
 ): Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]> {
-  const builder = db<FactoryTableRow>('factories as f')
+  const builder = db<FactoryTableRow>(factoryAccessReadTable('f'))
     .modify(joinKwpFactoryProfile)
     .join(
       factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),

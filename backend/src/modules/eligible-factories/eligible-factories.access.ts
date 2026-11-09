@@ -1,6 +1,9 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter, isFactoryType88 } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
@@ -219,7 +222,7 @@ export function applySelectedFactoryAccessFilters(
     }
     builder.whereExists(function assignedEligibleFactoryAccess() {
       this.select(db.raw('1'))
-        .from('factories as f')
+        .from(factoryAccessReadTable('f'))
         .whereNull('f.deleted_at')
         .where(function eligibleFactoryIdentifierMatch() {
           if (identifierColumns.factoryMasterId) {
@@ -434,7 +437,9 @@ async function estateByName(estateName: string): Promise<IndustrialEstateRow | n
 }
 
 async function loadAssignedFactoryIdentifiers(actorUserId: number): Promise<string[]> {
-  const rows: Array<{ fid: string | null; code: string | null }> = await db('factories as f')
+  const rows: Array<{ fid: string | null; code: string | null }> = await db(
+    factoryAccessReadTable('f'),
+  )
     .whereNull('f.deleted_at')
     .modify((builder) => applyAssignedFactoryAccessFilter(builder, actorUserId, 'f'))
     .select('f.fid', 'f.code');

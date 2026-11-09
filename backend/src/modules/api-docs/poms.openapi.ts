@@ -1,3 +1,7 @@
+import {
+  eligibleOperatorAccessPaths,
+  eligibleOperatorAccessSchemas,
+} from './eligible-operator-access.openapi';
 import { generalUploadPolicyDescription } from './upload-policy.openapi';
 import { menuBadgePaths, menuBadgeSchemas } from './menu-badges.openapi';
 import { generalInformationPaths, generalInformationSchemas } from './general-information.openapi';
@@ -7674,6 +7678,8 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
       mode: 'all',
     };
   }
+  if (path.includes('/operator-access'))
+    return { permissions: ['eligible_factories:view'], mode: 'any' };
   if (path.startsWith('/eligible-factories')) {
     return method === 'get'
       ? { permissions: ['eligible_factories:view'], mode: 'any' }
@@ -8019,6 +8025,7 @@ const components: OpenApiObject = {
     ...statusManagementSchemas,
     ...baseSchemas,
     ...editRequestFormSchemas,
+    ...eligibleOperatorAccessSchemas,
     ErrorEnvelope: {
       ...baseErrorEnvelope,
       properties: {
@@ -8057,6 +8064,7 @@ const paths = decorateWriteRequestValidationDocs(
         menuBadgePaths,
         generalInformationPaths,
         chatPaths,
+        eligibleOperatorAccessPaths,
       ),
     ),
   ),
@@ -8090,6 +8098,16 @@ for (const [path, schemaName] of [
   };
 }
 
+for (const authPath of ['/auth/login', '/auth/me']) {
+  const operation = paths[authPath]?.[authPath.endsWith('login') ? 'post' : 'get'] as
+    | OpenApiObject
+    | undefined;
+  if (operation)
+    operation.description =
+      String(operation.description ?? '') +
+      '\n\nเมื่อเปิด ELIGIBLE_OPERATOR_ACCESS_ENABLED หลัง migration 0158: operator persona รวมโรงงานเข้าข่ายที่ admin ผูกไว้และมีผลตาม Fac60k FFLAG=0/ความสด แม้ provider ส่ง juristics ว่าง; citizen persona คงเดิม. ownedFactoryIds เป็น FID จริงและตัดซ้ำ ไม่ใช้ eligible row ID. การผูกไม่ข้ามการยืนยันตัวตนหรือ action permission. สิทธิ์ปัจจุบันตรวจซ้ำเมื่อใช้ token เดิม; ดู API operator-access และคู่มือ factory status sync.';
+}
+
 extendKwpCurrentLocationDocs(paths);
 decorateOfficerWritePermissionDocs(paths);
 
@@ -8121,14 +8139,14 @@ export const pomsOpenApiDocument: OpenApiObject = {
     description:
       officerWritePermissionDescription +
       '\n\n' +
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 160 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 169 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 164 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 173 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
       '\n\nการแบ่งจังหวัดตามภาค: ภาคกลาง 11 จังหวัด, ภาคตะวันตก 8 จังหวัด, ภาคตะวันออก 8 จังหวัด, ภาคเหนือ 16 จังหวัด, ภาคตะวันออกเฉียงเหนือ 20 จังหวัด และภาคใต้ 14 จังหวัด รวม 77 จังหวัด. นครนายกอยู่ภาคตะวันออก; ตาก กำแพงเพชร และนครสวรรค์อยู่ภาคเหนือ; สมุทรสาคร สมุทรสงคราม นครปฐม และสุพรรณบุรีอยู่ภาคตะวันตก; อุทัยธานียังคงอยู่ภาคกลาง. region/regionName สำหรับข้อมูลปัจจุบันและ snapshot คำขอเชื่อมต่อที่ยังใช้งานอยู่ใช้พื้นที่ใหม่นี้ โดย regionCode ของ snapshot คำขอเชื่อมต่อเก็บชื่อภาคเดียวกับ regionName. IN_REGION ยังคงใช้ qualifier รายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ และไม่มีการเปลี่ยนชื่อภาคหรือสิทธิ์ผู้ใช้. แบบ กวภ.01–05 ทั้งเก่าและใหม่ใช้จังหวัดปัจจุบันของโรงงานและ provinces.region ชุดเดียวกันสำหรับรายการ รายละเอียด การแก้ไข ส่งกลับหลังแก้ไข และการพิจารณา โดยตรวจ scope ของ view/edit/approve แยกตาม action; ใช้ active connected point และ eligible factory ปัจจุบันก่อน และ fallback ไป factory master เฉพาะเมื่อไม่มี eligible row ทั้ง legacy/canonical mode. submission_region_name เป็นประวัติตอนออกเลขเท่านั้น ไม่ใช้กรองสิทธิ์; คำขอใหม่ออกเลขจากภาคปัจจุบัน. เลขเอกสารและ running เดิมคงอยู่; รหัสภาคสำหรับออกเลขเอกสารยังเป็น 02-07. ต้องรัน migration 0139_update_provincial_regional_jurisdictions ก่อนใช้งาน',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 160,
+  'x-poms-canonical-operation-count': 164,
   'x-poms-officer-write-permission-checks-enabled': env.OFFICER_WRITE_PERMISSION_CHECKS_ENABLED,
 };
 

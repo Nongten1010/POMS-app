@@ -8,7 +8,10 @@ import { parameterSourceDb } from '../../config/parameter-source-database';
 import type { Knex } from 'knex';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import {
   type ConnectionTestAccessContext,
@@ -484,7 +487,7 @@ function joinStationLocation(query: Knex.QueryBuilder) {
     .leftJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'p.eligible_factory_id').andOnNull('ef.deleted_at');
     })
-    .leftJoin('factories as f', function joinFactory() {
+    .leftJoin(factoryAccessReadTable('f'), function joinFactory() {
       this.on(function joinFactoryKeys() {
         this.on('f.fid', '=', 'p.factory_id')
           .orOn('f.code', '=', 'p.factory_id')
@@ -527,7 +530,7 @@ function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessCo
   if (scopeValue === 'ALL') return query;
 
   const scopedQuery = query
-    .leftJoin('factories as f', function joinFactory() {
+    .leftJoin(factoryAccessReadTable('f'), function joinFactory() {
       this.on('f.fid', '=', 'r.factory_id').andOnNull('f.deleted_at');
     })
     .leftJoin('provinces as pr', 'pr.id', 'f.province_id')

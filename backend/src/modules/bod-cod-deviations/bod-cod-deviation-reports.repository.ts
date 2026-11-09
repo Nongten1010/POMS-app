@@ -4,7 +4,10 @@ import {
 } from '../factory-profiles/factory-profile-mode';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import {
   BadRequestError,
@@ -843,7 +846,7 @@ function buildFactoryQuery(
   const builder = connection<FactoryTableRow>(
     factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'),
   )
-    .leftJoin('factories as f', function joinPomsFactory() {
+    .leftJoin(factoryAccessReadTable('f'), function joinPomsFactory() {
       this.on('f.fid', '=', 'cp.factory_id')
         .orOn('f.code', '=', 'cp.factory_id')
         .orOn('f.code', '=', 'cp.factory_registration_no');
@@ -912,7 +915,7 @@ function buildReportAccessQuery(
   access: BodCodDeviationAccess,
 ): Knex.QueryBuilder<ReportTableRow, ReportTableRow[]> {
   const builder = db<ReportTableRow>('bod_cod_deviation_reports as r')
-    .leftJoin('factories as f', function joinReportFactory() {
+    .leftJoin(factoryAccessReadTable('f'), function joinReportFactory() {
       this.on('f.id', '=', 'r.factory_id').orOn(function legacyFactoryIdentity() {
         this.onNull('r.factory_id').andOn(function registrationIdentity() {
           this.on('f.fid', '=', 'r.factory_registration_no').orOn(
@@ -1158,7 +1161,7 @@ function buildEditableReportQuery(
   connection: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<EditableReportRow, EditableReportRow[]> {
   const builder = connection<EditableReportRow>('bod_cod_deviation_reports as r')
-    .leftJoin('factories as f', function joinReportFactory() {
+    .leftJoin(factoryAccessReadTable('f'), function joinReportFactory() {
       this.on('f.id', '=', 'r.factory_id').orOn(function legacyFactoryIdentity() {
         this.onNull('r.factory_id').andOn(function registrationIdentity() {
           this.on('f.fid', '=', 'r.factory_registration_no').orOn(

@@ -1,3 +1,5 @@
+import { env } from '../../config/env';
+import { eligibleFactoryStatusSync } from '../eligible-factories/eligible-factory-status-sync';
 import { db } from '../../config/database';
 import { logger } from '../../config/logger';
 import { UnauthorizedError } from '../../shared/errors/AppError';
@@ -49,6 +51,17 @@ export const authService = {
       const profile = await provider.authenticateOperator(payload.username, payload.password);
       if (!profile) throw new UnauthorizedError('Invalid credentials');
       if (profile.juristics.length === 0) {
+        if (env.ELIGIBLE_OPERATOR_ACCESS_ENABLED && profile.identity_provider === 'i_industry') {
+          const user = await authRepository.findUserByProviderAndExternalId(
+            'i_industry',
+            profile.external_id,
+          );
+          if (user && user.is_active && !user.deleted_at) {
+            await eligibleFactoryStatusSync.refreshForUser(user.id);
+            if (await authRepository.hasEligibleFactoryAccess(user.id))
+              return this.completeLoginAsOperator(profile);
+          }
+        }
         return await this.completeLoginAsCitizenFromOperatorProfile(profile);
       }
       return await this.completeLoginAsOperator(profile);
@@ -229,6 +242,8 @@ export const authService = {
   ): Promise<AuthenticatedUser> {
     const user = await authRepository.findUserById(userId);
     ensureLoginUserAvailable(user, 'citizen');
+    if (user.user_type === 'operator' && session?.userType !== 'citizen')
+      await eligibleFactoryStatusSync.refreshForUser(user.id);
     const current = await resolveCurrentAuthorization(user, session, false);
     ensureSingleSystemRole(current.roles);
     const effectiveScopes = enrichRoleScopeDetails(
@@ -475,11 +490,17 @@ async function buildProfileForUser(
 }
 
 async function buildOperatorProfile(userId: number): Promise<OperatorProfileDTO> {
+  await eligibleFactoryStatusSync.refreshForUser(userId);
   const opProfile = await authRepository.getOperatorProfile(userId);
   const factories = await authRepository.getOperatorFactories(userId);
   const juristicsMap = new Map<string, OperatorProfileDTO['juristics'][number]>();
 
+  const additionalFactoryIds: string[] = [];
   for (const factory of factories) {
+    if (factory.juristic_id === null) {
+      additionalFactoryIds.push(factory.fid);
+      continue;
+    }
     const factoryDTO = {
       fid: factory.fid,
       code: factory.code,
@@ -509,6 +530,7 @@ async function buildOperatorProfile(userId: number): Promise<OperatorProfileDTO>
   }
 
   return {
+    ...(additionalFactoryIds.length ? { additionalFactoryIds } : {}),
     userCode: opProfile?.user_code ?? null,
     regisDate: opProfile?.regis_date ?? null,
     juristics: Array.from(juristicsMap.values()),
@@ -591,9 +613,14 @@ function toAuthUserDTO(
     .join(' ');
   const operatorFields = operatorProfile
     ? {
-        ownedFactoryIds: operatorProfile.juristics.flatMap((juristic) =>
-          juristic.factories.map((factory) => factory.fid),
-        ),
+        ownedFactoryIds: [
+          ...new Set([
+            ...operatorProfile.juristics.flatMap((juristic) =>
+              juristic.factories.map((factory) => factory.fid),
+            ),
+            ...(operatorProfile.additionalFactoryIds ?? []),
+          ]),
+        ],
       }
     : {};
 

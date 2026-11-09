@@ -1,3 +1,4 @@
+import { env } from '../../config/env';
 import {
   factoryProfileReadTable,
   isCanonicalFactoryProfilesEnabled,
@@ -9,7 +10,10 @@ import {
   regionalDocumentRegionCode,
   type RegionalDocumentRegionCode,
 } from '../../shared/utils/regional-document-number';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { formatBodCodDeviationReportNo } from './bod-cod-deviation-report-number';
 import type {
   CreateBodCodDeviationReportAccess,
@@ -44,7 +48,7 @@ export interface ReservedBodCodDeviationReportNumber {
 }
 
 export function buildBodCodNumberingFactoryQueryForTests(
-  input: Pick<CreateBodCodDeviationReportDTO, 'factoryId' | 'factoryRegistrationNo'>,
+  input: NumberingFactoryInput,
   access: CreateBodCodDeviationReportAccess,
 ) {
   return buildNumberingFactoryQuery(input, access);
@@ -139,7 +143,7 @@ function buildNumberingFactoryQuery(
   access: CreateBodCodDeviationReportAccess,
   connection: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<NumberingFactoryRow, NumberingFactoryRow | undefined> {
-  const builder = connection<NumberingFactoryRow>('factories as f');
+  const builder = connection<NumberingFactoryRow>(factoryAccessReadTable('f'));
   const eligibleFactoryId = input.eligibleFactoryId;
   if (eligibleFactoryId !== undefined) {
     // The locked, accessible connected point supplies this ID; request bodies cannot set it.
@@ -150,6 +154,11 @@ function buildNumberingFactoryQuery(
       .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
       .where('ef.factory_registration_no_new', input.factoryRegistrationNo)
       .where('f.id', input.factoryInternalId ?? null)
+      .modify((query) => {
+        if (env.ELIGIBLE_OPERATOR_ACCESS_ENABLED && input.factoryInternalId == null) {
+          query.whereRaw('f.fid = ef.factory_registration_no_new');
+        }
+      })
       .whereNull('f.deleted_at');
   } else if (isCanonicalFactoryProfilesEnabled()) {
     builder

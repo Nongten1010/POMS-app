@@ -4,7 +4,10 @@ import {
 } from '../factory-profiles/factory-profile-mode';
 import { db } from '../../config/database';
 import { toAlertEventInsertPayload } from './alert-event-persistence';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
@@ -203,7 +206,7 @@ function buildListRowsQuery(query: ListAlertEventsQuery, access: AlertEventAcces
 
 function buildAccessQuery(access: AlertEventAccess) {
   const builder = db<AlertEventRow>('alert_events')
-    .leftJoin('factories as f', function joinFactoryMaster() {
+    .leftJoin(factoryAccessReadTable('f'), function joinFactoryMaster() {
       this.on(function joinFactoryKeys() {
         this.on('f.fid', '=', 'alert_events.factory_id').orOn(
           'f.code',

@@ -1,3 +1,4 @@
+import { operatorAccessRoutes } from './eligible-operator-access';
 import { Router } from 'express';
 import { authenticate } from '../../shared/middlewares/authenticate';
 import { authorize } from '../../shared/middlewares/authorize';
@@ -6,6 +7,7 @@ import { eligibleFactoriesController } from './eligible-factories.controller';
 export const eligibleFactoriesRoutes = Router();
 
 eligibleFactoriesRoutes.use(authenticate);
+eligibleFactoriesRoutes.use('/:id/operator-access', operatorAccessRoutes);
 
 eligibleFactoriesRoutes.get(
   '/candidates',

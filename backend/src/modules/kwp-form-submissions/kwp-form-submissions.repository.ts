@@ -12,7 +12,10 @@ import {
 } from '../../shared/errors/AppError';
 import { db } from '../../config/database';
 import { env } from '../../config/env';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -1225,7 +1228,7 @@ function buildFactoryAccessQuery(
   factoryId: string,
   access: KwpFormSubmissionAccess,
 ): Knex.QueryBuilder {
-  const builder = knexOrTrx('factories as f')
+  const builder = knexOrTrx(factoryAccessReadTable('f'))
     .modify(joinKwpFactoryProfile)
     .whereNull('f.deleted_at')
     .where((factoryBuilder) => {
@@ -1245,7 +1248,7 @@ function buildSubmissionRegionQuery(
   knexOrTrx: Knex | Knex.Transaction,
   factoryId: string,
 ): Knex.QueryBuilder<KwpSubmissionRegionRow, KwpSubmissionRegionRow[]> {
-  return knexOrTrx('factories as f')
+  return knexOrTrx(factoryAccessReadTable('f'))
     .modify(joinKwpFactoryProfile)
     .whereNull('f.deleted_at')
     .where((factoryBuilder) => {

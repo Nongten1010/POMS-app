@@ -30,7 +30,10 @@ import {
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { buddhistCalendarYear } from '../../shared/utils/monitoring-point-code';
 import {
@@ -295,7 +298,7 @@ interface FactoryGeneralRow {
   eia_assessment?: string | null;
   eia_other?: string | null;
   project_name?: string | null;
-  id: number | string;
+  id: number | string | null;
   fid: string;
   code: string;
   name: string;
@@ -664,7 +667,7 @@ export const connectionRequestsRepository = {
     access: FactoryAccess,
   ): Promise<FactoryGeneralDTO | null> {
     const canonical = isCanonicalFactoryProfilesEnabled();
-    const builder = db<FactoryGeneralRow>('factories as f')
+    const builder = db<FactoryGeneralRow>(factoryAccessReadTable('f'))
       .leftJoin(
         factoryProfileReadTable('eligible_factories', 'ef'),
         function joinEligibleFactory() {
@@ -820,7 +823,7 @@ export const connectionRequestsRepository = {
 
     if (factoryIds.length === 0 && registrationNos.length === 0) return new Map();
 
-    const rows = await db<FactoryRow>('factories as f')
+    const rows = await db<FactoryRow>(factoryAccessReadTable('f'))
       .leftJoin('provinces as p', 'p.id', 'f.province_id')
       .whereNull('f.deleted_at')
       .where((builder) => {
@@ -1110,7 +1113,7 @@ export const connectionRequestsRepository = {
           .select('fsm.state_json')
           .whereRaw('?? = ??', ['fsm.eligible_factory_id', `${source}.eligible_factory_id`])
           .as('management_state_json'),
-        db('factories as f')
+        db(factoryAccessReadTable('f'))
           .select('f.is_active')
           .whereNull('f.deleted_at')
           .where((query) =>
@@ -2281,7 +2284,7 @@ export function buildStatusHistoryTimelineForTests(historyRows: StatusHistoryRow
 function buildFactoriesForAccessQuery(
   access: FactoryAccess,
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
-  const builder = db<FactoryRow>('factories as f')
+  const builder = db<FactoryRow>(factoryAccessReadTable('f'))
     .joinRaw(
       `
       OUTER APPLY (
@@ -2415,7 +2418,7 @@ function buildConnectedFactoriesForAccessQuery(
   access: FactoryAccess,
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
   const builder = db<FactoryRow>(factoryProfileReadTable('eligible_factories', 'ef'))
-    .leftJoin('factories as f', function joinFactoryMaster() {
+    .leftJoin(factoryAccessReadTable('f'), function joinFactoryMaster() {
       this.on(function joinFactoryKeys() {
         this.on('f.code', '=', 'ef.factory_registration_no_new')
           .orOn('f.fid', '=', 'ef.factory_registration_no_new')
@@ -2570,7 +2573,7 @@ function applyDirectConnectionFactoryAccessFilter(
   if (scopeValue === 'OWN_FACTORY') {
     builder.whereExists(function assignedEligibleFactoryAccess() {
       this.select(db.raw('1'))
-        .from('factories as f')
+        .from(factoryAccessReadTable('f'))
         .whereNull('f.deleted_at')
         .where(function eligibleFactoryIdentity() {
           this.whereRaw('f.fid = ef.source_factory_id')
@@ -2840,7 +2843,7 @@ function applyAssignedRequestFactoryAccessFilter(
 ): void {
   builder.whereExists(function assignedRequestFactoryAccess() {
     this.select(db.raw('1'))
-      .from('factories as f')
+      .from(factoryAccessReadTable('f'))
       .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
         this.on(function joinFactoryIdentifiers() {
           this.on('f.code', '=', 'ef.factory_registration_no_new')
@@ -3170,7 +3173,7 @@ function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(row.factory_type_sequence);
   const registration = resolveFactoryRegistrationIdentity(row);
   return {
-    id: Number(row.id),
+    id: row.id === null ? null : Number(row.id),
     factoryId: row.source_system === 'diw.fac_import' ? registration.newRegistrationNo : row.fid,
     factoryName: row.name,
     ...registration,

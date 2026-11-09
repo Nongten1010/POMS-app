@@ -4,6 +4,10 @@
 
 > Owner: Backend
 
+## จัดการผู้มีสิทธิ์รายโรงงาน
+
+[API จัดการผู้ประกอบการที่ผูกกับโรงงานยังไม่แจ้งประกอบ](./operator-access.md) — admin เท่านั้น รวมรายชื่อหลัง login และใช้สถานะ Fac60k ประเมินสิทธิ์; ต้อง migrate และเปิด feature ก่อนใช้งาน
+
 ## Frontend Quick Start
 
 คู่มือสำหรับต่อ UI เอกสารแนบโดยตรง: [Frontend attachment integration](./frontend-attachment-integration.md)

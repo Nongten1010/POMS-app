@@ -1,3 +1,4 @@
+import { startFactoryStatusSyncWorker } from './modules/eligible-factories/eligible-factory-status-sync';
 import { createApp } from './app';
 import { env } from './config/env';
 import { logger } from './config/logger';
@@ -29,11 +30,13 @@ async function bootstrap(): Promise<void> {
   server.requestTimeout = REQUEST_TIMEOUT_MS;
   server.headersTimeout = REQUEST_TIMEOUT_MS + 60000;
   server.setTimeout(REQUEST_TIMEOUT_MS);
+  const factoryStatusWorker = startFactoryStatusSyncWorker();
   const autoCancelWorker = startConnectionRequestAutoCancelWorker();
   const attachmentCleanupWorker = startMonitoringPointAttachmentCleanupWorker();
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`[boot] ${signal} received — shutting down gracefully`);
+    clearInterval(factoryStatusWorker);
     clearInterval(autoCancelWorker);
     clearInterval(attachmentCleanupWorker);
     server.close(async () => {

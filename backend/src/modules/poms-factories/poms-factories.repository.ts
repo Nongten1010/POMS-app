@@ -23,7 +23,10 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../shared/errors/AppError';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
@@ -1148,7 +1151,7 @@ function buildConnectedFactoryRowsQuery(
     .innerJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
     })
-    .leftJoin('factories as f', function joinFactory() {
+    .leftJoin(factoryAccessReadTable('f'), function joinFactory() {
       this.on(function joinFactoryKeys() {
         this.on('f.fid', '=', 'ef.source_factory_id')
           .orOn('f.code', '=', 'ef.source_factory_id')
@@ -1237,7 +1240,7 @@ function buildEditRequestsQuery(
     .innerJoin(factoryProfileReadTable('eligible_factories', 'ef'), function joinEligibleFactory() {
       this.on('ef.id', '=', 'req.eligible_factory_id').andOnNull('ef.deleted_at');
     })
-    .leftJoin('factories as f', function joinFactory() {
+    .leftJoin(factoryAccessReadTable('f'), function joinFactory() {
       this.on(function joinFactoryKeys() {
         this.on('f.fid', '=', 'ef.source_factory_id')
           .orOn('f.code', '=', 'ef.source_factory_id')

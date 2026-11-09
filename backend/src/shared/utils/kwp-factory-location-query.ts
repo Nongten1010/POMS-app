@@ -1,3 +1,4 @@
+import { factoryAccessReadTable } from './factory-access-query';
 import type { Knex } from 'knex';
 import { factoryProfileReadTable } from '../../modules/factory-profiles/factory-profile-mode';
 
@@ -99,7 +100,7 @@ export function joinKwpSubmissionFactoryProfile(builder: Knex.QueryBuilder): voi
       `
       OUTER APPLY (
         SELECT TOP (1) f_source.*
-        FROM factories AS f_source
+        FROM ${factoryAccessReadTable('f_source')}
         WHERE f_source.deleted_at IS NULL
           AND (
             f_source.fid = ef.source_factory_id

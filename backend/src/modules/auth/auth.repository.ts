@@ -1,3 +1,4 @@
+import { env } from '../../config/env';
 import { db } from '../../config/database';
 import { applyPersonaPermissionOverrides, mergePermissionScopesWithOverrides } from './permissions';
 import type {
@@ -11,7 +12,11 @@ import type {
   ExternalOfficerProfile,
   ExternalOperatorProfile,
 } from './identity-provider/identity-provider.interface';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  applyEligibleGrantFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { grantTargetOperatorFactoryAccess } from '../../db/migrations/0073_grant_operator_demo_factory_access';
 export interface UserRow {
   id: number;
@@ -467,9 +472,16 @@ export const authRepository = {
     };
   },
 
+  async hasEligibleFactoryAccess(userId: number): Promise<boolean> {
+    const row = await db('eligible_factories as ef')
+      .modify((query) => applyEligibleGrantFilter(query, userId, 'ef'))
+      .first('ef.id');
+    return Boolean(row);
+  },
+
   async getOperatorFactories(userId: number): Promise<
     Array<{
-      juristic_id: string;
+      juristic_id: string | null;
       juristic_name_th: string;
       juristic_name_en: string | null;
       fid: string;
@@ -494,8 +506,25 @@ export const authRepository = {
 };
 
 function buildOperatorFactoriesQuery(userId: number) {
-  return db('factories')
-    .join('juristics', 'factories.juristic_id', 'juristics.id')
+  const eligibleFid = env.ELIGIBLE_OPERATOR_ACCESS_ENABLED
+    ? db('eligible_factories as aef')
+        .select('aef.factory_registration_no_new')
+        .where((query) =>
+          query
+            .whereRaw('aef.factory_registration_no_new = factories.fid')
+            .orWhereRaw('aef.source_factory_id = factories.fid'),
+        )
+        .modify((query) => applyEligibleGrantFilter(query, userId, 'aef'))
+        .orderBy('aef.id')
+        .limit(1)
+    : null;
+  return db
+    .from(factoryAccessReadTable('factories'))
+    [env.ELIGIBLE_OPERATOR_ACCESS_ENABLED ? 'leftJoin' : 'join'](
+      'juristics',
+      'factories.juristic_id',
+      'juristics.id',
+    )
     .whereNull('factories.deleted_at')
     .whereNull('juristics.deleted_at')
     .modify((builder) => applyAssignedFactoryAccessFilter(builder, userId, 'factories'))
@@ -503,7 +532,9 @@ function buildOperatorFactoriesQuery(userId: number) {
       'juristics.juristic_id as juristic_id',
       'juristics.name_th as juristic_name_th',
       'juristics.name_en as juristic_name_en',
-      'factories.fid as fid',
+      eligibleFid
+        ? db.raw('COALESCE(?, factories.fid) as fid', [eligibleFid])
+        : 'factories.fid as fid',
       'factories.code as code',
       'factories.name as name',
       'factories.province_id as province_id',

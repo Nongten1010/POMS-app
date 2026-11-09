@@ -8,7 +8,10 @@ import {
 } from '../factory-profiles/factory-profile-mode';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
-import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyAssignedFactoryAccessFilter,
+  factoryAccessReadTable,
+} from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { toCanonicalStatusDateTime } from './device-connection-status-datetime';
 import { deviceConnectionIdentity } from './device-connection-identity';
@@ -372,7 +375,7 @@ function buildDeviceConnectionAccessQuery(access?: DeviceConnectionAccessContext
           this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
         },
       )
-      .leftJoin('factories as f', function joinFactory() {
+      .leftJoin(factoryAccessReadTable('f'), function joinFactory() {
         this.on('f.fid', '=', 'cp.factory_id')
           .orOn('f.code', '=', 'cp.factory_id')
           .andOnNull('f.deleted_at');
@@ -447,7 +450,7 @@ function applyDeviceConnectionLocationFilter(
       builder.where((ownBuilder) => {
         ownBuilder.whereExists(function assignedFactory() {
           this.select(db.raw('1'))
-            .from('factories as f')
+            .from(factoryAccessReadTable('f'))
             .whereRaw('f.fid = cp.factory_id OR f.code = cp.factory_id');
           applyAssignedFactoryAccessFilter(this, access.actorUserId);
         });

@@ -49,6 +49,7 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
     getOfficerProfile: jest.fn(),
     getOperatorProfile: jest.fn(),
     getOperatorFactories: jest.fn(),
+    hasEligibleFactoryAccess: jest.fn(),
     getRolesAndPermissions: jest.fn(),
     getRolePermissions: jest.fn(),
     upsertExternalOfficerUser: jest.fn(),
@@ -59,6 +60,8 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
   },
 }));
 
+import { env } from '../../src/config/env';
+import { eligibleFactoryStatusSync } from '../../src/modules/eligible-factories/eligible-factory-status-sync';
 import { authRepository } from '../../src/modules/auth/auth.repository';
 import { authService, getOfficerRoleCode } from '../../src/modules/auth/auth.service';
 import { getIdentityProvider } from '../../src/modules/auth/identity-provider';
@@ -1285,6 +1288,63 @@ describe('authService login completion', () => {
       roles: 'diw_central',
       isActive: true,
     });
+  });
+
+  it('promotes a verified external citizen with an effective eligible grant even when juristics is empty', async () => {
+    const previousFlag = env.ELIGIBLE_OPERATOR_ACCESS_ENABLED;
+    env.ELIGIBLE_OPERATOR_ACCESS_ENABLED = true;
+    const refresh = jest
+      .spyOn(eligibleFactoryStatusSync, 'refreshForUser')
+      .mockResolvedValue(undefined);
+    try {
+      const profile = { ...externalOperatorProfile(), juristics: [] };
+      mockedAuthRepository.hasEligibleFactoryAccess.mockResolvedValue(true);
+      mockedGetIdentityProvider.mockReturnValue({
+        authenticateOperator: jest.fn(async () => profile),
+        authenticateCitizen: jest.fn(async () => null),
+        authenticateOfficer: jest.fn(async () => null),
+      });
+      mockedAuthRepository.findUserByProviderAndExternalId.mockImplementation(async (provider) =>
+        provider === 'local' ? undefined : { ...externalOperatorUser(), user_type: 'citizen' },
+      );
+      mockedAuthRepository.upsertExternalOperatorUser.mockResolvedValue(externalOperatorUser());
+      mockedAuthRepository.getOperatorFactories.mockResolvedValue([
+        { ...operatorFactoryRow('', '10000000000017'), juristic_id: null },
+      ]);
+      mockedAuthRepository.getRolePermissions.mockResolvedValue({
+        roles: ['factory_operator'],
+        scopes: { 'factories:view': 'OWN_FACTORY' },
+      });
+      const result = await authService.login({
+        userType: 'operator',
+        username: profile.external_id,
+        password: 'test',
+      });
+      expect(result.user).toMatchObject({
+        userType: 'operator',
+        ownedFactoryIds: ['10000000000017'],
+      });
+      expect(refresh).toHaveBeenCalledWith(externalOperatorUser().id);
+      expect(mockedAuthRepository.upsertExternalCitizenUser).not.toHaveBeenCalled();
+    } finally {
+      env.ELIGIBLE_OPERATOR_ACCESS_ENABLED = previousFlag;
+      refresh.mockRestore();
+    }
+  });
+
+  it('merges real FIDs across juristic and eligible assignments without inventing juristic identities', async () => {
+    mockedAuthRepository.upsertExternalOperatorUser.mockResolvedValue(externalOperatorUser());
+    mockedAuthRepository.getOperatorFactories.mockResolvedValue([
+      operatorFactoryRow('J-1', '10000000000017'),
+      { ...operatorFactoryRow('', '10000000000017'), juristic_id: null },
+      { ...operatorFactoryRow('', '10000000000018'), juristic_id: null },
+    ]);
+    mockedAuthRepository.getRolePermissions.mockResolvedValue({
+      roles: ['factory_operator'],
+      scopes: { 'factories:view': 'OWN_FACTORY' },
+    });
+    const result = await authService.completeLoginAsOperator(externalOperatorProfile());
+    expect(result.user.ownedFactoryIds).toEqual(['10000000000017', '10000000000018']);
   });
 
   it('returns owned factory ids for an operator login', async () => {
