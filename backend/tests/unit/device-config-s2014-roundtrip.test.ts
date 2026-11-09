@@ -53,6 +53,9 @@ describe('S2014 device configuration read-save roundtrip', () => {
 
     let channelId = 0;
     fixture = await createKnexSqliteFixture(db, {
+      cems_wpms_connection_requests: [
+        { id: 10195, status: 'WAITING_CONNECTION', deleted_at: null },
+      ],
       device_connection_configs: configs.map((config) => ({
         id: config.id,
         request_id: config.requestId,
