@@ -19,7 +19,7 @@ jobs:
       run:
         shell: powershell
     steps:
-      - name: Snapshot the six reviewed source files without changing production
+      - name: Snapshot reviewed production source without changing production
         id: snapshot
         run: |
           $ErrorActionPreference = 'Stop'
@@ -27,6 +27,10 @@ jobs:
           $repo = 'C:\apps\POMS-app'
           $destination = Join-Path $env:RUNNER_TEMP "poms-source-audit-${{ github.run_id }}-${{ github.run_attempt }}"
           $files = @(
+            'backend/src/config/env.ts',
+            'backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts',
+            'backend/src/modules/auth/identity-provider/index.ts',
+            'backend/src/modules/eligible-factories/eligible-factories.service.ts',
             'backend/src/modules/api-docs/poms.openapi.ts',
             'backend/src/modules/device-connections/device-connections.repository.ts',
             'backend/src/modules/integrations/integration-device-configs.controller.ts',
@@ -41,6 +45,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the production checkout.' }
             $changed = @(git diff --name-only HEAD)
             if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect tracked changes.' }
+            $untrackedSource = @(git ls-files --others --exclude-standard -- backend/src backend/scripts backend/deploy)
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect untracked backend source paths.' }
             $status = @(git status --short --untracked-files=all -- $files)
             if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect reviewed source paths.' }
             $hashes = @()
@@ -67,6 +73,7 @@ jobs:
             [ordered]@{
               head = $head
               trackedChanges = $changed
+              untrackedSource = $untrackedSource
               reviewedStatus = $status
               files = $hashes
             } | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $destination 'manifest.json') -Encoding UTF8
