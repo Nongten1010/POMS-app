@@ -145,7 +145,7 @@ const isBiomassOption = (value = '') => {
 }
 const combustionControlSystemOptions = ['ระบบปิด', 'ระบบเปิด']
 const cemsLegalAnnexRequiredOptions = cemsInstallationRequiredOptions.slice(0, 2).map((option) => option.value)
-const connectionDeviceOptions = ['POMS Box (กรอ.)', 'POMS Box (กนอ.)', 'D-POMS Client (ใหม่)', 'อื่นๆ']
+const connectionDeviceOptions = ['POMS Box (กรอ.)', 'POMS Box (กนอ.)', 'D-POMS Client (ใหม่)']
 const exemptedRegulationClauseOptions = ['ไม่มี', '4(1)', '4(2)', '11(3)', 'อื่นๆ']
 const officerPostSubmitStatusOptions = [
   {
