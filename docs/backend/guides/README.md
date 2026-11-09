@@ -6,6 +6,10 @@
 
 - [Documentation templates](./documentation/README.md)
 
+## แผนพัฒนาสิทธิ์โรงงาน
+
+- [แผนผูกผู้ประกอบการกับโรงงานที่ยังไม่แจ้งประกอบ เพิ่มรายชื่อหลัง login และตรวจสถานะ Fac60k ทุกวัน](./operator-eligible-factory-access-plan.md) — แผนสำหรับพัฒนาต่อ ยังไม่เปิดใช้ flow ใหม่
+
 ## Frontend Handoffs
 
 - [ขอเชื่อมต่อ: ชื่อนิคมในรายการโรงงานผู้ประกอบการและเจ้าหน้าที่](./frontend-handoffs/connection-factory-estate-name/README.md)
