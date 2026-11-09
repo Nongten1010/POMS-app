@@ -29,8 +29,9 @@
 
 ## ตรวจ source ที่เคยแก้บนเซิร์ฟเวอร์
 
-เรียก [Inspect production checkout](../../../.github/workflows/inspect-production-checkout.yml) แบบ manual บน branch `main` งานนี้อ่าน checkout โดยไม่แก้ source, ฐานข้อมูล หรือสถานะ service และเก็บเฉพาะ source ที่กำหนดไว้ 10 paths และรายชื่อ untracked backend source โดยไม่อ่านไฟล์ environment:
+เรียก [Inspect production checkout](../../../.github/workflows/inspect-production-checkout.yml) แบบ manual บน branch `main` งานนี้อ่าน checkout โดยไม่แก้ source, ฐานข้อมูล หรือสถานะ service และเก็บเฉพาะ source ที่กำหนดไว้ 11 paths และรายชื่อ untracked backend source โดยไม่อ่านไฟล์ environment:
 
+- `backend/src/shared/services/factory-source-provinces.ts`
 - `backend/src/config/env.ts`
 - `backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts`
 - `backend/src/modules/auth/identity-provider/index.ts`
