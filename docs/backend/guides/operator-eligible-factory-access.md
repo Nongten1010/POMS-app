@@ -2,7 +2,7 @@
 
 [กลับไปคู่มือ Backend](./README.md) · [สัญญา API และกติกาสิทธิ์](../api/menus/eligible-factories/operator-access.md)
 
-> มี source implementation ใน change นี้ ยังไม่ได้รัน migration บน SQL Server จริง ไม่ได้ตั้งค่าหรือเปิด worker บน production และยังไม่ได้ยืนยัน frontend end-to-end
+Migration และ backend ผ่านการส่งขึ้น production แล้ว ดู [หลักฐาน release และการเปิดใช้](../evidence/eligible-factories/operator-access-production-release.md) สำหรับ flags และผลตรวจของแต่ละรอบ การตรวจ frontend แบบ authenticated บน production ต้องใช้บัญชีที่มีสิทธิ์จริง
 
 ## ขอบเขตที่พัฒนา
 
@@ -53,6 +53,16 @@ Server เริ่ม timer ตรวจทุกนาที ไม่มี p
 8. ตรวจ runtime `/api/v1/openapi.json` และ `/api/v1/docs/` ให้ตรงกับ source contract หลัง production deployment โดยอ่าน `x-poms-eligible-operator-access-enabled` และ `x-poms-factory-status-sync-enabled` เพื่อยืนยัน flags ที่ process ใช้จริง
 
 เอกสารนี้ไม่อนุญาตให้รัน migration, deploy หรือเปลี่ยน production configuration โดยอัตโนมัติ
+
+เมื่อผู้ดูแลสั่งเปิดใช้อย่างชัดเจน ใช้ [Eligible operator production controls](../../../.github/workflows/eligible-operator-production.yml) บน `main` ผ่าน runner production เดิม:
+
+- `inspect`: อ่าน flags, release markers, schema/source connectivity และผล probe ใน IIS logs โดยไม่แสดงข้อมูลผู้ใช้จริง
+- `enable`: สำรอง environment และ IIS config ใน `C:\apps\POMS-backups` โดยจำกัด ACL ให้ SYSTEM/Administrators; ปิด `UriQuery` และ `Referer` เฉพาะไซต์ POMS แล้วตรวจ canary ก่อนเปิด backend flags และตั้ง frontend environment flag; restart และยืนยัน runtime OpenAPI หาก restart/flags ไม่ผ่านให้คืน environment เดิม
+- หลังผล sync รอบแรกผ่าน ให้เรียก `Deploy POMS`, target `frontend` เพื่อ build ด้วย environment บนเซิร์ฟเวอร์และติดตั้ง bundle ที่เปิดฟีเจอร์ โดยไม่แก้ frontend source
+- `verify`: อ่าน flags จาก process จริง ตรวจ request path/401 ใน log segment ใหม่โดยไม่มี query/Referer canary และอ่านผลรอบ sync/จำนวนสถานะรวม
+- `disable`: ปิด backend และ frontend environment flags แล้ว restart backend; ต้อง deploy frontend อีกครั้งเพื่อให้ bundle เปลี่ยนตาม เก็บประวัติในฐานไว้ และยังคงการปิด query/Referer ใน IIS
+
+การตั้ง logging นี้ใช้กับทั้งไซต์ POMS เพราะ W3C fields กำหนดระดับไซต์; ยังคง path, method, HTTP status และเวลาตอบสนอง ไม่แก้หรือลบ log เก่า อ้างอิง [Microsoft IIS logFile](https://learn.microsoft.com/en-us/iis/configuration/system.applicationhost/sites/site/logfile/?view=iis-10.0) และ [LogExtFileFlags](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.administration.logextfileflags?view=iis-dotnet)
 
 ## ตรวจผลและการหยุดใช้
 

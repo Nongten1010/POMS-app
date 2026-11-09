@@ -44,7 +44,7 @@ if ($sites.siteDefaults.logFile.directory) { $roots += [Environment]::ExpandEnvi
 foreach ($root in ($roots | Select-Object -Unique)) {
   if (!(Test-Path $root)) { continue }
   foreach ($file in (Get-ChildItem $root -Filter '*.log' -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 6)) {
-    $header = Get-Content $file.FullName -TotalCount 10 | Where-Object { $_ -like '#Fields:*' } | Select-Object -Last 1
+    $header = [string](Get-Content $file.FullName -TotalCount 10 | Where-Object { $_ -like '#Fields:*' } | Select-Object -Last 1)
     $tail = Get-Content $file.FullName -Tail 3000
     Write-Host (ConvertTo-Json -Compress ([ordered]@{ log = $file.Name; siteDirectory = $file.Directory.Name; fields = $header; canaryQueryMatches = @($tail | Where-Object { $_.Contains($canary) }).Count; operatorPathMatches = @($tail | Where-Object { $_.Contains('/operator-access/candidates') }).Count }))
   }

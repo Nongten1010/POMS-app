@@ -2,6 +2,16 @@ name: Eligible operator production controls
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: Inspect, enable backend and frontend configuration, verify, or disable
+        type: choice
+        default: inspect
+        options:
+          - inspect
+          - enable
+          - verify
+          - disable
 
 permissions:
   contents: read
@@ -24,6 +34,20 @@ jobs:
           lfs: false
           clean: false
       - name: Inspect feature readiness without exposing user data
+        if: inputs.action == 'inspect' || inputs.action == 'enable'
         env:
           AUDIT_RUN_ID: ${{ github.run_id }}
         run: ./.github/scripts/inspect-eligible-operator-production.ps1
+      - name: Validate production control scripts
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE '.github/scripts/set-eligible-operator-production.ps1'), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw 'Production control script did not parse.' }
+          node --test .github/scripts/eligible-operator-env.test.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Allowlisted environment patch tests failed.' }
+      - name: Apply or verify explicitly selected production action
+        if: inputs.action != 'inspect'
+        env:
+          CONTROL_ACTION: ${{ inputs.action }}
+          AUDIT_RUN_ID: ${{ github.run_id }}
+        run: ./.github/scripts/set-eligible-operator-production.ps1
