@@ -70,8 +70,8 @@ Server เริ่ม timer ตรวจทุกนาที ไม่มี p
 
 หยุด feature ได้ด้วย flags แล้ว restart ตามกระบวนการ release สิทธิ์เดิมจากแหล่งอื่นไม่ถูกเพิกถอน แต่สิทธิ์พิเศษจากรายการผูกจะไม่ถูกนำมาใช้ เก็บ schema และประวัติไว้ ไม่ drop ตารางที่มีข้อมูล การ rollback schema ที่มีประวัติต้องใช้ forward migration; migration down ปฏิเสธหากมีรายการผูกหรือ status events
 
-## หลักฐานที่ยังต้องเก็บก่อน release
+## ขอบเขตหลักฐานการทดสอบ
 
-Tests ใน change นี้ใช้ query จริงผ่าน SQL fixture ที่แปลงเฉพาะ dialect และ fixture ของ provider จึงไม่ใช่หลักฐานการรัน MSSQL locks, view, filtered unique index หรือ lease concurrency บน server จริง ต้องบันทึกผล SQL Server และ frontend end-to-end ก่อนกล่าวว่า production พร้อมเปิดใช้
+Automated tests ใช้ query จริงผ่าน SQL fixture ที่แปลงเฉพาะ dialect และ fixture ของ provider จึงไม่ใช้แทนหลักฐานการแข่งกันของหลาย process บน MSSQL หรือ frontend end-to-end ด้วยบัญชีจริง ผล migration, worker บน SQL Server จริง และการเปิด production บันทึกแยกในหน้าหลักฐาน release ด้านบน โดยระบุสิ่งที่ตรวจแล้วและข้อจำกัดไว้ตามจริง
 
 สิทธิ์และผลตรวจต้นทางบันทึก FID ที่ยืนยันไว้ด้วย หากเลขทะเบียนใหม่ของแถวเข้าข่ายเปลี่ยน จะใช้ cache/สิทธิ์จากเลขเดิมกับเลขใหม่ไม่ได้ รายการผูกเดิมสิ้นสุดพร้อมเหตุผล `FACTORY_IDENTITY_CHANGED` และต้องให้แอดมินอนุมัติใหม่หลังยืนยันต้นทาง ไม่สร้างหรือซ่อม identity อัตโนมัติ
