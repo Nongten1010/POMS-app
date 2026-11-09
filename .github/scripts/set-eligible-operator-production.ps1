@@ -13,7 +13,8 @@ function Test-PrivateAccessLogging {
     $site = $manager.Sites['POMS']
     if (!$site -or $site.Applications['/'].VirtualDirectories['/'].PhysicalPath -ne 'C:\sites\poms') { throw 'Unexpected IIS site.' }
     $logMode = [string]$manager.GetApplicationHostConfiguration().GetSection('system.applicationHost/log').GetAttributeValue('centralLogFileMode')
-    if ($logMode -ne 'Site') { throw 'Central IIS logging needs a separate privacy review.' }
+    # MWA exposes enum attributes as integers on some IIS versions (Site = 0).
+    if ($logMode -notin @('Site', '0')) { throw 'Central IIS logging needs a separate privacy review.' }
     if (!$site.LogFile.Enabled -or [string]$site.LogFile.LogFormat -ne 'W3C') { throw 'Expected active W3C site logging.' }
     if ($site.TraceFailedRequestsLogging.Enabled) { throw 'Disable or review failed-request tracing before enabling candidate search.' }
     $custom = $site.GetChildElement('logFile').GetChildElement('customFields').GetCollection()
