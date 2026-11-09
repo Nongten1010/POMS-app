@@ -36,6 +36,11 @@ const paths = [
   'backend/src/modules/integrations/integration-device-configs.repository.ts',
   'backend/src/modules/integrations/integration-device-configs.service.ts',
   'backend/src/db/migrations/0144_track_device_config_request_source.ts',
+  'backend/src/config/env.ts',
+  'backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts',
+  'backend/src/modules/auth/identity-provider/index.ts',
+  'backend/src/modules/eligible-factories/eligible-factories.service.ts',
+  'backend/src/shared/services/factory-source-provinces.ts',
 ];
 const temporary: string[] = [];
 
@@ -101,7 +106,7 @@ function fixture() {
   const expectedManifest: Manifest = {
     head,
     trackedChanges: paths.slice(0, 5),
-    reviewedStatus: paths.map((file, index) => `${index === 5 ? '??' : ' M'} ${file}`),
+    reviewedStatus: paths.map((file, index) => `${index >= 5 ? '??' : ' M'} ${file}`),
     files: paths.map((file) => ({
       path: file,
       sha256: createHash('sha256')

@@ -18,6 +18,16 @@ import { verifyAccessToken } from '../../src/shared/utils/jwt';
 import type { KnexSqliteFixture } from '../helpers/knex-sqlite-fixture';
 import { createAuthLoginApiFixture } from '../helpers/auth-login-api-fixture';
 
+jest.mock('../../src/shared/services/factory-source-provinces', () => ({
+  ...jest.requireActual<typeof import('../../src/shared/services/factory-source-provinces')>(
+    '../../src/shared/services/factory-source-provinces',
+  ),
+  resolveFactorySourceProvinces: jest.fn(
+    async (ids: string[]) =>
+      new Map(ids.map((id) => [id, { provinceId: '1000', provinceName: 'กรุงเทพมหานคร' }])),
+  ),
+}));
+
 const syntheticUsername = '1111111111111';
 const localPassword = 'synthetic-local*';
 const externalPassword = 'synthetic-external*';

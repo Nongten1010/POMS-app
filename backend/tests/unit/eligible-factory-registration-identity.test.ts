@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import knex from 'knex';
 
+jest.mock('../../src/shared/services/factory-source-provinces', () => ({
+  ...jest.requireActual<typeof import('../../src/shared/services/factory-source-provinces')>(
+    '../../src/shared/services/factory-source-provinces',
+  ),
+  resolveFactorySourceProvinces: jest.fn(
+    async (ids: string[]) =>
+      new Map(ids.map((id) => [id, { provinceId: '1021', provinceName: 'ระยอง' }])),
+  ),
+}));
+
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), { transaction: jest.fn() }),
 }));
