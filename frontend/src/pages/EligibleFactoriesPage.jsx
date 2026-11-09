@@ -29,6 +29,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import AddTaskIcon from '@mui/icons-material/AddTask'
@@ -42,6 +43,9 @@ import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import LinkIcon from '@mui/icons-material/Link'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
+import EligibleOperatorAccessDialog from '../components/EligibleOperatorAccessDialog'
+import { isAccessAdministrator } from '../utils/eligibleOperatorAccess.mjs'
 import { DataGrid } from '@mui/x-data-grid'
 import cemsInstallationRequiredOptions from '../option/cemsInstallationRequiredOptions.json'
 import cemsParameterOptionItems from '../option/cemsParameterOptions.json'
@@ -854,7 +858,9 @@ function createEligibleFactoryPayload(row) {
   }
 }
 
-function EligibleFactoriesPage({ accessToken = '', userType = '', permissions = {} }) {
+function EligibleFactoriesPage({ accessToken = '', userType = '', roleCodes = [], permissions = {} }) {
+  const isAccessAdmin = Boolean(accessToken) && isAccessAdministrator(userType, roleCodes)
+  const [accessFactory, setAccessFactory] = useState(null)
   const isOperator = userType === 'operator'
   const canEditEligibleFactories = !isOperator && permissions?.eligible_factories?.edit === true
   const canApproveEligibleFactories = !isOperator && permissions?.eligible_factories?.approve === true
@@ -1560,14 +1566,22 @@ function EligibleFactoriesPage({ accessToken = '', userType = '', permissions = 
       {
         field: 'option',
         headerName: 'Option',
-        width: canEditEligibleFactories ? 185 : 110,
+        width: (canEditEligibleFactories ? 185 : 110) + (isAccessAdmin ? 48 : 0),
         sortable: false,
         filterable: false,
         renderCell: (params) => {
           const isDeleting = deletingEligibleFactoryIdSet.has(params.row.id)
+          const accessButton = isAccessAdmin ? (
+            <Tooltip title="จัดการผู้มีสิทธิ์">
+              <IconButton size="small" color="primary" aria-label="จัดการผู้มีสิทธิ์" onClick={() => setAccessFactory(params.row)}>
+                <ManageAccountsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          ) : null
 
           if (!canEditEligibleFactories) {
             return (
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: '100%' }}>
               <Button
                 size="small"
                 variant="outlined"
@@ -1575,6 +1589,8 @@ function EligibleFactoriesPage({ accessToken = '', userType = '', permissions = 
               >
                 เปิดดู
               </Button>
+              {accessButton}
+              </Stack>
             )
           }
 
@@ -1602,6 +1618,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '', permissions = 
               >
                 {isDeleting ? 'กำลังนำออก' : 'นำออก'}
               </Button>
+              {accessButton}
             </Stack>
           )
         },
@@ -1610,7 +1627,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '', permissions = 
       ...eligibleMonitoringColumns,
       ...baseColumns.slice(3),
     ],
-    [canEditEligibleFactories, deletingEligibleFactoryIdSet, handleOpenEligibleSheet],
+    [canEditEligibleFactories, deletingEligibleFactoryIdSet, handleOpenEligibleSheet, isAccessAdmin],
   )
 
   const eligibleFactoryAddRequestColumns = useMemo(
@@ -1921,6 +1938,9 @@ function EligibleFactoriesPage({ accessToken = '', userType = '', permissions = 
         />
       )}
 
+      {isAccessAdmin && accessFactory && (
+        <EligibleOperatorAccessDialog key={`${accessToken}:${accessFactory.eligibleFactoryId}`} factory={accessFactory} accessToken={accessToken} onClose={() => setAccessFactory(null)} />
+      )}
       <EligibleFactoryBottomSheet
         open={Boolean(selectedFactoryForSheet)}
         factory={selectedFactoryForSheet}

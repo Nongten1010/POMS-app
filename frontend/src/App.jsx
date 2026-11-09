@@ -352,7 +352,7 @@ function App() {
         ) : visibleSelectedMenu === 'chat' ? (
           <ChatPage accessToken={accessToken} viewerId={getChatViewerId(authResponse)} userType={userType} permissions={activePermissions} onAccessError={handleChatAccessError} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
-          <EligibleFactoriesPage accessToken={accessToken} userType={userType} permissions={activePermissions} />
+          <EligibleFactoriesPage accessToken={accessToken} userType={userType} roleCodes={roleCodes} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'manuals' ? (
           <ManualsPage userType={userType} roleCode={roleCode} />
         ) : (
