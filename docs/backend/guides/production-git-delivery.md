@@ -7,7 +7,7 @@
 ## ขั้นตอนปกติ
 
 1. จัดชุดเปลี่ยนแปลงจาก `main` ล่าสุด ตรวจรายการไฟล์และ diff ให้ตรงขอบเขตงาน รวม canonical docs และ runtime OpenAPI เมื่อ contract เปลี่ยน
-2. ตรวจ diff, lint และ tests ที่เกี่ยวข้องตามความเสี่ยง พร้อมทบทวน migration ก่อน commit/push; ไม่รันชุดทดสอบ backend ทั้งหมดซ้ำในเครื่องเพียงเพื่อส่ง deploy เมื่อ CI จะตรวจ commit นั้นอยู่แล้ว สำหรับการแก้ deployment helpers ให้รัน `node --test backend/deploy/detect-changes.test.cjs backend/deploy/release-artifact.test.cjs` และตรวจ syntax ของ workflow
+2. ตรวจ diff, lint และ tests ที่เกี่ยวข้องตามความเสี่ยง พร้อมทบทวน migration ก่อน commit/push; ไม่รันชุดทดสอบ backend ทั้งหมดซ้ำในเครื่องเพียงเพื่อส่ง deploy เมื่อ CI จะตรวจ commit นั้นอยู่แล้ว สำหรับการแก้ deployment helpers ให้รัน `node --test backend/deploy/detect-changes.test.cjs backend/deploy/release-artifact.test.cjs backend/deploy/windows/reconcile-production-checkout.test.cjs` และตรวจ syntax ของ workflow
 3. Push ชุดที่ตรวจแล้วเข้า `main` ตามวิธีส่งงานที่ผู้ใช้อนุญาต การแก้ backend application, migrations, package files, deployment helpers หรือ workflow นี้จะตรวจและส่ง backend; การแก้เฉพาะ tests จะตรวจ CI แต่ไม่ restart production ส่วนการสั่งเองใช้ `Deploy POMS`, branch `main`, `deploy_target: backend`
 4. Job `backend_ci` บน GitHub-hosted Ubuntu ติดตั้งตาม lockfile, build และรัน tests ทั้งหมดครั้งเดียวด้วย 2 workers พร้อมข้อมูลทดสอบและ JWT keys ชั่วคราว โดยไม่อ่าน production `.env` แล้วส่ง compiled `dist`, package files และ manifest ของ commit นั้นเป็น artifact. Job production เริ่มได้เฉพาะ `main` หลัง CI สำเร็จ ตรวจ commit/checksum และ package metadata ก่อน stage release จากนั้น sync checkout, เตรียม Windows runtime dependencies, หยุด backend ก่อน migration, ติดตั้ง และตรวจ health. การ migration ยังคงใช้ไฟล์ TypeScript และประวัติเดิมในฐาน จึงต้องมี migration ใน Git ครบ
 5. ตรวจผล workflow, commit ใน deploy marker, health และ [production OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) ให้ตรงกับ canonical contract แล้วบันทึกหลักฐาน release จึงถือว่า deploy สำเร็จ
@@ -57,7 +57,7 @@ Artifact `production-source-audit-<attempt>` เก็บ source, patch แล�
 | `reconcile_server_changes` | `true` เฉพาะรอบที่ต้องเก็บการแก้เดิมบนเซิร์ฟเวอร์ก่อน sync |
 | `server_snapshot_manifest` | JSON ทั้งฉบับของ manifest ที่ตรวจแล้วจาก artifact |
 
-[Helper สำหรับ reconcile](../../../backend/deploy/windows/reconcile-production-checkout.cjs) ตรวจ snapshot, target commit และ `main` ก่อนจัดเก็บ backup นอก webroot พร้อม stash เฉพาะ tracked changes และเก็บ migration `0144` ที่เป็น untracked แยกใน backup แล้วจึงเลื่อน checkout แบบ fast-forward ขั้นตอนนี้ไม่ใช้ `reset`/`clean` เพื่อล้างการแก้และไม่ `stash pop` กลับมาทับ source รุ่นใหม่ รายละเอียดเงื่อนไขและรูปแบบ metadata ให้ยึด helper กับ workflow ที่ commit นั้น
+[Helper สำหรับ reconcile](../../../backend/deploy/windows/reconcile-production-checkout.cjs) ตรวจ snapshot, target commit และ `main` ก่อนจัดเก็บ backup นอก webroot พร้อม stash เฉพาะ tracked changes และเก็บ source/migration ที่เป็น untracked และอยู่ใน whitelist ที่ตรวจแล้วแยกใน backup แล้วจึงเลื่อน checkout แบบ fast-forward ขั้นตอนนี้ไม่ใช้ `reset`/`clean` เพื่อล้างการแก้และไม่ `stash pop` กลับมาทับ source รุ่นใหม่ รายละเอียดเงื่อนไขและรูปแบบ metadata ให้ยึด helper กับ workflow ที่ commit นั้น
 
 หาก HEAD, hash, path หรือ target ไม่ตรงกับข้อมูลที่ตรวจไว้ ให้หยุดการ reconcile และสร้าง audit ใหม่ การได้ backup หรือ stash ยังไม่ใช่ผลยืนยันว่า deploy สำเร็จ ต้องตรวจผล CI build/tests, artifact verification, migration, health และ production OpenAPI หลังจากนั้นครบตาม workflow
 

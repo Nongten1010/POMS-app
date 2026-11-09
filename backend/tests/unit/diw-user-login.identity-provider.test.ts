@@ -206,7 +206,6 @@ describe('parseDiwOperatorLoginResponse', () => {
           ]),
         },
       ],
-      '1000',
       '1234567890123',
     );
 
@@ -230,7 +229,7 @@ describe('parseDiwOperatorLoginResponse', () => {
               fid: '10100008325355',
               code: '3-28(1)-83/35',
               name: 'โรงงานทดสอบ',
-              province_id: '1000',
+              province_id: '',
               system_id: null,
               verify_status: 0,
               authorize_start: null,
@@ -278,7 +277,6 @@ describe('parseDiwOperatorLoginResponse', () => {
           ]),
         },
       ],
-      '1000',
       '3333333333333',
     );
 
@@ -302,7 +300,7 @@ describe('parseDiwOperatorLoginResponse', () => {
               fid: '10100000000001',
               code: 'TEST-001',
               name: 'โรงงานทดสอบ',
-              province_id: '1000',
+              province_id: '',
               system_id: 12,
               verify_status: 1,
               authorize_start: '2024-09-02',
@@ -327,7 +325,6 @@ describe('parseDiwOperatorLoginResponse', () => {
             juristic: '[]',
           },
         ],
-        '1000',
         '4444444444444',
       );
 
@@ -341,16 +338,13 @@ describe('parseDiwOperatorLoginResponse', () => {
   });
 
   it('rejects unsuccessful DIW login responses', () => {
-    expect(
-      parseDiwOperatorLoginResponse([{ status: 'false' }], '1000', '1111111111111'),
-    ).toBeNull();
+    expect(parseDiwOperatorLoginResponse([{ status: 'false' }], '1111111111111')).toBeNull();
   });
 
   it('rejects a submitted operator login that is not exactly 13 digits', () => {
     expect(
       parseDiwOperatorLoginResponse(
         [{ status: 'true', citizen_id: '1111111111111', juristic: '[]' }],
-        '1000',
         'operator-user',
       ),
     ).toBeNull();
@@ -360,7 +354,6 @@ describe('parseDiwOperatorLoginResponse', () => {
     expect(
       parseDiwOperatorLoginResponse(
         [{ status: 'true', citizen_id: '2222222222222', juristic: '[]' }],
-        '1000',
         '1111111111111',
       ),
     ).toBeNull();
@@ -387,7 +380,6 @@ describe('DiwUserLoginIdentityProvider', () => {
       officerUrl: 'https://diwws.diw.go.th/idiwdpislogin/v1/UserLogin',
       clientId: 'test-client-id',
       timeoutMs: 1000,
-      defaultProvinceId: '1000',
       fetchImpl,
     });
 
@@ -435,7 +427,6 @@ describe('DiwUserLoginIdentityProvider', () => {
       officerUrl: 'https://example.test/officer',
       clientId: 'test-client-id',
       timeoutMs: 1000,
-      defaultProvinceId: '1000',
       fetchImpl,
     });
 
@@ -467,7 +458,6 @@ describe('DiwUserLoginIdentityProvider', () => {
       officerUrl: 'https://example.test/officer',
       clientId: 'test-client-id',
       timeoutMs: 1000,
-      defaultProvinceId: '1000',
       fetchImpl,
     });
 
@@ -495,7 +485,6 @@ describe('DiwUserLoginIdentityProvider', () => {
       officerUrl: 'https://example.test/officer',
       clientId: 'test-client-id',
       timeoutMs: 1000,
-      defaultProvinceId: '1000',
       fetchImpl,
     });
 
@@ -525,7 +514,6 @@ describe('DiwUserLoginIdentityProvider', () => {
       officerUrl: 'https://diwws.diw.go.th/idiwdpislogin/v1/UserLogin',
       clientId: 'test-client-id',
       timeoutMs: 1000,
-      defaultProvinceId: '1000',
       fetchImpl,
     });
 
@@ -570,7 +558,6 @@ describe('DiwUserLoginIdentityProvider', () => {
       officerUrl: 'https://example.test/officer',
       clientId: 'test-client-id',
       timeoutMs: 1000,
-      defaultProvinceId: '1000',
       fetchImpl,
     });
 

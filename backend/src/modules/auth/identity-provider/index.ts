@@ -30,7 +30,6 @@ function withOptionalDiwLogin(primary: IdentityProvider): IdentityProvider {
     officerUrl: env.DIW_OFFICER_LOGIN_URL,
     clientId: env.DIW_USER_LOGIN_CLIENT_ID!,
     timeoutMs: env.DIW_USER_LOGIN_TIMEOUT_MS,
-    defaultProvinceId: env.DIW_USER_LOGIN_DEFAULT_PROVINCE_ID,
   });
 
   return {

@@ -65,7 +65,6 @@ const envSchema = z
       .default('https://diwws.diw.go.th/idiwdpisloginV2/v1/UserLogin'),
     DIW_USER_LOGIN_CLIENT_ID: z.string().min(1).optional(),
     DIW_USER_LOGIN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
-    DIW_USER_LOGIN_DEFAULT_PROVINCE_ID: z.string().min(1).max(8).default('1000'),
 
     FACTORY_DB_HOST: z.string().min(1).optional(),
     FACTORY_DB_PORT: z.coerce.number().int().positive().optional(),

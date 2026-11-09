@@ -1,3 +1,7 @@
+import {
+  resolveFactorySourceProvinces,
+  factoryProvinceUnavailable,
+} from '../../../shared/services/factory-source-provinces';
 import { recordAuthDecision } from '../auth-login-diagnostics';
 import {
   IdentityProvider,
@@ -13,7 +17,6 @@ interface DiwUserLoginOptions {
   officerUrl: string;
   clientId: string;
   timeoutMs: number;
-  defaultProvinceId: string;
   fetchImpl?: FetchLike;
 }
 
@@ -144,10 +147,18 @@ export class DiwUserLoginIdentityProvider implements IdentityProvider {
       'operator',
     );
     if (!data) return null;
-    const profile = parseDiwOperatorLoginResponse(data, this.options.defaultProvinceId, externalId);
+    const profile = parseDiwOperatorLoginResponse(data, externalId);
     recordAuthDecision('diw', profile ? 'diw_authenticated' : 'diw_rejected', {
       userType: 'operator',
     });
+    if (!profile) return null;
+    const factories = profile.juristics.flatMap((juristic) => juristic.factories);
+    const provinces = await resolveFactorySourceProvinces(factories.map((factory) => factory.fid));
+    for (const factory of factories) {
+      const province = provinces.get(factory.fid);
+      if (!province) throw factoryProvinceUnavailable();
+      factory.province_id = province.provinceId;
+    }
     return profile;
   }
 
@@ -270,7 +281,6 @@ function classifyOfficerAccountIdentity(
 
 export function parseDiwOperatorLoginResponse(
   data: unknown,
-  defaultProvinceId: string,
   submittedUsername: string,
 ): ExternalOperatorProfile | null {
   const first = Array.isArray(data) ? data[0] : data;
@@ -298,14 +308,11 @@ export function parseDiwOperatorLoginResponse(
     email: toStringValue(payload.userEmail),
     phone: toStringValue(payload.userPhone),
     regis_date: normalizeDiwDateTime(payload.userRegisDate),
-    juristics: parseJuristics(payload.juristic ?? payload.JuristicList, defaultProvinceId),
+    juristics: parseJuristics(payload.juristic ?? payload.JuristicList),
   };
 }
 
-function parseJuristics(
-  value: unknown,
-  defaultProvinceId: string,
-): ExternalOperatorProfile['juristics'] {
+function parseJuristics(value: unknown): ExternalOperatorProfile['juristics'] {
   const rawJuristics = parseMaybeJson(value);
   if (!Array.isArray(rawJuristics)) return [];
 
@@ -321,16 +328,13 @@ function parseJuristics(
         juristic_id: juristicId,
         name_th: nameTh,
         name_en: toStringValue(juristic.JuristicNameEn) ?? '',
-        factories: parseFactories(juristic.FactoryList, defaultProvinceId),
+        factories: parseFactories(juristic.FactoryList),
       },
     ];
   });
 }
 
-function parseFactories(
-  value: unknown,
-  defaultProvinceId: string,
-): ExternalOperatorProfile['juristics'][number]['factories'] {
+function parseFactories(value: unknown): ExternalOperatorProfile['juristics'][number]['factories'] {
   const rawFactories = parseMaybeJson(value);
   if (!Array.isArray(rawFactories)) return [];
 
@@ -347,10 +351,7 @@ function parseFactories(
         fid,
         code,
         name,
-        province_id:
-          toStringValue(factory.PROVINCE_ID) ??
-          toStringValue(factory.province_id) ??
-          defaultProvinceId,
+        province_id: toStringValue(factory.PROVINCE_ID) ?? toStringValue(factory.province_id) ?? '',
         system_id: toNumberValue(factory.SYSTEM_ID ?? factory.system_id),
         verify_status: toNumberValue(factory.VERIFY_STATUS ?? factory.verify_status) ?? 0,
         authorize_start: normalizeDiwDate(factory.AUTHORIZE_START ?? factory.authorize_start),

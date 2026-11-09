@@ -50,7 +50,7 @@ Server เริ่ม timer ตรวจทุกนาที ไม่มี p
 5. รัน migration ผ่านวิธี release ของโครงการ แล้ว deploy backend โดยยังปิด flags
 6. เปิด backend access flag และ sync flag หลังตรวจ schema/source connectivity แล้ว ตรวจผลรอบงานและรายการสถานะที่เปลี่ยน
 7. ให้ frontend ตรวจ adapter กับ contract และทดสอบทุกธุรกรรมที่ใช้สิทธิ์ รวมกรณีไม่มี factory master, ไม่ส่ง juristics, token เก่า, `0 → 1/2/3` ก่อนเปิด frontend flag
-8. ตรวจ runtime `/api/v1/openapi.json` และ `/api/v1/docs/` ให้ตรงกับ source contract หลัง production deployment
+8. ตรวจ runtime `/api/v1/openapi.json` และ `/api/v1/docs/` ให้ตรงกับ source contract หลัง production deployment โดยอ่าน `x-poms-eligible-operator-access-enabled` และ `x-poms-factory-status-sync-enabled` เพื่อยืนยัน flags ที่ process ใช้จริง
 
 เอกสารนี้ไม่อนุญาตให้รัน migration, deploy หรือเปลี่ยน production configuration โดยอัตโนมัติ
 

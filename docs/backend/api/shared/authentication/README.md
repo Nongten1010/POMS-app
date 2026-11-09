@@ -247,3 +247,9 @@ Log ชุดนี้จำกัด field เป็น `requestId`, `provider`
 - Tests ผ่านขอบเขตจริง: [HTTP login กับฐานข้อมูลจำลอง](../../../../../backend/tests/unit/auth.login-routing.api.test.ts), [DIW HTTP และ safe logs](../../../../../backend/tests/unit/diw-login.diagnostics.test.ts)
 - Tests: [route persona](../../../../../backend/tests/unit/auth.login-personas.route.test.ts), [service](../../../../../backend/tests/unit/auth.service.test.ts), [repository](../../../../../backend/tests/unit/auth.repository.test.ts), [provider](../../../../../backend/tests/unit/diw-user-login.identity-provider.test.ts)
 - Tests สำหรับ Chat: [เปรียบเทียบ login, me และรายละเอียดผู้ใช้](../../../../../backend/tests/unit/auth.chat-ask-response.test.ts), [OpenAPI contract](../../../../../backend/tests/unit/auth.chat-ask.openapi.test.ts)
+
+## จังหวัดโรงงานจากทะเบียนต้นทาง
+
+การ login ผู้ประกอบการอ่านจังหวัดจริงจาก `diw.fac_import.PROV` ด้วย FID และ map กับ province master ก่อน sync `factories` ไม่ใช้จังหวัดจาก login หรือค่าเริ่มต้นกรุงเทพมหานคร หากไม่พบ FID/จังหวัด ข้อมูลกำกวม หรือต้นทางอ่านไม่ได้ จะตอบ `503 FACTORY_PROVINCE_UNAVAILABLE` โดยไม่ sync โปรไฟล์หรือออก token กรณีไม่มีโรงงานจาก provider ไม่ต้องค้นจังหวัดและยังใช้ flow สิทธิ์ผูกเพิ่มเติมตามหัวข้อข้างต้นได้
+
+อ้างอิง [ตัวอ่านจังหวัดต้นทาง](../../../../../backend/src/shared/services/factory-source-provinces.ts) และ [tests](../../../../../backend/tests/unit/diw-operator-province-source.test.ts) พฤติกรรมนี้รักษาการแก้ที่ใช้งานอยู่บน production ก่อนส่งฟังก์ชันสิทธิ์รายโรงงาน

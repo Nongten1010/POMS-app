@@ -1,3 +1,7 @@
+import {
+  resolveFactorySourceProvinces,
+  factoryProvinceUnavailable,
+} from '../../shared/services/factory-source-provinces';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { connectionRequestsRepository } from '../connection-requests/connection-requests.repository';
 import { eligibleFactoriesRepository } from './eligible-factories.repository';
@@ -154,7 +158,10 @@ export const eligibleFactoriesService = {
       });
     }
 
-    const provinceName = factory.provinceName ?? factory.province ?? '';
+    const sourceProvinces = await resolveFactorySourceProvinces([factory.factoryId]);
+    const sourceProvince = sourceProvinces.get(factory.factoryId);
+    if (!sourceProvince) throw factoryProvinceUnavailable();
+    const provinceName = sourceProvince.provinceName;
     const verifiedFactory = await normalizeFactoryAreaNamesForWrite<CreateEligibleFactoryInput>({
       sourceSystem: 'eligible_factory_add_requests',
       sourceFactoryId: factory.factoryId,
@@ -188,7 +195,7 @@ export const eligibleFactoriesService = {
     });
     const requestedFactory = {
       ...verifiedFactory,
-      provinceName: verifiedFactory.provinceName.trim() || 'ไม่ระบุจังหวัด',
+      provinceName,
     };
 
     try {

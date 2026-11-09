@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
+jest.mock('../../src/shared/services/factory-source-provinces', () => ({
+  resolveFactorySourceProvinces: jest.fn(),
+}));
+
 jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', () => ({
   eligibleFactoriesRepository: {
     findByRegistrationNoNew: jest.fn(),
@@ -42,7 +46,8 @@ jest.mock('../../src/modules/eligible-factories/factory-area-names', () => ({
   normalizeFactoryAreaNamesForRead: jest.fn(async (rows: unknown[]) => rows),
 }));
 
-import { BadRequestError, ConflictError } from '../../src/shared/errors/AppError';
+import { AppError, BadRequestError, ConflictError } from '../../src/shared/errors/AppError';
+import { resolveFactorySourceProvinces } from '../../src/shared/services/factory-source-provinces';
 import { eligibleFactoryCandidatesRepository } from '../../src/modules/eligible-factories/eligible-factory-candidates.repository';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
@@ -75,6 +80,11 @@ describe('eligibleFactoriesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest
+      .mocked(resolveFactorySourceProvinces)
+      .mockResolvedValue(
+        new Map([['10550000125197', { provinceId: '1055', provinceName: 'น่าน' }]]),
+      );
   });
 
   it.each(['3-60-1/43ปท', '72220100125563'])(
@@ -734,7 +744,7 @@ describe('eligibleFactoriesService', () => {
     },
   );
 
-  it('retains the existing unknown-province contract when an add-request province cannot be verified', async () => {
+  it('uses the source province even when the stored master has no province', async () => {
     const factory = { ...ownedFactorySummary(), provinceName: null, province: null };
     mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(factory);
     mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue(null);
@@ -747,12 +757,12 @@ describe('eligibleFactoriesService', () => {
       addRequestAccess(),
     );
     expect(mockedNormalizeAreasWrite).toHaveBeenCalledWith(
-      expect.objectContaining({ provinceName: '' }),
+      expect.objectContaining({ provinceName: 'น่าน' }),
     );
     expect(mockedRepository.createAddRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        provinceName: 'ไม่ระบุจังหวัด',
-        requestedFactory: expect.objectContaining({ provinceName: 'ไม่ระบุจังหวัด' }),
+        provinceName: 'น่าน',
+        requestedFactory: expect.objectContaining({ provinceName: 'น่าน' }),
       }),
       42,
     );
@@ -866,6 +876,64 @@ describe('eligibleFactoriesService', () => {
     );
     expect(result.status).toBe('APPROVED');
     expect(result.eligibleFactoryId).toBeNull();
+  });
+});
+
+describe('add-request province source regression', () => {
+  it('does not save a request when its province cannot be verified', async () => {
+    jest.clearAllMocks();
+    mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(
+      ownedFactorySummary(),
+    );
+    mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue(null);
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
+    jest
+      .mocked(resolveFactorySourceProvinces)
+      .mockRejectedValueOnce(
+        new AppError('Factory province unavailable', 503, 'FACTORY_PROVINCE_UNAVAILABLE'),
+      );
+    await expect(
+      eligibleFactoriesService.createAddRequest(
+        { factoryId: ownedFactorySummary().factoryId, reason: 'ทดสอบ' },
+        42,
+        addRequestAccess(),
+      ),
+    ).rejects.toMatchObject({ statusCode: 503, code: 'FACTORY_PROVINCE_UNAVAILABLE' });
+    expect(mockedRepository.createAddRequest).not.toHaveBeenCalled();
+  });
+
+  it('replaces stale master province with DIW province in both request and snapshot', async () => {
+    jest.clearAllMocks();
+    const factory = {
+      ...ownedFactorySummary(),
+      provinceName: 'กรุงเทพมหานคร',
+      province: 'กรุงเทพมหานคร',
+    };
+    mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(factory);
+    mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue(null);
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
+    mockedRepository.createAddRequest.mockResolvedValue(pendingAddRequest());
+    jest
+      .mocked(resolveFactorySourceProvinces)
+      .mockResolvedValue(
+        new Map([[factory.factoryId, { provinceId: '1055', provinceName: 'น่าน' }]]),
+      );
+
+    await eligibleFactoriesService.createAddRequest(
+      { factoryId: factory.factoryId, reason: 'ทดสอบจังหวัดจริง' },
+      42,
+      addRequestAccess(),
+    );
+
+    expect(mockedRepository.createAddRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provinceName: 'น่าน',
+        requestedFactory: expect.objectContaining({ provinceName: 'น่าน' }),
+      }),
+      42,
+    );
   });
 });
 

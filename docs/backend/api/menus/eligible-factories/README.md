@@ -1001,3 +1001,7 @@ Minimal request: ไม่มี request body.
 รัน migration [`0118_add_eligible_factory_add_request_contacts.ts`](../../../../../backend/src/db/migrations/0118_add_eligible_factory_add_request_contacts.ts) ก่อนเริ่ม backend รุ่นที่อ่าน/เขียนข้อมูลผู้ติดต่อ โดยเพิ่มคอลัมน์ nullable สองคอลัมน์และไม่เติมข้อมูลแทนคำขอเดิม หลัง deploy ตรวจ `/api/v1/openapi.json` ว่า schema `CreateEligibleFactoryAddRequest` และ `EligibleFactoryAddRequest` มีฟิลด์ตรงกับหน้านี้
 
 การตรวจเฉพาะงานนี้ครอบคลุม [validator](../../../../../backend/tests/unit/eligible-factories.validator.test.ts), [route](../../../../../backend/tests/unit/eligible-factories.route.test.ts), [service](../../../../../backend/tests/unit/eligible-factories.service.test.ts), [การบันทึกและอ่านข้อมูล](../../../../../backend/tests/unit/eligible-factory-add-requests.repository-regression.test.ts), [migration](../../../../../backend/tests/unit/eligible-factory-add-request-contacts.migration.test.ts) และ [OpenAPI](../../../../../backend/tests/unit/api-docs.openapi.test.ts)
+
+## จังหวัดในคำขอเพิ่มโรงงาน
+
+`POST /api/v1/eligible-factories/add-requests` อ่าน `provinceName` ของแถวคำขอและ snapshot จาก `diw.fac_import.PROV` ผ่าน FID และ province master ไม่คัดลอกจังหวัดที่ค้างใน `factories` และไม่เดาจังหวัดจากเลขทะเบียนหรือเติมกรุงเทพมหานคร ถ้ายืนยันจังหวัดไม่ได้ตอบ `503 FACTORY_PROVINCE_UNAVAILABLE` และไม่สร้างคำขอ ใช้ error envelope กลางตามเดิม ดู [ตัวอ่านจังหวัดต้นทาง](../../../../../backend/src/shared/services/factory-source-provinces.ts) และ [tests](../../../../../backend/tests/unit/factory-source-provinces.test.ts)

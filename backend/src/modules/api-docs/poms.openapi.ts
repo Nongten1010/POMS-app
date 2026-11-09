@@ -5748,7 +5748,8 @@ const extraPaths: Record<string, OpenApiObject> = {
         'ถ้าพบ local แต่รหัสผ่าน/สถานะ/persona ไม่ผ่าน คืน generic 401 และไม่เรียก DIW. ' +
         'ไป provider ที่ตั้งค่าไว้เฉพาะเมื่อไม่พบ local identity; accountType=poms หรือ provider=local ยังคง local-only. ' +
         'บัญชี i_industry ที่ sync ไว้ต้องยืนยัน DIW ใหม่ทุกครั้ง. DIW HTTP 200 ที่ status=false ยังคืน 401; ' +
-        'ไม่เรียก NEXT API แทน DIW. ส่ง X-Request-Id ที่ backend สร้างให้ใช้ติดตาม safe auth logs.',
+        'ไม่เรียก NEXT API แทน DIW. ส่ง X-Request-Id ที่ backend สร้างให้ใช้ติดตาม safe auth logs. ' +
+        'ก่อน sync โรงงานผู้ประกอบการ อ่านจังหวัดจริงจาก diw.fac_import.PROV ด้วย FID และ map กับ province master; ไม่ใช้จังหวัดจาก login หรือค่าเริ่มต้นกรุงเทพมหานคร. หากไม่พบ FID/จังหวัด, ข้อมูลกำกวม หรือต้นทางใช้ไม่ได้ คืน 503 FACTORY_PROVINCE_UNAVAILABLE โดยไม่ sync ข้อมูลหรือออก token',
       requestBody: jsonRequestBody(schemaRef('LoginRequest'), loginExample),
       successSchema: schemaRef('AuthSessionResponse'),
       extraResponses: {
@@ -5773,6 +5774,13 @@ const extraPaths: Record<string, OpenApiObject> = {
             },
           },
         },
+        '503': errorResponse('ยืนยันจังหวัดโรงงานจากฐานต้นทาง กรอ. ไม่ได้; ลองใหม่ภายหลัง', {
+          success: false,
+          error: {
+            code: 'FACTORY_PROVINCE_UNAVAILABLE',
+            message: 'Factory province could not be verified with DIW. Please try again later.',
+          },
+        }),
         '429': { $ref: '#/components/responses/TooManyRequests' },
       },
     }),
@@ -6115,7 +6123,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Submit an eligible-factory add request',
       operationId: 'createEligibleFactoryAddRequest',
       description:
-        'Permission (ต้องมีครบ): factories:view + factories:edit. Operator ส่งได้เฉพาะโรงงานใน OWN_FACTORY scope ที่ยังไม่เข้าข่ายและไม่มีคำขอ PENDING_REVIEW. backend resolve ข้อมูลเอง: snapshot.sourceFactoryId และ factoryRegistrationNoNew เก็บ FID/เลขทะเบียนใหม่ของ Fac60k; factoryRegistrationNoOld เก็บเลขเดิม และ factoryRegistrationNo ใน response ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่',
+        'Permission (ต้องมีครบ): factories:view + factories:edit. Operator ส่งได้เฉพาะโรงงานใน OWN_FACTORY scope ที่ยังไม่เข้าข่ายและไม่มีคำขอ PENDING_REVIEW. backend resolve ข้อมูลเอง: snapshot.sourceFactoryId และ factoryRegistrationNoNew เก็บ FID/เลขทะเบียนใหม่ของ Fac60k; factoryRegistrationNoOld เก็บเลขเดิม และ factoryRegistrationNo ใน response ใช้เลขเดิมเมื่อมี มิฉะนั้นเลขใหม่. provinceName ของคำขอและ snapshot อ่านจาก diw.fac_import.PROV ด้วย FID และ map กับ province master ไม่คัดลอกค่าค้างจาก factories และไม่เดาเป็นกรุงเทพมหานคร; ยืนยันไม่ได้ตอบ 503 FACTORY_PROVINCE_UNAVAILABLE และไม่สร้างคำขอ',
       requestBody: jsonRequestBody(
         schemaRef('CreateEligibleFactoryAddRequest'),
         createEligibleFactoryAddRequestExample,
@@ -6125,6 +6133,13 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('EligibleFactoryAddRequestResponse'),
       extraResponses: {
         '409': { $ref: '#/components/responses/Conflict' },
+        '503': errorResponse('ยืนยันจังหวัดโรงงานจากฐานต้นทาง กรอ. ไม่ได้; ไม่สร้างคำขอ', {
+          success: false,
+          error: {
+            code: 'FACTORY_PROVINCE_UNAVAILABLE',
+            message: 'Factory province could not be verified with DIW. Please try again later.',
+          },
+        }),
       },
     }),
   },
@@ -8147,6 +8162,8 @@ export const pomsOpenApiDocument: OpenApiObject = {
   paths,
   components,
   'x-poms-canonical-operation-count': 164,
+  'x-poms-eligible-operator-access-enabled': env.ELIGIBLE_OPERATOR_ACCESS_ENABLED,
+  'x-poms-factory-status-sync-enabled': env.FACTORY_STATUS_SYNC_ENABLED,
   'x-poms-officer-write-permission-checks-enabled': env.OFFICER_WRITE_PERMISSION_CHECKS_ENABLED,
 };
 

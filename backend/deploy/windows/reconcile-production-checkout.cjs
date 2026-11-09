@@ -12,6 +12,11 @@ const REVIEWED_FILES = Object.freeze([
   'backend/src/modules/integrations/integration-device-configs.repository.ts',
   'backend/src/modules/integrations/integration-device-configs.service.ts',
   'backend/src/db/migrations/0144_track_device_config_request_source.ts',
+  'backend/src/config/env.ts',
+  'backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts',
+  'backend/src/modules/auth/identity-provider/index.ts',
+  'backend/src/modules/eligible-factories/eligible-factories.service.ts',
+  'backend/src/shared/services/factory-source-provinces.ts',
 ]);
 const MIGRATION = REVIEWED_FILES[5];
 const SHA = /^[a-f0-9]{40}$/i;
@@ -37,7 +42,7 @@ function validateManifest(manifest) {
   );
   assert(
     Array.isArray(manifest.files) && manifest.files.length === REVIEWED_FILES.length,
-    'Snapshot must contain exactly six reviewed files.',
+    'Snapshot must contain exactly the reviewed source files.',
   );
   assert(
     manifest.files.every(
@@ -226,7 +231,7 @@ function reconcileCheckout({ repoRoot, expectedManifest, targetSha, backupRoot }
   assert(
     state.untracked.every(
       (file) =>
-        file === MIGRATION ||
+        REVIEWED_FILES.includes(file) ||
         !targetFiles.some(
           (target) =>
             target === file || target.startsWith(`${file}/`) || file.startsWith(`${target}/`),
@@ -324,19 +329,19 @@ function reconcileCheckout({ repoRoot, expectedManifest, targetSha, backupRoot }
     metadata.phase = 'stashed';
     save();
   }
-  if (state.untracked.includes(MIGRATION)) {
-    const moved = path.join(backupDirectory, 'moved-untracked', MIGRATION);
+  for (const untracked of state.untracked.filter((file) => REVIEWED_FILES.includes(file))) {
+    const moved = path.join(backupDirectory, 'moved-untracked', untracked);
     fs.mkdirSync(path.dirname(moved), { recursive: true });
-    fs.copyFileSync(path.join(repoRoot, MIGRATION), moved, fs.constants.COPYFILE_EXCL);
+    fs.copyFileSync(path.join(repoRoot, untracked), moved, fs.constants.COPYFILE_EXCL);
     const originalHash = expectedManifest.files
-      .find((entry) => entry.path === MIGRATION)
+      .find((entry) => entry.path === untracked)
       .sha256.toLowerCase();
     assert(
-      fileHash(moved) === originalHash && fileHash(path.join(repoRoot, MIGRATION)) === originalHash,
-      'Migration backup verification failed.',
+      fileHash(moved) === originalHash && fileHash(path.join(repoRoot, untracked)) === originalHash,
+      'Reviewed source backup verification failed.',
     );
-    fs.unlinkSync(path.join(repoRoot, MIGRATION));
-    metadata.phase = 'untracked-migration-preserved';
+    fs.unlinkSync(path.join(repoRoot, untracked));
+    metadata.phase = 'untracked-source-preserved';
     save();
   }
   assert(
@@ -354,7 +359,7 @@ function reconcileCheckout({ repoRoot, expectedManifest, targetSha, backupRoot }
   return { backupDirectory, stashSha: metadata.stashSha, head: finalHead };
 }
 
-module.exports = { reconcileCheckout };
+module.exports = { reconcileCheckout, REVIEWED_FILES };
 
 if (require.main === module) {
   try {

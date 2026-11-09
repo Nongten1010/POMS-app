@@ -13,7 +13,6 @@ function createProvider(fetchImpl: typeof fetch, timeoutMs = 25) {
     operatorUrl: 'https://diw.example.invalid/operator',
     officerUrl: 'https://diw.example.invalid/officer',
     clientId: syntheticClientId,
-    defaultProvinceId: '1000',
     timeoutMs,
     fetchImpl,
   });
