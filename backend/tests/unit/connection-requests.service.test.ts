@@ -678,6 +678,59 @@ describe('connectionRequestsService', () => {
     expect(result.data[0]).not.toHaveProperty('monitoringPointCountBySystem');
   });
 
+  it('keeps numeric master ids and gives each masterless operator factory a stable row id', async () => {
+    const factories = [
+      factorySummary({ id: 77, factoryId: 'with-master' }),
+      factorySummary({ id: null, factoryId: '40490171025682', eligibleFactoryId: 18 }),
+      factorySummary({ id: null, factoryId: '77', eligibleFactoryId: 19 }),
+    ];
+    mockedRepository.listFactoriesForAccess.mockResolvedValue(factories);
+
+    const first = await connectionRequestsService.listOperatorFactories(actorUserId, 'OWN_FACTORY');
+
+    expect(first.data.map(({ id }) => id)).toEqual([77, 'factory-40490171025682', 'factory-77']);
+    expect(new Set(first.data.map(({ id }) => id)).size).toBe(3);
+    expect(first.meta.total).toBe(3);
+    expect(factories.map(({ id }) => id)).toEqual([77, null, null]);
+
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([...factories].reverse());
+    const reordered = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+    expect(reordered.data.map(({ factoryId, id }) => ({ factoryId, id }))).toEqual(
+      first.data.map(({ factoryId, id }) => ({ factoryId, id })).reverse(),
+    );
+  });
+
+  it('gives a non-eligible operator factory without a master a non-null row id', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        id: null,
+        eligibleFactoryId: null,
+        factoryId: 'not-eligible',
+        isEligible: false,
+        eligibilityStatus: 'ไม่เข้าข่าย',
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]).toMatchObject({
+      id: 'factory-not-eligible',
+      factoryId: 'not-eligible',
+      isEligible: false,
+      eligibilityRequest: null,
+      canRequestEligibility: true,
+    });
+    expect(
+      mockedRepository.listOpenEligibleFactoryAddRequestsForFactoryMasterIds,
+    ).toHaveBeenCalledWith([]);
+  });
+
   it('uses IEAT officer notification emails for factories inside an industrial estate', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({

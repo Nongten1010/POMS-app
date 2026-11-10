@@ -92,6 +92,7 @@ import {
   type MeasurementPointInput,
   type OperatorFactoryDashboardRowDTO,
   type OperatorFactoryEligibilityRequestDTO,
+  type OperatorFactoryListRowDTO,
   type OperatorFactoryMeasurementPointDTO,
   type OperatorFactoryOverviewResultDTO,
   type OperatorFactoryOverviewRowDTO,
@@ -282,7 +283,7 @@ export const connectionRequestsService = {
     factoryViewScope: AccessScope,
     query: ListOperatorFactoriesQuery = {},
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<PaginatedTableRowsDTO<ConnectionRequestFactoryTableRowDTO>> {
+  ): Promise<PaginatedTableRowsDTO<OperatorFactoryListRowDTO>> {
     void query;
     const factories = await normalizeReadFactoryAreas(
       await connectionRequestsRepository.listFactoriesForAccess({
@@ -329,20 +330,24 @@ export const connectionRequestsService = {
       }
     });
 
-    const data = factories.map<ConnectionRequestFactoryTableRowDTO>((factory) => {
+    const data = factories.map<OperatorFactoryListRowDTO>((factory) => {
+      const id = factory.id ?? `factory-${factory.factoryId}`;
       if (factory.isEligible !== true) {
-        return toNonEligibleOperatorFactoryTableRow(
-          factory,
-          factory.id === null
-            ? undefined
-            : openEligibilityRequestsByFactoryMasterId.get(factory.id),
-        );
+        return {
+          ...toNonEligibleOperatorFactoryTableRow(
+            factory,
+            factory.id === null
+              ? undefined
+              : openEligibilityRequestsByFactoryMasterId.get(factory.id),
+          ),
+          id,
+        };
       }
 
       const latestRequest = latestRequestByFactory.get(factory.factoryId);
       const currentPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
       return {
-        id: factory.id,
+        id,
         factoryId: factory.factoryId,
         factoryName: factory.factoryName,
         newRegistrationNo: factory.newRegistrationNo,

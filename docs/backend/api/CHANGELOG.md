@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="operator-factory-row-id"></a>
+
+## 2026-11-10 — รายการโรงงานผู้ประกอบการคืนคีย์แถวสำหรับโรงงานที่ไม่มี master
+
+- **Affected canonical docs:** [คำขอเชื่อมต่อ: คีย์แถวโรงงานผู้ประกอบการ](./menus/connection-requests/README.md#operator-factory-row-id)
+- **Impact:** `GET /api/v1/cems-wpms-requests/operator-factories` คืน `data[].id` เป็น `number | string` ที่ไม่เป็น `null`. โรงงานผูกเพิ่มที่ไม่มี supporting master เคยได้ `null` จาก `factory_access_identities` และทำให้ตารางที่ใช้ `id` เป็นคีย์แถวแสดงไม่ได้; backend เปลี่ยนเฉพาะคีย์แถวของ response เป็น `factory-<factoryId>` โดยคง ID ตัวเลขของ master เดิม
+- **Migration:** Consumer ที่ตรวจชนิด `id` เป็น `number | null` ต้องรองรับ `number | string` และถือเป็นคีย์รายการ ไม่ parse ข้อความเป็นตัวเลข ใช้ `factoryId` สำหรับ action/URL/scope ตามเดิม. คีย์คงเดิมเมื่อ `factoryId` และการมี master ไม่เปลี่ยน; หากจับคู่ master ได้ภายหลัง `id` จะเป็น ID ตัวเลขของ master. ไม่ต้อง migrate ฐานข้อมูลหรือสร้าง master เพิ่ม. หลัง deploy ที่ได้รับอนุญาต ตรวจ `/api/v1/openapi.json` ว่า endpoint อ้าง `OperatorFactoryListResponse` และทดสอบโรงงานเดิมกับโรงงานผูกเพิ่มจริง
+- **Old contract:** `data[].id` เป็น `number | null`; โรงงานที่ไม่มี master คืน `null`
+- **New contract:** มี master ใช้ `factories.id` เดิม; ไม่มี master ใช้ `factory-<factoryId>`. Endpoint และ schema ของรายการเจ้าหน้าที่ ข้อมูลพื้นฐาน หน้าแรก และแผนที่คงเดิม
+- **Breaking change:** yes — consumer ที่รับ `id` เฉพาะตัวเลขหรือ `null` ต้องยอมรับข้อความแบบมี prefix
+
 <a id="hourly-receipt-next-hour-deadline"></a>
 
 ## 2026-11-06 — ทุกอุปกรณ์ส่งข้อมูลรายชั่วโมงได้ถึงสิ้นสุดชั่วโมงถัดไป

@@ -1080,17 +1080,15 @@ describe('POMS OpenAPI contract', () => {
       ).schema,
       'operator response schema',
     );
-    expect(operatorResponseSchema.$ref).toBe(
-      '#/components/schemas/ConnectionRequestFactoryTableResponse',
-    );
+    expect(operatorResponseSchema.$ref).toBe('#/components/schemas/OperatorFactoryListResponse');
 
-    const operatorRow = asObject(schemas.OperatorFactoryTableRow, 'OperatorFactoryTableRow');
+    const operatorRow = asObject(schemas.OperatorFactoryListRow, 'OperatorFactoryListRow');
     expect(operatorRow.required).toEqual(
       expect.arrayContaining(['eligibilityRequest', 'canRequestEligibility']),
     );
     const operatorRowProperties = asObject(
       operatorRow.properties,
-      'OperatorFactoryTableRow.properties',
+      'OperatorFactoryListRow.properties',
     );
     expect(operatorRowProperties).toHaveProperty('eligibilityRequest');
     expect(operatorRowProperties).toHaveProperty('canRequestEligibility');
@@ -1122,15 +1120,15 @@ describe('POMS OpenAPI contract', () => {
       $ref: '#/components/schemas/ConnectionRequestFactoryTableRow',
     });
 
-    for (const pathKey of [
-      '/cems-wpms-requests/operator-factories',
-      '/cems-wpms-requests/eligible-factories',
+    for (const [pathKey, schemaName] of [
+      ['/cems-wpms-requests/operator-factories', 'OperatorFactoryListResponse'],
+      ['/cems-wpms-requests/eligible-factories', 'ConnectionRequestFactoryTableResponse'],
     ]) {
       const operation = asObject(asObject(paths[pathKey], pathKey).get, `GET ${pathKey}`);
       const responses = asObject(operation.responses, 'responses');
       const content = asObject(asObject(responses['200'], '200').content, 'content');
       expect(asObject(content['application/json'], 'application/json').schema).toEqual({
-        $ref: '#/components/schemas/ConnectionRequestFactoryTableResponse',
+        $ref: `#/components/schemas/${schemaName}`,
       });
     }
 
@@ -1138,6 +1136,51 @@ describe('POMS OpenAPI contract', () => {
     expect(asObject(pomsRow.properties, 'POMS row properties')).not.toHaveProperty(
       'industrialEstateName',
     );
+  });
+
+  it('documents non-null operator factory row ids without widening the other factory contracts', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const row = asObject(schemas.OperatorFactoryListRow, 'OperatorFactoryListRow');
+    const properties = asObject(row.properties, 'OperatorFactoryListRow.properties');
+
+    expect(row.required).toEqual(
+      expect.arrayContaining(['id', 'factoryId', 'industrialEstateName']),
+    );
+    expect(properties.id).toEqual({
+      oneOf: [
+        { type: 'integer', minimum: 1 },
+        {
+          type: 'string',
+          minLength: 9,
+          maxLength: 72,
+          pattern: '^factory-.+$',
+          example: 'factory-40490171025682',
+        },
+      ],
+      description: expect.stringContaining('factory-<factoryId>'),
+    });
+    expect(row.example).toMatchObject({
+      id: 'factory-40490171025682',
+      factoryId: '40490171025682',
+    });
+    const response = asObject(schemas.OperatorFactoryListResponse, 'OperatorFactoryListResponse');
+    const responseProperties = asObject(
+      response.properties,
+      'OperatorFactoryListResponse.properties',
+    );
+    expect(asObject(responseProperties.data, 'data').items).toEqual({
+      $ref: '#/components/schemas/OperatorFactoryListRow',
+    });
+
+    for (const schemaName of ['OperatorFactoryTableRow', 'ConnectionRequestFactoryTableRow']) {
+      const shared = asObject(schemas[schemaName], schemaName);
+      expect(asObject(shared.properties, `${schemaName}.properties`).id).toEqual({
+        type: 'integer',
+        minimum: 1,
+        nullable: true,
+      });
+    }
   });
 
   it('documents the Fac60k source-factory lookup path, permission, and response schema', () => {

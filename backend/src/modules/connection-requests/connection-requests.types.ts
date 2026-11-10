@@ -569,6 +569,10 @@ export interface ConnectionRequestFactoryTableRowDTO extends OperatorFactoryTabl
   industrialEstateName: string | null;
 }
 
+export interface OperatorFactoryListRowDTO extends Omit<ConnectionRequestFactoryTableRowDTO, 'id'> {
+  id: number | string;
+}
+
 export interface OperatorFactoryDashboardRowDTO {
   id: number | null;
   eligibleFactoryId: number | null;

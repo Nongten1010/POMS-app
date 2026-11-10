@@ -3134,6 +3134,64 @@ componentSchemas.ConnectionRequestFactoryTableResponse = {
   },
 };
 
+componentSchemas.OperatorFactoryListRow = {
+  ...componentSchemas.ConnectionRequestFactoryTableRow,
+  properties: {
+    ...(componentSchemas.ConnectionRequestFactoryTableRow.properties as OpenApiObject),
+    id: {
+      oneOf: [
+        { type: 'integer', minimum: 1 },
+        {
+          type: 'string',
+          minLength: 9,
+          maxLength: 72,
+          pattern: '^factory-.+$',
+          example: 'factory-40490171025682',
+        },
+      ],
+      description:
+        'คีย์แถวที่ไม่เป็น null: ใช้ factories.id เดิมเมื่อมี master; หากไม่มีใช้ factory-<factoryId>. ใช้ factoryId สำหรับ action/scope ไม่แปลงคีย์ข้อความเป็น primary key และไม่สร้าง master เพิ่ม; คงค่าเดิมเมื่อ factoryId และการมี master ไม่เปลี่ยน',
+    },
+  },
+  example: {
+    id: 'factory-40490171025682',
+    factoryId: '40490171025682',
+    factoryName: 'โรงงานที่ผูกสิทธิ์เพิ่มเติม',
+    newRegistrationNo: '40490171025682',
+    oldRegistrationNo: null,
+    industryType: null,
+    industryMainOrder: null,
+    industrySubOrder: null,
+    businessActivity: null,
+    eia: null,
+    eiaOther: null,
+    projectName: null,
+    address: null,
+    latitude: null,
+    longitude: null,
+    province: 'มุกดาหาร',
+    industrialEstateName: null,
+    officerNotificationEmails: [],
+    isEligible: true,
+    eligibilityStatus: 'เข้าข่าย',
+    monitoringPointCount: 0,
+    requestStatusCode: null,
+    eligibilityRequest: null,
+    canRequestEligibility: false,
+    status: 'แสดง',
+  },
+};
+componentSchemas.OperatorFactoryListResponse = {
+  ...componentSchemas.ConnectionRequestFactoryTableResponse,
+  properties: {
+    ...(componentSchemas.ConnectionRequestFactoryTableResponse.properties as OpenApiObject),
+    data: {
+      type: 'array',
+      items: schemaRef('OperatorFactoryListRow'),
+    },
+  },
+};
+
 const connectionRequestPaths: Record<string, OpenApiObject> = {
   '/cems-wpms-requests': {
     get: securedOperation({
@@ -3208,9 +3266,19 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'อ่านโรงงานของผู้ประกอบการ',
       operationId: 'listOperatorFactories',
       description:
-        'Permission: factories:view. คืนทุกโรงงานที่ผู้ใช้เข้าถึงได้ พร้อม status ปัจจุบันจาก POMS ด้วย eligible factory id: แสดง, ซ่อน หรือ ยกเลิกการเชื่อมต่อ. สถานะใช้เป็นป้ายกำกับ ไม่กรองแถวหรือรายละเอียดออก; meta.total รวมทุกแถวที่คืน. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานไม่เข้าข่ายยังแสดงตามสิทธิ์เดิม. industryType ใช้ businessActivity, ลำดับหลัก/ย่อยที่ไม่มีข้อมูลเป็น null และคงค่า EIA/ชื่อโครงการที่บันทึกไว้. industrialEstateName คืนชื่อนิคมจากข้อมูลโรงงานเข้าข่าย หรือ null เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย. ทุก row คืน eligibilityRequest และ canRequestEligibility เพื่อควบคุมปุ่มแจ้งความประสงค์โดยไม่ต้องเดาสถานะจาก client',
+        'Permission: factories:view. คืนทุกโรงงานที่ผู้ใช้เข้าถึงได้ พร้อม status ปัจจุบันจาก POMS ด้วย eligible factory id: แสดง, ซ่อน หรือ ยกเลิกการเชื่อมต่อ. สถานะใช้เป็นป้ายกำกับ ไม่กรองแถวหรือรายละเอียดออก; meta.total รวมทุกแถวที่คืน. โรงงานที่ยังไม่มีจุดตรวจวัดและโรงงานไม่เข้าข่ายยังแสดงตามสิทธิ์เดิม. industryType ใช้ businessActivity, ลำดับหลัก/ย่อยที่ไม่มีข้อมูลเป็น null และคงค่า EIA/ชื่อโครงการที่บันทึกไว้. industrialEstateName คืนชื่อนิคมจากข้อมูลโรงงานเข้าข่าย หรือ null เมื่อไม่มีข้อมูลหรือไม่เข้าข่าย. ทุก row คืน eligibilityRequest และ canRequestEligibility เพื่อควบคุมปุ่มแจ้งความประสงค์โดยไม่ต้องเดาสถานะจาก client. id เป็นคีย์แถว number|string ที่ไม่เป็น null: ใช้ factories.id เดิม หรือ factory-<factoryId> เมื่อไม่มี master; action และ scope ยังคงใช้ factoryId',
       parameters: operatorFactoryParameters,
-      successSchema: schemaRef('ConnectionRequestFactoryTableResponse'),
+      successSchema: schemaRef('OperatorFactoryListResponse'),
+      successExamples: {
+        assignedFactoryWithoutMaster: {
+          summary: 'โรงงานผูกเพิ่มที่ไม่มี factory master ได้คีย์แถวข้อความ',
+          value: {
+            success: true,
+            data: [componentSchemas.OperatorFactoryListRow.example],
+            meta: { total: 1 },
+          },
+        },
+      },
     }),
   },
   '/cems-wpms-requests/eligible-factories': {
