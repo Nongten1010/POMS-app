@@ -1,3 +1,10 @@
+export const kwp04ReportConditions = ['4(1)', '4(2)', '11(3)', '16']
+
+export function validateKwp04ReportConditions(rows) {
+  const index = rows.findIndex((row) => !kwp04ReportConditions.includes(row.reportCondition))
+  if (index !== -1) throw new Error(`กรุณาเลือกรายงานตามเงื่อนไขในรายการตรวจวัดลำดับที่ ${index + 1}`)
+}
+
 export function isKwpAdmin(roleCode = '', roleCodes = []) {
   return [roleCode, ...roleCodes].some((role) => String(role).toLowerCase() === 'admin')
 }

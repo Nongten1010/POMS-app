@@ -335,7 +335,7 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
       assert.ok(html.includes('name="labReportLink"'))
       for (const code of ['02', '04']) {
         const form = { code: `กวภ.${code}`, title: `กวภ.${code}` }
-        const payload = page.buildKwp02SubmissionPayload(form, inputs, [{ pollutant: 'CO (ppm)' }], [])
+        const payload = page.buildKwp02SubmissionPayload(form, inputs, [{ pollutant: 'CO (ppm)', reportCondition: '4(1)' }], [])
         assert.equal(payload.reportRound, 1)
         assert.equal(payload.reportYear, 2569)
         assert.equal(payload.samplingPhotoLink, 'https://example.com/photos')
@@ -352,6 +352,32 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
         assert.equal(view.reportRound, 1)
         assert.equal(view.reportYear, 2569)
         assert.equal(view.attachmentSections[0].link, payload.samplingPhotoLink)
+      }
+    })
+
+    await t.test('only KWP04 requires and round-trips a condition on every measurement', () => {
+      for (const reportCondition of ['4(1)', '4(2)', '11(3)', '16']) {
+        const rows = [{ pollutant: 'CO (ppm)', reportCondition }]
+        const payload = page.buildKwp02SubmissionPayload({ code: 'กวภ.04' }, inputs, rows)
+        assert.equal(payload.measurementItems[0].reportCondition, reportCondition)
+        const detail = { ...payload, formType: 'KWP04' }
+        assert.equal(page.buildKwpEditFormFromDetail(detail).initialState.measurementRows[0].reportCondition, reportCondition)
+        assert.equal(page.buildKwpRequestPreviewDataFromDetail(detail).measurementRows[0].reportCondition, reportCondition)
+        assert.ok(!('reportCondition' in page.buildKwp02SubmissionPayload({ code: 'กวภ.02' }, inputs, rows).measurementItems[0]))
+      }
+      for (const reportCondition of [undefined, null, '', '4(3)', 16]) {
+        assert.throws(() => page.buildKwp02SubmissionPayload({ code: 'กวภ.04' }, inputs, [
+          { reportCondition: '16' }, { reportCondition },
+        ]), /ลำดับที่ 2/)
+      }
+      const legacy = page.buildKwpEditFormFromDetail({ formType: 'KWP04', measurementItems: [{}] })
+      assert.equal(legacy.initialState.measurementRows[0].reportCondition, '')
+      for (const isKwp04 of [false, true]) {
+        const html = renderToStaticMarkup(React.createElement(page.Kwp02Form, {
+          isKwp04, factory: {}, point: {}, measurementRows: [{ id: 1, reportCondition: '11(3)' }], samplingPhotoFiles: [], labReportFiles: [],
+        }))
+        assert.equal(html.includes('รายงานตามเงื่อนไข'), isKwp04)
+        assert.equal(html.includes('11(3)'), isKwp04)
       }
     })
 
@@ -485,10 +511,12 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
           const data = { formType: `kwp${code}`, requestNo: `KWP${code}-0001/2569`, status: 'APPROVED',
             submittedAt: '2026-09-16T00:00:00Z', reporterName: 'นายทดสอบ ระบบ', reporterPosition: 'วิศวกร',
             factoryName: 'บริษัท ทดสอบ จำกัด', companyName: 'บริษัท ทดสอบ จำกัด', reportRound: 1, reportYear: 2569,
-            measurementRows: [{ pollutant: 'CO (ppm)', measuredValue: '10', unit: 'ppm' }], calibrationRows: [],
+            measurementRows: [{ pollutant: 'CO (ppm)', measuredValue: '10', unit: 'ppm', reportCondition: '11(3)' }], calibrationRows: [],
             attachmentSections: [{ title: 'เอกสารแนบ', link: 'https://example.com/evidence', files: [{ name: 'evidence.pdf', type: 'application/pdf' }] }],
           }
           const bytes = await pdf.createKwpFormPdf(data)
+          assert.equal(drawn.some(({ text }) => text === 'รายงานตาม'), code === '04')
+          assert.equal(drawn.some(({ text }) => text === '11(3)'), code === '04')
           assert.ok((await PDFDocument.load(bytes)).getPageCount() >= 2)
           assert.ok(drawn.some(({ text }) => text === `เลขที่ : ${data.requestNo}`))
           assert.ok(drawn.some(({ text, options }) => text === 'ผ่านการพิจารณา' && options.bold === true))
@@ -567,7 +595,7 @@ test('KWP forms, detail round trips and generated PDF content', async (t) => {
             if (['02', '04', '05'].includes(code)) {
               const size = code === '05' ? 12.8 : 11.4
               assert.equal(drawn.filter(({ text, options }) => text === '-' && options.size === size).length,
-                code === '05' ? 8 : 7, `${code}: each empty table cell has a placeholder`)
+                code === '02' ? 7 : 8, `${code}: each empty table cell has a placeholder`)
             }
             if (missing === undefined && process.env.KWP_PDF_QA_DIR) {
               await writeFile(join(process.env.KWP_PDF_QA_DIR, `kwp${code}-empty.pdf`), bytes)

@@ -56,6 +56,7 @@ import {
   getKwpReportPeriod, getKwpAttachmentValidationError, getKwpLink, readKwpApiResponse,
   fetchKwpMeasurementPoints, withKwpParameterOptions, isKwpParameterError,
   buildKwpAttachmentMetadata, isKwpMeasurementAttachment, sortKwpRequestRows,
+  kwp04ReportConditions, validateKwp04ReportConditions,
 } from '../utils/kwpFormPresentation.mjs'
 
 dayjs.extend(buddhistEra)
@@ -1429,13 +1430,18 @@ function buildKwpEmissionMeasurementItem(row, attachments = []) {
 
 function buildKwp02SubmissionPayload(form, formElement, measurementRows, measurementAttachments = []) {
   const formData = formElement ? new FormData(formElement) : new FormData()
+  const isKwp04 = form?.code === 'กวภ.04' || form?.title?.startsWith('กวภ.04')
+  if (isKwp04) validateKwp04ReportConditions(measurementRows)
   return {
     ...buildKwpCommonSubmissionPayload(form, formElement),
     ...getKwpReportPeriod(formData, { allowEmpty: form?.mode === 'edit' }),
     samplingPhotoLink: getKwpLink(formData.get('samplingPhotoLink')),
     labReportLink: getKwpLink(formData.get('labReportLink')),
     measurementItems: measurementRows.map((row, index) =>
-      buildKwpEmissionMeasurementItem(row, index === 0 ? measurementAttachments : []),
+      ({
+        ...buildKwpEmissionMeasurementItem(row, index === 0 ? measurementAttachments : []),
+        ...(isKwp04 ? { reportCondition: row.reportCondition } : {}),
+      }),
     ),
   }
 }
@@ -1840,6 +1846,7 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
         unit: item.unit ?? '',
         laboratoryNo: item.laboratoryNo ?? '',
         reportNo: item.reportNo ?? '',
+        reportCondition: item.reportCondition ?? '',
         method: item.method ?? '',
         methodOther: item.methodOther ?? '',
       })),
@@ -1965,6 +1972,7 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
           unit: item.unit ?? '',
           laboratoryNo: item.laboratoryNo ?? '',
           reportNo: item.reportNo ?? '',
+          reportCondition: item.reportCondition ?? '',
           method: item.method ?? '',
           methodOther: item.methodOther ?? '',
         }))
@@ -2483,9 +2491,9 @@ function Kwp02PaperDocument({ data }) {
               }}
             >
               <TableBody>
-                <KwpPaperRowsOneAndTwo data={data} totalColumns={7} />
+                <KwpPaperRowsOneAndTwo data={data} totalColumns={isKwp04 ? 8 : 7} />
                 <TableRow>
-                  <TableCell component="th" colSpan={7}>3. รายการตรวจวัดมลพิษอากาศจากปล่องระบาย</TableCell>
+                  <TableCell component="th" colSpan={isKwp04 ? 8 : 7}>3. รายการตรวจวัดมลพิษอากาศจากปล่องระบาย</TableCell>
                 </TableRow>
                 <TableRow>
                   {[
@@ -2495,6 +2503,7 @@ function Kwp02PaperDocument({ data }) {
                     ['หน่วยการ', 'ตรวจวัด'],
                     ['เลขที่ห้อง', 'ปฏิบัติการ'],
                     ['เลขที่รายงาน'],
+                    ...(isKwp04 ? [['รายงานตาม', 'เงื่อนไข']] : []),
                     ['วิธีการตรวจวัดวิเคราะห์'],
                   ].map((column) => (
                     <TableCell key={column.join('-')} align="center" sx={{ fontWeight: 700 }}>
@@ -2514,17 +2523,18 @@ function Kwp02PaperDocument({ data }) {
                     <TableCell>{row.unit}</TableCell>
                     <TableCell>{row.laboratoryNo}</TableCell>
                     <TableCell>{row.reportNo}</TableCell>
+                    {isKwp04 && <TableCell>{row.reportCondition || '-'}</TableCell>}
                     <TableCell>{getEmissionMeasurementMethodDisplay(row)}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={isKwp04 ? 8 : 7}>
                     หมายเหตุ : การเก็บและวิเคราะห์ตัวอย่างต้องดําเนินการโดยห้องปฏิบัติการวิเคราะห์ของหน่วยงานราชการ
                     หรือห้องปฏิบัติการวิเคราะห์เอกชนที่ขึ้นทะเบียนกับกรมโรงงานอุตสาหกรรม
                   </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell colSpan={7} sx={{ height: 260 }}>
+                  <TableCell colSpan={isKwp04 ? 8 : 7} sx={{ height: 260 }}>
                     <Box sx={{ textAlign: 'center', mt: 4, fontSize: 13 }}>
                       <Typography sx={{ fontSize: 13 }}>ข้าพเจ้าขอรับรองว่าข้อมูลข้างต้นเป็นจริงทุกประการ</Typography>
                       <Box sx={{ mt: 4, fontSize: 13 }}>
@@ -3598,7 +3608,7 @@ function KwpLegacyAttachmentWarning({ files, onRemove }) {
   )
 }
 
-function EmissionMeasurementDialog({ open, value, parameterOptions, onClose, onSave }) {
+function EmissionMeasurementDialog({ open, value, parameterOptions, isKwp04 = false, onClose, onSave }) {
   if (!open) {
     return null
   }
@@ -3608,14 +3618,16 @@ function EmissionMeasurementDialog({ open, value, parameterOptions, onClose, onS
       key={value?.id ?? 'new'}
       value={value}
       parameterOptions={parameterOptions}
+      isKwp04={isKwp04}
       onClose={onClose}
       onSave={onSave}
     />
   )
 }
 
-function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, onSave }) {
+function EmissionMeasurementDialogContent({ value, parameterOptions, isKwp04, onClose, onSave }) {
   const [form, setForm] = useState(value ?? emptyEmissionMeasurement)
+  const [conditionError, setConditionError] = useState(false)
   const measurementMethodOptions = getEmissionMeasurementMethodOptions(form.pollutant)
 
   const updateForm = (field, nextValue) => {
@@ -3705,7 +3717,16 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
                 fullWidth
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
+            {isKwp04 && <Grid size={{ xs: 12, md: 4 }}>
+              <TextField select required label="รายงานตามเงื่อนไข" size="small" fullWidth
+                value={form.reportCondition ?? ''}
+                error={conditionError}
+                helperText={conditionError ? 'กรุณาเลือกรายงานตามเงื่อนไข' : ''}
+                onChange={(event) => { updateForm('reportCondition', event.target.value); setConditionError(false) }}>
+                {kwp04ReportConditions.map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
+              </TextField>
+            </Grid>}
+            <Grid size={{ xs: 12, md: isKwp04 ? 8 : 6 }}>
               <TextField
                 select
                 label="วิธีการตรวจวัดวิเคราะห์"
@@ -3745,7 +3766,10 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
         <Button color="inherit" onClick={onClose}>
           ยกเลิก
         </Button>
-        <Button variant="contained" onClick={() => onSave(form)}>
+        <Button variant="contained" onClick={() => {
+          if (isKwp04 && !kwp04ReportConditions.includes(form.reportCondition)) { setConditionError(true); return }
+          onSave(form)
+        }}>
           บันทึก
         </Button>
       </DialogActions>
@@ -3754,6 +3778,7 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
 }
 
 function Kwp02Form({
+  isKwp04 = false,
   factory,
   point,
   defaults = {},
@@ -3882,6 +3907,7 @@ function Kwp02Form({
                       'หน่วยการตรวจวัด',
                       'เลขที่ห้องปฏิบัติการ',
                       'เลขที่รายงาน',
+                      ...(isKwp04 ? ['รายงานตามเงื่อนไข'] : []),
                       'วิธีการตรวจวัดวิเคราะห์',
                       'จัดการ',
                     ].map((column) => (
@@ -3901,6 +3927,7 @@ function Kwp02Form({
                         <TableCell>{row.unit}</TableCell>
                         <TableCell>{row.laboratoryNo}</TableCell>
                         <TableCell>{row.reportNo}</TableCell>
+                        {isKwp04 && <TableCell>{row.reportCondition || '-'}</TableCell>}
                         <TableCell>{getEmissionMeasurementMethodDisplay(row)}</TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={1} sx={tableActionStackSx}>
@@ -3921,7 +3948,7 @@ function Kwp02Form({
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} align="center">
+                      <TableCell colSpan={isKwp04 ? 9 : 8} align="center">
                         <Typography variant="body2" color="text.secondary">
                           ไม่มีข้อมูลรายการตรวจวัด
                         </Typography>
@@ -3975,6 +4002,7 @@ function Kwp02Form({
         </SectionPaper>
       </Stack>
       <EmissionMeasurementDialog
+        isKwp04={isKwp04}
         open={Boolean(editingMeasurement)}
         value={editingMeasurement?.id ? editingMeasurement : null}
         parameterOptions={pollutantOptions}
@@ -4463,6 +4491,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
 
   const validateFormInputs = () => {
     if (!canSubmit) throw new Error('ไม่มีสิทธิ์ส่งแบบฟอร์มคำขอ')
+    if (form?.code === 'กวภ.04') validateKwp04ReportConditions(measurementRows)
     const formData = formRef.current ? new FormData(formRef.current) : new FormData()
     if (unsupportedMeasurementFiles.length) throw new Error('กรุณาจัดการไฟล์แนบเดิมที่มีประเภทไม่ถูกต้องก่อนบันทึก')
     if (['กวภ.02', 'กวภ.04'].includes(form?.code)) {
@@ -4812,6 +4841,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
               />
             ) : form?.title?.startsWith('กวภ.02') || form?.title?.startsWith('กวภ.04') ? (
               <Kwp02Form
+                isKwp04={form?.code === 'กวภ.04'}
                 factory={form.factory}
                 point={point}
                 defaults={form.defaults}

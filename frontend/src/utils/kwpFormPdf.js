@@ -979,7 +979,8 @@ async function drawKwp02(layout, data) {
     { label: 'หน่วยการ\nตรวจวัด', width: 0.85 },
     { label: 'เลขที่\nห้องปฏิบัติการ', width: 1.05 },
     { label: 'เลขที่รายงาน', width: 1.05 },
-    { label: 'วิธีการตรวจวัดวิเคราะห์', width: 1.9 },
+    ...(isKwp04 ? [{ label: 'รายงานตาม\nเงื่อนไข', width: 0.9 }] : []),
+    { label: isKwp04 ? 'วิธีการตรวจวัด\nวิเคราะห์' : 'วิธีการตรวจวัดวิเคราะห์', width: isKwp04 ? 1.25 : 1.9 },
   ]
   const totalColumnWeight = tableColumns.reduce((sum, column) => sum + column.width, 0)
   const colWidths = tableColumns.map((column) => (column.width / totalColumnWeight) * width)
@@ -1000,6 +1001,7 @@ async function drawKwp02(layout, data) {
     const cells = [
       displayValue(row.pollutant), formatDate(row.sampleDate), displayValue(row.measuredValue),
       displayValue(row.unit), displayValue(row.laboratoryNo), displayValue(row.reportNo),
+      ...(isKwp04 ? [displayValue(row.reportCondition)] : []),
       displayValue(row.methodOther || row.method),
     ].map((cell, index) => layout.wrapText(cell, colWidths[index] - 8, 11.4))
     const maxLines = Math.max(1, ...cells.map((lines) => lines.length))
