@@ -1,9 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { connectedPointVisibility } from '../poms-factories/connected-point-visibility';
 import { readPomsManagedStatuses } from '../poms-factories/poms-status-management.state';
-import {
-  approvedParameterLabel,
-  parameterKey,
-} from '../poms-factories/poms-measurement-point-parameters';
+import { approvedParameterLabel } from '../poms-factories/poms-measurement-point-parameters';
 import type { StoredFactoryStatus } from '../poms-factories/poms-status-management.types';
 import type { Knex } from 'knex';
 import {
@@ -4749,42 +4747,22 @@ function homeMeasurementPointVisibility(
     | 'factory_is_active'
   >,
 ): HomeMeasurementPointVisibility {
-  const state = parseJsonObject<StoredFactoryStatus>(row.management_state_json ?? null);
-  const own = state?.measurementPoints?.[String(row.id)];
-  const registered = parseParameters(row.parameters_json);
   const instruments = parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json);
   const instrumentLabels = (instruments?.parameters ?? []).map((item) => item.parameter);
-  const factoryVisible =
-    row.factory_is_active !== false &&
-    row.factory_is_active !== 0 &&
-    state?.factory?.visibility !== 'HIDDEN' &&
-    state?.factory?.connectionStatus !== 'DISCONNECTED';
-  const savedParameters = Object.entries(own?.parameters ?? {});
-  const visibleParameters = registered.filter(
-    (parameter) =>
-      !savedParameters.some(
-        ([saved, visibility]) =>
-          visibility === 'HIDDEN' &&
-          (parameterKey(saved) === parameterKey(parameter) ||
-            approvedParameterLabel(saved, registered) === parameter),
-      ),
-  );
-  const pointVisible =
-    factoryVisible &&
-    own?.visibility !== 'HIDDEN' &&
-    own?.connectionStatus !== 'DISCONNECTED' &&
-    (registered.length === 0 || visibleParameters.length > 0);
+  const visibility = connectedPointVisibility({
+    connectedPointId: row.id,
+    parameters: parseParameters(row.parameters_json),
+    managementState: parseJsonObject<StoredFactoryStatus>(row.management_state_json ?? null),
+    monitoringPointStatus: row.monitoring_point_status,
+    factoryIsActive: row.factory_is_active,
+  });
   return {
-    factoryVisible,
-    pointVisible,
-    fullyExempt: row.monitoring_point_status === 'ได้รับการยกเว้นทั้งหมด',
-    parameters: pointVisible
-      ? visibleParameters.map((parameter) =>
-          /\([^)]*\)/u.test(parameter)
-            ? parameter
-            : (approvedParameterLabel(parameter, instrumentLabels) ?? parameter),
-        )
-      : [],
+    ...visibility,
+    parameters: visibility.parameters.map((parameter) =>
+      /\([^)]*\)/u.test(parameter)
+        ? parameter
+        : (approvedParameterLabel(parameter, instrumentLabels) ?? parameter),
+    ),
     measurementInstruments: instruments,
   };
 }

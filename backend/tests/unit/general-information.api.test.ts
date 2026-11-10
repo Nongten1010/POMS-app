@@ -10,6 +10,10 @@ import {
 } from '../helpers/chat-sql-fixture';
 import { createKnexSqliteFixture, type KnexSqliteFixture } from '../helpers/knex-sqlite-fixture';
 import { env } from '../../src/config/env';
+import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
+import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
+import type { FactorySummaryDTO } from '../../src/modules/connection-requests/connection-requests.types';
+import { parameterValuesService } from '../../src/modules/parameter-values/parameter-values.service';
 import {
   defaultFactoryStatus,
   defaultManagedStatus,
@@ -101,7 +105,16 @@ beforeEach(async () => {
         'details_json',
         'updated_at',
         'deleted_at',
+        'monitoring_point_status',
+        'point_name',
+        'point_type',
+        'source_request_id',
+        'instruments_json',
+        'factory_front_photos_json',
+        'factory_logo_json',
+        'documents_json',
       ],
+      factories: ['id', 'fid', 'code', 'is_active', 'deleted_at'],
       eligible_factories: [
         'id',
         'source_factory_id',
@@ -191,7 +204,7 @@ describe('GET /api/v1/general-information', () => {
     expect(wpms.body.data.systemType).toBe('WPMS');
   });
 
-  it('counts distinct ever-connected factories/points nationally, using the latest point revision including removed rows', async () => {
+  it('counts current factories and latest points, excluding deleted points and eligible profiles', async () => {
     factory(1, 'ระยอง', 'นิคมสมมติ');
     factory(2, 'กรุงเทพมหานคร', '-');
     factory(3); // eligible only: never installed
@@ -211,15 +224,15 @@ describe('GET /api/v1/general-information', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.total).toEqual({
       label: 'ทั่วประเทศ',
-      factoryCount: 2,
-      pointCount: 3,
+      factoryCount: 1,
+      pointCount: 1,
     });
     expect(
       response.body.data.regions.find((row: { label: string }) => row.label === 'ภาคกลาง'),
-    ).toEqual({ label: 'ภาคกลาง', factoryCount: 1, pointCount: 1 });
+    ).toEqual({ label: 'ภาคกลาง', factoryCount: 0, pointCount: 0 });
     expect(response.body.data.estates).toEqual([
-      { label: 'ในนิคมฯ', factoryCount: 1, pointCount: 2 },
-      { label: 'นอกนิคมฯ', factoryCount: 1, pointCount: 1 },
+      { label: 'ในนิคมฯ', factoryCount: 1, pointCount: 1 },
+      { label: 'นอกนิคมฯ', factoryCount: 0, pointCount: 0 },
     ]);
     const admin = await request(app).get(url).auth(token('admin'), { type: 'bearer' });
     expect(admin.body.data.regions).toEqual(response.body.data.regions);
@@ -227,6 +240,162 @@ describe('GET /api/v1/general-information', () => {
       .get('/api/v1/general-information?systemType=WPMS')
       .auth(token('officer'), { type: 'bearer' });
     expect(wpms.body.data.total).toEqual({ label: 'ทั่วประเทศ', factoryCount: 1, pointCount: 1 });
+  });
+
+  it.each([
+    ['CEMS', 'ได้รับการยกเว้นทั้งหมด'],
+    ['WPMS', 'ได้รับการยกเว้นทั้งหมด'],
+    ['CEMS', 'อยู่ระหว่างขยายเวลา'],
+    ['WPMS', 'อยู่ระหว่างขยายเวลา'],
+  ])('excludes %s points with status %s even when parameters exist', async (systemType, status) => {
+    factory(1);
+    point(1, 1, {
+      system_type: systemType,
+      monitoring_point_status: status,
+      parameters_json: '["CO (ppm)"]',
+      details_json: JSON.stringify({ averageFlowRate: 999, averageWastewaterDischarge: 999 }),
+    });
+    const response = await request(app)
+      .get(`/api/v1/general-information?systemType=${systemType}`)
+      .auth(token('officer'), { type: 'bearer' });
+    expect(response.status).toBe(200);
+    expect(response.body.data.total).toMatchObject({ factoryCount: 0, pointCount: 0 });
+    expect(
+      response.body.data.regions.every((row: { pointCount: number }) => row.pointCount === 0),
+    ).toBe(true);
+    expect(
+      response.body.data.estates.every((row: { pointCount: number }) => row.pointCount === 0),
+    ).toBe(true);
+    expect(response.body.data.parameters).toEqual([]);
+    expect(response.body.data.flowTotal).toMatchObject({ average: null, min: null, max: null });
+  });
+
+  it.each(['CEMS', 'WPMS'] as const)(
+    'matches dashboard and public map counts for the same current %s points',
+    async (systemType) => {
+      const label = systemType === 'CEMS' ? 'CO (ppm)' : 'BOD (mg/l)';
+      for (const id of [1, 2, 3, 4]) factory(id, 'ระยอง', 'นิคมสมมติ');
+      const common = {
+        system_type: systemType,
+        parameters_json: JSON.stringify([label, 'NOx (ppm)']),
+      };
+      point(1, 1, {
+        ...common,
+        details_json: JSON.stringify({ averageFlowRate: 10, averageWastewaterDischarge: 10 }),
+      });
+      point(2, 1, { ...common, monitoring_point_status: 'ได้รับการยกเว้นทั้งหมด' });
+      point(3, 1, { ...common, monitoring_point_status: 'อยู่ระหว่างขยายเวลา' });
+      point(4, 1, { ...common, deleted_at: '2026-11-10T01:00:00Z' });
+      point(5, 1, common); // disconnected point
+      point(6, 1, common); // hidden point
+      point(7, 2, {
+        ...common,
+        monitoring_point_status: 'อยู่ระหว่างขยายเวลา',
+        parameters_json: '[]',
+      });
+      point(8, 3, common); // visible child of hidden factory
+      point(9, 4, common); // visible child of disconnected factory
+      const state = defaultFactoryStatus();
+      state.measurementPoints['1'] = {
+        ...defaultManagedStatus(),
+        parameters: { 'NOx (ppm)': 'HIDDEN' },
+      };
+      state.measurementPoints['5'] = {
+        ...defaultManagedStatus(),
+        connectionStatus: 'DISCONNECTED',
+        parameters: {},
+      };
+      state.measurementPoints['6'] = {
+        ...defaultManagedStatus(),
+        visibility: 'HIDDEN',
+        parameters: {},
+      };
+      management(1, state);
+      const hidden = defaultFactoryStatus();
+      hidden.factory.visibility = 'HIDDEN';
+      hidden.measurementPoints['8'] = { ...defaultManagedStatus(), parameters: {} };
+      management(3, hidden);
+      const disconnected = defaultFactoryStatus();
+      disconnected.factory.connectionStatus = 'DISCONNECTED';
+      disconnected.measurementPoints['9'] = { ...defaultManagedStatus(), parameters: {} };
+      management(4, disconnected);
+      const homeFactories: FactorySummaryDTO[] = [1, 2, 3, 4].map((id) => ({
+        id,
+        eligibleFactoryId: id,
+        factoryId: `FID-${id}`,
+        factoryName: `โรงงาน ${id}`,
+        newRegistrationNo: `REG-${id}`,
+        oldRegistrationNo: null,
+        industryType: null,
+        industryMainOrder: null,
+        industrySubOrder: null,
+        businessActivity: null,
+        eia: null,
+        projectName: null,
+        address: null,
+        latitude: null,
+        longitude: null,
+        province: 'ระยอง',
+        isEligible: true,
+        isActive: true,
+      }));
+      jest
+        .spyOn(connectionRequestsRepository, 'listFactoriesForAccess')
+        .mockResolvedValue(homeFactories);
+      jest
+        .spyOn(connectionRequestsRepository, 'listFactoryMainTypeLabels')
+        .mockResolvedValue(new Map());
+      jest.spyOn(connectionRequestsRepository, 'listFavoriteFactoryIds').mockResolvedValue([]);
+      jest.spyOn(parameterValuesService, 'latestHourly').mockImplementation(async (stationId) => ({
+        data: [],
+        meta: {
+          stationId,
+          interval: '60m',
+          schemaName: 'ingest',
+          tableName: `${stationId}_data_60m`,
+          count: 0,
+          registeredParameters: [label],
+          returnedColumns: [],
+        },
+      }));
+      const response = await request(app)
+        .get(`/api/v1/general-information?systemType=${systemType}`)
+        .auth(token('officer'), { type: 'bearer' });
+      expect(response.status).toBe(200);
+      const dashboard = await connectionRequestsService.listOperatorFactoryDashboard(42, 'ALL');
+      const map = await connectionRequestsService.listPublicFactoryMapPoints();
+      for (const home of [dashboard, map]) {
+        expect(home.meta.total).toBe(1);
+        expect(home.data[0].measurementPoints.map((point) => point.stationId)).toEqual(['S1']);
+        expect(home.data[0].measurementPoints[0].parameters).toEqual([label]);
+        expect(response.body.data.total).toMatchObject({
+          factoryCount: home.meta.total,
+          pointCount: home.data.reduce(
+            (total, factory) => total + factory.measurementPoints.length,
+            0,
+          ),
+        });
+      }
+      expect(response.body.data.parameters).toEqual([
+        expect.objectContaining({ displayName: label, factoryCount: 1, pointCount: 1 }),
+      ]);
+      expect(
+        response.body.data.regions.find((row: { label: string }) => row.label === 'ภาคตะวันออก'),
+      ).toMatchObject({ factoryCount: 1, pointCount: 1 });
+      expect(response.body.data.estates[0]).toMatchObject({ factoryCount: 1, pointCount: 1 });
+      expect(response.body.data.flowTotal).toMatchObject({ average: 10, min: null, max: null });
+    },
+  );
+
+  it('excludes inactive supporting factory identities without requiring a master row for membership', async () => {
+    factory(1);
+    factory(2);
+    point(1, 1);
+    point(2, 2);
+    insert('factories', { id: 1, fid: 'FID-1', code: 'REG-1', is_active: false });
+    const response = await request(app).get(url).auth(token('officer'), { type: 'bearer' });
+    expect(response.status).toBe(200);
+    expect(response.body.data.total).toMatchObject({ factoryCount: 1, pointCount: 1 });
   });
 
   it('groups units per parameter, distinguishes CO/CO2 and counts each factory/point once using latest data', async () => {
@@ -351,7 +520,7 @@ describe('GET /api/v1/general-information', () => {
     expect(response.body.data.flowTotal).toMatchObject({ average: null, min: null, max: null });
   });
 
-  it('uses current children across both systems for visibility and retains visible removed/disconnected points', async () => {
+  it('does not allow visible children in either system to reopen a hidden parent', async () => {
     factory(1);
     point(1, 1);
     point(2, 1, { system_type: 'WPMS' });
@@ -367,7 +536,7 @@ describe('GET /api/v1/general-information', () => {
     management(1, state);
     const response = await request(app).get(url).auth(token('officer'), { type: 'bearer' });
     expect(response.status).toBe(200);
-    expect(response.body.data.total).toMatchObject({ factoryCount: 1, pointCount: 2 });
+    expect(response.body.data.total).toMatchObject({ factoryCount: 0, pointCount: 0 });
   });
 
   it('hides points whose current parameters are all hidden, without allowing removed children to reopen the factory', async () => {
@@ -408,14 +577,17 @@ describe('GET /api/v1/general-information', () => {
     expect(response.body.data.flowTotal).toMatchObject({ average: null, min: null, max: null });
   });
 
-  it('rejects invalid management JSON rather than counting hidden points as visible', async () => {
-    factory(1);
-    point(1, 1);
-    insert('poms_factory_status_management', { eligible_factory_id: 1, state_json: '{broken' });
-    const response = await request(app).get(url).auth(token('officer'), { type: 'bearer' });
-    expect(response.status).toBe(503);
-    expect(response.body.error.code).toBe('GENERAL_INFORMATION_DATA_INCOMPLETE');
-  });
+  it.each(['{broken', 'null', '[]', 'false'])(
+    'rejects invalid management state %s rather than counting hidden points as visible',
+    async (stateJson) => {
+      factory(1);
+      point(1, 1);
+      insert('poms_factory_status_management', { eligible_factory_id: 1, state_json: stateJson });
+      const response = await request(app).get(url).auth(token('officer'), { type: 'bearer' });
+      expect(response.status).toBe(503);
+      expect(response.body.error.code).toBe('GENERAL_INFORMATION_DATA_INCOMPLETE');
+    },
+  );
 
   it('normalizes saved discharge units, preserves zero/missing values and weights national means by points', async () => {
     factory(1);
@@ -526,7 +698,7 @@ describe('GET /api/v1/general-information', () => {
       'CREATE VIEW current_connected_measurement_points AS SELECT * FROM cems_wpms_connected_measurement_points',
     );
     fixture.execute(
-      "CREATE VIEW current_eligible_factories AS SELECT id, factory_registration_no_new, 'อุทัยธานี' AS province_name, '—' AS industrial_estate_name FROM eligible_factories",
+      "CREATE VIEW current_eligible_factories AS SELECT id, source_factory_id, deleted_at, factory_registration_no_new, 'อุทัยธานี' AS province_name, '—' AS industrial_estate_name FROM eligible_factories",
     );
     env.FACTORY_PROFILE_MODE = 'canonical';
     const response = await request(app).get(url).auth(token('provinceOfficer'), { type: 'bearer' });
@@ -566,6 +738,10 @@ describe('GET /api/v1/general-information', () => {
     ]);
     expect(operation.description).toContain('ทั่วประเทศ');
     expect(operation.description).toContain('ไม่นับโรงงานหรือจุดตรวจวัดที่ซ่อน');
+    expect(operation.description).toContain('ได้รับการยกเว้นทั้งหมด');
+    expect(operation.description).toContain('อยู่ระหว่างขยายเวลา');
+    expect(operation.description).toContain('connectionStatus=DISCONNECTED');
+    expect(operation.description).toContain('deleted_at เป็น null');
     const schemas = response.body.components.schemas;
     expect(schemas.GeneralInformation.required).toEqual(
       expect.arrayContaining([

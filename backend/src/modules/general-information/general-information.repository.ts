@@ -1,4 +1,5 @@
 import { db } from '../../config/database';
+import { factoryAccessReadTable } from '../../shared/utils/factory-access-query';
 import { factoryProfileReadTable } from '../factory-profiles/factory-profile-mode';
 import type { GeneralInformationSystemType } from './general-information.validator';
 
@@ -19,38 +20,33 @@ export interface GeneralInformationPointRow {
   system_type: GeneralInformationSystemType;
   deleted_at: Date | string | null;
   management_state_json: string | null;
+  monitoring_point_status: string | null;
+  factory_is_active: boolean | number | null;
 }
 
-/** Include current siblings from both systems to resolve factory visibility in the same read. */
+/** Read current connected membership; the factory master supplies activity metadata only. */
 export async function listGeneralInformationPoints(
   systemType: GeneralInformationSystemType,
 ): Promise<GeneralInformationPointRow[]> {
   return db(factoryProfileReadTable('cems_wpms_connected_measurement_points', 'cp'))
-    .leftJoin(
-      factoryProfileReadTable('eligible_factories', 'ef'),
-      'ef.id',
-      'cp.eligible_factory_id',
-    )
+    .join(factoryProfileReadTable('eligible_factories', 'ef'), 'ef.id', 'cp.eligible_factory_id')
+    .leftJoin(factoryAccessReadTable('f'), function joinFactoryMaster() {
+      this.on(function joinFactoryKeys() {
+        this.on('f.code', '=', 'ef.factory_registration_no_new')
+          .orOn('f.fid', '=', 'ef.factory_registration_no_new')
+          .orOn('f.fid', '=', 'ef.source_factory_id')
+          .orOn('f.code', '=', 'ef.source_factory_id');
+      }).andOnNull('f.deleted_at');
+    })
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
     .leftJoin(
       'poms_factory_status_management as fsm',
       'fsm.eligible_factory_id',
       'cp.eligible_factory_id',
     )
-    .where((query) =>
-      query
-        .where('cp.system_type', systemType)
-        .orWhere((siblings) =>
-          siblings
-            .whereNull('cp.deleted_at')
-            .whereIn(
-              'cp.eligible_factory_id',
-              db(factoryProfileReadTable('cems_wpms_connected_measurement_points', 'requested_cp'))
-                .where('requested_cp.system_type', systemType)
-                .select('requested_cp.eligible_factory_id'),
-            ),
-        ),
-    )
+    .where('cp.system_type', systemType)
+    .whereNull('cp.deleted_at')
+    .whereNull('ef.deleted_at')
     .select(
       'cp.id',
       'cp.eligible_factory_id',
@@ -63,6 +59,8 @@ export async function listGeneralInformationPoints(
       'cp.updated_at',
       'cp.system_type',
       'cp.deleted_at',
+      'cp.monitoring_point_status',
+      db.raw('CAST(f.is_active AS INT) as factory_is_active'),
       'fsm.state_json as management_state_json',
       'ef.province_name',
       'ef.industrial_estate_name',

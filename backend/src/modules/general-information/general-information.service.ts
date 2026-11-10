@@ -4,14 +4,8 @@ import {
   type GeneralInformationPointRow,
 } from './general-information.repository';
 import { AppError } from '../../shared/errors/AppError';
-import {
-  managedStatusDTO,
-  readPomsManagedStatuses,
-} from '../poms-factories/poms-status-management.state';
-import {
-  defaultManagedStatus,
-  type StoredFactoryStatus,
-} from '../poms-factories/poms-status-management.types';
+import { connectedPointVisibility } from '../poms-factories/connected-point-visibility';
+import type { StoredFactoryStatus } from '../poms-factories/poms-status-management.types';
 
 export const GENERAL_INFORMATION_REGIONS = [
   'ภาคเหนือ',
@@ -48,46 +42,8 @@ function pointParameters(row: GeneralInformationPointRow): string[] {
   return parsed;
 }
 
-function hiddenPoints(rows: GeneralInformationPointRow[]): Set<GeneralInformationPointRow> {
-  const factories = new Map<number | null, GeneralInformationPointRow[]>();
-  for (const row of rows) {
-    const id = row.eligible_factory_id;
-    const points = factories.get(id) ?? [];
-    points.push(row);
-    factories.set(id, points);
-  }
-  const hidden = new Set<GeneralInformationPointRow>();
-  for (const points of factories.values()) {
-    const stateJson = points[0].management_state_json;
-    if (!stateJson) continue;
-    try {
-      const statuses = readPomsManagedStatuses(
-        stateJson,
-        points
-          .filter((row) => row.deleted_at === null)
-          .map((row) => ({ connectedPointId: Number(row.id), parameters: pointParameters(row) })),
-      );
-      const stored = savedJson(stateJson) as StoredFactoryStatus;
-      for (const row of points) {
-        // Historical points keep their saved override but cannot reopen a current parent.
-        const status =
-          statuses.measurementPoints.get(Number(row.id)) ??
-          managedStatusDTO(
-            stored.measurementPoints?.[String(row.id)] ?? defaultManagedStatus(),
-            statuses.factory,
-          );
-        if (status.effectiveVisibility === 'HIDDEN') hidden.add(row);
-      }
-    } catch {
-      incomplete();
-    }
-  }
-  return hidden;
-}
-
 export async function getGeneralInformation(systemType: GeneralInformationSystemType) {
   const rows = await listGeneralInformationPoints(systemType);
-  const hidden = hiddenPoints(rows);
   const latest = new Map<string, GeneralInformationPointRow>();
   const factoryKey = (row: GeneralInformationPointRow) => {
     const key =
@@ -112,7 +68,24 @@ export async function getGeneralInformation(systemType: GeneralInformationSystem
     )
       latest.set(key, row);
   }
-  const points = [...latest.values()].filter((row) => !hidden.has(row));
+  const visibleParameters = new Map<GeneralInformationPointRow, string[]>();
+  const points = [...latest.values()].filter((row) => {
+    const parsed = row.management_state_json ? savedJson(row.management_state_json) : null;
+    if (
+      row.management_state_json &&
+      (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    )
+      incomplete();
+    const visibility = connectedPointVisibility({
+      connectedPointId: row.id,
+      parameters: pointParameters(row),
+      managementState: parsed as StoredFactoryStatus | null,
+      monitoringPointStatus: row.monitoring_point_status,
+      factoryIsActive: row.factory_is_active,
+    });
+    visibleParameters.set(row, visibility.parameters);
+    return visibility.pointVisible;
+  });
   const regionOf = (row: GeneralInformationPointRow) => {
     const region = ['ชัยนาท', 'อุทัยธานี'].includes(row.province_name ?? '')
       ? 'ภาคกลาง'
@@ -223,7 +196,7 @@ export async function getGeneralInformation(systemType: GeneralInformationSystem
     flowrate: 'Flow Rate',
   };
   for (const row of points) {
-    const parameters = pointParameters(row);
+    const parameters = visibleParameters.get(row) ?? [];
     for (const parameter of parameters) {
       const match = /^(.*?)(?:\s*\(([^()]*)\))?$/.exec(parameter.trim());
       if (!match) incomplete();

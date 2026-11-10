@@ -119,6 +119,16 @@ afterEach(() => {
 });
 
 describe('home dashboard visibility projection', () => {
+  it.each(['ได้รับการยกเว้นทั้งหมด', 'อยู่ระหว่างขยายเวลา'])(
+    'rejects direct station visibility for excluded status %s',
+    async (status) => {
+      pointRows = [point({ monitoring_point_status: status })];
+      const visibility =
+        await connectionRequestsRepository.getHomeMeasurementPointVisibility('S0001');
+      expect(visibility).toMatchObject({ pointVisible: false, parameters: [] });
+    },
+  );
+
   it.each([
     ['dashboard', 'CEMS'],
     ['map', 'CEMS'],
@@ -315,7 +325,7 @@ describe('home dashboard visibility projection', () => {
   );
 
   it.each(['CEMS', 'WPMS'] as const)(
-    'filters exempt and hidden %s points before counts and hourly availability',
+    'filters exempt, extended and hidden %s points before counts and hourly availability',
     async (systemType) => {
       pointRows = [
         point({ system_type: systemType }),
@@ -326,6 +336,19 @@ describe('home dashboard visibility projection', () => {
           monitoring_point_status: 'ได้รับการยกเว้นทั้งหมด',
         }),
         point({ id: 13, point_code: 'S0003', system_type: systemType }),
+        point({
+          id: 14,
+          point_code: 'S0004',
+          system_type: systemType,
+          monitoring_point_status: 'อยู่ระหว่างขยายเวลา',
+        }),
+        point({
+          id: 15,
+          point_code: 'S0005',
+          system_type: systemType,
+          monitoring_point_status: 'อยู่ระหว่างขยายเวลา',
+          parameters_json: '[]',
+        }),
       ];
       const state = JSON.stringify({
         factory: { visibility: 'VISIBLE', connectionStatus: 'CONNECTED' },
@@ -440,18 +463,20 @@ describe('home dashboard visibility projection', () => {
     expect(parameterValuesService.latestHourly).not.toHaveBeenCalled();
   });
 
-  it.each(['dashboard', 'map'] as const)(
-    'removes factories with no remaining points on %s',
-    async (surface) => {
-      pointRows = [point({ monitoring_point_status: 'ได้รับการยกเว้นทั้งหมด' })];
-      const result =
-        surface === 'dashboard'
-          ? await connectionRequestsService.listOperatorFactoryDashboard(42, 'ALL')
-          : await connectionRequestsService.listPublicFactoryMapPoints();
-      expect(result).toEqual({ data: [], meta: { total: 0 } });
-      expect(parameterValuesService.latestHourly).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    ['dashboard', 'ได้รับการยกเว้นทั้งหมด'],
+    ['map', 'ได้รับการยกเว้นทั้งหมด'],
+    ['dashboard', 'อยู่ระหว่างขยายเวลา'],
+    ['map', 'อยู่ระหว่างขยายเวลา'],
+  ] as const)('removes factories with only excluded points on %s: %s', async (surface, status) => {
+    pointRows = [point({ monitoring_point_status: status })];
+    const result =
+      surface === 'dashboard'
+        ? await connectionRequestsService.listOperatorFactoryDashboard(42, 'ALL')
+        : await connectionRequestsService.listPublicFactoryMapPoints();
+    expect(result).toEqual({ data: [], meta: { total: 0 } });
+    expect(parameterValuesService.latestHourly).not.toHaveBeenCalled();
+  });
 
   it('does not relabel a hidden unit as the remaining visible unit of the same parameter', async () => {
     pointRows = [

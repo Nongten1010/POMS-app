@@ -1,3 +1,4 @@
+import { isExcludedMonitoringPointStatus } from '../poms-factories/connected-point-visibility';
 import { deriveCurrentParameterDetails } from '../../shared/utils/current-parameter-details';
 import {
   approvedParameterLabel,
@@ -3241,7 +3242,7 @@ function homeMeasurementPoints(
         ? point.homeVisibility.factoryVisible &&
           point.homeVisibility.pointVisible &&
           !point.homeVisibility.fullyExempt
-        : point.monitoringPointStatus !== 'ได้รับการยกเว้นทั้งหมด' &&
+        : !isExcludedMonitoringPointStatus(point.monitoringPointStatus) &&
           point.effectiveVisibility !== 'HIDDEN' &&
           point.effectiveConnectionStatus !== 'DISCONNECTED',
     )

@@ -25,6 +25,25 @@ const annualStationPath = `${stationPath}/{buddhistYear}`;
 const responseSchema = (path: string): unknown => objectAt(responseFor(path), 'schema').$ref;
 
 describe('home handoff OpenAPI contract', () => {
+  it('publishes current point exclusions for dashboard, map and both statistics aliases', () => {
+    const homePaths = ['/operator-factory-dashboard', '/public/factory-map-points'];
+    for (const prefix of [stationPath, annualStationPath]) {
+      for (const suffix of [
+        '/measurement-statistics',
+        '/calendar-status',
+        '/calendar-status/details',
+      ]) {
+        homePaths.push(`${prefix}${suffix}`);
+      }
+    }
+    for (const path of homePaths) {
+      expect(operationFor(path).description).toContain('ได้รับการยกเว้นทั้งหมด');
+      expect(operationFor(path).description).toContain('อยู่ระหว่างขยายเวลา');
+      expect(operationFor(path).description).toContain('connectionStatus=DISCONNECTED');
+      expect(operationFor(path).description).toContain('GET /general-information');
+    }
+  });
+
   it('publishes the next-hour receipt deadline for every device and both station path variants', () => {
     for (const prefix of [stationPath, annualStationPath]) {
       for (const suffix of [

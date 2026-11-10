@@ -122,3 +122,48 @@ Breaking change: no
 - `GET /api/v1/general-information?systemType=CEMS` และ `systemType=WPMS` โดยไม่มี token ตอบ `401 UNAUTHORIZED` ตามเดิม
 - DNS ของเครื่องที่ใช้ตรวจ resolve โดเมนไม่ได้ จึงยืนยัน A record ผ่าน Google DNS over HTTPS และใช้ `curl --resolve d-poms.diw.go.th:443:110.78.4.84`; ตรวจใบรับรอง TLS ตามชื่อโดเมนผ่าน โดยไม่ได้ปิดการตรวจ certificate
 - ยังไม่ได้ตรวจยอดสรุปจริงด้วย token เจ้าหน้าที่/แอดมิน ผลยืนยันครอบคลุมการติดตั้ง, health, runtime contract และ authentication; พฤติกรรมการนับยืนยันผ่าน HTTP fixtures
+
+
+## ยืนยันกติกานับร่วมกับหน้าแรก
+
+ผู้ใช้ยืนยันให้แก้ backend, ทดสอบ และอัปเดตเอกสาร/OpenAPI โดยยังไม่ deploy กติกาส่วนนี้แทนกติกาประวัติจุดที่เคยเชื่อมต่อของ release เดิมด้านบน
+
+- สาเหตุ: ข้อมูลทั่วไปอ่านแถว deleted/disconnected และไม่เลือก `monitoring_point_status`; หน้าแรกตัดยกเว้นทั้งหมดแต่ยังไม่ตัดขยายเวลา ส่วน visibility ของข้อมูลทั่วไปใช้ rollup ที่เปิดโรงงานซ่อนกลับมาได้ ต่างจากหน้าแรกที่ตรวจโรงงานก่อนจุด
+- เปลี่ยนเป็นตัวกรองร่วม `connectedPointVisibility` ใน `backend/src/modules/poms-factories/connected-point-visibility.ts`; ข้อมูลทั่วไปอ่านเฉพาะ active connected points และ eligible profiles ปัจจุบัน นำสถานะโรงงาน/จุดและพารามิเตอร์ที่ผ่านเกณฑ์ไปใช้กับทั้ง 4 หัวข้อ
+- ไม่ใช้ `factories` เป็นสมาชิกโรงงาน POMS; อ่าน supporting identity เพื่อใช้ `is_active` เช่นเดียวกับหน้าแรก โรงงานที่ไม่มี master ยังนับได้เมื่อมีจุดที่ผ่านเกณฑ์
+- SQL Server บังคับ active `point_code` ไม่ซ้ำด้วย `uq_connected_points_point_code` (migration `0030`); regression ของ latest revision ยังคงป้องกันการย้อนนับ revision เก่าที่ซ่อน
+
+### Red และ Green
+
+ก่อนแก้ implementation รัน `general-information.api.test.ts` และ `home-dashboard-visibility.test.ts`: **11 failed / 48 passed** ภายใน 7.22 วินาที ตัวอย่างอาการตรงกับข้อกำหนดคือจุดขยายเวลายังอยู่ในหน้าแรกและข้อมูลทั่วไปยังได้ `factoryCount: 1, pointCount: 1` แทนศูนย์สำหรับทั้งสองสถานะที่ต้องตัดออก
+
+หลังแก้ ทดสอบขอบเขตจริงดังนี้:
+
+- HTTP ข้อมูลทั่วไปผ่าน Supertest, authorization จริง และ SQL ที่ repository สร้างผ่าน SQL.js fixture
+- เปรียบเทียบ HTTP ข้อมูลทั่วไปกับ dashboard และ public map จากแถว connected point ชุดเดียวกันทั้ง CEMS/WPMS โดยใช้ repository/projection จริงของจุด แทนเฉพาะ factory access/label/favorite และ hourly measurement boundary ด้วย fixture เพื่อไม่เรียกข้อมูลจริง
+- ครอบคลุมยกเว้นทั้งหมด ขยายเวลาที่มี/ไม่มีพารามิเตอร์ จุดลบ จุดยกเลิกเชื่อมต่อ จุดซ่อน โรงงานซ่อนหรือยกเลิกเชื่อมต่อแต่มีจุดแสดง โรงงาน inactive และ eligible profile ที่ลบ; โรงงานที่เหลือแต่จุดถูกตัดออกหายจากยอดด้วย
+- ยืนยันพารามิเตอร์ที่ซ่อนถูกตัดจากรายงาน ข้อมูล flow/ภาค/นิคมใช้เฉพาะจุดที่เหลือ และไม่คืน revision เก่าแทน revision ล่าสุดที่ซ่อน
+- ยืนยัน direct station visibility ของจุดขยายเวลาเป็น false และ measurement access เดิมคืน `404` ก่อนอ่านค่าที่ไม่แสดง; OpenAPI ครอบคลุม dashboard/map และ statistics/calendar ทั้ง path ปกติและ annual aliases
+- ใช้ dummy database hosts และ JWT secrets สุ่มสำหรับ fixture; ไม่แก้ฐานข้อมูล production ไม่สร้าง migration และไม่มี debug instrumentation ใน source
+
+คำสั่งที่รันจาก `backend/` ด้วย environment ของ fixture:
+
+```bash
+npm run typecheck
+npx --no-install eslint src/modules/poms-factories/connected-point-visibility.ts src/modules/general-information/*.ts src/modules/connection-requests/connection-requests.repository.ts src/modules/connection-requests/connection-requests.service.ts src/modules/api-docs/general-information.openapi.ts src/modules/api-docs/home-handoff.openapi.ts tests/unit/general-information.api.test.ts tests/unit/home-dashboard-visibility.test.ts tests/unit/home-handoff.openapi.test.ts --max-warnings 0
+npm test -- --runInBand --runTestsByPath tests/unit/general-information.api.test.ts tests/unit/home-dashboard-visibility.test.ts tests/unit/home-measurement-access.test.ts tests/unit/home-handoff.openapi.test.ts tests/unit/api-docs.openapi.test.ts tests/unit/api-docs.route.test.ts tests/unit/poms-current-status-rollup.test.ts tests/unit/poms-status-management.state.test.ts tests/unit/connected-measurement-points.route.test.ts
+```
+
+ผล: **9 suites / 218 tests ผ่าน**, typecheck และ targeted lint ผ่าน ไม่มี warnings; `git diff --check` ผ่าน ตรวจลิงก์เอกสารที่เพิ่มและการเข้าถึงจาก backend hub แล้ว
+
+รัน diagnostic loop เดิมซ้ำจาก debug workspace: exclusion repro **5/5 ผ่าน**, home probe **7/7 ผ่าน** (ก่อนแก้ 4 และ 2 กรณีล้มเหลวตามลำดับ) เพิ่มเฉพาะ schema ของ supporting factory fixture เพื่อรองรับ query ใหม่ โดยไม่เปลี่ยน expected results
+
+ข้อจำกัด: fixture ยืนยันกติกาและการประกอบ SQL แต่ไม่แทนการทดสอบกับข้อมูลจริง/collation/concurrency ของ SQL Server; **ยังไม่ commit, push หรือ deploy** และยังไม่อ้างว่ายอด production เปลี่ยน เมื่อ deploy ได้รับอนุญาตแล้วต้องเทียบ runtime OpenAPI และยอดจริงในระบบ พื้นที่และตัวกรองเดียวกัน ข้อมูลทั่วไปยังเป็นยอดทั่วประเทศ ส่วนหน้าแรกอาจจำกัดตามสิทธิ์ของผู้เรียก
+
+### Change summary
+
+- Docs impact: updated
+- Canonical docs: [ข้อมูลทั่วไป](../../api/menus/general-information/README.md), [หน้าแรก](../../api/menus/home/README.md), [สถิติ/ปฏิทิน](../../api/shared/connected-measurement-points/README.md)
+- Reason: ให้หน้าแรกและข้อมูลทั่วไปคัดจุดปัจจุบันด้วยเกณฑ์เดียวกันก่อนนับและคำนวณผลสรุป
+- Client impact: ยอด/พารามิเตอร์/อัตราการระบายอาจลดลง; ไม่เปลี่ยน request/response schema หรือสิทธิ์; จุดขยายเวลาเรียกสถิติ/ปฏิทินไม่ได้
+- Breaking change: yes — [การเปลี่ยนขอบเขตการนับ](../../api/CHANGELOG.md#home-general-current-point-counts)
