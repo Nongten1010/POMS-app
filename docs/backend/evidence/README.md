@@ -28,6 +28,7 @@
 
 ## Connection requests
 
+- [ผลตรวจคีย์แถวโรงงานผู้ประกอบการบน production](./connection-requests/operator-factory-row-id-production.md)
 - [ปลด lock รายการคำขอและป้องกัน transaction ค้าง](./connection-requests/transaction-lock-recovery.md)
 - [ขยายระยะเวลาทั้งปล่องใช้ flow อนุมัติเดียวกับยกเว้นทั้งหมด](./connection-requests/whole-stack-extension-approval.tdd.md)
 - [Serial ASCII และฟังก์ชันอ่าน Modbus: TDD และข้อจำกัด SQL Server](./connection-requests/serial-ascii-modbus-read-function.md)
