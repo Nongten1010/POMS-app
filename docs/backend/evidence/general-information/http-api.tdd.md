@@ -99,7 +99,7 @@ npx --no-install eslint src/modules/general-information/general-information.repo
 npm test -- --runInBand --runTestsByPath tests/unit/general-information.api.test.ts tests/unit/poms-status-management.state.test.ts tests/unit/poms-current-status-rollup.test.ts tests/unit/api-docs.openapi.test.ts tests/unit/api-docs.route.test.ts
 ```
 
-รอบนี้ตรวจใน workspace ผ่าน SQL.js fixture ยังไม่ได้ deploy หรือยืนยันยอดจริงบน SQL Server/production จึงไม่ใช้หลักฐาน release เดิมด้านบนยืนยันพฤติกรรมกรองซ่อนใหม่
+หลักฐาน local ในหัวข้อนี้ใช้ SQL.js fixture และไม่ยืนยันยอดจริงบน SQL Server/production ผลเผยแพร่กติกากรองซ่อนใหม่อยู่ในหัวข้อถัดไป โดยไม่ใช้หลักฐาน release เดิมด้านบนแทนผล release นี้
 
 ```text
 Docs impact: updated
@@ -108,3 +108,17 @@ Reason: กรองโรงงานและจุดตรวจวัดท
 Client impact: frontend
 Breaking change: no
 ```
+
+
+## ผลเผยแพร่กติกาไม่นับสถานะซ่อน
+
+- Release: [`6a56dbc0`](https://github.com/Nongten1010/POMS-app/commit/6a56dbc05aa3659075f5e69a5f00b0c0b3c0efb3) จากฐาน `98d51ee1` เฉพาะ 6 ไฟล์ที่ตรวจแล้ว ไม่รวมงานค้างใน workspace หรือ frontend
+- [GitHub Actions run 42740031711](https://github.com/Nongten1010/POMS-app/actions/runs/42740031711): detect, CI และ production installation สำเร็จทั้งหมด
+- Clean release checkout ติดตั้ง dependency ตาม lockfile จริง แล้ว build, typecheck, targeted ESLint, API/status/OpenAPI tests 123 กรณี และ deployment-helper tests 18 กรณีผ่าน
+- CI ทั้ง backend: 416 suites / 5,756 tests ผ่าน; ข้าม 2 suites / 18 tests; ไม่มี failures และ deployment-helper tests ผ่านอีก 18 กรณี
+- Production ตรวจ verified artifact, sync checkout ไป commit release, migration และ restart/health check ผ่าน พร้อมเขียน deploy marker; migration แสดง `Already up to date` และ profile mode เป็น `legacy` รอบนี้ไม่มี migration เพิ่ม
+- Workflow ข้าม frontend build/deploy ทั้งสองขั้น
+- Public HTTPS: `GET /api/v1`, `GET /api/v1/docs/` และ `GET /api/v1/openapi.json` ตอบ `200`; เปรียบเทียบ operation ของ `/general-information` และ schema ทั้ง 5 ชุดกับ compiled release แล้วตรงกัน รวมข้อความไม่นับโรงงานหรือจุดตรวจวัดที่ซ่อน
+- `GET /api/v1/general-information?systemType=CEMS` และ `systemType=WPMS` โดยไม่มี token ตอบ `401 UNAUTHORIZED` ตามเดิม
+- DNS ของเครื่องที่ใช้ตรวจ resolve โดเมนไม่ได้ จึงยืนยัน A record ผ่าน Google DNS over HTTPS และใช้ `curl --resolve d-poms.diw.go.th:443:110.78.4.84`; ตรวจใบรับรอง TLS ตามชื่อโดเมนผ่าน โดยไม่ได้ปิดการตรวจ certificate
+- ยังไม่ได้ตรวจยอดสรุปจริงด้วย token เจ้าหน้าที่/แอดมิน ผลยืนยันครอบคลุมการติดตั้ง, health, runtime contract และ authentication; พฤติกรรมการนับยืนยันผ่าน HTTP fixtures

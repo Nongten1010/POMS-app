@@ -16,7 +16,7 @@ curl --get 'https://d-poms.diw.go.th/api/v1/general-information' \
 2. แสดงข้อมูลทั้ง 4 หัวข้อจากคำตอบเดียว ไม่คำนวณยอดโรงงานจากผลบวกยอดย่อย
 3. ส่งออก Excel/PDF จาก snapshot ที่แสดง โดยไม่มี endpoint ส่งออกแยก
 
-Endpoint เดิมเปิดใช้งานบน production ใน [release `27b7e094`](https://github.com/Nongten1010/POMS-app/commit/27b7e094421e27a2db3ce05dedb7e66fb38db0ba) ผ่าน [CI และ deployment](https://github.com/Nongten1010/POMS-app/actions/runs/42184836878) โดยตรวจ [runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) และ [Swagger UI](https://d-poms.diw.go.th/api/v1/docs/) แล้ว ส่วนกติกาไม่นับสถานะซ่อนในหน้านี้ยังไม่ได้ deploy; หลัง deploy ต้องตรวจ runtime OpenAPI และยอดผ่านบัญชีเจ้าหน้าที่หรือแอดมินอีกครั้ง
+Endpoint และกติกาไม่นับสถานะซ่อนเปิดใช้งานบน production แล้วใน [release `6a56dbc0`](https://github.com/Nongten1010/POMS-app/commit/6a56dbc05aa3659075f5e69a5f00b0c0b3c0efb3) ผ่าน [CI และ deployment](https://github.com/Nongten1010/POMS-app/actions/runs/42740031711) ตรวจ [runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) แล้ว operation และ schema ทั้ง 5 ชุดตรงกับ source release และ [Swagger UI](https://d-poms.diw.go.th/api/v1/docs/) ตอบ `200` ดูขอบเขตการยืนยันและข้อจำกัดใน [หลักฐานการเผยแพร่](../../../evidence/general-information/http-api.tdd.md#ผลเผยแพร่กติกาไม่นับสถานะซ่อน)
 
 ## สรุป Endpoint
 
