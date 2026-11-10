@@ -256,7 +256,20 @@ describe('POMS factory master-data OpenAPI contract', () => {
       $ref: '#/components/schemas/OperatorFactoryTableResponse',
     });
     expect(jsonSuccessSchema('/cems-wpms-requests/operator-factories', 'get')).toEqual({
-      $ref: '#/components/schemas/ConnectionRequestFactoryTableResponse',
+      $ref: '#/components/schemas/OperatorFactoryListResponse',
+    });
+    const sharedRow = asObject(schemas().OperatorFactoryTableRow, 'POMS factory row');
+    expect(asObject(sharedRow.properties, 'POMS factory row properties').id).toEqual({
+      type: 'integer',
+      minimum: 1,
+      nullable: true,
+    });
+    const operatorRow = asObject(schemas().OperatorFactoryListRow, 'operator factory row');
+    expect(asObject(operatorRow.properties, 'operator factory row properties').id).toMatchObject({
+      oneOf: [
+        { type: 'integer', minimum: 1 },
+        expect.objectContaining({ type: 'string', pattern: '^factory-.+$' }),
+      ],
     });
     expect(pomsList.description).toEqual(
       expect.stringContaining('active row ใน cems_wpms_connected_measurement_points'),
