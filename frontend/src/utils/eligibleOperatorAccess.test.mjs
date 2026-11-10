@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canGrantOperatorAccess, createEligibleOperatorAccessApi, isAccessAdministrator, maskCitizenId, optionalAccessReason } from './eligibleOperatorAccess.mjs'
+import { accessSearchError, accessUnavailableMessage, canGrantOperatorAccess, createEligibleOperatorAccessApi, isAccessAdministrator, maskCitizenId, optionalAccessReason } from './eligibleOperatorAccess.mjs'
 
 test('only admin can manage and granting requires a freshly confirmed status/capability', () => {
   assert.equal(isAccessAdministrator('admin'), true)
@@ -53,5 +53,41 @@ test('never treats empty or non-JSON responses as successful saves', async () =>
   for (const response of [new Response('', { status: 200 }), Response.json({ success: false }), new Response('', { status: 409 })]) {
     const api = createEligibleOperatorAccessApi({ enabled: true, fetchImpl: async () => response })
     await assert.rejects(api.grant(8, 9, ''))
+  }
+})
+
+test('search matches name length and exact citizen ID contract', async () => {
+  for (const value of ['กข', 'ก'.repeat(100), '1234567890123', '  ทดสอบ  ']) assert.equal(accessSearchError(value), '')
+  for (const value of ['', 'ก', 'ก'.repeat(101), '12', '123456789012', '12345678901234']) assert.ok(accessSearchError(value))
+  let called = false
+  const api = createEligibleOperatorAccessApi({ enabled: true, fetchImpl: async () => { called = true } })
+  await assert.rejects(api.search(8, '123'), /13 หลัก/)
+  assert.equal(called, false)
+})
+
+test('reason remains optional and rejects more than 1000 trimmed characters', () => {
+  assert.deepEqual(optionalAccessReason(''), {})
+  assert.equal(optionalAccessReason('ก'.repeat(1000)).reason.length, 1000)
+  assert.throws(() => optionalAccessReason('ก'.repeat(1001)), /1,000/)
+})
+
+test('capability reason codes are translated, including unknown codes', () => {
+  assert.match(accessUnavailableMessage('SOURCE_STATUS_UNVERIFIED'), /ยืนยันสถานะโรงงานจากต้นทาง/)
+  assert.match(accessUnavailableMessage('FACTORY_NOT_NOT_STARTED'), /ยังไม่แจ้งประกอบ/)
+  assert.equal(accessUnavailableMessage('UNKNOWN_CODE'), accessUnavailableMessage(null))
+  assert.ok(!accessUnavailableMessage('UNKNOWN_CODE').includes('UNKNOWN_CODE'))
+})
+
+test('HTTP errors show actionable Thai messages without raw server details', async () => {
+  for (const [status, reason, expected] of [
+    [400, null, /ข้อมูลไม่ถูกต้อง/], [401, null, /เข้าสู่ระบบใหม่/],
+    [403, null, /ไม่มีสิทธิ์/], [404, null, /ไม่พบโรงงาน/], [503, null, /ยังไม่เปิดให้บริการ/],
+    [409, 'DUPLICATE_GRANT', /บัญชีนี้มีสิทธิ์/],
+    [409, 'SOURCE_STATUS_UNVERIFIED', /ยืนยันสถานะโรงงานจากต้นทาง/],
+    [409, 'FACTORY_NOT_NOT_STARTED', /ยังไม่แจ้งประกอบ/],
+    [409, 'FACTORY_IDENTITY_CHANGED', /ข้อมูลสิทธิ์หรือสถานะโรงงานเปลี่ยนแปลง/],
+  ]) {
+    const api = createEligibleOperatorAccessApi({ enabled: true, fetchImpl: async () => Response.json({ success: false, error: { message: 'Internal detail', details: { reason } } }, { status }) })
+    await assert.rejects(api.grant(8, 9, ''), expected)
   }
 })

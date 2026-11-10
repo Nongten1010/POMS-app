@@ -5,7 +5,7 @@ import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
-import { canGrantOperatorAccess, createEligibleOperatorAccessApi, maskCitizenId } from '../utils/eligibleOperatorAccess.mjs'
+import { accessSearchError, accessUnavailableMessage, canGrantOperatorAccess, createEligibleOperatorAccessApi, maskCitizenId } from '../utils/eligibleOperatorAccess.mjs'
 
 const statusLabels = { active: 'มีสิทธิ์', revoked: 'ยกเลิกสิทธิ์', expired: 'สิ้นสุดสิทธิ์', suspended: 'ระงับชั่วคราว' }
 const actionLabels = { granted: 'เพิ่มสิทธิ์', revoked: 'ยกเลิกสิทธิ์', expired: 'สิ้นสุดสิทธิ์', suspended: 'ระงับชั่วคราว' }
@@ -42,7 +42,7 @@ export default function EligibleOperatorAccessDialog({ factory, accessToken, onC
   }, [api, id, revision])
 
   useEffect(() => {
-    if (action?.type !== 'grant' || query.trim().length < 2) return undefined
+    if (action?.type !== 'grant' || accessSearchError(query)) return undefined
     const controller = new AbortController()
     const timer = setTimeout(() => {
       api.search(id, query.trim(), controller.signal).then((items) => {
@@ -61,6 +61,7 @@ export default function EligibleOperatorAccessDialog({ factory, accessToken, onC
   const canGrant = !loading && !error && canGrantOperatorAccess(factory, data)
   const canRevoke = !loading && !error && data?.items?.some((row) => row.id === action?.row?.id && row.canRevoke === true)
   const save = async () => {
+    if (reason.trim().length > 1000) { setActionError('เหตุผลต้องไม่เกิน 1,000 ตัวอักษร'); return }
     if (submitLock.current || !action || (action.type === 'grant' && (!canGrant || !selectedUser))) return
     if (action.type === 'revoke' && !canRevoke) return
     submitLock.current = true
@@ -101,8 +102,9 @@ export default function EligibleOperatorAccessDialog({ factory, accessToken, onC
         <IconButton aria-label="ปิดจัดการผู้มีสิทธิ์" disabled={busy} onClick={onClose} sx={{ position: 'absolute', right: 12, top: 12 }}><CloseIcon /></IconButton>
       </DialogTitle>
       <DialogContent dividers>
-        <Typography fontWeight={700}>{factory.factoryName}</Typography>
-        <Typography variant="body2" color="text.secondary">{factory.factoryId} · {data?.factory?.operationStatus ?? factory.operationStatus}</Typography>
+        <Typography fontWeight={700}>{data?.factory?.name ?? factory.factoryName}</Typography>
+        <Typography variant="body2" color="text.secondary">{data?.factory?.factoryRegistrationNo ?? factory.factoryId} · {data?.factory?.operationStatus ?? factory.operationStatus}</Typography>
+        {data && <Typography variant="body2" color="text.secondary">ยืนยันสถานะล่าสุด: {data.factory.statusVerifiedAt ? dateText(data.factory.statusVerifiedAt) : 'ยังไม่เคยยืนยันสถานะ'}</Typography>}
         <Stack direction="row" useFlexGap spacing={1} sx={{ mt: 2, flexWrap: 'wrap', alignItems: 'center' }}>
           <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ flex: { xs: '1 0 100%', sm: 1 }, minWidth: 0 }} aria-label="ข้อมูลสิทธิ์ผู้ประกอบการ"><Tab value="members" label="ผู้มีสิทธิ์" /><Tab value="history" label="ประวัติ" /></Tabs>
           <Tooltip title="รีเฟรช"><span><IconButton aria-label="รีเฟรชสิทธิ์" disabled={loading || busy} onClick={refresh}><RefreshIcon /></IconButton></span></Tooltip>
@@ -110,7 +112,7 @@ export default function EligibleOperatorAccessDialog({ factory, accessToken, onC
         </Stack>
         {error && <Alert severity="warning" sx={{ my: 2 }}>{error}</Alert>}
         {notice && <Alert severity="success" sx={{ my: 2 }}>{notice}</Alert>}
-        {data && !canGrant && <Alert severity="info" sx={{ my: 2 }}>{data.capabilities.grantUnavailableReason || 'เพิ่มสิทธิ์ได้เฉพาะโรงงานที่ยืนยันสถานะว่ายังไม่แจ้งประกอบ'}</Alert>}
+        {data && !canGrant && <Alert severity="info" sx={{ my: 2 }}>{accessUnavailableMessage(data.capabilities.grantUnavailableReason)}</Alert>}
         <Box sx={{ height: 380, minWidth: 0, mt: 2 }}>
           <DataGrid rows={tab === 'members' ? data?.items ?? [] : data?.history ?? []} columns={tab === 'members' ? memberColumns : historyColumns} loading={loading} disableRowSelectionOnClick pageSizeOptions={[10, 25, 50]} initialState={{ pagination: { paginationModel: { pageSize: 10 } } }} localeText={{ noRowsLabel: error ? 'ไม่สามารถแสดงข้อมูลได้' : tab === 'members' ? 'ยังไม่มีผู้ประกอบการที่ผูกสิทธิ์' : 'ยังไม่มีประวัติ' }} sx={{ borderColor: 'divider' }} />
         </Box>
@@ -121,11 +123,11 @@ export default function EligibleOperatorAccessDialog({ factory, accessToken, onC
       <DialogTitle id="operator-access-action-title">{action?.type === 'grant' ? 'เพิ่มผู้มีสิทธิ์' : 'ยืนยันยกเลิกสิทธิ์'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
-          <Typography>{factory.factoryName}</Typography>
+          <Typography>{data?.factory?.name ?? factory.factoryName}</Typography>
           {action?.type === 'grant' ? <Autocomplete options={options} value={selectedUser} loading={searching} disabled={busy} filterOptions={(items) => items} getOptionLabel={(item) => `${item.name} (${maskCitizenId(item.citizenIdMasked)})`} isOptionEqualToValue={(a, b) => a.userId === b.userId} onChange={(_, value) => setSelectedUser(value)} onInputChange={(_, value, cause) => {
-            if (cause === 'input' || cause === 'clear') { setQuery(value); setSelectedUser(null); setOptions([]); setSearchError(''); setSearching(value.trim().length >= 2) }
-          }} noOptionsText={query.trim().length < 2 ? 'พิมพ์ชื่อหรือเลขบัตรประชาชนอย่างน้อย 2 ตัวอักษร' : 'ไม่พบผู้ประกอบการ'} loadingText="กำลังค้นหา..." renderInput={(params) => <TextField {...params} label="ผู้ประกอบการ" required error={Boolean(searchError)} helperText={searchError} />} /> : <Typography>ยกเลิกสิทธิ์ของ {action?.row?.name} ในโรงงานนี้หรือไม่?</Typography>}
-          <TextField label="เหตุผล (ไม่บังคับ)" multiline minRows={3} value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} />
+            if (cause === 'input' || cause === 'clear') { setQuery(value); setSelectedUser(null); setOptions([]); setSearchError(''); setSearching(!accessSearchError(value)) }
+          }} noOptionsText={accessSearchError(query) || 'ไม่พบผู้ประกอบการที่เลือกผูกได้'} loadingText="กำลังค้นหา..." renderInput={(params) => <TextField {...params} slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, maxLength: 100 } }} label="ผู้ประกอบการ" required error={Boolean(searchError)} helperText={searchError || 'ค้นชื่อ 2–100 ตัวอักษร หรือเลขบัตรประชาชนครบ 13 หลัก'} />} /> : <Typography>ยกเลิกสิทธิ์ของ {action?.row?.name} ในโรงงานนี้หรือไม่?</Typography>}
+          <TextField label="เหตุผล (ไม่บังคับ)" multiline minRows={3} value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} slotProps={{ htmlInput: { maxLength: 1000 } }} helperText={`${reason.length.toLocaleString('en-US')} / 1,000`} />
           {actionError && <Alert severity="error">{actionError}</Alert>}
         </Stack>
       </DialogContent>
