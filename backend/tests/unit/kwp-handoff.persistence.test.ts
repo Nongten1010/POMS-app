@@ -161,23 +161,44 @@ describe('KWP handoff persistence through repository entry points', () => {
         samplingPhotoLink: 'https://example.com/photo',
         labReportLink: 'https://example.com/lab',
         measurementItems: [
-          { pollutant: 'BOD (mg/l)', attachments: files },
-          { pollutant: 'COD (mg/l)' },
+          { pollutant: 'BOD (mg/l)', reportCondition: '4(1)' as const, attachments: files },
+          { pollutant: 'COD (mg/l)', reportCondition: '16' as const },
         ],
       };
       const created = await (
         formType === 'KWP02' ? repository.createKwp02 : repository.createKwp04
       )(payload, access);
       const readAccess = { ...access, formType };
-      expect(await repository.getById(created.id, readAccess)).toMatchObject({
+      const initial = await repository.getById(created.id, readAccess);
+      expect(initial).toMatchObject({
         reportRound: 3,
         reportYear: 2569,
         labReportLink: payload.labReportLink,
       });
+      if (formType === 'KWP04') {
+        expect(initial.measurementItems?.map((item) => item.reportCondition)).toEqual([
+          '4(1)',
+          '16',
+        ]);
+        expect(
+          tables.get('kwp_emission_measurement_items')?.map((item) => item.report_condition),
+        ).toEqual(['4(1)', '16']);
+      } else {
+        for (const item of initial.measurementItems ?? [])
+          expect(item).not.toHaveProperty('reportCondition');
+      }
       submission().status = 'REVISION_REQUESTED';
       await (formType === 'KWP02' ? repository.updateKwp02 : repository.updateKwp04)(
         created.id,
-        { ...payload, reportRound: 4, labReportLink: null },
+        {
+          ...payload,
+          reportRound: 4,
+          labReportLink: null,
+          measurementItems: payload.measurementItems.map((item) => ({
+            ...item,
+            reportCondition: '11(3)' as const,
+          })),
+        },
         readAccess,
       );
       await repository.resubmit(created.id, {}, readAccess);
@@ -205,6 +226,10 @@ describe('KWP handoff persistence through repository entry points', () => {
         ],
       });
       if (!detail.submittedAt) throw new Error('Expected a submission timestamp');
+      for (const item of detail.measurementItems ?? []) {
+        if (formType === 'KWP04') expect(item.reportCondition).toBe('11(3)');
+        else expect(item).not.toHaveProperty('reportCondition');
+      }
       expect(new Date(detail.submittedAt).toISOString()).toBe(detail.submittedAt);
       submission().status = 'REVISION_REQUESTED';
       const {
@@ -214,13 +239,16 @@ describe('KWP handoff persistence through repository entry points', () => {
         labReportLink: _lab,
         ...withoutPeriodAndLinks
       } = payload;
+      const clearedItems = [
+        { pollutant: 'BOD (mg/l)', reportCondition: '4(2)' as const, attachments: [] },
+      ];
       const cleared = await (
         formType === 'KWP02' ? repository.updateKwp02 : repository.updateKwp04
       )(
         created.id,
         {
           ...withoutPeriodAndLinks,
-          measurementItems: [{ pollutant: 'BOD (mg/l)', attachments: [] }],
+          measurementItems: clearedItems,
         },
         readAccess,
       );
@@ -247,6 +275,37 @@ describe('KWP handoff persistence through repository entry points', () => {
       });
     },
   );
+
+  it('reads old KWP04 conditions as null and requires PATCH before resubmitting', async () => {
+    seedSubmission('REVISION_REQUESTED');
+    submission().form_type = 'KWP04';
+    tables.set('kwp_emission_measurement_items', [
+      { id: 1, submission_id: 1, pollutant: 'CO (ppm)', report_condition: null },
+    ]);
+    const readAccess = { ...access, formType: 'KWP04' as const };
+    expect(await repository.getById(1, readAccess)).toMatchObject({
+      measurementItems: [{ reportCondition: null }],
+    });
+    await expect(repository.resubmit(1, {}, readAccess)).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+    });
+    expect(submission().status).toBe('REVISION_REQUESTED');
+    expect(tables.get('kwp_form_status_history') ?? []).toHaveLength(0);
+    await repository.updateKwp04(
+      1,
+      {
+        ...common,
+        measurementItems: [{ pollutant: 'CO (ppm)', reportCondition: '16' }],
+      },
+      readAccess,
+    );
+    await repository.resubmit(1, {}, readAccess);
+    expect(await repository.getById(1, readAccess)).toMatchObject({
+      status: 'SUBMITTED',
+      measurementItems: [{ reportCondition: '16' }],
+    });
+  });
 
   it('writes cancellation history and preserves previous review metadata', async () => {
     seedSubmission('REJECTED');

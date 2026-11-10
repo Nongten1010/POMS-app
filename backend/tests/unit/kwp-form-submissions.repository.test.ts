@@ -633,6 +633,7 @@ describe('kwpFormSubmissionsRepository', () => {
         measurementItems: [
           {
             pollutant: 'CO (ppm)',
+            reportCondition: '4(1)',
             sampleDate: '2026-07-02',
             measuredValue: '12.5',
             unit: 'ppm',
@@ -676,6 +677,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(records.measurementItems).toEqual([
       {
         pollutant: 'CO (ppm)',
+        report_condition: '4(1)',
         sample_date: '2026-07-02',
         measured_value: 12.5,
         measured_value_text: '12.5',

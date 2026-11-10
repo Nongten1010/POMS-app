@@ -13,6 +13,54 @@ function objectAt(value: unknown, ...keys: string[]): ObjectSchema {
 const schemas = objectAt(pomsOpenApiDocument, 'components', 'schemas');
 
 describe('KWP handoff runtime contract', () => {
+  it('requires reportCondition only on KWP04 writes and returns nullable legacy values', () => {
+    const item = objectAt(schemas, 'Kwp04Request', 'properties', 'measurementItems', 'items');
+    expect(item.required).toEqual(['pollutant', 'reportCondition']);
+    expect(objectAt(item, 'properties', 'reportCondition')).toMatchObject({
+      type: 'string',
+      enum: ['4(1)', '4(2)', '11(3)', '16'],
+    });
+    expect(objectAt(item, 'properties', 'reportCondition')).not.toHaveProperty('default');
+    expect(
+      objectAt(
+        schemas,
+        'Kwp02Or04Request',
+        'properties',
+        'measurementItems',
+        'items',
+        'properties',
+      ),
+    ).not.toHaveProperty('reportCondition');
+    expect(
+      objectAt(
+        schemas,
+        'Kwp04SubmissionDetail',
+        'properties',
+        'measurementItems',
+        'items',
+        'properties',
+        'reportCondition',
+      ),
+    ).toMatchObject({ nullable: true, enum: ['4(1)', '4(2)', '11(3)', '16', null] });
+    for (const [path, method] of [
+      ['/kwp-form-submissions/kwp04', 'post'],
+      ['/kwp-form-submissions/kwp04/{id}', 'patch'],
+    ]) {
+      expect(
+        objectAt(
+          pomsOpenApiDocument,
+          'paths',
+          path,
+          method,
+          'requestBody',
+          'content',
+          'application/json',
+          'schema',
+        ).$ref,
+      ).toBe('#/components/schemas/Kwp04Request');
+    }
+  });
+
   it('documents one current-location policy for every KWP read and workflow operation', () => {
     const paths = objectAt(pomsOpenApiDocument, 'paths');
     for (const [path, item] of Object.entries(paths)) {
@@ -87,7 +135,11 @@ describe('KWP handoff runtime contract', () => {
             'application/json',
             'schema',
           ).$ref,
-        ).toBe('#/components/schemas/KwpSubmissionDetailResponse');
+        ).toBe(
+          form === 'kwp04'
+            ? '#/components/schemas/Kwp04SubmissionDetailResponse'
+            : '#/components/schemas/KwpSubmissionDetailResponse',
+        );
       }
     }
   });

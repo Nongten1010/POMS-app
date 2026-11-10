@@ -8,6 +8,8 @@ import {
 } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.validator';
 
 const common = { factoryId: 'FID-001', factoryName: 'โรงงานทดสอบ' };
+const conditionFor = (schema: unknown) =>
+  schema === createKwp04SubmissionSchema ? { reportCondition: '4(1)' } : {};
 const attachment = {
   attachmentType: 'GENERAL',
   originalFileName: 'report.pdf',
@@ -29,6 +31,61 @@ const kwp03 = {
 };
 
 describe('KWP frontend handoff contract', () => {
+  it('accepts independent KWP04 report conditions and keeps the 1-100 item limit', () => {
+    const measurementItems = ['4(1)', '4(2)', '11(3)', '16'].map((reportCondition) => ({
+      pollutant: 'CO (ppm)',
+      reportCondition,
+    }));
+    expect(
+      createKwp04SubmissionSchema.parse({ ...common, measurementItems }).measurementItems,
+    ).toMatchObject(measurementItems);
+    for (const count of [0, 101]) {
+      expect(
+        createKwp04SubmissionSchema.safeParse({
+          ...common,
+          measurementItems: Array(count).fill(measurementItems[0]),
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      createKwp04SubmissionSchema.safeParse({
+        ...common,
+        measurementItems: Array(100).fill(measurementItems[0]),
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([undefined, null, '', ' ', '4', '4(3)', ' 16 ', 16, {}, ['16']])(
+    'rejects missing or invalid KWP04 report condition %p at its row',
+    (reportCondition) => {
+      const result = createKwp04SubmissionSchema.safeParse({
+        ...common,
+        measurementItems: [
+          { pollutant: 'CO (ppm)', reportCondition: '4(1)' },
+          { pollutant: 'NOx (ppm)', reportCondition },
+        ],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success)
+        expect(result.error.issues[0].path).toEqual(['measurementItems', 1, 'reportCondition']);
+    },
+  );
+
+  it('keeps reportCondition outside the KWP02 contract', () => {
+    expect(
+      createKwp02SubmissionSchema.safeParse({
+        ...common,
+        measurementItems: [{ pollutant: 'CO (ppm)' }],
+      }).success,
+    ).toBe(true);
+    expect(
+      createKwp02SubmissionSchema.safeParse({
+        ...common,
+        measurementItems: [{ pollutant: 'CO (ppm)', reportCondition: '16' }],
+      }).success,
+    ).toBe(false);
+  });
+
   it.each([
     [createKwp01SubmissionSchema, kwp01],
     [createKwp03SubmissionSchema, kwp03],
@@ -57,6 +114,7 @@ describe('KWP frontend handoff contract', () => {
           measurementItems: [
             {
               pollutant: 'BOD (mg/l)',
+              ...conditionFor(schema),
               attachments: [{ ...attachment, attachmentType, fileSize: 100 }],
             },
           ],
@@ -86,8 +144,8 @@ describe('KWP frontend handoff contract', () => {
         }));
       for (const type of ['SAMPLING_PHOTO', 'LAB_REPORT']) {
         const measurementItems = [
-          { pollutant: 'BOD (mg/l)', attachments: files(type, 3) },
-          { pollutant: 'COD (mg/l)', attachments: files(type, 3) },
+          { pollutant: 'BOD (mg/l)', ...conditionFor(schema), attachments: files(type, 3) },
+          { pollutant: 'COD (mg/l)', ...conditionFor(schema), attachments: files(type, 3) },
         ];
         expect(schema.safeParse({ ...common, measurementItems }).success).toBe(false);
       }
@@ -97,6 +155,7 @@ describe('KWP frontend handoff contract', () => {
           measurementItems: [
             {
               pollutant: 'BOD (mg/l)',
+              ...conditionFor(schema),
               attachments: [...files('SAMPLING_PHOTO', 5), ...files('LAB_REPORT', 5)],
             },
           ],
@@ -107,7 +166,10 @@ describe('KWP frontend handoff contract', () => {
   it.each([createKwp02SubmissionSchema, createKwp04SubmissionSchema])(
     'accepts Buddhist report periods without converting the year',
     (schema) => {
-      const payload = { ...common, measurementItems: [{ pollutant: 'BOD (mg/l)' }] };
+      const payload = {
+        ...common,
+        measurementItems: [{ pollutant: 'BOD (mg/l)', ...conditionFor(schema) }],
+      };
       expect(
         schema.parse({
           ...payload,
@@ -132,6 +194,7 @@ describe('KWP frontend handoff contract', () => {
           measurementItems: [
             {
               pollutant: 'BOD (mg/l)',
+              ...conditionFor(schema),
               attachments: [{ ...attachment, attachmentType: 'LAB_REPORT' }],
             },
           ],

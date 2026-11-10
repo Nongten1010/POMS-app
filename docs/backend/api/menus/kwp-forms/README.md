@@ -14,7 +14,7 @@ permission code และ scope ที่อ้างในหน้านี้
 
 1. อ่านจุดตรวจวัดและข้อมูล prefill ด้วย `GET /api/v1/kwp-form-reports/factories/:factoryId/measurement-points`; สำหรับ กวภ.05 ใช้ `parameterInstrumentDetails[].cemsModel` ตามพารามิเตอร์ที่เลือก
 2. อัปโหลดไฟล์แนบด้วย `POST /api/v1/kwp-form-submissions/attachments` และเก็บ metadata กลับไปผูกในฟอร์ม
-3. ส่งแบบ `POST /api/v1/kwp-form-submissions/kwp01` ถึง `kwp05`
+3. ส่งแบบ `POST /api/v1/kwp-form-submissions/kwp01` ถึง `kwp05`; กวภ.04 ต้องเลือก `measurementItems[].reportCondition` ทุกแถว ดู [รายงานตามเงื่อนไข กวภ.04](./kwp04-report-condition.md)
 4. อ่านรายการและรายละเอียดแบบผ่าน `kwp-form-reports/*` และ `kwp-form-submissions/*`
 5. เจ้าหน้าที่อ่าน workflow และอนุมัติ ขอแก้ไข หรือปฏิเสธผ่าน workflow endpoints
 
@@ -48,8 +48,8 @@ curl --request POST \
 | แก้ไขแบบ กวภ.05 | `PATCH` | `/api/v1/kwp-form-submissions/kwp05/:id` | Bearer | `kwp_forms:edit` | [KWP05 calibration parameters](#postpatch-kwp05-calibration-parameters-contract) |
 | ส่งแบบ กวภ.02 | `POST` | `/api/v1/kwp-form-submissions/kwp02` | Bearer | `kwp_forms:edit` | [KWP02/KWP04 summary](#kwp02kwp04-summary) |
 | แก้ไขแบบ กวภ.02 | `PATCH` | `/api/v1/kwp-form-submissions/kwp02/:id` | Bearer | `kwp_forms:edit` | [KWP02/KWP04 summary](#kwp02kwp04-summary) |
-| ส่งแบบ กวภ.04 | `POST` | `/api/v1/kwp-form-submissions/kwp04` | Bearer | `kwp_forms:edit` | [KWP02/KWP04 summary](#kwp02kwp04-summary) |
-| แก้ไขแบบ กวภ.04 | `PATCH` | `/api/v1/kwp-form-submissions/kwp04/:id` | Bearer | `kwp_forms:edit` | [KWP02/KWP04 summary](#kwp02kwp04-summary) |
+| ส่งแบบ กวภ.04 | `POST` | `/api/v1/kwp-form-submissions/kwp04` | Bearer | `kwp_forms:edit` | [รายงานตามเงื่อนไข กวภ.04](./kwp04-report-condition.md) |
+| แก้ไขแบบ กวภ.04 | `PATCH` | `/api/v1/kwp-form-submissions/kwp04/:id` | Bearer | `kwp_forms:edit` | [รายงานตามเงื่อนไข กวภ.04](./kwp04-report-condition.md) |
 | อ่านรายละเอียดแบบ | `GET` | `/api/v1/kwp-form-submissions/kwp01/:id` ถึง `/api/v1/kwp-form-submissions/kwp05/:id` | Bearer | `kwp_forms:view` | [Read detail](#get-detail-endpoints) |
 | ส่งแบบกลับหลังแก้ไข | `POST` | `/api/v1/kwp-form-submissions/kwp01/:id/resubmit` ถึง `/api/v1/kwp-form-submissions/kwp05/:id/resubmit` | Bearer | `kwp_forms:edit` | [Resubmit](#post-resubmit-endpoints) |
 | อ่าน workflow | `GET` | `/api/v1/kwp-form-submissions/:id/workflow` | Bearer | `kwp_forms:view` | [Workflow read](#get-apiv1kwp-form-submissionsidworkflow) |
@@ -62,6 +62,7 @@ curl --request POST \
 - [ฟิลด์เอกสารแนบและรอบรายงาน](#kwp-handoff-fields)
 - [พารามิเตอร์ที่เข้าข่ายและสิทธิ์ prefill](#kwp-eligible-parameters)
 - [ยกเลิกคำขอ](#kwp-cancel)
+- [รายงานตามเงื่อนไข กวภ.04: สร้าง แก้ไข อ่าน และส่งซ้ำ](./kwp04-report-condition.md)
 
 
 ### `POST /api/v1/kwp-form-submissions/attachments`
@@ -512,7 +513,8 @@ Attachment request เป็น strict object และรับเฉพาะ 
 
 ### KWP02/KWP04 summary
 
-- `POST/PATCH /api/v1/kwp-form-submissions/kwp02` และ `kwp04` ยังใช้ contract เดิมสำหรับ `measurementItems[]`
+- กวภ.02 คง contract เดิมสำหรับ `measurementItems[]` และไม่รับ/ไม่คืน `reportCondition`
+- กวภ.04 เพิ่ม `measurementItems[].reportCondition` แบบบังคับทุกแถวบน `POST/PATCH`; `GET/PATCH` detail คืนค่าต่อแถว และข้อมูลเก่าคืน `null` ดู [สัญญารายงานตามเงื่อนไข](./kwp04-report-condition.md)
 - sample date ของแต่ละรายการยังเป็น `YYYY-MM-DD`
 - attachment metadata ต้องมี `attachmentType` และ `originalFileName`; client ควรส่ง metadata อื่นจาก upload response รวมทั้ง `storagePath` กลับมาโดยไม่แก้ค่า
 
@@ -539,6 +541,7 @@ Minimal response:
 
 - อ่าน detail ของแต่ละ form type ด้วย permission `kwp_forms:view`
 - response shape ใช้ `formType` แยก subtype เช่น `issueReport`, `wpmsIssueReport`, `measurementItems`, `calibrationReport`, `calibrationItems`
+- กวภ.04 คืน `measurementItems[].reportCondition` เป็น string ตามตัวเลือก หรือ `null` สำหรับข้อมูลเดิม; ดู [ตาราง response](./kwp04-report-condition.md#อ่านและแก้ไขรายละเอียด)
 - KWP01 และ KWP03 จะคืน `totalHours` ได้เมื่อเคยบันทึกแบบ hourly
 - KWP05 คืนทั้ง `calibrationItems[].parameters` และ legacy alias `calibrationItems[].parameter`; ข้อมูลเดิมที่มีเฉพาะค่า legacy จะคืน `parameters: [parameter]`
 
@@ -574,6 +577,8 @@ Request fields:
 `note` เท่านั้น หากต้องแก้ parameter หรือข้อมูลแบบ ต้องเรียก `PATCH` ของ form type
 ก่อน แล้วจึงเรียก resubmit; ห้ามแนบ `calibrationItems`, `parameters` หรือ `parameter`
 มากับ resubmit payload
+
+กวภ.04 ใช้ payload `note` เดิมเช่นกัน ต้อง PATCH `measurementItems[].reportCondition` ให้ครบก่อน; หากข้อมูลที่เก็บยังขาดเงื่อนไขหรือนอกตัวเลือก การส่งซ้ำตอบ `400 BAD_REQUEST` โดยไม่เปลี่ยนสถานะ ดู [ขั้นตอนส่งซ้ำ](./kwp04-report-condition.md#ส่งซ้ำหลังแก้ไข)
 
 Request example:
 

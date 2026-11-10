@@ -28,6 +28,7 @@ import {
   kwpRegionCode,
   type KwpSubmissionRegionCode,
 } from './kwp-form-submission-number';
+import { KWP04_REPORT_CONDITIONS } from './kwp-form-submissions.types';
 import type {
   CreatedKwpFormSubmissionDTO,
   CreateKwp01SubmissionDTO,
@@ -37,6 +38,7 @@ import type {
   CreateKwp05SubmissionDTO,
   ChangeKwpFormWorkflowStatusDTO,
   KwpEmissionMeasurementItemDTO,
+  Kwp04ReportCondition,
   Kwp03IssueReason,
   Kwp03WpmsIssueReportDTO,
   Kwp05CalibrationItemDTO,
@@ -228,6 +230,7 @@ interface Kwp01UnreportedParameterRow {
 interface KwpEmissionMeasurementItemRow {
   id: number | string;
   pollutant: string;
+  report_condition: Kwp04ReportCondition | null;
   sample_date: Date | string | null;
   measured_value: number | string | null;
   measured_value_text: string | null;
@@ -422,7 +425,11 @@ export const kwpFormSubmissionsRepository = {
 
     return {
       ...baseDetail,
-      measurementItems: await listEmissionMeasurementItems(Number(submission.id), access),
+      measurementItems: await listEmissionMeasurementItems(
+        Number(submission.id),
+        access,
+        submission.form_type === 'KWP04',
+      ),
     };
   },
 
@@ -579,6 +586,21 @@ export const kwpFormSubmissionsRepository = {
     if (access.canEdit !== true) throw new ForbiddenError('KWP edit permission is required');
     return db.transaction(async (trx) => {
       await assertCanEditReturnedSubmission(id, access, trx);
+      if (access.formType === 'KWP04') {
+        const items = await trx<KwpEmissionMeasurementItemRow>('kwp_emission_measurement_items')
+          .where('submission_id', id)
+          .select('report_condition');
+        if (
+          items.length === 0 ||
+          items.some(
+            (item) => !KWP04_REPORT_CONDITIONS.some((value) => value === item.report_condition),
+          )
+        ) {
+          throw new BadRequestError(
+            'Select a reportCondition for every KWP04 measurement item through PATCH before resubmitting',
+          );
+        }
+      }
       const now = new Date();
 
       await trx('kwp_form_submissions').where('id', id).update({
@@ -1522,6 +1544,7 @@ async function getKwp01IssueReport(submissionId: number) {
 async function listEmissionMeasurementItems(
   submissionId: number,
   access: KwpFormSubmissionReadAccess,
+  includeReportCondition: boolean,
 ): Promise<KwpEmissionMeasurementItemDTO[]> {
   const itemRows = await db<KwpEmissionMeasurementItemRow>('kwp_emission_measurement_items')
     .where('submission_id', submissionId)
@@ -1530,6 +1553,7 @@ async function listEmissionMeasurementItems(
     .select(
       'id',
       'pollutant',
+      ...(includeReportCondition ? ['report_condition'] : []),
       'sample_date',
       'measured_value',
       'measured_value_text',
@@ -1547,6 +1571,7 @@ async function listEmissionMeasurementItems(
   return itemRows.map((row) => ({
     id: Number(row.id),
     pollutant: row.pollutant,
+    ...(includeReportCondition ? { reportCondition: row.report_condition ?? null } : {}),
     sampleDate: toDateOnly(row.sample_date),
     measuredValue: row.measured_value_text,
     numericValue: row.measured_value === null ? null : Number(row.measured_value),
@@ -2169,6 +2194,9 @@ function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
 
     return {
       pollutant: item.pollutant,
+      ...(formType === 'KWP04' && 'reportCondition' in item
+        ? { report_condition: item.reportCondition }
+        : {}),
       sample_date: item.sampleDate ?? null,
       measured_value: numericMeasurementValue(item.measuredValue),
       measured_value_text: measurementValueText(item.measuredValue),

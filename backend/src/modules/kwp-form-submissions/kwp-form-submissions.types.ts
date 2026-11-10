@@ -141,6 +141,13 @@ export interface KwpEmissionMeasurementItemInput {
   attachments?: KwpFormAttachmentInput[];
 }
 
+export const KWP04_REPORT_CONDITIONS = ['4(1)', '4(2)', '11(3)', '16'] as const;
+export type Kwp04ReportCondition = (typeof KWP04_REPORT_CONDITIONS)[number];
+
+export interface Kwp04EmissionMeasurementItemInput extends KwpEmissionMeasurementItemInput {
+  reportCondition: Kwp04ReportCondition;
+}
+
 export interface CreateKwp02SubmissionDTO {
   reportRound?: number | null;
   reportYear?: number | null;
@@ -169,7 +176,12 @@ export interface CreateKwp02SubmissionDTO {
   reporterPosition?: string | null;
 }
 
-export type CreateKwp04SubmissionDTO = CreateKwp02SubmissionDTO;
+export interface CreateKwp04SubmissionDTO extends Omit<
+  CreateKwp02SubmissionDTO,
+  'measurementItems'
+> {
+  measurementItems: Kwp04EmissionMeasurementItemInput[];
+}
 
 export interface CreateKwp03SubmissionDTO {
   attachmentLink?: string | null;
@@ -287,6 +299,7 @@ export interface KwpFormAttachmentDTO {
 export interface KwpEmissionMeasurementItemDTO {
   id: number;
   pollutant: string;
+  reportCondition?: Kwp04ReportCondition | null;
   sampleDate: string | null;
   measuredValue: string | null;
   numericValue: number | null;

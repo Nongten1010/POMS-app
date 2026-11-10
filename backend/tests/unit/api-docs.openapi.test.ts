@@ -337,6 +337,7 @@ describe('POMS OpenAPI contract', () => {
     ['/kwp-form-submissions/kwp02', 'post', createKwp02SubmissionSchema],
     ['/kwp-form-submissions/kwp03', 'post', createKwp03SubmissionSchema],
     ['/kwp-form-submissions/kwp04', 'post', createKwp04SubmissionSchema],
+    ['/kwp-form-submissions/kwp04/{id}', 'patch', createKwp04SubmissionSchema],
     ['/kwp-form-submissions/kwp05', 'post', createKwp05SubmissionSchema],
     ['/kwp-form-submissions/kwp01/{id}/resubmit', 'post', resubmitKwpFormSubmissionSchema],
     ['/kwp-form-submissions/{id}/workflow-actions', 'post', changeKwpWorkflowStatusSchema],

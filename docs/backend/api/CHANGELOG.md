@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="kwp04-report-condition"></a>
+
+## 2026-11-10 — บังคับรายงานตามเงื่อนไขต่อรายการตรวจวัด กวภ.04
+
+- **Affected menu:** [แจ้งแบบ กวภ.](./menus/kwp-forms/README.md), [รายงานตามเงื่อนไข กวภ.04](./menus/kwp-forms/kwp04-report-condition.md)
+- **Impact:** `POST/PATCH /kwp-form-submissions/kwp04` บังคับ `measurementItems[].reportCondition` ทุกแถวเป็น string `4(1)`, `4(2)`, `11(3)` หรือ `16`; client เดิมที่ไม่ส่งได้ `400 VALIDATION_ERROR`. GET/PATCH detail คืนค่าต่อแถว; ข้อมูลเก่าเป็น `null`. resubmit ที่ยังไม่มีเงื่อนไขครบได้ `400 BAD_REQUEST` โดยไม่เปลี่ยนสถานะ
+- **Migration:** รัน migration 0159 ก่อนเริ่ม backend ใหม่; ไม่มี default/backfill และไม่เปลี่ยนข้อมูล กวภ.02. client ต้องให้ผู้ใช้เลือกเงื่อนไขทุกแถวก่อน POST/PATCH แล้วจึงเรียก resubmit ด้วย payload เดิมที่รับเฉพาะ note; เปิดอ่านข้อมูลเก่าได้และไม่เดาค่าให้. rollback แอปให้เก็บคอลัมน์ไว้; หลัง deploy ตรวจ runtime OpenAPI ให้ตรงกับ canonical docs
+- **Old contract:** กวภ.02/04 ใช้ request schema เดียวกันและไม่รับ/ไม่คืน `reportCondition`
+- **New contract:** กวภ.04 ใช้ `Kwp04Request` และ `Kwp04SubmissionDetailResponse`; กวภ.02 คง contract เดิมและไม่รับ/ไม่คืนฟิลด์ใหม่
+- **Breaking change:** yes — เพิ่มฟิลด์บังคับสำหรับการสร้าง/แก้ไข กวภ.04 และตรวจข้อมูลก่อนส่งซ้ำ
+
 <a id="home-general-current-point-counts"></a>
 
 ## 2026-11-10 — หน้าแรกและข้อมูลทั่วไปนับจากจุดปัจจุบันที่ผ่านเกณฑ์เดียวกัน

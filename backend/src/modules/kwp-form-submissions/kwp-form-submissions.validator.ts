@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { KWP01_ISSUE_REASONS, KWP03_ISSUE_REASONS } from './kwp-form-submissions.types';
+import {
+  KWP01_ISSUE_REASONS,
+  KWP03_ISSUE_REASONS,
+  KWP04_REPORT_CONDITIONS,
+} from './kwp-form-submissions.types';
 import {
   deriveKwpFormDuration,
   isKwpFormDateRangeOrdered,
@@ -259,7 +263,16 @@ export const createKwp02SubmissionSchema = z
     }
   });
 
-export const createKwp04SubmissionSchema = createKwp02SubmissionSchema;
+export const createKwp04SubmissionSchema = createKwp02SubmissionSchema.safeExtend({
+  measurementItems: z
+    .array(
+      kwpEmissionMeasurementItemSchema.extend({
+        reportCondition: z.enum(KWP04_REPORT_CONDITIONS),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
 
 export const createKwp03SubmissionSchema = z
   .object({

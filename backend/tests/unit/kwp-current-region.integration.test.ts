@@ -158,7 +158,7 @@ beforeEach(async () => {
         'id submission_id parameter_name parameters_json start_date end_date result verifier_company cems_model link_qr1 link_qr2 sort_order',
       ),
       kwp_emission_measurement_items: columns(
-        'id submission_id pollutant sample_date measured_value measured_value_text unit laboratory_no report_no method sort_order',
+        'id submission_id pollutant report_condition sample_date measured_value measured_value_text unit laboratory_no report_no method sort_order',
       ),
       kwp_form_attachments: columns(
         'id submission_id related_table related_id attachment_type original_file_name stored_file_name mime_type file_size storage_path uploaded_at uploaded_by deleted_at',
@@ -190,6 +190,22 @@ afterEach(() => {
 describe.each(['legacy', 'canonical'] as const)('KWP current region in %s mode', (mode) => {
   beforeEach(() => {
     env.FACTORY_PROFILE_MODE = mode;
+  });
+
+  it('reads stored KWP04 conditions, returns null for old rows and omits them for KWP02', async () => {
+    await db('kwp_emission_measurement_items').insert([
+      { id: 1, submission_id: 4, pollutant: 'CO (ppm)', report_condition: '11(3)', sort_order: 1 },
+      { id: 2, submission_id: 4, pollutant: 'NOx (ppm)', report_condition: null, sort_order: 2 },
+      { id: 3, submission_id: 2, pollutant: 'BOD (mg/l)', report_condition: null, sort_order: 1 },
+    ]);
+    const detail = await submissions.getById(4, { ...east, ...read, formType: 'KWP04' });
+    expect(detail.measurementItems).toMatchObject([
+      { pollutant: 'CO (ppm)', reportCondition: '11(3)' },
+      { pollutant: 'NOx (ppm)', reportCondition: null },
+    ]);
+    const kwp02 = await submissions.getById(2, { ...east, ...read, formType: 'KWP02' });
+    expect(kwp02.measurementItems).toHaveLength(1);
+    expect(kwp02.measurementItems?.[0]).not.toHaveProperty('reportCondition');
   });
 
   it.each(forms)(

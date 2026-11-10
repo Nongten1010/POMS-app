@@ -46,6 +46,57 @@ const mockedService = jest.mocked(kwpFormSubmissionsService);
 const expectedPublicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://d-poms.diw.go.th';
 
 describe('KWP form submission routes', () => {
+  it.each([undefined, null, '', '4(3)', 16])(
+    'rejects reportCondition %p on KWP04 POST and PATCH before calling the service',
+    async (reportCondition) => {
+      const app = createApp();
+      const payload = {
+        factoryId: 'FID-001',
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        measurementItems: [{ pollutant: 'CO (ppm)', reportCondition }],
+      };
+      for (const response of [
+        await request(app)
+          .post('/api/v1/kwp-form-submissions/kwp04')
+          .set('Authorization', `Bearer ${operatorToken()}`)
+          .send(payload),
+        await request(app)
+          .patch('/api/v1/kwp-form-submissions/kwp04/14')
+          .set('Authorization', `Bearer ${operatorToken()}`)
+          .send(payload),
+      ]) {
+        expect(response.status).toBe(400);
+        expect(response.body.error).toMatchObject({
+          code: 'VALIDATION_ERROR',
+          issues: expect.arrayContaining([
+            expect.objectContaining({ path: ['measurementItems', 0, 'reportCondition'] }),
+          ]),
+        });
+      }
+      expect(mockedService.createKwp04).not.toHaveBeenCalled();
+      expect(mockedService.updateKwp04).not.toHaveBeenCalled();
+    },
+  );
+
+  it('passes each report condition through KWP04 PATCH', async () => {
+    const payload = validKwp04Payload();
+    const response = await request(createApp())
+      .patch('/api/v1/kwp-form-submissions/kwp04/14')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(payload);
+    expect(response.status).toBe(200);
+    expect(mockedService.updateKwp04).toHaveBeenCalledWith(
+      14,
+      expect.objectContaining({
+        measurementItems: expect.arrayContaining([
+          expect.objectContaining({ reportCondition: '4(1)' }),
+          expect.objectContaining({ reportCondition: '16' }),
+        ]),
+      }),
+      expect.anything(),
+    );
+  });
+
   it.each(['kwp02', 'kwp04'] as const)(
     'rejects unsupported attachment sets on POST and PATCH %s before persistence',
     async (form) => {
@@ -1143,7 +1194,7 @@ describe('KWP form submission routes', () => {
     const response = await request(app)
       .post('/api/v1/kwp-form-submissions/kwp04')
       .set('Authorization', `Bearer ${operatorToken()}`)
-      .send(validKwp02Payload());
+      .send(validKwp04Payload());
 
     expect(response.status).toBe(201);
     expect(response.headers.location).toBe('/api/v1/kwp-form-reports/requests/14');
@@ -1153,6 +1204,7 @@ describe('KWP form submission routes', () => {
         measurementItems: [
           expect.objectContaining({
             pollutant: 'NOx (ppm)',
+            reportCondition: '4(1)',
             attachments: [
               expect.objectContaining({
                 attachmentType: 'SAMPLING_PHOTO',
@@ -1166,6 +1218,7 @@ describe('KWP form submission routes', () => {
           }),
           expect.objectContaining({
             pollutant: 'SO2 (ppm)',
+            reportCondition: '16',
             attachments: [expect.objectContaining({ attachmentType: 'LAB_REPORT' })],
           }),
         ],
@@ -1519,6 +1572,17 @@ function validKwp01Payload() {
     correctiveAction: 'ซ่อมบำรุงเครื่องมือและตรวจสอบระบบรับส่งข้อมูล',
     reporterName: 'สมชาย ทดสอบ',
     reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+  };
+}
+
+function validKwp04Payload() {
+  const payload = validKwp02Payload();
+  return {
+    ...payload,
+    measurementItems: payload.measurementItems.map((item, index) => ({
+      ...item,
+      reportCondition: index === 0 ? '4(1)' : '16',
+    })),
   };
 }
 

@@ -7180,11 +7180,11 @@ const extraPaths: Record<string, OpenApiObject> = {
       operationId: 'createKwp04',
       successSchema: schemaRef('KwpCreatedResponse'),
       description:
-        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
-      requestBody: jsonRequestBody(schemaRef('Kwp02Or04Request'), {
+        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน. บังคับ measurementItems[].reportCondition เป็น string 4(1), 4(2), 11(3) หรือ 16 ทุกแถว ไม่มีค่าเริ่มต้น; ผิดหรือขาดค่าได้ 400 VALIDATION_ERROR. กวภ.02 ไม่รับฟิลด์นี้',
+      requestBody: jsonRequestBody(schemaRef('Kwp04Request'), {
         factoryId: 'F000123',
         factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
-        measurementItems: [{ pollutant: 'COD (mg/l)' }],
+        measurementItems: [{ pollutant: 'CO (ppm)', reportCondition: '4(1)' }],
       }),
       successStatus: '201',
     }),
@@ -7194,19 +7194,23 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Get KWP04 detail',
       operationId: 'getKwp04ById',
-      successSchema: schemaRef('KwpSubmissionDetailResponse'),
+      description:
+        'ใช้ kwp_forms:view ตามขอบเขตโรงงาน/พื้นที่; คืน measurementItems[].reportCondition แยกต่อรายการ ข้อมูลเก่าเป็น null ไม่เติมค่าอัตโนมัติ',
+      successSchema: schemaRef('Kwp04SubmissionDetailResponse'),
       parameters: [idParameter],
     }),
     patch: securedOperation({
       tag: 'KWP Forms',
       summary: 'Update KWP04',
       operationId: 'updateKwp04',
-      successSchema: schemaRef('KwpSubmissionDetailResponse'),
+      description:
+        'ใช้ kwp_forms:edit และสถานะ REVISION_REQUESTED ตามขอบเขตเดิม; ส่งข้อมูลแบบและ measurementItems[] ทั้งชุดตาม contract เดิม โดยบังคับ reportCondition ทุกแถว รวมรายการเก่าที่นำมาแก้ไข. ค่าที่ขาด ว่าง null ไม่ใช่ string หรือนอก enum ได้ 400 VALIDATION_ERROR; จากนั้นจึง POST resubmit',
+      successSchema: schemaRef('Kwp04SubmissionDetailResponse'),
       parameters: [idParameter],
-      requestBody: jsonRequestBody(schemaRef('Kwp02Or04Request'), {
+      requestBody: jsonRequestBody(schemaRef('Kwp04Request'), {
         factoryId: 'F000123',
         factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
-        measurementItems: [{ pollutant: 'COD (mg/l)' }],
+        measurementItems: [{ pollutant: 'CO (ppm)', reportCondition: '4(2)' }],
       }),
     }),
   },
@@ -7215,6 +7219,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Resubmit KWP04',
       operationId: 'resubmitKwp04',
+      description:
+        'ใช้ kwp_forms:edit และสถานะ REVISION_REQUESTED ตามขอบเขตเดิม; payload รับเฉพาะ note ตามเดิม ต้อง PATCH reportCondition ให้ครบก่อนส่งซ้ำ. หากรายการที่บันทึกยังไม่มี reportCondition ที่ถูกต้อง ได้ 400 BAD_REQUEST และสถานะไม่เปลี่ยน; ห้ามส่ง measurementItems ใน resubmit payload',
       successSchema: schemaRef('KwpWorkflowResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('KwpResubmitRequest'), { note: 'แก้ไขแล้ว' }),

@@ -25,6 +25,31 @@ const envelope = (data: Schema): Schema => ({
 
 export function extendKwpHandoffSchemas(schemas: Record<string, Schema>): void {
   const properties = (name: string) => schemas[name].properties as Record<string, Schema>;
+  const reportCondition = {
+    type: 'string',
+    enum: ['4(1)', '4(2)', '11(3)', '16'],
+    description: 'รายงานตามเงื่อนไข เฉพาะ กวภ.04; บังคับเลือกต่อรายการ ไม่มีค่าเริ่มต้น',
+    example: '4(1)',
+  };
+  const measurementItems = properties('Kwp02Or04Request').measurementItems;
+  const measurementItem = measurementItems.items as Schema;
+  schemas.Kwp04Request = {
+    ...schemas.Kwp02Or04Request,
+    properties: {
+      ...properties('Kwp02Or04Request'),
+      measurementItems: {
+        ...measurementItems,
+        items: {
+          ...measurementItem,
+          required: ['pollutant', 'reportCondition'],
+          properties: {
+            ...(measurementItem.properties as Record<string, Schema>),
+            reportCondition,
+          },
+        },
+      },
+    },
+  };
   schemas.KwpCreatedResponse = envelope({
     type: 'object',
     properties: {
@@ -166,6 +191,49 @@ export function extendKwpHandoffSchemas(schemas: Record<string, Schema>): void {
     },
   };
   schemas.KwpSubmissionDetailResponse = envelope(ref('KwpSubmissionDetail'));
+  const detailItems = properties('KwpSubmissionDetail').measurementItems;
+  const detailItem = detailItems.items as Schema;
+  schemas.Kwp04SubmissionDetail = {
+    ...schemas.KwpSubmissionDetail,
+    required: [...(schemas.KwpSubmissionDetail.required as string[]), 'measurementItems'],
+    properties: {
+      ...properties('KwpSubmissionDetail'),
+      formType: { type: 'string', enum: ['KWP04'] },
+      measurementItems: {
+        ...detailItems,
+        items: {
+          ...detailItem,
+          required: ['id', 'pollutant', 'reportCondition'],
+          properties: {
+            ...(detailItem.properties as Record<string, Schema>),
+            reportCondition: {
+              ...reportCondition,
+              nullable: true,
+              enum: [...reportCondition.enum, null],
+              description: 'รายงานตามเงื่อนไขของแต่ละรายการ; ข้อมูลเก่าเป็น null ไม่เดาค่าให้',
+            },
+          },
+        },
+      },
+    },
+  };
+  schemas.Kwp04SubmissionDetailResponse = {
+    ...envelope(ref('Kwp04SubmissionDetail')),
+    example: {
+      success: true,
+      data: {
+        id: 14,
+        requestNo: 'F04-04-0001/2569',
+        formType: 'KWP04',
+        status: 'REVISION_REQUESTED',
+        submittedAt: '2026-11-10T04:00:00.000Z',
+        measurementItems: [
+          { id: 81, pollutant: 'CO (ppm)', reportCondition: '4(1)' },
+          { id: 82, pollutant: 'NOx (ppm)', reportCondition: '16' },
+        ],
+      },
+    },
+  };
   const step = {
     type: 'object',
     properties: {
