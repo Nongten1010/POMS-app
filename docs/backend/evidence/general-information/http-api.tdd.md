@@ -158,7 +158,7 @@ npm test -- --runInBand --runTestsByPath tests/unit/general-information.api.test
 
 รัน diagnostic loop เดิมซ้ำจาก debug workspace: exclusion repro **5/5 ผ่าน**, home probe **7/7 ผ่าน** (ก่อนแก้ 4 และ 2 กรณีล้มเหลวตามลำดับ) เพิ่มเฉพาะ schema ของ supporting factory fixture เพื่อรองรับ query ใหม่ โดยไม่เปลี่ยน expected results
 
-ข้อจำกัด: fixture ยืนยันกติกาและการประกอบ SQL แต่ไม่แทนการทดสอบกับข้อมูลจริง/collation/concurrency ของ SQL Server; **ยังไม่ commit, push หรือ deploy** และยังไม่อ้างว่ายอด production เปลี่ยน เมื่อ deploy ได้รับอนุญาตแล้วต้องเทียบ runtime OpenAPI และยอดจริงในระบบ พื้นที่และตัวกรองเดียวกัน ข้อมูลทั่วไปยังเป็นยอดทั่วประเทศ ส่วนหน้าแรกอาจจำกัดตามสิทธิ์ของผู้เรียก
+ข้อจำกัดของผลก่อน release: fixture ยืนยันกติกาและการประกอบ SQL แต่ไม่แทนการทดสอบกับข้อมูลจริง/collation/concurrency ของ SQL Server; ณ ขั้นเตรียมยังไม่ได้ commit, push หรือ deploy ส่วนผลหลังผู้ใช้อนุมัติให้เผยแพร่บันทึกไว้ด้านล่าง การเทียบยอดจริงต้องใช้ระบบ พื้นที่และตัวกรองเดียวกัน ข้อมูลทั่วไปยังเป็นยอดทั่วประเทศ ส่วนหน้าแรกอาจจำกัดตามสิทธิ์ของผู้เรียก
 
 ### Change summary
 
@@ -167,3 +167,26 @@ npm test -- --runInBand --runTestsByPath tests/unit/general-information.api.test
 - Reason: ให้หน้าแรกและข้อมูลทั่วไปคัดจุดปัจจุบันด้วยเกณฑ์เดียวกันก่อนนับและคำนวณผลสรุป
 - Client impact: ยอด/พารามิเตอร์/อัตราการระบายอาจลดลง; ไม่เปลี่ยน request/response schema หรือสิทธิ์; จุดขยายเวลาเรียกสถิติ/ปฏิทินไม่ได้
 - Breaking change: yes — [การเปลี่ยนขอบเขตการนับ](../../api/CHANGELOG.md#home-general-current-point-counts)
+
+
+## ผลเผยแพร่กติกานับร่วมกับหน้าแรก
+
+- ผู้ใช้อนุมัติให้ commit และ push production เฉพาะงานแก้การนับรอบนี้ พร้อมตรวจยอดและ OpenAPI หลัง deploy
+- Release [`c6b13c06`](https://github.com/Nongten1010/POMS-app/commit/c6b13c06f2322fde9a04e07d815ae62b2aaf3b8e) มี 15 ไฟล์ต่อจาก `7500ce4a` เฉพาะ backend, tests, OpenAPI และเอกสารการนับ ไม่มี frontend application หรืองานค้างกลุ่มอื่น
+- [Deploy POMS run 42758100894](https://github.com/Nongten1010/POMS-app/actions/runs/42758100894) สำเร็จทั้ง detect, hosted CI และ production installation; รันซ้ำก่อน push 9 suites / 218 tests ผ่าน
+- CI: 417 suites / 5,776 tests ผ่าน; ข้าม 2 suites / 18 tests ตามเงื่อนไขเดิม ไม่มี failures. Backend build และ deployment-helper checks ผ่าน
+- Production ใช้ verified artifact ของ commit เดียวกัน เซิร์ฟเวอร์ checkout เป็น `c6b13c06f2322fde9a04e07d815ae62b2aaf3b8e`; ใช้ Windows dependencies เดิมที่ตรง lockfile/Node ABI, migration แจ้ง `Already up to date`, profile mode `legacy`, restart/health และเขียน deploy marker ผ่าน รอบนี้ไม่มี migration ใหม่
+- Workflow ข้าม frontend build/deploy ทั้งสองขั้น
+- HTTPS ตรวจใบรับรองตามปกติ: `/api/v1` และ `/api/v1/docs/` ตอบ `200`; `/api/v1/openapi.json` ตอบ `200` และเทียบ **9 paths / 21 schemas** ของ general information, dashboard/map, statistics/calendar และ annual aliases กับ source release แล้วตรงกันทั้งหมด
+- เครื่องตรวจ resolve โดเมนผ่าน DNS ระบบไม่ได้ จึงยืนยัน A record จาก Google DNS over HTTPS เป็น `110.78.4.84` แล้วใช้ `curl --resolve` โดยคงการตรวจ certificate ตามชื่อโดเมน
+
+ผลยอดที่อ่านได้หลัง deploy จาก `GET /api/v1/public/factory-map-points` (ไม่มีตัวกรองพื้นที่/ประเภทโรงงาน):
+
+| ระบบ | โรงงานในแผนที่ | จุดในแผนที่ | ข้อมูลทั่วไปผ่านบัญชีเจ้าหน้าที่ | Dashboard ผ่านบัญชีเจ้าหน้าที่ |
+| --- | --- | --- | --- | --- |
+| CEMS | 32 | 38 | รอยืนยัน | รอยืนยัน |
+| WPMS | 32 | 33 | รอยืนยัน | รอยืนยัน |
+
+ยอดแผนที่เท่ากับ snapshot ก่อน deploy ซึ่งเป็นผลที่อ่านได้จริง ไม่ใช่หลักฐานว่ายอดข้อมูลทั่วไปเท่ากันแล้ว โรงงานที่มีสองระบบนับแยกต่อระบบได้
+
+การตรวจที่ยังค้าง: `GET /general-information` ทั้ง CEMS/WPMS ตอบ `401 UNAUTHORIZED` เมื่อไม่มี token ตามสัญญา ขณะตรวจไม่มี Chrome session เจ้าหน้าที่ที่เปิดอยู่ จึงขอให้ผู้ใช้ล็อกอินบัญชีที่ดูทั่วประเทศเพื่อเทียบ HTTP ข้อมูลทั่วไปและ dashboard ในขอบเขตเดียวกัน; ไม่สร้าง JWT สำหรับ production แทนผู้ใช้. ทดลองอ่าน general-information service แบบ read-only ด้วย database configuration ที่มีอยู่แล้วแต่เชื่อมต่อไม่ได้ภายใน timeout จึงไม่ใช้เป็นหลักฐานยอด ไม่มีการเปลี่ยนฐานข้อมูลหรือ credentials
