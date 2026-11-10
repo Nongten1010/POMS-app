@@ -16,9 +16,12 @@ export interface GeneralInformationPointRow {
   region: string | null;
   industrial_estate_name: string | null;
   factory_registration_no_new: string | null;
+  system_type: GeneralInformationSystemType;
+  deleted_at: Date | string | null;
+  management_state_json: string | null;
 }
 
-/** One read supplies all four summaries, including deleted/disconnected/hidden points. */
+/** Include current siblings from both systems to resolve factory visibility in the same read. */
 export async function listGeneralInformationPoints(
   systemType: GeneralInformationSystemType,
 ): Promise<GeneralInformationPointRow[]> {
@@ -29,7 +32,25 @@ export async function listGeneralInformationPoints(
       'cp.eligible_factory_id',
     )
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
-    .where('cp.system_type', systemType)
+    .leftJoin(
+      'poms_factory_status_management as fsm',
+      'fsm.eligible_factory_id',
+      'cp.eligible_factory_id',
+    )
+    .where((query) =>
+      query
+        .where('cp.system_type', systemType)
+        .orWhere((siblings) =>
+          siblings
+            .whereNull('cp.deleted_at')
+            .whereIn(
+              'cp.eligible_factory_id',
+              db(factoryProfileReadTable('cems_wpms_connected_measurement_points', 'requested_cp'))
+                .where('requested_cp.system_type', systemType)
+                .select('requested_cp.eligible_factory_id'),
+            ),
+        ),
+    )
     .select(
       'cp.id',
       'cp.eligible_factory_id',
@@ -40,6 +61,9 @@ export async function listGeneralInformationPoints(
       'cp.parameters_json',
       'cp.details_json',
       'cp.updated_at',
+      'cp.system_type',
+      'cp.deleted_at',
+      'fsm.state_json as management_state_json',
       'ef.province_name',
       'ef.industrial_estate_name',
       'ef.factory_registration_no_new',

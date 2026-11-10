@@ -81,3 +81,30 @@ npm test -- --runInBand --coverage --collectCoverageFrom='src/modules/general-in
 - `GET /api/v1`: `200`; `GET /api/v1/docs/`: `200`
 - `GET /api/v1/general-information?systemType=CEMS` โดยไม่มี token: `401 UNAUTHORIZED` ยืนยันว่า route ถูกติดตั้งและบังคับ authentication
 - ไม่สร้างบัญชี ไม่ออก token ของผู้ใช้จริง และไม่เปลี่ยนข้อมูลโรงงานในการตรวจรอบนี้
+
+## หลักฐานการกรองสถานะซ่อน
+
+ผู้ใช้ขอให้ `/api/v1/general-information` ไม่นับโรงงานหรือจุดตรวจวัดที่ซ่อน ปรับเฉพาะ repository, service, HTTP tests, runtime OpenAPI และสัญญา canonical ของเมนูนี้
+
+- ก่อนแก้ implementation: HTTP tests ล้มเหลว 5 กรณี เนื่องจากยังรวมรายการที่ซ่อนและ OpenAPI ยังระบุว่ารวม hidden; อีก 12 กรณีผ่าน
+- หลังแก้: HTTP tests ของเมนูผ่าน 20 กรณี รวม CEMS/WPMS, การกรองทุกหัวข้อและอัตราการระบาย, revision ล่าสุดที่ถูกซ่อน, สถานะจาก current children ทั้งสองระบบ, จุดที่ soft-delete/ยกเลิกการเชื่อมต่อ, การซ่อนจากพารามิเตอร์ทั้งหมด, canonical views และ JSON สถานะผิดรูปแบบ
+- ชุดตรวจที่เกี่ยวข้องผ่านทั้งหมด 5 suites / 121 tests รวมสถานะ POMS และ HTTP OpenAPI; `npm run typecheck` และ targeted ESLint แบบไม่มี warning ผ่าน ตรวจ relative links ของหน้า API และหลักฐานนี้แล้วปลายทางมีอยู่จริง
+- ตรวจ diff เทียบสำเนาก่อนเริ่มงาน เฉพาะ 6 ไฟล์ใน `backend/` และ `docs/backend/`; ไม่แก้ frontend และไม่รวมงานเดิมใน workspace
+
+คำสั่งที่ใช้จาก `backend/`:
+
+```bash
+npm run typecheck
+npx --no-install eslint src/modules/general-information/general-information.repository.ts src/modules/general-information/general-information.service.ts src/modules/api-docs/general-information.openapi.ts tests/unit/general-information.api.test.ts --max-warnings 0
+npm test -- --runInBand --runTestsByPath tests/unit/general-information.api.test.ts tests/unit/poms-status-management.state.test.ts tests/unit/poms-current-status-rollup.test.ts tests/unit/api-docs.openapi.test.ts tests/unit/api-docs.route.test.ts
+```
+
+รอบนี้ตรวจใน workspace ผ่าน SQL.js fixture ยังไม่ได้ deploy หรือยืนยันยอดจริงบน SQL Server/production จึงไม่ใช้หลักฐาน release เดิมด้านบนยืนยันพฤติกรรมกรองซ่อนใหม่
+
+```text
+Docs impact: updated
+Canonical docs: docs/backend/api/menus/general-information/README.md
+Reason: กรองโรงงานและจุดตรวจวัดที่ซ่อนก่อนสรุปทุกหัวข้อ พร้อมอัปเดต runtime OpenAPI
+Client impact: frontend
+Breaking change: no
+```

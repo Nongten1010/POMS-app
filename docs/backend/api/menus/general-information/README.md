@@ -16,7 +16,7 @@ curl --get 'https://d-poms.diw.go.th/api/v1/general-information' \
 2. แสดงข้อมูลทั้ง 4 หัวข้อจากคำตอบเดียว ไม่คำนวณยอดโรงงานจากผลบวกยอดย่อย
 3. ส่งออก Excel/PDF จาก snapshot ที่แสดง โดยไม่มี endpoint ส่งออกแยก
 
-เปิดใช้งานบน production แล้วใน [release `27b7e094`](https://github.com/Nongten1010/POMS-app/commit/27b7e094421e27a2db3ce05dedb7e66fb38db0ba) ผ่าน [CI และ deployment](https://github.com/Nongten1010/POMS-app/actions/runs/42184836878) ตรวจ [runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) แล้วพบ endpoint และ schema ตรงกับสัญญานี้ หน้า [Swagger UI](https://d-poms.diw.go.th/api/v1/docs/) พร้อมใช้งาน การเรียกข้อมูลต้องใช้บัญชีเจ้าหน้าที่หรือแอดมินตามสิทธิ์ด้านล่าง
+Endpoint เดิมเปิดใช้งานบน production ใน [release `27b7e094`](https://github.com/Nongten1010/POMS-app/commit/27b7e094421e27a2db3ce05dedb7e66fb38db0ba) ผ่าน [CI และ deployment](https://github.com/Nongten1010/POMS-app/actions/runs/42184836878) โดยตรวจ [runtime OpenAPI](https://d-poms.diw.go.th/api/v1/openapi.json) และ [Swagger UI](https://d-poms.diw.go.th/api/v1/docs/) แล้ว ส่วนกติกาไม่นับสถานะซ่อนในหน้านี้ยังไม่ได้ deploy; หลัง deploy ต้องตรวจ runtime OpenAPI และยอดผ่านบัญชีเจ้าหน้าที่หรือแอดมินอีกครั้ง
 
 ## สรุป Endpoint
 
@@ -69,7 +69,7 @@ curl --get 'https://d-poms.diw.go.th/api/v1/general-information' \
 | flow | `min` | number / null | ต่ำสุดจากช่องค่าต่ำสุดที่มีข้อมูล |
 | flow | `max` | number / null | สูงสุดจากช่องค่าสูงสุดที่มีข้อมูล |
 
-ตัวอย่างเมื่อยังไม่มีจุดเคยเชื่อมต่อ เป็นชุดว่างจริง ไม่มีตัวเลขจำลอง:
+ตัวอย่างเมื่อยังไม่มีจุดเคยเชื่อมต่อ หรือทุกโรงงาน/จุดถูกซ่อน เป็นชุดว่างจริง ไม่มีตัวเลขจำลอง:
 
 ```json
 {
@@ -106,7 +106,9 @@ curl --get 'https://d-poms.diw.go.th/api/v1/general-information' \
 
 ### กติกาการนับและการคำนวณ
 
-- ใช้เฉพาะจุดที่เคยเชื่อมต่อจาก `cems_wpms_connected_measurement_points` รวมแถว soft-deleted และจุดที่ซ่อน/ยกเลิกการเชื่อมต่อ ไม่เอารายการ eligible-only หรือคำขอที่ยังไม่สำเร็จมานับ
+- ใช้เฉพาะจุดที่เคยเชื่อมต่อจาก `cems_wpms_connected_measurement_points` รวมแถว soft-deleted และจุดที่ยกเลิกการเชื่อมต่อเฉพาะที่ไม่ถูกซ่อน ไม่เอารายการ eligible-only หรือคำขอที่ยังไม่สำเร็จมานับ
+- ไม่นับโรงงานหรือจุดตรวจวัดที่ซ่อน โดยใช้ `effectiveVisibility=HIDDEN` จาก [กติกาจัดการสถานะ POMS](../master-data/status-management.md) และ `poms_factory_status_management.state_json`; ไม่มีสถานะบันทึกถือว่า `VISIBLE` คำนวณสถานะโรงงานจากจุดและพารามิเตอร์ปัจจุบันทั้ง CEMS/WPMS ก่อนกรองระบบที่ร้องขอ จุดที่ soft-delete ไม่ทำให้โรงงานกลับมาแสดง แต่ยังใช้สถานะที่บันทึกของจุดนั้นร่วมกับสถานะโรงงานปัจจุบัน
+- กรองสถานะซ่อนหลังเลือก revision ล่าสุดของแต่ละจุด เพื่อไม่ย้อนนับ revision เก่าที่เคยแสดง ทั้ง 4 หัวข้อ (`regions`/`total`, `estates`, `parameters`, `flowRates`/`flowTotal`) ใช้เฉพาะจุดที่ผ่านตัวกรองเดียวกัน โรงงานที่ไม่มีจุดผ่านตัวกรองในระบบที่ร้องขอมีจำนวนเป็น 0
 - ใช้ข้อมูล profile ปัจจุบันตาม `FACTORY_PROFILE_MODE` และยังอ่าน profile โรงงานที่ soft-delete แล้วได้เพื่อไม่ทำประวัติจุดหาย การอ่านนี้ไม่แก้ฐานข้อมูล
 - ตัวตนโรงงานใช้เลขทะเบียนใหม่จาก eligible profile ถ้ามี มิฉะนั้นใช้เลขทะเบียนที่ connected point บันทึก แล้วจึง `factory_id` โดย trim และไม่แยกตัวพิมพ์ ห้ามใช้จำนวนแถวใน `factories` เป็นยอดโรงงาน POMS
 - ตัวตนจุดอยู่ภายในโรงงานและระบบเดียวกัน ใช้ `point_code` เมื่อมี หรือ `source_measurement_point_id` เมื่อไม่มีรหัส เลือกข้อมูลล่าสุดตาม `updated_at` และใช้ `id` สูงสุดเมื่อตรงกัน รหัสเหมือนกันในคนละโรงงานไม่ถูกรวมกัน

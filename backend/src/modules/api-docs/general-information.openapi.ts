@@ -145,7 +145,8 @@ export const generalInformationPaths: Record<string, OpenApiObject> = {
       description: [
         'Authentication: Bearer token; ใช้ข้อมูลบัญชี/role ล่าสุดจาก server; อนุญาต userType officer/admin หรือ role admin เท่านั้น; ไม่มี permission code เพิ่มเติม',
         'เจ้าหน้าที่ทุกระดับเห็นข้อมูลทั่วประเทศชุดเดียวกัน ไม่กรองภาค/จังหวัด/นิคมหรือ factory type ตามสิทธิ์ของเมนูอื่น; ผู้ประกอบการและประชาชนไม่มีสิทธิ์',
-        'รวมจุดที่เคยเชื่อมต่อใน cems_wpms_connected_measurement_points รวม soft-deleted, hidden และ disconnected; ไม่นับ eligible-only หรือคำขอยังไม่เชื่อมต่อ; แต่ละโรงงาน/ระบบ/รหัสจุดใช้ข้อมูลล่าสุดตาม updated_at แล้ว id; ไม่มีรหัสใช้ source_measurement_point_id',
+        'รวมจุดที่เคยเชื่อมต่อใน cems_wpms_connected_measurement_points รวม soft-deleted และ disconnected เฉพาะที่ไม่ถูกซ่อน; ไม่นับ eligible-only หรือคำขอยังไม่เชื่อมต่อ; แต่ละโรงงาน/ระบบ/รหัสจุดใช้ข้อมูลล่าสุดตาม updated_at แล้ว id; ไม่มีรหัสใช้ source_measurement_point_id',
+        'ไม่นับโรงงานหรือจุดตรวจวัดที่ซ่อน: ใช้ effectiveVisibility=HIDDEN ตาม status-management และกติกา rollup จากจุด/พารามิเตอร์ปัจจุบันทั้ง CEMS/WPMS; ไม่มีสถานะบันทึกถือว่า VISIBLE; เลือก revision ล่าสุดก่อนกรอง ไม่ย้อนนับ revision เก่าที่แสดง; ทั้ง 4 หัวข้อรวมอัตราการระบายใช้เฉพาะจุดที่ผ่านตัวกรองเดียวกัน',
         'ทั้ง 4 หัวข้อใช้ผลอ่านเดียวและไม่มี pagination/ข้อมูลส่วนบุคคล; ไม่มีข้อมูลคืน 200 พร้อม 0/null; ไม่ใช้ 404/501 แทนชุดว่าง',
         'ใช้ profiles ปัจจุบันตาม FACTORY_PROFILE_MODE; อัตราการระบายไม่ระบุหน่วยใช้หน่วยที่สัญญาฟอร์มกำหนด: CEMS m³/hr และ WPMS m³/d; หน่วยชัดเจนปรับก่อนรวม รองรับ m3/hr, m3/h, m3/d, m3/day, m3/s, l/s, l/min และสัญลักษณ์ ³; JSON/ตัวเลข/หน่วย/ภาคไม่ถูกต้องตอบ 503 ไม่ตัดจุดทิ้ง',
         'โหลดเมื่อเข้าหน้า เปลี่ยนระบบ หรือกดรีเฟรช; export Excel/PDF ใช้ snapshot นี้ ไม่มี endpoint ส่งออกแยก; Cache-Control: private, no-store',
