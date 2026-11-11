@@ -180,6 +180,69 @@ describe('connection-test measured values through the API', () => {
     });
   });
 
+  it.each(
+    [
+      ['MODBUS_TCP', 'real'],
+      ['MSSQL', '1m'],
+    ].flatMap(([protocol, interval]) =>
+      [
+        ['C°', '°C'],
+        ['°C', 'C°'],
+        ['C°', 'C°'],
+        ['°C', '°C'],
+      ].map(([registeredUnit, sourceUnit]) => [protocol, interval, registeredUnit, sourceUnit]),
+    ),
+  )(
+    'reads Celsius from %s (%s) with registered unit %s and source unit %s',
+    async (protocol, interval, registeredUnit, sourceUnit) => {
+      const label = `Temp. (${registeredUnit})`;
+      registerParameters([label]);
+      primary.execute('UPDATE device_connection_configs SET protocol = ?', [protocol]);
+      if (interval === '1m') createMinuteTable();
+      for (const suffix of ['value', 'status', 'units'])
+        source.execute(`ALTER TABLE ingest.S2007_data_${interval} ADD COLUMN temp_${suffix}`);
+      source.execute(
+        `INSERT INTO ingest.S2007_data_${interval}
+         (cdate, ctime, temp_value, temp_status, temp_units)
+         VALUES ('2026-11-11', '11:32:00', '90.15', '1', ?)`,
+        [sourceUnit],
+      );
+
+      const response = await request(createApp()).get(path).auth(token, { type: 'bearer' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.meta.interval).toBe(interval);
+      expect(response.body.meta.registeredParameters).toEqual([label]);
+      expect(response.body.data[0]).toEqual({
+        timestamp: '2026-11-11 11:32:00',
+        values: { [label]: '90.15' },
+        statuses: { [label]: 'Ok' },
+      });
+    },
+  );
+
+  it.each(['C', '°F', 'F°', 'K'])(
+    'does not treat the distinct source unit %s as Celsius',
+    async (sourceUnit) => {
+      registerParameters(['Temp. (C°)']);
+      addFamilies(['temp']);
+      source.execute(
+        `INSERT INTO ingest.S2007_data_real
+         (cdate, ctime, temp_value, temp_status, temp_units)
+         VALUES ('2026-11-11', '11:32:00', '90.15', '1', ?)`,
+        [sourceUnit],
+      );
+
+      const response = await request(createApp()).get(path).auth(token, { type: 'bearer' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data[0]).toMatchObject({
+        values: { 'Temp. (C°)': null },
+        statuses: { 'Temp. (C°)': null },
+      });
+    },
+  );
+
   it('does not guess between two populated generic families for the same parameter', async () => {
     primary.execute('UPDATE cems_wpms_connected_measurement_points SET parameters_json = ?', [
       JSON.stringify(['Flow Rate (m3/hr)']),

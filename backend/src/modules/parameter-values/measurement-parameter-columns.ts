@@ -24,7 +24,8 @@ export function normalizedMeasurementName(value: string): string {
 }
 
 export function normalizedMeasurementUnit(value: string): string {
-  return value.normalize('NFKC').toLowerCase().replace(/\s+/gu, '');
+  const unit = value.normalize('NFKC').toLowerCase().replace(/\s+/gu, '');
+  return unit === 'c°' ? '°c' : unit;
 }
 
 export function parseMeasurementParameter(label: string): MeasurementParameterIdentity {

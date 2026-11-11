@@ -2,6 +2,23 @@ import { describe, expect, it } from '@jest/globals';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
 
 describe('connection-test OpenAPI contract', () => {
+  it('documents Celsius unit aliases without changing registered response labels', () => {
+    const document = pomsOpenApiDocument as any;
+    const response =
+      document.paths['/parameter-values/connection-test'].get.responses['200'].content[
+        'application/json'
+      ];
+    expect(response.examples.celsiusUnitAlias.value.data[0]).toEqual({
+      timestamp: '2026-11-11 11:32:00',
+      values: { 'Temp. (C°)': '90.15' },
+      statuses: { 'Temp. (C°)': 'Ok' },
+    });
+    expect(
+      document.components.schemas.ParameterConnectionTestResponse.properties.data.items.properties
+        .values.description,
+    ).toContain('C° และ °C เป็นหน่วยเดียวกัน');
+  });
+
   it('documents measured values separately from operational statuses in both protocol examples', () => {
     const document = pomsOpenApiDocument as any;
     const response =
