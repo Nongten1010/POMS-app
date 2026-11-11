@@ -72,7 +72,7 @@ npm test -- --runInBand --runTestsByPath \
 - ชุด SQL Server ตรวจชื่อฐานจริงก่อนเขียน ใช้ schema สุ่มเฉพาะ test และลบเฉพาะ schema/table ของตนเมื่อจบ ตรวจคอลัมน์ DATE/TIME(7), query bindings, ขอบเที่ยงคืน และการรักษาเศษวินาที ห้ามชี้ไป production
 - Fixture SQLite ไม่รับรอง implicit conversions, query plans หรือ driver behavior ของ SQL Server; รอบนี้มีผล opt-in บน SQL Server 2022 เพิ่มแล้ว แต่ยังไม่ใช่ performance/driver verification ของ instance production
 - repository มี docs guard specification แต่ยังไม่พบ executable guard จึงตรวจ relative links/reachability และใช้ registry/OpenAPI tests ในรอบนี้ ยังไม่ได้อ้างว่าผ่าน AST route extraction หรือ docs guard เต็มชุด
-- ยังไม่ได้เชื่อม dialog ฝั่ง frontend หรือทดสอบ browser และยังไม่ได้ตรวจ runtime production OpenAPI ต้องตรวจหลัง deploy ตามขั้นตอน release
+- ยังไม่ได้เชื่อม dialog ฝั่ง frontend หรือทดสอบ browser; ผล deployment, health และ runtime production OpenAPI ดู [หลักฐาน release](./hourly-minute-details-production.md)
 
 ## Documentation impact
 
