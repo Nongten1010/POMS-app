@@ -287,6 +287,30 @@ export const parameterValuesRepository = {
     return typeof value === 'string' ? value.slice(0, 10) : null;
   },
 
+  async listMinuteRows(query: {
+    stationId: string;
+    date: string;
+    hour: string;
+  }): Promise<Record<string, unknown>[]> {
+    const rows: Record<string, unknown>[] = await parameterSourceDb
+      .withSchema(env.PARAMETER_DB_SCHEMA)
+      .from<Record<string, unknown>>(this.tableName(query.stationId, '1m'))
+      .select('*')
+      // Preserve TIME(7) fractions before the SQL Server driver converts time to Date.
+      .select(parameterSourceDb.raw('CAST(?? AS varchar(16)) AS ??', ['ctime', '__minute_ctime']))
+      .where('cdate', query.date)
+      .where('ctime', '>=', `${query.hour}:00:00`)
+      .modify((builder) => {
+        if (query.hour !== '23')
+          builder.where('ctime', '<', `${String(Number(query.hour) + 1).padStart(2, '0')}:00:00`);
+      })
+      .orderBy('ctime', 'asc');
+    return rows.map((row) => {
+      const { __minute_ctime: measuredTime, ...stored } = row;
+      return serializeRow({ ...stored, ctime: measuredTime });
+    });
+  },
+
   async listRows(
     query: ListParameterValuesQuery,
   ): Promise<{ rows: Record<string, unknown>[]; tableName: string }> {

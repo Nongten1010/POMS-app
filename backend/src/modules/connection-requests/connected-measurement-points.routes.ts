@@ -38,6 +38,12 @@ connectedMeasurementPointsRoutes.get(
   connectionRequestsController.getCurrentDeviceConfigFormDetail,
 );
 connectedMeasurementPointsRoutes.get(
+  `${stationPath}/measurement-minutes`,
+  normalizeAnnualPointCodePath,
+  authorize('dashboard.stats:view'),
+  connectionRequestsController.getMeasurementMinutes,
+);
+connectedMeasurementPointsRoutes.get(
   `${stationPath}/measurement-statistics`,
   normalizeAnnualPointCodePath,
   authorize('dashboard.stats:view'),

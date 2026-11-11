@@ -167,3 +167,18 @@ export type CalendarStatusDetailsQuerySchemaInput = z.infer<
   typeof calendarStatusDetailsQuerySchema
 >;
 export type MeasurementCsvExportQuerySchemaInput = z.infer<typeof measurementCsvExportQuerySchema>;
+
+export const measurementMinutesQuerySchema = z
+  .object({
+    date: dateSchema.refine((value) => {
+      const date = new Date(`${value}T00:00:00.000Z`);
+      return (
+        Number.isFinite(date.getTime()) &&
+        date.toISOString().slice(0, 10) === value &&
+        Number(value.slice(0, 4)) >= 1
+      );
+    }, 'date must exist in the Gregorian calendar'),
+    hour: z.string().regex(/^(?:[01]\d|2[0-3])$/, 'hour must use 00-23'),
+  })
+  .strict();
+export type MeasurementMinutesQuerySchemaInput = z.infer<typeof measurementMinutesQuerySchema>;

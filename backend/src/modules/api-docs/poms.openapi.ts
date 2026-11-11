@@ -1,4 +1,9 @@
 import {
+  measurementMinutesSchemas,
+  measurementMinutesDescription,
+  measurementMinutesUnitUnavailableResponse,
+} from './measurement-minutes.openapi';
+import {
   eligibleOperatorAccessPaths,
   eligibleOperatorAccessSchemas,
 } from './eligible-operator-access.openapi';
@@ -6232,6 +6237,79 @@ const extraPaths: Record<string, OpenApiObject> = {
       requestBody: jsonRequestBody(schemaRef('FavoriteRequest'), favoriteExample),
     }),
   },
+  '/connected-measurement-points/{stationId}/measurement-minutes': {
+    get: securedOperation({
+      tag: 'Connected Measurement Points',
+      summary: 'ข้อมูลรายนาทีของชั่วโมงที่เลือก',
+      operationId: 'getMeasurementMinutes',
+      description: measurementMinutesDescription,
+      parameters: [
+        stationIdParameter,
+        queryString(
+          'date',
+          'วันที่จริงตามปฏิทิน ค.ศ. YYYY-MM-DD ใน Asia/Bangkok',
+          true,
+          10,
+          isoDatePattern,
+          'date',
+        ),
+        queryString('hour', 'ชั่วโมง 00–23', true, 2, '^(?:[01]\\d|2[0-3])$'),
+      ],
+      successSchema: schemaRef('MeasurementMinutesResponse'),
+      extraResponses: {
+        '503': measurementMinutesUnitUnavailableResponse,
+        '429': {
+          description: 'เรียกเกิน rate limit กลาง 300 requests / 15 นาที ต่อ IP',
+          headers: {
+            'Retry-After': { schema: { type: 'integer' }, description: 'จำนวนวินาทีก่อนลองใหม่' },
+          },
+          content: {
+            'text/plain': {
+              schema: { type: 'string' },
+              example: 'Too many requests, please try again later.',
+            },
+          },
+        },
+      },
+    }),
+  },
+  '/connected-measurement-points/{stationId}/{buddhistYear}/measurement-minutes': {
+    get: securedOperation({
+      tag: 'Connected Measurement Points',
+      summary: 'ข้อมูลรายนาทีของชั่วโมงที่เลือก',
+      operationId: 'getMeasurementMinutesByAnnualPath',
+      description: measurementMinutesDescription,
+      parameters: [
+        annualStationIdParameter,
+        buddhistYearParameter,
+        queryString(
+          'date',
+          'วันที่จริงตามปฏิทิน ค.ศ. YYYY-MM-DD ใน Asia/Bangkok',
+          true,
+          10,
+          isoDatePattern,
+          'date',
+        ),
+        queryString('hour', 'ชั่วโมง 00–23', true, 2, '^(?:[01]\\d|2[0-3])$'),
+      ],
+      successSchema: schemaRef('MeasurementMinutesResponse'),
+      extraResponses: {
+        '503': measurementMinutesUnitUnavailableResponse,
+        '429': {
+          description: 'เรียกเกิน rate limit กลาง 300 requests / 15 นาที ต่อ IP',
+          headers: {
+            'Retry-After': { schema: { type: 'integer' }, description: 'จำนวนวินาทีก่อนลองใหม่' },
+          },
+          content: {
+            'text/plain': {
+              schema: { type: 'string' },
+              example: 'Too many requests, please try again later.',
+            },
+          },
+        },
+      },
+    }),
+  },
   '/connected-measurement-points/{stationId}/measurement-statistics': {
     get: securedOperation({
       tag: 'Connected Measurement Points',
@@ -7619,6 +7697,7 @@ function menuTagForPath(path: string): string {
   if (path.startsWith('/connected-measurement-points/')) {
     if (
       path.includes('/measurement-statistics') ||
+      path.includes('/measurement-minutes') ||
       path.includes('/measurement-export.csv') ||
       path.includes('/calendar-status')
     ) {
@@ -7721,7 +7800,11 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
     if (path.includes('/measurement-export.csv')) {
       return { permissions: ['dashboard.stats:export'], mode: 'any' };
     }
-    if (path.includes('/measurement-statistics') || path.includes('/calendar-status')) {
+    if (
+      path.includes('/measurement-statistics') ||
+      path.includes('/measurement-minutes') ||
+      path.includes('/calendar-status')
+    ) {
       return { permissions: ['dashboard.stats:view'], mode: 'any' };
     }
     return method === 'post'
@@ -8040,6 +8123,7 @@ const components: OpenApiObject = {
     ...componentSchemas,
     ...buildHomeFactorySchemas(componentSchemas),
     ...homeHandoffSchemas,
+    ...measurementMinutesSchemas,
     ...menuBadgeSchemas,
     ...generalInformationSchemas,
     ...chatSchemas,
@@ -8160,14 +8244,14 @@ export const pomsOpenApiDocument: OpenApiObject = {
     description:
       officerWritePermissionDescription +
       '\n\n' +
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 164 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 173 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 165 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 175 operations เพราะขยาย optional buddhistYear path อีก 10 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว' +
       '\n\nการแบ่งจังหวัดตามภาค: ภาคกลาง 11 จังหวัด, ภาคตะวันตก 8 จังหวัด, ภาคตะวันออก 8 จังหวัด, ภาคเหนือ 16 จังหวัด, ภาคตะวันออกเฉียงเหนือ 20 จังหวัด และภาคใต้ 14 จังหวัด รวม 77 จังหวัด. นครนายกอยู่ภาคตะวันออก; ตาก กำแพงเพชร และนครสวรรค์อยู่ภาคเหนือ; สมุทรสาคร สมุทรสงคราม นครปฐม และสุพรรณบุรีอยู่ภาคตะวันตก; อุทัยธานียังคงอยู่ภาคกลาง. region/regionName สำหรับข้อมูลปัจจุบันและ snapshot คำขอเชื่อมต่อที่ยังใช้งานอยู่ใช้พื้นที่ใหม่นี้ โดย regionCode ของ snapshot คำขอเชื่อมต่อเก็บชื่อภาคเดียวกับ regionName. IN_REGION ยังคงใช้ qualifier รายเมนูก่อนค่าเริ่มต้นจากโปรไฟล์ และไม่มีการเปลี่ยนชื่อภาคหรือสิทธิ์ผู้ใช้. แบบ กวภ.01–05 ทั้งเก่าและใหม่ใช้จังหวัดปัจจุบันของโรงงานและ provinces.region ชุดเดียวกันสำหรับรายการ รายละเอียด การแก้ไข ส่งกลับหลังแก้ไข และการพิจารณา โดยตรวจ scope ของ view/edit/approve แยกตาม action; ใช้ active connected point และ eligible factory ปัจจุบันก่อน และ fallback ไป factory master เฉพาะเมื่อไม่มี eligible row ทั้ง legacy/canonical mode. submission_region_name เป็นประวัติตอนออกเลขเท่านั้น ไม่ใช้กรองสิทธิ์; คำขอใหม่ออกเลขจากภาคปัจจุบัน. เลขเอกสารและ running เดิมคงอยู่; รหัสภาคสำหรับออกเลขเอกสารยังเป็น 02-07. ต้องรัน migration 0139_update_provincial_regional_jurisdictions ก่อนใช้งาน',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 164,
+  'x-poms-canonical-operation-count': 165,
   'x-poms-eligible-operator-access-enabled': env.ELIGIBLE_OPERATOR_ACCESS_ENABLED,
   'x-poms-factory-status-sync-enabled': env.FACTORY_STATUS_SYNC_ENABLED,
   'x-poms-officer-write-permission-checks-enabled': env.OFFICER_WRITE_PERMISSION_CHECKS_ENABLED,

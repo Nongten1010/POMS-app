@@ -1,3 +1,4 @@
+import { readMeasurementMinutes } from '../parameter-values/measurement-minutes';
 import { isExcludedMonitoringPointStatus } from '../poms-factories/connected-point-visibility';
 import { deriveCurrentParameterDetails } from '../../shared/utils/current-parameter-details';
 import {
@@ -42,6 +43,7 @@ import type {
   CalendarStatusQuerySchemaInput,
   MeasurementCsvExportQuerySchemaInput,
   MeasurementStatisticsQuerySchemaInput,
+  MeasurementMinutesQuerySchemaInput,
 } from '../parameter-values/parameter-values.validator';
 import type { ParameterEvaluationOptions } from '../parameter-values/parameter-values.types';
 import { connectionRequestsRepository } from './connection-requests.repository';
@@ -1005,6 +1007,33 @@ export const connectionRequestsService = {
     );
 
     return { data: details, meta: { total: details.length } };
+  },
+
+  async getMeasurementMinutes(
+    stationId: string,
+    query: MeasurementMinutesQuerySchemaInput,
+    actorUserId: number,
+    viewScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
+  ) {
+    return readMeasurementMinutes(
+      { stationId, ...query },
+      { actorUserId, scope: viewScope, regionalAccess },
+      async () => {
+        const point = await loadConnectedMeasurementPointDetail(
+          stationId,
+          actorUserId,
+          viewScope,
+          regionalAccess,
+        );
+        const options = await toHomeParameterEvaluationOptions(stationId, point);
+        return {
+          pointName: point.point.pointName,
+          parameters: options.allowedParameterLabels ?? [],
+          registeredParameters: point.point.parameters,
+        };
+      },
+    );
   },
 
   async getMeasurementStatistics(

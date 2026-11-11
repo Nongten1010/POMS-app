@@ -24,6 +24,8 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
+API สำหรับเปิด dialog ข้อมูลรายนาทีของชั่วโมงที่เลือกใช้ [สัญญาข้อมูลรายนาที](../../shared/connected-measurement-points/measurement-minutes.md) เรียกเฉพาะเมื่อเปิด dialog และใช้สิทธิ์เดียวกับตารางรายชั่วโมง
+
 ## Endpoint Summary
 
 | งาน                          | Method | Path                                                                     | Auth   | Permission               | Contract                                                                                                                                          |

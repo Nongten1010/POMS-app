@@ -87,6 +87,7 @@
 - [โรงงานของผู้ประกอบการพร้อมสถานะ POMS](./home/operator-owned-factory-overview.tdd.md)
 - [โรงงานที่เจ้าหน้าที่เชื่อมต่อแสดงบนหน้าหลัก](./home/officer-direct-connected-dashboard.tdd.md)
 - [ชื่อโรงงานหน้าหลักใช้ข้อมูล current/live POMS](./home/operator-dashboard-current-factory-name.tdd.md)
+- [API ข้อมูลรายนาทีของชั่วโมงที่เลือก: TDD และข้อจำกัดการตรวจ](./home/hourly-minute-details.tdd.md)
 - [ส่งออกข้อมูลตรวจวัดของจุดเชื่อมต่อเป็น CSV](./home/connected-measurement-csv-export.tdd.md)
 
 ## KWP forms

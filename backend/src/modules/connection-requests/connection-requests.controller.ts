@@ -14,6 +14,7 @@ import {
   connectedMeasurementPointDetailParamsSchema,
   measurementCsvExportQuerySchema,
   measurementStatisticsQuerySchema,
+  measurementMinutesQuerySchema,
 } from '../parameter-values/parameter-values.validator';
 import {
   addMeasurementPointRequestSchema,
@@ -309,6 +310,25 @@ export const connectionRequestsController = {
               ...getRegionalAccessArg(req),
             );
       res.status(StatusCodes.CREATED).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getMeasurementMinutes(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointDetailParamsSchema.parse(req.params);
+      const query = measurementMinutesQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.getMeasurementMinutes(
+        stationId,
+        query,
+        actorUserId,
+        getScopeDetails(req, 'dashboard.stats:view'),
+        ...getRegionalAccessArg(req),
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
       next(err);
     }
