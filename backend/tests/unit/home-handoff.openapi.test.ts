@@ -25,6 +25,21 @@ const annualStationPath = `${stationPath}/{buddhistYear}`;
 const responseSchema = (path: string): unknown => objectAt(responseFor(path), 'schema').$ref;
 
 describe('home handoff OpenAPI contract', () => {
+  it('documents unit-specific source families across dashboard and statistics aliases', () => {
+    for (const path of [
+      '/operator-factory-dashboard',
+      '/public/factory-map-points',
+      ...[stationPath, annualStationPath].flatMap((prefix) =>
+        ['/measurement-statistics', '/calendar-status', '/calendar-status/details'].map(
+          (suffix) => `${prefix}${suffix}`,
+        ),
+      ),
+    ]) {
+      expect(operationFor(path).description).toContain('hcl_ppm_value');
+      expect(operationFor(path).description).toContain('ไม่ปะค่าหรือสถานะข้ามชุดคอลัมน์');
+    }
+  });
+
   it('publishes current point exclusions for dashboard, map and both statistics aliases', () => {
     const homePaths = ['/operator-factory-dashboard', '/public/factory-map-points'];
     for (const prefix of [stationPath, annualStationPath]) {

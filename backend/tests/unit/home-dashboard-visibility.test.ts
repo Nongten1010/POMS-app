@@ -754,3 +754,35 @@ describe('home dashboard visibility projection', () => {
     }
   });
 });
+
+it('projects dedicated HCl hourly columns into dashboard data and latest values', async () => {
+  pointRows = [point({ parameters_json: JSON.stringify(['HCl (ppm)']), instruments_json: null })];
+  jest.spyOn(parameterValuesService, 'latestHourly').mockResolvedValue({
+    data: [
+      {
+        station_id: 'S0001',
+        cdate: '2026-09-23',
+        ctime: '09:00:00',
+        hcl_value: null,
+        hcl_status: null,
+        hcl_units: null,
+        hcl_ppm_value: '0.13593',
+        hcl_ppm_units: null,
+        hcl_ppm_status: '1',
+      },
+    ],
+    meta: {
+      stationId: 'S0001',
+      interval: '60m',
+      schemaName: 'ingest',
+      tableName: 'S0001_data_60m',
+      count: 1,
+      registeredParameters: ['HCl (ppm)'],
+      returnedColumns: [],
+    },
+  });
+  const result = await connectionRequestsService.listOperatorFactoryDashboard(42, 'ALL');
+  const measured = result.data[0].measurementPoints[0];
+  expect(measured.data[0]['HCl (ppm)']).toBe('0.13593');
+  expect(measured.latestMeasurement?.values['HCl (ppm)']).toMatchObject({ value: 0.13593 });
+});

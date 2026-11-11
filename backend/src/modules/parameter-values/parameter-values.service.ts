@@ -14,6 +14,7 @@ import {
   measurementParameterUnitMatches,
   parseMeasurementParameter,
   resolveMeasurementParameterFamilies,
+  resolveMeasurementParameterFamily,
 } from './measurement-parameter-columns';
 import {
   type CalendarStatusEvaluationOptions,
@@ -581,6 +582,7 @@ interface ParameterDefinition {
   name: string;
   unit: string;
   prefixes: string[];
+  registeredParameters: string[];
   normalMax: number;
   warningMax: number;
   criteriaRows: CriteriaRangeRow[];
@@ -825,6 +827,7 @@ function buildParameterDefinitions(
       name: presentation.name,
       unit,
       prefixes,
+      registeredParameters,
       normalMax: DEFAULT_NORMAL_MAX,
       warningMax: DEFAULT_WARNING_MAX,
       criteriaRows: readPreferredCriteriaRows(evaluation),
@@ -1405,7 +1408,7 @@ function readParameterCompletenessPercent(
   row: Record<string, unknown>,
   definition: ParameterDefinition,
 ): number | null {
-  for (const prefix of definition.prefixes) {
+  for (const prefix of homeParameterPrefixes(row, definition)) {
     for (const suffix of [
       'data_completeness_percent',
       'dataCompletenessPercent',
@@ -1443,11 +1446,23 @@ export function readRegisteredAlertMeasurement(
   return { value: null, status: null };
 }
 
+function homeParameterPrefixes(
+  row: Record<string, unknown>,
+  definition: ParameterDefinition,
+): string[] {
+  const family = resolveMeasurementParameterFamily(
+    row,
+    definition.label,
+    definition.registeredParameters,
+  );
+  return family ? [family.prefix] : [];
+}
+
 function readParameterNumber(
   row: Record<string, unknown>,
   definition: ParameterDefinition,
 ): number | null {
-  for (const prefix of definition.prefixes) {
+  for (const prefix of homeParameterPrefixes(row, definition)) {
     if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
 
     const value = toNumber(row[`${prefix}_value`]);
@@ -1465,7 +1480,7 @@ function readParameterStatus(
   if (definition.useConfiguredEvaluation)
     return evaluateParameterPollutionStatus(definition, value);
 
-  for (const prefix of definition.prefixes) {
+  for (const prefix of homeParameterPrefixes(row, definition)) {
     if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
 
     const sourceStatus = normalizeSourceStatus(row[`${prefix}_status`]);
@@ -1490,7 +1505,7 @@ function evaluateParameterPollutionStatus(
 }
 
 function readPomsClientStatus(row: Record<string, unknown>, definition: ParameterDefinition) {
-  for (const prefix of definition.prefixes) {
+  for (const prefix of homeParameterPrefixes(row, definition)) {
     if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
 
     const sourceStatus = resolvePomsClientParameterStatus(row[`${prefix}_status`]);
@@ -1504,7 +1519,7 @@ function hasCountableHomeMeasurement(
   row: Record<string, unknown>,
   definition: ParameterDefinition,
 ): boolean {
-  for (const prefix of definition.prefixes) {
+  for (const prefix of homeParameterPrefixes(row, definition)) {
     if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
     if (toNumber(row[`${prefix}_value`]) === null) continue;
 
@@ -1519,7 +1534,7 @@ function hasNormalMeasurementStatus(
   row: Record<string, unknown>,
   definition: ParameterDefinition,
 ): boolean {
-  for (const prefix of definition.prefixes) {
+  for (const prefix of homeParameterPrefixes(row, definition)) {
     if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
     if (toNumber(row[`${prefix}_value`]) === null) continue;
 

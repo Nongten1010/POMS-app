@@ -302,8 +302,7 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
       latestMeasurement: ref('HomeLatestMeasurement'),
       data: {
         ...pointProperties.data,
-        description:
-          'รูปแบบเดิมจากชั่วโมงล่าสุดที่มีและจบแล้วของจุดนั้น อาจเก่ากว่าชั่วโมงก่อนหน้า; เก็บ cdate/ctime จริง ใช้ latestMeasurement.freshness แยก current/stale/noData; ไม่มีแถวหรือตารางรายชั่วโมงคืน [] โดยไม่ใช้ข้อมูลรายนาทีแทน',
+        description: `รูปแบบเดิมจากชั่วโมงล่าสุดที่มีและจบแล้วของจุดนั้น อาจเก่ากว่าชั่วโมงก่อนหน้า; เก็บ cdate/ctime จริง ใช้ latestMeasurement.freshness แยก current/stale/noData; ไม่มีแถวหรือตารางรายชั่วโมงคืน [] โดยไม่ใช้ข้อมูลรายนาทีแทน; ${parameterColumnRules}`,
       },
     },
   };
@@ -345,6 +344,9 @@ export function buildHomeFactorySchemas(existing: Record<string, Schema>): Recor
     HomeOperatorFactoryDashboardResponse: response(array(ref('HomeOperatorFactoryRow')), meta),
   };
 }
+
+const parameterColumnRules =
+  'จับคู่พารามิเตอร์ตามชื่อและหน่วย เช่น HCl (ppm) อ่าน hcl_ppm_value พร้อม hcl_ppm_status จากชุดคอลัมน์เดียวกัน เลือกชุดที่ระบุหน่วยตรงก่อนชุดชื่อทั่วไป hcl_value; ชุดระบุหน่วยในชื่อใช้ได้แม้ช่อง units ว่าง แต่ถ้าระบุ units ขัดกันจะไม่ใช้ชุดนั้น ชุดชื่อทั่วไปที่ไม่มีหน่วยใช้ได้เฉพาะเมื่อหน่วยไม่กำกวม ไม่ปะค่าหรือสถานะข้ามชุดคอลัมน์; กรณีจับคู่ไม่ได้คงค่า null และไม่เพิ่มความครบถ้วน';
 
 const timestampRules =
   'เฉพาะหน้าหลัก: cdate/ctime เป็นเวลาตรวจวัดหน้าเครื่อง ใช้จัดวัน/ชั่วโมง; udate/utime เป็นเวลาที่เครื่องส่งข้อมูล ทั้งสองชุดใช้ Asia/Bangkok ที่ต้นทางปรับ timezone แล้ว เปรียบเทียบวันและเวลาที่เก็บโดยตรง ไม่บวกหรือลบ timezone ซ้ำ ทุกอุปกรณ์และทุก protocol ใช้เส้นตายเดียวกัน ส่งได้ถึงสิ้นสุดชั่วโมงถัดจากรอบ cdate/ctime เช่นรอบ 09:00–09:59 ส่งได้ถึง 10:59:59.999 และตั้งแต่ 11:00:00 เป็นย้อนหลัง (เวลาส่งต้องน้อยกว่าต้นรอบ + 2 ชั่วโมง) รวมกรณีข้ามวัน/เดือน/ปี; รอบล่าสุดยังเป็นเวลาปัจจุบันลบ 1 ชั่วโมง และ freshness แยกจากการส่งตรงเวลา ข้อมูลส่งช้าแสดงค่าได้; เปอร์เซ็นต์หลักรวมถึงเปอร์เซ็นต์แถวสถิติ ปฏิทิน lowData/lowDataDays/lowData details นับเฉพาะส่งตรงเวลาจาก Normal/Ok (code 1) และ Shut Down (code 6) ที่มีค่าตัวเลขตรงหน่วย สถานะอื่นไม่นับแม้มีค่า 0; วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์ วันปัจจุบันใช้เฉพาะชั่วโมงที่จบแล้ว เช่น 22:15 ใช้ถึง 21:59; lowDataDays และ lowData details นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok ย้อนจากวันสิ้นสุดหรือเมื่อวานเมื่อเลือกวันนี้ ไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง; ตารางคง 24 แถว แต่ชั่วโมง 22–23 คืน value: null, displayValue: -, status: noData; lateDataPercent แยกจากเปอร์เซ็นต์หลักทุกวัน บวกกับเปอร์เซ็นต์ส่งตรงเวลาได้ยอดรับรวม; สถานะ Normal ส่งตรงเวลา 12/22 ชั่วโมงได้ 54.55% และ lateDataPercent 45.45%; Shut Down ส่งตรงเวลา 21/22 ชั่วโมงและส่งช้า 1 ชั่วโมงได้ 95.45% และ lateDataPercent 4.55%; ข้อความสถานะเครื่องที่ส่งช้าเช่น Shut Down คืน value:null, displayValue:Shut Down, status:lateData; source NoData คง noData และ warning/exceeded คงระดับมลพิษ; 00:00–00:59 การส่งข้อมูลวันนี้เป็น null และ popup เลือกชั่วโมงล่าสุดที่มีและจบแล้วไม่เกิน 23 ของวันก่อนหน้า โดยคืน cdate/ctime จริงและ freshness=current/stale/noData กรองโรงงาน → จุด → พารามิเตอร์ที่ซ่อนก่อนคำนวณ ใช้เกณฑ์เดียวกับ GET /general-information เมื่อระบบ พื้นที่และตัวกรองตรงกัน: ใช้จุด/profile ปัจจุบันที่ไม่ลบ ตัดโรงงาน inactive และโรงงาน/จุดที่ connectionStatus=DISCONNECTED จุดที่แสดงไม่เปิดโรงงานที่ซ่อนกลับมา ตัด monitoringPointStatus ที่เป็น ได้รับการยกเว้นทั้งหมด หรือ อยู่ระหว่างขยายเวลา ทั้งมีและไม่มีพารามิเตอร์ และถ้าไม่เหลือจุดไม่คืนโรงงาน; การเรียก stationId ที่ถูกตัดออกโดยตรงตอบ 404 NOT_FOUND';
@@ -388,7 +390,9 @@ export function decorateHomeHandoffPaths(paths: Record<string, Schema>): Record<
       ...pathItem,
       get: {
         ...operation,
-        description: [operation.description, timestampRules].filter(Boolean).join('\n\n'),
+        description: [operation.description, timestampRules, parameterColumnRules]
+          .filter(Boolean)
+          .join('\n\n'),
         parameters,
         responses: {
           ...responses,

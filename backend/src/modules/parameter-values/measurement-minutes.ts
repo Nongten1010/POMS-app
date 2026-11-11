@@ -2,7 +2,7 @@ import type { ParameterValueAccessContext } from './parameter-values.types';
 import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { parameterValuesRepository } from './parameter-values.repository';
 import {
-  measurementParameterUnitMatches,
+  resolveMeasurementParameterFamily,
   normalizedMeasurementUnit,
   parseMeasurementParameter,
   resolveMeasurementParameterFamilies,
@@ -147,35 +147,7 @@ function stableRow(row: Record<string, unknown>): string {
 }
 
 function matchingFamily(row: Record<string, unknown>, label: string, parameters: string[]) {
-  const definition = parseMeasurementParameter(label);
-  const registeredUnits = new Set(
-    parameters
-      .map(parseMeasurementParameter)
-      .filter((p) => p.nameKey === definition.nameKey)
-      .map((p) => p.unitKey),
-  );
-  try {
-    const matches = resolveMeasurementParameterFamilies(Object.keys(row), label).filter(
-      (family) => {
-        const value = family.valueColumn ? row[family.valueColumn] : null;
-        const status = family.statusColumn ? row[family.statusColumn] : null;
-        if (value == null && status == null) return false;
-        const unit = family.unitsColumn ? row[family.unitsColumn] : null;
-        const missingUnit = unit == null || (typeof unit === 'string' && !unit.trim());
-        return (
-          measurementParameterUnitMatches(definition, unit) ||
-          (missingUnit &&
-            (family.unitSpecific ||
-              (registeredUnits.size === 1 && !family.hasCompetingUnitFamilies)))
-        );
-      },
-    );
-    const specific = matches.filter((family) => family.unitSpecific);
-    const selected = specific.length ? specific : matches;
-    return selected.length === 1 ? selected[0] : null;
-  } catch {
-    return null;
-  }
+  return resolveMeasurementParameterFamily(row, label, parameters);
 }
 
 function storedNumericValue(raw: unknown): number | string | null {

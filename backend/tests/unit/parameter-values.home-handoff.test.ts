@@ -64,6 +64,67 @@ describe('home handoff measurement calculations', () => {
     jest.useRealTimers();
   });
 
+  it('reads dedicated HCl hourly columns in popup, statistics and calendar', async () => {
+    repository.listRegisteredParameters.mockResolvedValue(['HCl (ppm)']);
+    const row = {
+      ...hourRow(9),
+      hcl_value: null,
+      hcl_status: null,
+      hcl_units: null,
+      hcl_ppm_value: '0.13593',
+      hcl_ppm_status: '1',
+      hcl_ppm_units: null,
+    };
+    repository.listRows.mockResolvedValue({ tableName: 'S1125_data_60m', rows: [row] });
+    const evaluation = {
+      parameterEvaluations: [{ parameter: 'HCl (ppm)', standardCriteria: criteria }],
+    };
+    expect(evaluateHomeMeasurementRow(row, ['HCl (ppm)'], evaluation)['HCl (ppm)']).toMatchObject({
+      value: 0.13593,
+      status: 'normal',
+    });
+    const statistics = await parameterValuesService.measurementStatistics(
+      { stationId: 'S1125', date: '2026-09-23' },
+      access,
+      evaluation,
+    );
+    expect(statistics.data.measurementPoints[0].rows[9]).toMatchObject({
+      dataCompletenessPercent: 100,
+      values: { 'HCl (ppm)': { value: 0.13593, status: 'normal' } },
+    });
+    const calendar = await parameterValuesService.calendarStatus(
+      { stationId: 'S1125', month: '2026-09', endDate: '2026-09-23' },
+      access,
+      evaluation,
+    );
+    expect(calendar.data.monthlySummary[0].todayDataCompletenessPercent).toBe(10);
+  });
+
+  it('keeps value and status in the dedicated family and rejects conflicting units', () => {
+    const evaluation = {
+      parameterEvaluations: [{ parameter: 'HCl (ppm)', standardCriteria: criteria }],
+    };
+    const row = {
+      hcl_value: 999,
+      hcl_units: 'ppm',
+      hcl_status: 'Defective',
+      hcl_ppm_value: '5.37367',
+      hcl_ppm_units: null,
+      hcl_ppm_status: '1',
+    };
+    expect(evaluateHomeMeasurementRow(row, ['HCl (ppm)'], evaluation)['HCl (ppm)']).toMatchObject({
+      value: 5.37367,
+      status: 'normal',
+    });
+    expect(
+      evaluateHomeMeasurementRow(
+        { ...row, hcl_value: null, hcl_status: null, hcl_ppm_units: 'mg/m3' },
+        ['HCl (ppm)'],
+        evaluation,
+      )['HCl (ppm)'].value,
+    ).toBeNull();
+  });
+
   it.each([
     ['2026-11-06', '09:00:00', '2026-11-06', '10:01:23', 'onTime'],
     ['2026-11-06', '09:32:15', '2026-11-06', '10:59:59.999', 'onTime'],

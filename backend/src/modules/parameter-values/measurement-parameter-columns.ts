@@ -148,3 +148,40 @@ export function resolveMeasurementParameterFamilies(
     (a, b) => Number(b.unitSpecific) - Number(a.unitSpecific) || a.prefix.localeCompare(b.prefix),
   );
 }
+
+/** Select value, status and unit as one family; never combine physical channels. */
+export function resolveMeasurementParameterFamily(
+  row: Record<string, unknown>,
+  label: string,
+  registeredParameters: string[],
+): MeasurementParameterFamily | null {
+  const parameter = parseMeasurementParameter(label);
+  const registeredUnits = new Set(
+    registeredParameters
+      .map(parseMeasurementParameter)
+      .filter((candidate) => candidate.nameKey === parameter.nameKey)
+      .map((candidate) => candidate.unitKey),
+  );
+  try {
+    const matches = resolveMeasurementParameterFamilies(Object.keys(row), label).filter(
+      (family) => {
+        const value = family.valueColumn ? row[family.valueColumn] : null;
+        const status = family.statusColumn ? row[family.statusColumn] : null;
+        if (value == null && status == null) return false;
+        const unit = family.unitsColumn ? row[family.unitsColumn] : null;
+        const missingUnit = unit == null || (typeof unit === 'string' && !unit.trim());
+        return (
+          measurementParameterUnitMatches(parameter, unit) ||
+          (missingUnit &&
+            (family.unitSpecific ||
+              (registeredUnits.size === 1 && !family.hasCompetingUnitFamilies)))
+        );
+      },
+    );
+    const dedicated = matches.filter((family) => family.unitSpecific);
+    const selected = dedicated.length ? dedicated : matches;
+    return selected.length === 1 ? selected[0] : null;
+  } catch {
+    return null;
+  }
+}

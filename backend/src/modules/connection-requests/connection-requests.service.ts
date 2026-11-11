@@ -1,3 +1,4 @@
+import { resolveMeasurementParameterFamily } from '../parameter-values/measurement-parameter-columns';
 import { readMeasurementMinutes } from '../parameter-values/measurement-minutes';
 import { isExcludedMonitoringPointStatus } from '../poms-factories/connected-point-visibility';
 import { deriveCurrentParameterDetails } from '../../shared/utils/current-parameter-details';
@@ -3691,6 +3692,27 @@ function toDashboardMeasurementRow(
   parameterDisplayNames: string[],
   strictParameters = false,
 ): Record<string, unknown> {
+  if (strictParameters) {
+    return {
+      ...Object.fromEntries(
+        parameterDisplayNames.map((label) => {
+          const family = resolveMeasurementParameterFamily(row, label, parameterDisplayNames);
+          return [
+            label,
+            family
+              ? toDashboardMeasurementDisplayValue(
+                  family.valueColumn ? row[family.valueColumn] : null,
+                  family.statusColumn ? row[family.statusColumn] : null,
+                )
+              : null,
+          ];
+        }),
+      ),
+      ...Object.fromEntries(
+        Object.entries(row).filter(([key]) => dashboardBaseMeasurementColumns.has(key)),
+      ),
+    };
+  }
   const parametersByColumnPrefix = groupParametersByColumnPrefix(parameterDisplayNames);
   const result: Record<string, unknown> = Object.fromEntries(
     parameterDisplayNames.map((parameter) => [parameter, null]),
@@ -3706,22 +3728,6 @@ function toDashboardMeasurementRow(
     if (!valueColumnMatch) return;
 
     const columnPrefix = valueColumnMatch[1].toLowerCase();
-    if (strictParameters && !parametersByColumnPrefix.has(columnPrefix)) return;
-    const candidates = parametersByColumnPrefix.get(columnPrefix) ?? [];
-    const sourceUnit =
-      typeof row[`${columnPrefix}_units`] === 'string'
-        ? normalizeParameterUnit(row[`${columnPrefix}_units`] as string)
-        : '';
-    if (
-      strictParameters &&
-      sourceUnit &&
-      candidates.every(
-        (candidate) =>
-          extractParameterUnit(candidate) &&
-          normalizeParameterUnit(extractParameterUnit(candidate)) !== sourceUnit,
-      )
-    )
-      return;
     const displayName = findDashboardParameterDisplayName(
       parametersByColumnPrefix.get(columnPrefix) ?? [],
       row[`${columnPrefix}_units`],
