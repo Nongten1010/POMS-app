@@ -3028,7 +3028,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
               type: 'object',
               additionalProperties: {},
               description:
-                'key เป็น label จาก registeredParameters รวมหน่วยเมื่อพารามิเตอร์มีหน่วย; pH ไร้มิติใช้ label เดิม. คืนค่าตรวจวัดตามต้นทางเสมอ รวม 0 และชนิดข้อมูลเดิม แม้ status ไม่ใช่ Normal/Ok; values/statuses ของพารามิเตอร์หนึ่งต้องมาจาก family เดียวกัน. เลือกชุดคอลัมน์เฉพาะหน่วยก่อนในแต่ละแถวเมื่อมี value หรือ status แม้อีกค่าเป็น null; ใช้ generic ที่ตรงหน่วยเมื่อคู่ dedicated ไม่มีข้อมูลทั้งคู่เท่านั้น; generic รุ่นเก่าที่ไม่มีหน่วยใช้ได้เฉพาะ registered unit เดียวที่ชัดเจนและไม่มี dedicated ต่างหน่วยแข่งขันกัน. รักษาชื่อคอลัมน์ pm2_5 และรองรับ pH ไร้มิติที่หน่วยว่าง/null. ห้ามนำ ppm ไปซ้ำใต้ %. ไม่มีค่าหรือคอลัมน์ให้คืน null โดยมี key คู่กันเสมอ',
+                'key เป็น label จาก registeredParameters รวมหน่วยเมื่อพารามิเตอร์มีหน่วย; pH ไร้มิติใช้ label เดิม. คืนค่าตรวจวัดตามต้นทางเสมอ รวม 0 และชนิดข้อมูลเดิม แม้ status ไม่ใช่ Normal/Ok; values/statuses ของพารามิเตอร์หนึ่งต้องมาจาก family เดียวกัน. เลือกชุดคอลัมน์เฉพาะหน่วยก่อนในแต่ละแถวเมื่อมี value หรือ status แม้อีกค่าเป็น null; ใช้ generic ที่ตรงหน่วยเมื่อคู่ dedicated ไม่มีข้อมูลทั้งคู่เท่านั้น; generic รุ่นเก่าที่ไม่มีหน่วยใช้ได้เฉพาะ registered unit เดียวที่ชัดเจนและไม่มี dedicated ต่างหน่วยแข่งขันกัน. เทียบหน่วยเซลเซียส C° และ °C เป็นหน่วยเดียวกันทั้งสองทิศทางใน 1m/real โดยคง label ที่ลงทะเบียนและไม่แปลงค่าตัวเลข; C, °F, F° และ K ไม่ถือเป็นหน่วยเดียวกัน. รักษาชื่อคอลัมน์ pm2_5 และรองรับ pH ไร้มิติที่หน่วยว่าง/null. ห้ามนำ ppm ไปซ้ำใต้ %. ไม่มีค่าหรือคอลัมน์ให้คืน null โดยมี key คู่กันเสมอ',
               example: { 'CO (ppm)': '12.5', 'NOx (ppm)': '88.2' },
             },
             statuses: {
@@ -4184,6 +4184,27 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       parameters: [parameterValueStationIdQuery],
       successSchema: schemaRef('ParameterConnectionTestResponse'),
       successExamples: {
+        celsiusUnitAlias: {
+          summary: 'Temp. (C°) อ่าน temp_units=°C ได้ โดยคงชื่อที่ลงทะเบียนและค่าต้นทาง',
+          value: {
+            success: true,
+            data: [
+              {
+                timestamp: '2026-11-11 11:32:00',
+                values: { 'Temp. (C°)': '90.15' },
+                statuses: { 'Temp. (C°)': 'Ok' },
+              },
+            ],
+            meta: {
+              stationId: 'S2004',
+              interval: '1m',
+              schemaName: 'ingest',
+              tableName: 'S2004_data_1m',
+              count: 1,
+              registeredParameters: ['Temp. (C°)'],
+            },
+          },
+        },
         mixedParameterFamilies: {
           summary:
             'CO2 แยก ppm/% และ PM2.5/pH: ไม่ผสมค่า generic กับสถานะ dedicated ของแถวเดียวกัน',
