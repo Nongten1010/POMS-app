@@ -48,6 +48,8 @@ import 'dayjs/locale/th'
 import diwLogo from '../assets/diwLogo.png'
 import locationOptions from '../option/locationOptions.json'
 import measurementValueAbbreviationOptions from '../option/measurementValueAbbreviationOptions.json'
+import MinuteMeasurementsDialog from '../components/MinuteMeasurementsDialog'
+import { getMeasurementHour } from '../utils/minuteMeasurements.mjs'
 
 const longdoMapKey = import.meta.env.VITE_LONGDO_MAP_KEY ?? ''
 const longdoMapScriptId = 'longdo-map-script'
@@ -457,6 +459,7 @@ function mapMeasurementStatistics(payload, selectedPoint) {
 
       return {
         date: selectedRows.date ?? payload?.meta?.date ?? '',
+        stationId: selectedPoint,
         time: row.time ?? '',
         chartTime: row.chartTime ?? String(row.time ?? '').slice(0, 5).replace('.', ':'),
         values,
@@ -2229,6 +2232,8 @@ function FactoryMap({ factories, focusedFactory = null, canViewDetails = false, 
 }
 
 function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onClose }) {
+  const [minuteContext, setMinuteContext] = useState(null)
+  const closeFactory = () => { setMinuteContext(null); onClose() }
   const [selectedDate, setSelectedDate] = useState(() => dayjs())
   const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => dayjs())
   const [selectedStatisticSystem, setSelectedStatisticSystem] = useState('')
@@ -2359,7 +2364,7 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
     <Drawer
       anchor="bottom"
       open={open}
-      onClose={onClose}
+      onClose={closeFactory}
       ModalProps={{ keepMounted: true }}
       sx={{
         '& .MuiDrawer-paper': {
@@ -2451,7 +2456,7 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
                 </Box>
 
                 <Tooltip title="ปิด">
-                  <IconButton aria-label="ปิด" onClick={onClose} sx={{ flex: '0 0 auto' }}>
+                  <IconButton aria-label="ปิด" onClick={closeFactory} sx={{ flex: '0 0 auto' }}>
                     <CloseIcon />
                   </IconButton>
                 </Tooltip>
@@ -2497,6 +2502,13 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
               error={measurementStatisticError}
               canExport={canExportStatistics}
               onExport={() => setExportDialogOpen(true)}
+              onViewMinutes={(row) => setMinuteContext({
+                stationId: row.stationId ?? activeStatisticPoint,
+                pointName: statisticPoints.find((point) => point.value === (row.stationId ?? activeStatisticPoint))?.label ?? row.stationId ?? activeStatisticPointLabel,
+                date: row.date || selectedDate.format('YYYY-MM-DD'),
+                hour: getMeasurementHour(row.chartTime || row.time),
+                parameters: [...activeStatisticParameters],
+              })}
             />
             <Stack spacing={2} sx={{ minWidth: 0 }}>
               <PollutionTrendPanel
@@ -2517,6 +2529,14 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
               />
             </Stack>
           </Box>
+          {open && minuteContext && <MinuteMeasurementsDialog
+            key={`${minuteContext.stationId}-${minuteContext.date}-${minuteContext.hour}`}
+            context={minuteContext} onClose={() => setMinuteContext(null)}
+            accessToken={accessToken}
+            url={getConnectedMeasurementPointApiUrl(minuteContext.stationId, 'measurement-minutes', {
+              date: minuteContext.date, hour: String(minuteContext.hour).padStart(2, '0'),
+            })}
+          />}
           <ExportReportDialog
             key={exportDialogKey}
             open={exportDialogOpen}
@@ -3106,6 +3126,7 @@ function CalendarStatusPickerLayout(props) {
 }
 
 function FactoryStatisticPanel({
+  onViewMinutes,
   selectedDate,
   onDateChange,
   statusByDay,
@@ -3251,7 +3272,12 @@ function FactoryStatisticPanel({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {row.time}
+                  <Button size="small" variant="text" color="inherit" onClick={() => onViewMinutes?.(row)}
+                    disabled={!onViewMinutes || getMeasurementHour(row.chartTime || row.time) === null}
+                    aria-label={`ดูข้อมูลรายนาที ${row.time}`}
+                    sx={{ p: 0, minWidth: 0, fontWeight: 600 }}>
+                    {row.time}
+                  </Button>
                 </TableCell>
                 {parameters.map((parameter) => (
                   <TableCell
