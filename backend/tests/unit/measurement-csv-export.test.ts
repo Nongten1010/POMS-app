@@ -3,6 +3,107 @@ import { Readable } from 'node:stream';
 import { createMeasurementCsvExport } from '../../src/modules/parameter-values/measurement-csv-export';
 
 describe('createMeasurementCsvExport', () => {
+  it('adds an unambiguous source unit to a bare PM2.5 label with underscore columns', async () => {
+    const result = createMeasurementCsvExport({
+      stationId: 'S1',
+      factoryName: 'Test',
+      factoryRegistrationNumber: 'T',
+      frequency: 'hourly',
+      startDate: '2026-11-11',
+      endDate: '2026-11-11',
+      registeredParameters: ['PM2.5'],
+      requestedParameters: ['all'],
+      rows: [{ cdate: '2026-11-11', pm2_5_value: 0, pm2_5_units: 'µg/m3', pm2_5_status: 1 }],
+    });
+    await expect(readStream(result.stream)).resolves.toBe(
+      '\uFEFFdate_time,factory_name,factory_registration_number,meas_code,PM2.5 (µg/m3)\r\n' +
+        '2026-11-11 00:00:00,Test,T,S1,0.00\r\n',
+    );
+  });
+
+  it.each([
+    ['HCl (ppm)', 'hcl_ppm', null],
+    ['PM2.5 (µg/m3)', 'pm2_5', 'µg/m3'],
+    ['CO2 (ppm)', 'co2ppm', null],
+    ['CO2 (%)', 'co2percent', null],
+    ['BOD (mg/l)', 'bod', 'mg/l'],
+    ['COD (mg/l)', 'cod', 'mg/l'],
+    ['CO (ppm)', 'co', 'ppm'],
+    ['NOx (ppm)', 'nox', 'ppm'],
+    ['SO2 (ppm)', 'so2', 'ppm'],
+    ['O2 (%)', 'o2', '%'],
+    ['Temp. (C°)', 'temp', '°C'],
+    ['Flow Rate (m3/hr)', 'flowrate', 'm3/hr'],
+    ['Flow Rate (m3/hr)', 'flow', 'm3hr'],
+    ['pH', 'ph', null],
+  ] as const)('exports %s from its physical %s family', async (label, prefix, unit) => {
+    const result = createMeasurementCsvExport({
+      stationId: 'S1',
+      factoryName: 'Test',
+      factoryRegistrationNumber: 'T',
+      frequency: 'hourly',
+      startDate: '2026-11-11',
+      endDate: '2026-11-11',
+      registeredParameters: [label],
+      requestedParameters: ['all'],
+      rows: [
+        {
+          cdate: '2026-11-11',
+          [`${prefix}_value`]: 12.34,
+          [`${prefix}_status`]: 1,
+          [`${prefix}_units`]: unit,
+        },
+      ],
+    });
+    await expect(readStream(result.stream)).resolves.toContain(
+      '2026-11-11 00:00:00,Test,T,S1,12.34\r\n',
+    );
+  });
+
+  it('keeps a dedicated status and null value together instead of using a generic value', async () => {
+    const result = createMeasurementCsvExport({
+      stationId: 'S1',
+      factoryName: 'Test',
+      factoryRegistrationNumber: 'T',
+      frequency: 'hourly',
+      startDate: '2026-11-11',
+      endDate: '2026-11-11',
+      registeredParameters: ['HCl (ppm)'],
+      requestedParameters: ['all'],
+      rows: [
+        {
+          cdate: '2026-11-11',
+          hcl_ppm_value: null,
+          hcl_ppm_status: 4,
+          hcl_value: 12.34,
+          hcl_status: 1,
+          hcl_units: 'ppm',
+        },
+      ],
+    });
+    await expect(readStream(result.stream)).resolves.toContain(
+      '2026-11-11 00:00:00,Test,T,S1,Maintenance\r\n',
+    );
+  });
+
+  it('leaves ambiguous unitless CO2 blank even when only one of its registered units is requested', async () => {
+    const result = createMeasurementCsvExport({
+      stationId: 'S1',
+      factoryName: 'Test',
+      factoryRegistrationNumber: 'T',
+      frequency: 'hourly',
+      startDate: '2026-11-11',
+      endDate: '2026-11-11',
+      registeredParameters: ['CO2 (ppm)', 'CO2 (%)'],
+      requestedParameters: ['CO2 (ppm)'],
+      rows: [{ cdate: '2026-11-11', co2_value: 420, co2_status: 1 }],
+    });
+    await expect(readStream(result.stream)).resolves.toBe(
+      '\uFEFFdate_time,factory_name,factory_registration_number,meas_code,CO2 (ppm)\r\n' +
+        '2026-11-11 00:00:00,Test,T,S1,\r\n',
+    );
+  });
+
   it('streams an authorized hourly export as the agreed UTF-8 CSV contract', async () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',

@@ -46,6 +46,7 @@ import {
   officerWritePermissionDescription,
 } from './officer-write-permissions.openapi';
 import { decorateWriteRequestValidationDocs } from './request-validation-docs';
+import { completeResponseContracts } from './response-contracts.openapi';
 import { extendKwpHandoffSchemas, extendKwpCurrentLocationDocs } from './kwp-handoff.openapi';
 import {
   buildHomeFactorySchemas,
@@ -6319,10 +6320,11 @@ const extraPaths: Record<string, OpenApiObject> = {
         stationIdParameter,
         queryString(
           'date',
-          'วันที่รูปแบบ YYYY-MM-DD; runtime ตรวจด้วย Date.parse และไม่บังคับ calendar round-trip',
+          'วันที่จริงตามปฏิทินคริสต์ศักราช YYYY-MM-DD (ปี 0001–9999); วันที่ไม่มีจริงตอบ 400 VALIDATION_ERROR',
           true,
           10,
           isoDatePattern,
+          'date',
         ),
       ],
     }),
@@ -6337,10 +6339,11 @@ const extraPaths: Record<string, OpenApiObject> = {
         buddhistYearParameter,
         queryString(
           'date',
-          'วันที่รูปแบบ YYYY-MM-DD; runtime ตรวจด้วย Date.parse และไม่บังคับ calendar round-trip',
+          'วันที่จริงตามปฏิทินคริสต์ศักราช YYYY-MM-DD (ปี 0001–9999); วันที่ไม่มีจริงตอบ 400 VALIDATION_ERROR',
           true,
           10,
           isoDatePattern,
+          'date',
         ),
       ],
     }),
@@ -6351,7 +6354,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Export measurement CSV',
       operationId: 'exportMeasurementCsv',
       description:
-        'startDate ต้องไม่เกิน endDate; hourly รวมได้ไม่เกิน 366 วัน และ daily ต้องน้อยกว่า 10 ปีปฏิทิน',
+        'startDate ต้องไม่เกิน endDate และเป็นวันจริงปี 0001–9999; hourly รวมได้ไม่เกิน 366 วัน และ daily ต้องน้อยกว่า 10 ปีปฏิทิน. CSV จับคู่ physical family เดียวกับรายนาที/สถิติ เช่น hcl_ppm_*, pm2_5_*, co2ppm_*; value/status/completeness ต้องมาจาก family เดียวกัน. Dedicated ที่มี status แต่ value=null ไม่ fallback ไปใช้ generic value; generic ไม่มีหน่วยใช้ได้เฉพาะรายชื่อที่ลงทะเบียนทั้งหมดมีหน่วยเดียวและไม่มี dedicated ต่างหน่วยแข่งขัน มิฉะนั้น cell ว่าง. หน่วย m3hr เทียบเท่า m3/hr และ C° เทียบเท่า °C โดยไม่แปลงค่าตัวเลข',
       parameters: [
         stationIdParameter,
         queryEnum('frequency', ['hourly', 'daily'], 'ความถี่ที่ส่งออก', true),
@@ -6391,7 +6394,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Export measurement CSV by annual station code',
       operationId: 'exportMeasurementCsvByAnnualPath',
       description:
-        'startDate ต้องไม่เกิน endDate; hourly รวมได้ไม่เกิน 366 วัน และ daily ต้องน้อยกว่า 10 ปีปฏิทิน',
+        'startDate ต้องไม่เกิน endDate และเป็นวันจริงปี 0001–9999; hourly รวมได้ไม่เกิน 366 วัน และ daily ต้องน้อยกว่า 10 ปีปฏิทิน. CSV จับคู่ physical family เดียวกับรายนาที/สถิติ เช่น hcl_ppm_*, pm2_5_*, co2ppm_*; value/status/completeness ต้องมาจาก family เดียวกัน. Dedicated ที่มี status แต่ value=null ไม่ fallback ไปใช้ generic value; generic ไม่มีหน่วยใช้ได้เฉพาะรายชื่อที่ลงทะเบียนทั้งหมดมีหน่วยเดียวและไม่มี dedicated ต่างหน่วยแข่งขัน มิฉะนั้น cell ว่าง. หน่วย m3hr เทียบเท่า m3/hr และ C° เทียบเท่า °C โดยไม่แปลงค่าตัวเลข',
       parameters: [
         annualStationIdParameter,
         buddhistYearParameter,
@@ -8235,6 +8238,8 @@ for (const [uploadPath, method] of [
   }
   operation['x-antivirus-enabled'] = false;
 }
+
+completeResponseContracts(paths, components.schemas as Record<string, OpenApiObject>);
 
 export const pomsOpenApiDocument: OpenApiObject = {
   openapi: '3.0.3',

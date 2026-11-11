@@ -93,6 +93,15 @@ beforeEach(() => {
   ]);
 });
 describe('minute measurements HTTP contract', () => {
+  it('rejects an impossible statistics date with a validation error', async () => {
+    const response = await request(app)
+      .get('/api/v1/connected-measurement-points/S0199/measurement-statistics')
+      .query({ date: '2026-02-30' })
+      .auth(token, { type: 'bearer' });
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
   it('keeps the stored value and operational status in a 60-minute grid', async () => {
     const response = await request(app)
       .get(path)

@@ -270,7 +270,7 @@ GET /api/v1/connected-measurement-points/S1125/requests
 | Field | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `stationId` | path | string | Yes | รหัสจุดตรวจวัด |
-| `date` | query | `YYYY-MM-DD` | Yes | วันที่ตามคริสต์ศักราชที่ต้องการอ่านสถิติ |
+| `date` | query | `YYYY-MM-DD` | Yes | วันที่จริงตามปฏิทินคริสต์ศักราช ปี `0001`–`9999`; วันที่ไม่มีจริง เช่น `2026-02-30` ตอบ `400 VALIDATION_ERROR` |
 
 #### Request Example
 
@@ -931,6 +931,9 @@ CSV ใช้ identity columns `date_time`, `factory_name`, `factory_registratio
 - เมื่อส่ง `parameters=all` ระบบเรียงคอลัมน์ตาม registered parameters; เมื่อส่ง key ซ้ำ ระบบเรียงตาม request และตัดค่าซ้ำหลัง normalize โดยเก็บค่าตัวแรก
 - Parameter matching trim และไม่สนตัวพิมพ์เล็ก-ใหญ่ แต่หน่วยในวงเล็บต้องตรงกับ registered parameter; parameter ที่ไม่ลงทะเบียนตอบ `400`
 - ชื่อ parameter ใน header ต้องมีหน่วยเมื่อ source ระบุได้ เช่น `BOD (mg/l)`, `CO2 (ppm)` หรือ `Flow Rate (m3/hr)`
+- CSV ใช้กฎจับคู่ physical family เดียวกับรายนาทีและสถิติ: รองรับ `hcl_ppm_*`, `pm2_5_*`, `co2ppm_*`, `co2percent_*` และ `flowrate_*` โดยอ่าน value/status/completeness จาก family เดียวกัน ไม่ผสมช่อง generic กับ dedicated; หน่วย `m3hr` เทียบเท่า `m3/hr` และ `C°` เทียบเท่า `°C` โดยไม่แปลงค่าตัวเลข
+- เลือก dedicated ที่ตรงหน่วยก่อน generic; ถ้า dedicated มีสถานะแต่ value เป็น `null` ให้ใช้สถานะนั้น ไม่หยิบ value จาก generic มาผสม. ถ้าทั้ง value/status ว่างจึงพิจารณา generic ที่ตรงหน่วย; รักษาค่าศูนย์
+- Generic ที่ไม่ระบุหน่วยใช้ได้เฉพาะชื่อที่ลงทะเบียนมีหน่วยเดียวและไม่มี dedicated ต่างหน่วยแข่งขันกัน โดยตรวจรายชื่อที่ลงทะเบียนทั้งหมดแม้ผู้ใช้ส่งออกเพียงบางพารามิเตอร์. เมื่อหน่วยกำกวมหรือไม่ตรงให้ cell ว่าง ไม่คัดลอกค่าซ้ำทั้ง ppm และ %. ดู [ผลกระทบต่อ client](../../CHANGELOG.md#measurement-calendar-and-csv-matching)
 - ส่งออกเฉพาะ source rows ที่มีอยู่ เรียง `cdate`, `ctime` จากเก่าไปใหม่ และรักษาทุก row ที่ timestamp ซ้ำ; daily row ที่ไม่มี `ctime` ใช้ `00:00:00`
 - `date_time` ใช้ `YYYY-MM-DD HH:mm:ss` ตามเวลา source ซึ่งเป็น `Asia/Bangkok`; measurement value ใช้ทศนิยมสองตำแหน่งและไม่มี thousands separator
 - `factory_registration_number` map จากเลขทะเบียนของ connected request ใน service layer; formatter ไม่ใช้ชื่อ field DB เป็น header โดยอัตโนมัติ

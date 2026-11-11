@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="measurement-calendar-and-csv-matching"></a>
+
+## 2026-11-11 — ตรวจวันที่จริงและจับคู่ค่าตรวจวัด CSV ตามหน่วย
+
+- **Affected contracts:** [ค่าตรวจวัดดิบ](./menus/connection-requests/parameter-values.md), [สถิติและ CSV](./shared/connected-measurement-points/README.md)
+- **Impact:** `GET /parameter-values` (`startDate`, `endDate`) และ `GET /connected-measurement-points/:stationId/measurement-statistics` (`date`) รวม annual path ปฏิเสธวันที่ไม่มีจริงหรือปี `0000` ด้วย `400 VALIDATION_ERROR`. CSV ไม่คัดลอก generic ที่ไม่มีหน่วยไปยังหลายหน่วยของชื่อเดียวกัน และรองรับ underscore/legacy family เดียวกับ API อื่น
+- **Migration:** client ต้องส่งวันจริงตามปฏิทินคริสต์ศักราช ปี `0001`–`9999`; แก้ต้นทางให้ระบุหน่วยหรือใช้ dedicated column เมื่อชื่อเดียวลงทะเบียนหลายหน่วย. CSV cell ที่เคยเดาหน่วยจะว่างเมื่อกำกวม; ไม่ต้อง migrate ฐานข้อมูลและไม่มีการแปลงหน่วยอัตโนมัติ
+- **Old contract:** วันที่บางค่าถูก `Date.parse` เลื่อนไปเดือนถัดไป; CSV อาจซ้ำค่าข้ามหน่วยหรือไม่พบคอลัมน์เช่น `pm2_5_value`
+- **New contract:** ยืนยันวันที่จริงก่อนอ่านข้อมูล และ CSV เลือก value/status/completeness จาก physical family ที่ตรงกัน
+- **Breaking change:** yes — validation เข้มขึ้นและ CSV ที่เคยมีค่าจากหน่วยกำกวมเปลี่ยนเป็นช่องว่าง
+
 <a id="kwp04-report-condition"></a>
 
 ## 2026-11-10 — บังคับรายงานตามเงื่อนไขต่อรายการตรวจวัด กวภ.04

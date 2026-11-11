@@ -1,6 +1,12 @@
 import { Readable } from 'node:stream';
 import { BadRequestError } from '../../shared/errors/AppError';
 import { resolvePomsClientParameterStatus } from './parameter-status';
+import {
+  resolveMeasurementParameterFamily,
+  resolveMeasurementParameterFamilies,
+  normalizedMeasurementUnit,
+  type MeasurementParameterFamily,
+} from './measurement-parameter-columns';
 
 export type MeasurementCsvExportFrequency = 'hourly' | 'daily';
 
@@ -37,6 +43,9 @@ export function createMeasurementCsvExport(
     'meas_code',
     ...parameters.map(({ label }) => label),
   ];
+  const registeredLabels = input.registeredParameters.map((label) =>
+    canonicalParameterLabel(label, input.rows),
+  );
 
   function* csvChunks(): Generator<string> {
     yield `\uFEFF${header.map((cell) => csvCell(cell, true)).join(',')}\r\n`;
@@ -48,11 +57,9 @@ export function createMeasurementCsvExport(
         input.stationId,
       ].map((cell) => csvCell(cell, true));
       const measurementCells = parameters
-        .map(({ prefixes, unit }) => {
-          const prefix = prefixes.find(
-            (candidate) => `${candidate}_value` in row && sourceUnitMatches(row, candidate, unit),
-          );
-          return prefix ? formatMeasurementCell(row, prefix) : '';
+        .map(({ label }) => {
+          const family = resolveMeasurementParameterFamily(row, label, registeredLabels);
+          return family ? formatMeasurementCell(row, family) : '';
         })
         .map((cell) => csvCell(cell, false));
       yield `${[...identityCells, ...measurementCells].join(',')}\r\n`;
@@ -94,8 +101,6 @@ function measurementDateTime(row: Record<string, unknown>): string {
 
 interface ResolvedParameter {
   label: string;
-  unit: string;
-  prefixes: string[];
 }
 
 function resolveRequestedParameters(
@@ -152,8 +157,6 @@ function buildRegisteredParameterDefinitions(
     if (!definitionsByLabel.has(canonicalKey)) {
       definitionsByLabel.set(canonicalKey, {
         label,
-        unit: parseParameterLabel(label).unit,
-        prefixes: parameterPrefixes(label),
       });
     }
   }
@@ -166,7 +169,7 @@ function canonicalParameterLabel(
   rows: Record<string, unknown>[],
 ): string {
   const parsed = parseParameterLabel(registeredParameter);
-  const sourceUnit = parsed.unit || findSourceUnit(rows, parameterPrefixes(registeredParameter));
+  const sourceUnit = parsed.unit || findSourceUnit(rows, registeredParameter);
   const isFlow = ['flow', 'flowrate'].includes(normalizeColumnToken(parsed.name));
   const name = isFlow ? 'Flow Rate' : parsed.name;
   const unit = isFlow && normalizeColumnToken(sourceUnit) === 'm3hr' ? 'm3/hr' : sourceUnit;
@@ -182,41 +185,23 @@ function parseParameterLabel(label: string): { name: string; unit: string } {
   };
 }
 
-function findSourceUnit(rows: Record<string, unknown>[], prefixes: string[]): string {
+function findSourceUnit(rows: Record<string, unknown>[], label: string): string {
+  const units = new Map<string, string>();
   for (const row of rows) {
-    for (const prefix of prefixes) {
-      const unit = row[`${prefix}_units`];
-      if (typeof unit === 'string' && unit.trim()) return unit.trim();
+    let families: MeasurementParameterFamily[];
+    try {
+      families = resolveMeasurementParameterFamilies(Object.keys(row), label);
+    } catch {
+      return '';
+    }
+    for (const family of families) {
+      const unit = family.unitsColumn ? row[family.unitsColumn] : null;
+      if (typeof unit === 'string' && unit.trim()) {
+        units.set(normalizedMeasurementUnit(unit), unit.trim());
+      }
     }
   }
-
-  return '';
-}
-
-function sourceUnitMatches(
-  row: Record<string, unknown>,
-  prefix: string,
-  expectedUnit: string,
-): boolean {
-  if (!expectedUnit) return true;
-
-  const sourceUnit = row[`${prefix}_units`];
-  if (typeof sourceUnit !== 'string' || !sourceUnit.trim()) return true;
-
-  return normalizeUnitColumnToken(sourceUnit) === normalizeUnitColumnToken(expectedUnit);
-}
-
-function parameterPrefixes(label: string): string[] {
-  const match = label.trim().match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-  const name = normalizeColumnToken(match?.[1] ?? label);
-  const unit = normalizeUnitColumnToken(match?.[2]);
-  const prefixes = new Set<string>();
-
-  if (name && unit) prefixes.add(`${name}_${unit}`);
-  if (name === 'flowrate') prefixes.add('flow');
-  if (name) prefixes.add(name);
-
-  return [...prefixes];
+  return units.size === 1 ? [...units.values()][0] : '';
 }
 
 function normalizeParameterLabel(value: string): string {
@@ -231,19 +216,19 @@ function normalizeColumnToken(value: string): string {
     .replace(/[^a-z0-9]+/g, '');
 }
 
-function normalizeUnitColumnToken(value: string | undefined): string {
-  if (value?.includes('%')) return 'percent';
-  return normalizeColumnToken(value ?? '');
-}
-
-function formatMeasurementCell(row: Record<string, unknown>, prefix: string): string {
-  const completeness = readCompleteness(row, prefix);
+function formatMeasurementCell(
+  row: Record<string, unknown>,
+  family: MeasurementParameterFamily,
+): string {
+  const completeness = readCompleteness(row, family.prefix);
   if (completeness !== null && completeness < 80) return '';
 
-  const operationalStatus = resolveOperationalStatus(row[`${prefix}_status`]);
+  const operationalStatus = resolveOperationalStatus(
+    family.statusColumn ? row[family.statusColumn] : null,
+  );
   if (!operationalStatus.usesMeasurementValue) return operationalStatus.label;
 
-  const value = toFiniteNumber(row[`${prefix}_value`]);
+  const value = toFiniteNumber(family.valueColumn ? row[family.valueColumn] : null);
   return value === null ? '' : value.toFixed(2);
 }
 

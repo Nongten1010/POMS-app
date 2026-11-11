@@ -97,8 +97,8 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 | --- | --- | --- | --- | --- |
 | `stationId` | query | string | Yes | รหัสจุดตรวจวัด ความยาวไม่เกิน 64 ตัวอักษร |
 | `interval` | query | enum string | No | `real`, `1m`, `5m`, `60m`, `1day` หรือ `test`; default `real` |
-| `startDate` | query | `YYYY-MM-DD` | Yes | วันเริ่มต้น |
-| `endDate` | query | `YYYY-MM-DD` | Yes | วันสิ้นสุด ต้องไม่น้อยกว่า `startDate` |
+| `startDate` | query | `YYYY-MM-DD` | Yes | วันเริ่มต้น ต้องมีจริงตามปฏิทินคริสต์ศักราช ปี `0001`–`9999` |
+| `endDate` | query | `YYYY-MM-DD` | Yes | วันสิ้นสุด ต้องมีจริงตามปฏิทินคริสต์ศักราช และไม่น้อยกว่า `startDate` |
 
 ### Success Response Fields
 
@@ -324,7 +324,7 @@ Endpoint นี้ไม่มี path, query หรือ request body fields
 
 | HTTP status | Code | Condition | Client action |
 | --- | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | query ไม่ผ่าน validation | แก้ `stationId`, interval หรือวันที่ |
+| `400` | `VALIDATION_ERROR` | query ไม่ผ่าน validation รวมวันที่ไม่มีจริง เช่น `2026-02-30` | แก้ `stationId`, interval หรือวันที่; ดู [การปรับ client](../../CHANGELOG.md#measurement-calendar-and-csv-matching) |
 | `401` | `UNAUTHORIZED` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
 | `403` | `FORBIDDEN` | ขาด permission, ประเภทบัญชีไม่รองรับ, station อยู่นอก data scope หรือสถานะคำขอไม่เปิดให้อ่าน | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ; สำหรับเจ้าหน้าที่ตรวจ `approve` และขอบเขตของสิทธิ์นั้น |
 | `404` | `NOT_FOUND` | ไม่พบ source table | ตรวจ station และ interval |

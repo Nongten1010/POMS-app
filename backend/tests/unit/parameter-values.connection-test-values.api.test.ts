@@ -15,6 +15,18 @@ let source: KnexSqliteFixture;
 let token: string;
 
 describe('connection-test measured values through the API', () => {
+  it.each(['2026-02-30', '2025-02-29', '2026-04-31', '0000-01-01'])(
+    'rejects nonexistent calendar date %s before reading source rows',
+    async (startDate) => {
+      const response = await request(createApp())
+        .get('/api/v1/parameter-values')
+        .query({ stationId: 'S2007', startDate, endDate: '2026-12-31' })
+        .auth(token, { type: 'bearer' });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    },
+  );
+
   beforeEach(async () => {
     env.FACTORY_PROFILE_MODE = 'legacy';
     env.PARAMETER_DB_SCHEMA = 'ingest';

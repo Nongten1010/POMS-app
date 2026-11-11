@@ -4334,9 +4334,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
           name: 'startDate',
           in: 'query',
           required: true,
-          description:
-            'วันเริ่มรูปแบบ YYYY-MM-DD; runtime ตรวจด้วย Date.parse และไม่บังคับ calendar round-trip',
-          schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+          description: 'วันเริ่มต้องเป็นวันที่จริงตามปฏิทินคริสต์ศักราช YYYY-MM-DD (ปี 0001–9999)',
+          schema: { type: 'string', format: 'date', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
           example: '2026-08-08',
         },
         {
@@ -4344,8 +4343,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
           in: 'query',
           required: true,
           description:
-            'วันสิ้นสุดรูปแบบ YYYY-MM-DD และต้องไม่น้อยกว่า startDate; runtime ตรวจด้วย Date.parse และไม่บังคับ calendar round-trip',
-          schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+            'วันสิ้นสุดต้องเป็นวันที่จริงตามปฏิทินคริสต์ศักราช YYYY-MM-DD (ปี 0001–9999) และต้องไม่น้อยกว่า startDate',
+          schema: { type: 'string', format: 'date', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
           example: '2026-08-08',
         },
       ],

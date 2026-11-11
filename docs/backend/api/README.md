@@ -16,6 +16,15 @@ Backend เป็นเจ้าของ contract เหล่านี้ ห�
 - Endpoint ที่ต้อง login ให้กด `Authorize` แล้วใส่ access token ใน `bearerAuth`
 - Integration ใช้ `X-API-Key` ผ่าน scheme ที่ระบุในแต่ละ endpoint
 
+### Response schema สำหรับเครื่องมือและ client
+
+ทุก JSON success operation มี schema เฉพาะ endpoint แทน `SuccessEnvelope` ที่ไม่แจกแจง `data` โดยส่วนที่เติมครบมี 22 operations: รายการคำขอและการพิจารณา/เปลี่ยนสถานะ/ยืนยัน 5 รายการ, raw parameters 3 รายการ, candidate/favorite 2 รายการ, monitoring forms 5 รายการ, alerts 3 รายการ, ทดสอบอีเมล 1 รายการ และผู้รับแจ้งเตือน 3 รายการ. เป็นการอธิบาย response เดิม ไม่เปลี่ยน payload, permission หรือ status
+
+- Raw measurement rows มีคอลัมน์ตาม schema ของ station จึงเปิด `additionalProperties` เฉพาะแถวข้อมูล พร้อมระบุ `meta.registeredParameters` และ `meta.returnedColumns`; ไม่ตีความสถานะหรือแปลงหน่วยของข้อมูลดิบ
+- Alert list ใช้ `pagination` ส่วน candidate และรายการทั่วไปใช้ `meta` ตาม endpoint เดิม; client ไม่ควรเปลี่ยนชื่อ field ให้เหมือนกันเอง
+- ข้อกำหนดรายฟิลด์อยู่ใน [คำขอเชื่อมต่อ](./menus/connection-requests/README.md), [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md), [หน้าหลัก](./menus/home/README.md), [แจ้งเตือน](./menus/notifications/README.md), [ผู้รับแจ้งเตือน](./shared/notification-recipients/README.md) และ [เครื่องมือภายใน](./shared/internal-tools/README.md)
+- แหล่ง runtime schema: [`response-contracts.openapi.ts`](../../../backend/src/modules/api-docs/response-contracts.openapi.ts); regression ผ่าน endpoint จริง: [`api-response-contracts.openapi.test.ts`](../../../backend/tests/unit/api-response-contracts.openapi.test.ts)
+
 `Try it out` เรียก backend environment ที่กำลังเปิดอยู่จริงและอาจสร้างหรือแก้ข้อมูลจริง ยกเว้น `POST /api/v1/device-connections/test-connection` ซึ่งปัจจุบันเป็นโหมด `MOCK` หน้าเอกสารเปิดเป็นค่าเริ่มต้นทุก environment รวม production และปิดได้ด้วย `API_DOCS_ENABLED=false`
 
 ## Navigation Rules

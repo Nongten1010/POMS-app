@@ -1810,13 +1810,13 @@ describe('POMS OpenAPI contract', () => {
     expect(asObject(alertStatusProperties.note, 'note').nullable).toBeUndefined();
   });
 
-  it('does not overstate calendar validation on regex or Date.parse-only query fields', () => {
+  it('publishes real calendar validation for raw measurements and statistics', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const cases: Array<[string, string[]]> = [
       ['/parameter-values', ['startDate', 'endDate']],
       ['/connected-measurement-points/{stationId}/measurement-statistics', ['date']],
-      ['/alert-events', ['dateFrom', 'dateTo']],
+      ['/connected-measurement-points/{stationId}/{buddhistYear}/measurement-statistics', ['date']],
     ];
 
     for (const [pathKey, parameterNames] of cases) {
@@ -1826,7 +1826,7 @@ describe('POMS OpenAPI contract', () => {
         const parameter = parameters.find((candidate) => candidate.name === parameterName);
         expect(
           asObject(asObject(parameter, parameterName).schema, `${parameterName}.schema`).format,
-        ).toBeUndefined();
+        ).toBe('date');
       }
     }
   });

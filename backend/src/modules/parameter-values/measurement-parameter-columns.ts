@@ -25,6 +25,7 @@ export function normalizedMeasurementName(value: string): string {
 
 export function normalizedMeasurementUnit(value: string): string {
   const unit = value.normalize('NFKC').toLowerCase().replace(/\s+/gu, '');
+  if (unit === 'm3hr') return 'm3/hr';
   return unit === 'c°' ? '°c' : unit;
 }
 
