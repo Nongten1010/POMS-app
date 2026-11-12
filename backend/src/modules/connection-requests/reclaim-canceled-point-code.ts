@@ -1,16 +1,58 @@
 import type { Knex } from 'knex';
 import { ConflictError } from '../../shared/errors/AppError';
+import { retireRequestDeviceConfigs } from '../device-connections/retire-request-device-configs';
 
 /** Call before assigning a code, while the destination request is locked. */
 export async function reclaimCanceledPointCode(
   trx: Knex.Transaction,
   pointCode: string,
   requestId: number,
+  actorUserId: number,
   errorPath = 'measurementPoints.0.pointCode',
 ): Promise<void> {
   // Delete and replacement INSERT share the caller's transaction. Keep the old
   // request and point as history; the unique registry index arbitrates new owners.
   try {
+    // Older cancellations kept live configs. Retire only the proven canceled
+    // owner's settings; independent configs must continue to block reuse below.
+    const [source] = await trx.raw<Array<{ source_request_id: number | string }>>(
+      `/* canceled-point-code-config-source */
+      SELECT reservation.source_request_id
+      FROM cems_wpms_point_code_registry AS reservation WITH (UPDLOCK, HOLDLOCK)
+      INNER JOIN cems_wpms_connection_requests AS old_request WITH (UPDLOCK, HOLDLOCK)
+        ON old_request.id = reservation.source_request_id
+      INNER JOIN cems_wpms_measurement_points AS source WITH (UPDLOCK, HOLDLOCK)
+        ON source.id = reservation.source_measurement_point_id
+        AND source.request_id = old_request.id
+      INNER JOIN cems_wpms_connection_requests AS new_request WITH (UPDLOCK, HOLDLOCK)
+        ON new_request.id = ?
+      WHERE reservation.normalized_point_code = ?
+        AND UPPER(LTRIM(RTRIM(source.point_code))) = reservation.normalized_point_code
+        AND old_request.id <> new_request.id
+        AND old_request.status = 'CANCELED'
+        AND old_request.deleted_at IS NULL
+        AND new_request.deleted_at IS NULL
+        AND old_request.system_type = new_request.system_type
+        AND (
+          (old_request.eligible_factory_id IS NOT NULL
+            AND new_request.eligible_factory_id = old_request.eligible_factory_id)
+          OR ((old_request.eligible_factory_id IS NULL OR new_request.eligible_factory_id IS NULL)
+            AND old_request.factory_id = new_request.factory_id
+            AND LTRIM(RTRIM(old_request.factory_id)) <> '')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM cems_wpms_connected_measurement_points AS connected WITH (UPDLOCK, HOLDLOCK)
+          WHERE connected.source_request_id = old_request.id
+            OR connected.source_measurement_point_id = source.id
+            OR UPPER(LTRIM(RTRIM(connected.point_code))) = reservation.normalized_point_code
+            OR (connected.deleted_at IS NULL
+              AND UPPER(LTRIM(RTRIM(connected.point_name))) = reservation.normalized_point_code)
+        )`,
+      [requestId, pointCode.trim().toUpperCase()],
+    );
+    if (source) {
+      await retireRequestDeviceConfigs(trx, Number(source.source_request_id), actorUserId);
+    }
     await trx.raw(
       `/* reclaim-canceled-point-code */
     DELETE FROM cems_wpms_point_code_registry WITH (UPDLOCK, HOLDLOCK)

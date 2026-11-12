@@ -51,7 +51,14 @@ async function executeReclaimSql(
     ],
     [POINTS]: ['id', 'request_id', 'point_code', 'point_name', 'deleted_at'],
     [REGISTRY]: ['id', 'normalized_point_code', 'source_request_id', 'source_measurement_point_id'],
-    [CONNECTED]: ['id', 'source_measurement_point_id', 'point_code', 'point_name', 'deleted_at'],
+    [CONNECTED]: [
+      'id',
+      'source_request_id',
+      'source_measurement_point_id',
+      'point_code',
+      'point_name',
+      'deleted_at',
+    ],
     device_connection_configs: ['id', 'request_id', 'station_id', 'deleted_at'],
   };
   try {
@@ -65,14 +72,21 @@ async function executeReclaimSql(
       }
     }
     // Run the application's actual predicate; only SQL Server lock hints differ.
-    connection.run(
+    const query = connection.prepare(
       statement.replace(/\s+WITH\s*\(UPDLOCK,\s*HOLDLOCK\)/g, ''),
       bindings as Array<string | number>,
     );
+    const result: Row[] = [];
+    try {
+      while (query.step()) result.push(query.getAsObject());
+    } finally {
+      query.free();
+    }
     const remaining = new Set(
       connection.exec(`SELECT id FROM ${REGISTRY}`)[0]?.values.map(([id]) => Number(id)) ?? [],
     );
     tables[REGISTRY] = tables[REGISTRY].filter((row) => remaining.has(Number(row.id)));
+    return result;
   } finally {
     connection.close();
   }
@@ -395,7 +409,10 @@ function fixtureDatabase(connectedRows: Row[], canonical = false) {
     {
       fn: { now: () => '2026-09-11T00:00:00.000Z' },
       raw(sql: string, bindings: unknown[]) {
-        if (sql.includes('/* reclaim-canceled-point-code */')) {
+        if (
+          sql.includes('/* reclaim-canceled-point-code */') ||
+          sql.includes('/* canceled-point-code-config-source */')
+        ) {
           return executeReclaimSql(tables, sql, bindings);
         }
         const [requestId, actorUserId] = bindings;

@@ -528,7 +528,7 @@ function pointCodeHarness(
       return builder;
     }),
     {
-      raw: jest.fn(async () => undefined),
+      raw: jest.fn(async () => []),
       fn: { now: jest.fn(() => '2026-07-24T00:00:00.000Z') },
     },
   );
@@ -793,7 +793,7 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
         throw new Error(`Unexpected query for ${tableName}`);
       }),
       {
-        raw: jest.fn(async () => undefined),
+        raw: jest.fn(async () => []),
         fn: { now: jest.fn(() => '2026-07-24T00:00:00.000Z') },
       },
     );

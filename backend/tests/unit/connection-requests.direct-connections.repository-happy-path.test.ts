@@ -608,6 +608,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
 });
 
 function fixtureRaw(sql: string, bindings: unknown[]) {
+  if (sql.includes('/* canceled-point-code-config-source */')) return [];
   return sql === '?? WITH (UPDLOCK, HOLDLOCK)' ? bindings[0] : sql;
 }
 

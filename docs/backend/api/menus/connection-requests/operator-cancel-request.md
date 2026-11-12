@@ -104,6 +104,7 @@
 - การบันทึก config ล็อกคำขอและตรวจ `WAITING_CONNECTION` ซ้ำใน transaction; คำสั่งที่มาถึงหลังยกเลิกตอบ `409 CONFLICT` แทนการสร้าง config กลับมา ดู [การบันทึก config](./device-configs.md#validation-and-business-rules).
 - แม้เก็บ device configs เป็นประวัติ [Integration device config](../../integrations/device-configs/README.md#สถานะคำขอและการเลือก-config) จะไม่ใช้ config ของคำขอ `CANCELED` รวมสำเนา current; ตรวจสถานะต้นทางทุกครั้งทั้งการยกเลิกโดยผู้ใช้และอัตโนมัติ
 - รหัสจากคำขอ `CANCELED` ที่ยังไม่เคยเชื่อมต่อ เช่น `P0267` สามารถนำไปใช้กับคำขอใหม่ของโรงงานเดิมและ `systemType` เดิมได้ รวมคำขอที่ยกเลิกไว้ก่อน deploy การยกเลิกยังเก็บการจองเดิมไว้; backend ตรวจและเปลี่ยนเจ้าของการจองอย่างปลอดภัยใน transaction ตอน [กำหนดรหัสให้คำขอใหม่](./request-payloads-and-validation.md#business-rules) หรือสร้าง direct connection โดยคงคำขอและจุดเก่าเป็นประวัติ รหัสที่เคยเชื่อมต่อแม้เลิกใช้งานแล้ว หรือยังมีจุดอื่น/live device config ใช้งานอยู่ ไม่เข้าเงื่อนไขนำกลับมาใช้
+- ถ้าคำขอที่ยกเลิกในระบบรุ่นเก่ายังมี config ค้าง เช่น `P0212` backend จะตรวจเจ้าของการจอง คำขอ โรงงาน และระบบก่อน แล้ว soft delete config ของคำขอเก่าและ current config ที่ `source_request_id` ตรงกัน พร้อม channels ใน transaction เดียวกับการนำรหัสกลับมาใช้ โดยบันทึก `updated_by` เป็นผู้อนุมัติคำขอใหม่. ต้องไม่มีประวัติจุดที่เชื่อมต่อจากคำขอเก่า รวมถึงรหัส/alias ที่ยังถูกป้องกัน. Config อิสระหรือของคำขออื่นยังขวางการใช้รหัสและตอบ `409 CONFLICT` ตามเดิม; หากการอนุมัติหรือการจองใหม่ล้มเหลว การปิด config และ channels จะ rollback ด้วย ไม่ต้องเรียกยกเลิกคำขอเก่าซ้ำ.
 - เวอร์ชันนี้ไม่ส่ง email, push notification หรือ notification อื่น.
 
 ### Errors
@@ -126,6 +127,7 @@
 
 - การนำรหัสจากคำขอยกเลิกกลับมาใช้: [`reclaim-canceled-point-code.ts`](../../../../../backend/src/modules/connection-requests/reclaim-canceled-point-code.ts), [`0138_allow_canceled_point_code_reuse.ts`](../../../../../backend/src/db/migrations/0138_allow_canceled_point_code_reuse.ts), [regression tests](../../../../../backend/tests/unit/connection-requests.current-factory-profile.repository.test.ts)
 - การปิด config พร้อมการยกเลิก: [`retire-request-device-configs.ts`](../../../../../backend/src/modules/device-connections/retire-request-device-configs.ts), [transaction และ delayed-write tests](../../../../../backend/tests/unit/canceled-request-device-configs.repository.test.ts)
+- การป้องกันรหัสค้างหลังยกเลิก: [API regression tests](../../../../../backend/tests/unit/canceled-point-code-reuse.api.test.ts) ครอบคลุม `P0212`, การยกเลิกโดยผู้ประกอบการ/เจ้าหน้าที่/หมดเวลา, การคงประวัติ, สิทธิ์อนุมัติ, live config ของแหล่งอื่น และ transaction rollback.
 - Workflow: [`workflows/operator-cancel-connection-request.md`](../../../../../workflows/operator-cancel-connection-request.md)
 - Route: [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts)
 - Controller: [`connection-requests.controller.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.controller.ts)

@@ -1223,7 +1223,7 @@ export const connectionRequestsRepository = {
 
         const requestId = Number(id);
         await upsertFactorySnapshot(trx, requestId, input, actorUserId);
-        await reclaimCanceledPointCode(trx, pointCode, requestId);
+        await reclaimCanceledPointCode(trx, pointCode, requestId, actorUserId);
         const pointId = await insertDirectMeasurementPoint(
           trx,
           requestId,
@@ -4218,7 +4218,13 @@ async function reservePointCodeRegistryEntry(
   const numericMatch = normalizedPointCode.match(/^([SP])(\d{4})$/);
 
   if (input.assignmentMode === POINT_CODE_ASSIGNMENT_MODE.MANUAL_LEGACY) {
-    await reclaimCanceledPointCode(trx, normalizedPointCode, input.requestId, input.errorPath);
+    await reclaimCanceledPointCode(
+      trx,
+      normalizedPointCode,
+      input.requestId,
+      input.actorUserId,
+      input.errorPath,
+    );
   }
 
   try {

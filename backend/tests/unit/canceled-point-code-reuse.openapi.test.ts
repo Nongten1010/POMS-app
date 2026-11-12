@@ -47,4 +47,15 @@ describe('canceled point-code reuse published contract', () => {
     expect(obj(save.responses)['409']).toBeDefined();
     expect(save.description).toEqual(expect.stringContaining('currentStatus'));
   });
+
+  it.each(['review', 'status', 'cancel'])(
+    'documents transactional cleanup of configs stranded by older cancellations on %s',
+    (action) => {
+      const paths = obj(pomsOpenApiDocument.paths);
+      const operation = obj(obj(paths[`/cems-wpms-requests/{id}/${action}`]).post);
+      for (const text of ['P0212', 'source_request_id', 'updated_by', 'rollback', 'config อิสระ']) {
+        expect(operation.description).toEqual(expect.stringContaining(text));
+      }
+    },
+  );
 });
