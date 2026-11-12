@@ -28,6 +28,8 @@
 
 ## Connection requests
 
+- [ผลส่ง backend ป้องกันรหัสค้างหลังยกเลิก เช่น P0212](./connection-requests/canceled-point-code-config-cleanup-production.md)
+
 - [ผลตรวจคีย์แถวโรงงานผู้ประกอบการบน production](./connection-requests/operator-factory-row-id-production.md)
 - [ปลด lock รายการคำขอและป้องกัน transaction ค้าง](./connection-requests/transaction-lock-recovery.md)
 - [ขยายระยะเวลาทั้งปล่องใช้ flow อนุมัติเดียวกับยกเว้นทั้งหมด](./connection-requests/whole-stack-extension-approval.tdd.md)
