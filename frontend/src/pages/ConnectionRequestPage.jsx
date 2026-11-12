@@ -37,6 +37,7 @@ import {
   TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
@@ -49,7 +50,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import LinkIcon from '@mui/icons-material/Link'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
-import { DataGrid } from '@mui/x-data-grid'
+import { DataGrid, ColumnsPanelTrigger, FilterPanelTrigger, ToolbarButton, useGridRootProps } from '@mui/x-data-grid'
 import cemsInstallationRequiredOptionItems from '../option/cemsInstallationRequiredOptions.json'
 import cemsParameterOptionItems from '../option/cemsParameterOptions.json'
 import fuelOptionItems from '../option/fuelOptions.json'
@@ -8259,6 +8260,25 @@ function getRequestColumns(
   ]
 }
 
+function RequestTableToolbarControls({ loading, disabled, onRefresh }) {
+  const { slots, localeText } = useGridRootProps()
+  return <>
+    <Tooltip title="รีเฟรชรายการคำขอ">
+      <span><ToolbarButton aria-label="รีเฟรชรายการคำขอ" disabled={disabled} onClick={onRefresh}>
+        {loading ? <CircularProgress size={20} /> : <RefreshIcon fontSize="small" />}
+      </ToolbarButton></span>
+    </Tooltip>
+    <Tooltip title={localeText.toolbarColumns}>
+      <ColumnsPanelTrigger render={<ToolbarButton />}><slots.columnSelectorIcon fontSize="small" /></ColumnsPanelTrigger>
+    </Tooltip>
+    <Tooltip title={localeText.toolbarFilters}>
+      <FilterPanelTrigger render={(props, state) => <ToolbarButton {...props} color={state.filterCount > 0 ? 'primary' : 'default'}>
+        <Badge badgeContent={state.filterCount} color="primary" variant="dot"><slots.openFilterButtonIcon fontSize="small" /></Badge>
+      </ToolbarButton>} />
+    </Tooltip>
+  </>
+}
+
 function ConnectionRequestPage({
   userType = '',
   roleCode = '',
@@ -8311,6 +8331,7 @@ function ConnectionRequestPage({
   const [operatorFactoriesError, setOperatorFactoriesError] = useState('')
   const [requestTableRows, setRequestTableRows] = useState([])
   const [requestTableLoading, setRequestTableLoading] = useState(false)
+  const requestRefreshRef = useRef(null)
   const [requestTableError, setRequestTableError] = useState('')
   const [requestFormSuccessMessage, setRequestFormSuccessMessage] = useState('')
   const isOperator = userType === 'operator'
@@ -8457,13 +8478,31 @@ function ConnectionRequestPage({
     setRequestTableLoading(true)
     try {
       const rows = await fetchRequestTableRows(options)
+      if (options?.signal?.aborted) return rows
       setRequestTableRows(rows)
       setRequestTableError('')
       return rows
     } finally {
-      setRequestTableLoading(false)
+      if (!options?.signal?.aborted) setRequestTableLoading(false)
     }
   }, [fetchRequestTableRows])
+  useEffect(() => () => {
+    requestRefreshRef.current?.abort()
+    requestRefreshRef.current = null
+  }, [accessToken, effectiveSubMenu])
+  const refreshRequestTable = async () => {
+    if (!accessToken || requestTableLoading || requestRefreshRef.current) return
+    const controller = new AbortController()
+    requestRefreshRef.current = controller
+    setRequestTableError('')
+    try {
+      await loadRequestTableRows({ signal: controller.signal })
+    } catch (error) {
+      if (!controller.signal.aborted) setRequestTableError(error instanceof Error ? error.message : 'โหลดรายการคำขอไม่สำเร็จ')
+    } finally {
+      if (requestRefreshRef.current === controller) requestRefreshRef.current = null
+    }
+  }
   const clearRequestDocumentPdf = useCallback(() => {
     setRequestDocumentPdfUrl('')
     setRequestDocumentPdfLoading(false)
@@ -9274,6 +9313,8 @@ function ConnectionRequestPage({
             border: 1,
             borderColor: 'divider',
             overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
           {effectiveSubMenu === 'factories' && effectiveOperatorFactoriesError ? (
@@ -9295,6 +9336,10 @@ function ConnectionRequestPage({
             showCellVerticalBorder
             showColumnVerticalBorder
             label={table.title}
+            slotProps={{ toolbar: effectiveSubMenu === 'requests' ? {
+              mainControls: <RequestTableToolbarControls loading={requestTableLoading} disabled={!accessToken || requestTableLoading} onRefresh={refreshRequestTable} />,
+            } : {} }}
+            aria-label={table.title}
             pageSizeOptions={pageSizeOptions}
             initialState={{
               pagination: {
