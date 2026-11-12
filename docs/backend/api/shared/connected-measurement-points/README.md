@@ -255,7 +255,7 @@ GET /api/v1/connected-measurement-points/S1125/requests
 - จำนวนวันเกินมาตรฐานนับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึงวันสิ้นสุดที่เลือก ระดับ `warning` ไม่นับ และข้อมูลส่งช้าที่เกินมาตรฐานยังนำมาประเมินมลพิษได้
 - เมื่อไม่มี expected buckets เช่นเวลา `00:xx`, ไม่มีพารามิเตอร์ที่แสดง หรือทุกชั่วโมงที่จบแล้วของทุกพารามิเตอร์เป็น SHUTDOWN เปอร์เซ็นต์รายวันหลัก/ส่งช้าเป็น `null`, `dataCompletenessStatus` และ `display.backgroundStatus` เป็น `null`; วันที่จบแล้วซึ่งเป็น SHUTDOWN ครบทุกชั่วโมงไม่เป็นวัน low-data และหยุดช่วงต่อเนื่อง หากขาด source row แม้เพียง 1 ชั่วโมงจะยังมีตัวหารและอาจได้ `0%`; วันนี้ยังคงนับ `lowDataDays` จากช่วงต่อเนื่องถึงเมื่อวาน ไม่ใช้เปอร์เซ็นต์วันนี้ตัดสินจำนวนวัน
 
-หลักฐานของกติกาปัจจุบัน: [แผนและหลักฐานตรวจรับ handoff หน้าหลัก](../../../evidence/home/home-handoff-2026-09-23.md) หลักฐาน TDD รุ่นก่อนใน sections ด้านล่างอธิบายที่มาของ behavior เดิม แต่ไม่แทนที่กติกาหน้าหลักส่วนนี้
+หลักฐานของกติกาปัจจุบัน: [ผลเผยแพร่สูตรที่ตัด SHUTDOWN](../../../evidence/home/shutdown-reporting-completeness-production.md) และ [แผนและหลักฐานตรวจรับ handoff หน้าหลัก](../../../evidence/home/home-handoff-2026-09-23.md) หลักฐาน TDD รุ่นก่อนใน sections ด้านล่างอธิบายที่มาของ behavior เดิม แต่ไม่แทนที่กติกาหน้าหลักส่วนนี้
 
 ### `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics`
 

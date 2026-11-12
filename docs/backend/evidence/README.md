@@ -84,6 +84,7 @@
 
 ## Home
 
+- [ผลเผยแพร่สูตรการส่งข้อมูลที่ตัด SHUTDOWN บน production](./home/shutdown-reporting-completeness-production.md)
 - [ข้อมูลล่าสุดที่มีและตรวจต้นทาง P0389/S1105](./home/latest-available-hour-and-source-diagnostics.md)
 - [แผนและหลักฐาน handoff หน้าหลัก 23 กันยายน 2026](./home/home-handoff-2026-09-23.md)
 - [โรงงานของผู้ประกอบการพร้อมสถานะ POMS](./home/operator-owned-factory-overview.tdd.md)
