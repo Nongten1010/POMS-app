@@ -12,6 +12,7 @@ import { parameterValuesRepository } from './parameter-values.repository';
 import { measurementStatusValue, resolvePomsClientParameterStatus } from './parameter-status';
 import {
   measurementParameterUnitMatches,
+  normalizedMeasurementUnit,
   parseMeasurementParameter,
   resolveMeasurementParameterFamilies,
   resolveMeasurementParameterFamily,
@@ -1688,7 +1689,7 @@ function canMatchParameterEvaluationByPrefix(
 }
 
 function normalizeUnit(unit: string): string {
-  return normalizeParameterName(unit);
+  return normalizeParameterName(normalizedMeasurementUnit(unit));
 }
 
 function toNumber(value: unknown): number | null {

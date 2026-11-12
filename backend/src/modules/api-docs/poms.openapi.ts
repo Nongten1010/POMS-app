@@ -6316,6 +6316,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Connected Measurement Points',
       summary: 'Measurement statistics by station',
       operationId: 'getMeasurementStatistics',
+      description:
+        'หน่วยเซลเซียส DegC, C° และ °C เทียบเท่ากันโดยไม่แปลงค่าตัวเลขและคง label ที่ลงทะเบียน; temp_units เป็น null/ว่างอ่าน generic temp_value/temp_status ได้เฉพาะเมื่อลงทะเบียนหน่วยเดียวชัดเจนและไม่มี dedicated ต่างหน่วยแข่งขัน ไม่เดาหน่วยเมื่อกำกวม. กติกาสถานะ ความครบถ้วน และเวลารับข้อมูลคงเดิม',
       parameters: [
         stationIdParameter,
         queryString(
@@ -6334,6 +6336,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'Connected Measurement Points',
       summary: 'Measurement statistics by annual station code',
       operationId: 'getMeasurementStatisticsByAnnualPath',
+      description:
+        'หน่วยเซลเซียส DegC, C° และ °C เทียบเท่ากันโดยไม่แปลงค่าตัวเลขและคง label ที่ลงทะเบียน; temp_units เป็น null/ว่างอ่าน generic temp_value/temp_status ได้เฉพาะเมื่อลงทะเบียนหน่วยเดียวชัดเจนและไม่มี dedicated ต่างหน่วยแข่งขัน ไม่เดาหน่วยเมื่อกำกวม. กติกาสถานะ ความครบถ้วน และเวลารับข้อมูลคงเดิม',
       parameters: [
         annualStationIdParameter,
         buddhistYearParameter,
@@ -6354,7 +6358,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Export measurement CSV',
       operationId: 'exportMeasurementCsv',
       description:
-        'startDate ต้องไม่เกิน endDate และเป็นวันจริงปี 0001–9999; hourly รวมได้ไม่เกิน 366 วัน และ daily ต้องน้อยกว่า 10 ปีปฏิทิน. CSV จับคู่ physical family เดียวกับรายนาที/สถิติ เช่น hcl_ppm_*, pm2_5_*, co2ppm_*; value/status/completeness ต้องมาจาก family เดียวกัน. Dedicated ที่มี status แต่ value=null ไม่ fallback ไปใช้ generic value; generic ไม่มีหน่วยใช้ได้เฉพาะรายชื่อที่ลงทะเบียนทั้งหมดมีหน่วยเดียวและไม่มี dedicated ต่างหน่วยแข่งขัน มิฉะนั้น cell ว่าง. หน่วย m3hr เทียบเท่า m3/hr และ C° เทียบเท่า °C โดยไม่แปลงค่าตัวเลข',
+        'startDate ต้องไม่เกิน endDate และเป็นวันจริงปี 0001–9999; hourly รวมได้ไม่เกิน 366 วัน และ daily ต้องน้อยกว่า 10 ปีปฏิทิน. CSV จับคู่ physical family เดียวกับรายนาที/สถิติ เช่น hcl_ppm_*, pm2_5_*, co2ppm_*; value/status/completeness ต้องมาจาก family เดียวกัน. Dedicated ที่มี status แต่ value=null ไม่ fallback ไปใช้ generic value; generic ไม่มีหน่วยใช้ได้เฉพาะรายชื่อที่ลงทะเบียนทั้งหมดมีหน่วยเดียวและไม่มี dedicated ต่างหน่วยแข่งขัน มิฉะนั้น cell ว่าง. หน่วย m3hr เทียบเท่า m3/hr และ DegC, C° และ °C เทียบเท่ากันโดยไม่แปลงค่าตัวเลข',
       parameters: [
         stationIdParameter,
         queryEnum('frequency', ['hourly', 'daily'], 'ความถี่ที่ส่งออก', true),
@@ -6394,7 +6398,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Export measurement CSV by annual station code',
       operationId: 'exportMeasurementCsvByAnnualPath',
       description:
-        'startDate ต้องไม่เกิน endDate และเป็นวันจริงปี 0001–9999; hourly รวมได้ไม่เกิน 366 วัน และ daily ต้องน้อยกว่า 10 ปีปฏิทิน. CSV จับคู่ physical family เดียวกับรายนาที/สถิติ เช่น hcl_ppm_*, pm2_5_*, co2ppm_*; value/status/completeness ต้องมาจาก family เดียวกัน. Dedicated ที่มี status แต่ value=null ไม่ fallback ไปใช้ generic value; generic ไม่มีหน่วยใช้ได้เฉพาะรายชื่อที่ลงทะเบียนทั้งหมดมีหน่วยเดียวและไม่มี dedicated ต่างหน่วยแข่งขัน มิฉะนั้น cell ว่าง. หน่วย m3hr เทียบเท่า m3/hr และ C° เทียบเท่า °C โดยไม่แปลงค่าตัวเลข',
+        'startDate ต้องไม่เกิน endDate และเป็นวันจริงปี 0001–9999; hourly รวมได้ไม่เกิน 366 วัน และ daily ต้องน้อยกว่า 10 ปีปฏิทิน. CSV จับคู่ physical family เดียวกับรายนาที/สถิติ เช่น hcl_ppm_*, pm2_5_*, co2ppm_*; value/status/completeness ต้องมาจาก family เดียวกัน. Dedicated ที่มี status แต่ value=null ไม่ fallback ไปใช้ generic value; generic ไม่มีหน่วยใช้ได้เฉพาะรายชื่อที่ลงทะเบียนทั้งหมดมีหน่วยเดียวและไม่มี dedicated ต่างหน่วยแข่งขัน มิฉะนั้น cell ว่าง. หน่วย m3hr เทียบเท่า m3/hr และ DegC, C° และ °C เทียบเท่ากันโดยไม่แปลงค่าตัวเลข',
       parameters: [
         annualStationIdParameter,
         buddhistYearParameter,

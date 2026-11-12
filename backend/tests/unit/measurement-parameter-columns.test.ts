@@ -2,6 +2,27 @@ import { describe, expect, it } from '@jest/globals';
 import { resolveMeasurementParameterFamily } from '../../src/modules/parameter-values/measurement-parameter-columns';
 
 describe('measurement source family selection', () => {
+  it.each(['DegC', 'degc', ' DegC ', 'C°', '°C', null])(
+    'reads a single registered Celsius channel with source unit %s',
+    (unit) => {
+      const row = { temp_value: '150.77', temp_status: '1', temp_units: unit };
+      expect(resolveMeasurementParameterFamily(row, 'Temp. (C°)', ['Temp. (C°)'])).toMatchObject({
+        valueColumn: 'temp_value',
+        statusColumn: 'temp_status',
+      });
+    },
+  );
+
+  it('does not guess a missing temperature unit when Celsius and Fahrenheit are registered', () => {
+    expect(
+      resolveMeasurementParameterFamily(
+        { temp_value: '150.77', temp_status: '1', temp_units: null },
+        'Temp. (C°)',
+        ['Temp. (C°)', 'Temp. (°F)'],
+      ),
+    ).toBeNull();
+  });
+
   it('prefers the dedicated unit family without borrowing its missing status', () => {
     const row = {
       hcl_value: 10,

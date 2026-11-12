@@ -785,6 +785,35 @@ describe('parameterValuesService', () => {
     ]);
   });
 
+  it.each(['DegC', 'C°', '°C', null])(
+    'keeps hourly Celsius values with source unit %s',
+    async (unit) => {
+      mockedRepository.listRegisteredParameters.mockResolvedValue(['Temp. (C°)']);
+      mockedRepository.tableExists.mockResolvedValue(true);
+      mockHomeRows({
+        tableName: 'S0844_data_60m',
+        rows: [
+          {
+            cdate: '2026-11-11',
+            ctime: '08:00:00',
+            temp_value: '151.04167',
+            temp_units: unit,
+            temp_status: '1',
+          },
+        ],
+      });
+      const result = await parameterValuesService.measurementStatistics(
+        { stationId: 'S0844', date: '2026-11-11' },
+        operatorAccess,
+      );
+      const hour = result.data.measurementPoints[0]?.rows.find((row) => row.chartTime === '08:00');
+      expect(hour?.values['Temp. (C°)']).toMatchObject({
+        value: 151.04167,
+        displayValue: '151.04',
+      });
+    },
+  );
+
   it('builds daily measurement statistics for chart and table display', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
