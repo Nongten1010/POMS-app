@@ -17,6 +17,10 @@ describe('connection-test OpenAPI contract', () => {
       document.components.schemas.ParameterConnectionTestResponse.properties.data.items.properties
         .values.description,
     ).toContain('C° และ °C เป็นหน่วยเดียวกัน');
+    expect(
+      document.components.schemas.ParameterConnectionTestResponse.properties.data.items.properties
+        .values.description,
+    ).toContain('DegC');
   });
 
   it('documents measured values separately from operational statuses in both protocol examples', () => {

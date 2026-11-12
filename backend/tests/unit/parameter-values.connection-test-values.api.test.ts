@@ -202,6 +202,9 @@ describe('connection-test measured values through the API', () => {
         ['°C', 'C°'],
         ['C°', 'C°'],
         ['°C', '°C'],
+        ['C°', 'DegC'],
+        ['°C', 'DegC'],
+        ['DegC', 'C°'],
       ].map(([registeredUnit, sourceUnit]) => [protocol, interval, registeredUnit, sourceUnit]),
     ),
   )(

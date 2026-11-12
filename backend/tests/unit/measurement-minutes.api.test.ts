@@ -599,6 +599,34 @@ function registerMinuteParameters(parameters: string[], visible = parameters): v
   });
 }
 
+it.each(['DegC', 'C°', '°C', null])(
+  'returns stored temperature and status for source unit %s',
+  async (unit) => {
+    registerMinuteParameters(['Temp. (C°)']);
+    jest.mocked(measurements.listMinuteRows).mockResolvedValue([
+      {
+        cdate: '2026-11-12',
+        ctime: '08:00:00',
+        temp_value: '150.77',
+        temp_units: unit,
+        temp_status: '1',
+      },
+    ]);
+    const response = await request(app)
+      .get(path)
+      .query({ date: '2026-11-12', hour: '08' })
+      .auth(token, { type: 'bearer' });
+    expect(response.status).toBe(200);
+    expect(response.body.data.rows[0].values['Temp. (C°)']).toEqual({
+      value: '150.77',
+      status: 'Normal',
+      sourceStatus: '1',
+      measuredAt: '2026-11-12T08:00:00+07:00',
+    });
+    expect(response.body.meta.minutesWithData).toBe(1);
+  },
+);
+
 it('returns a bare registered parameter with the unambiguous source unit and stored value', async () => {
   registerMinuteParameters(['CO']);
   jest.mocked(measurements.listMinuteRows).mockResolvedValue([
