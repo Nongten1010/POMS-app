@@ -1911,7 +1911,7 @@ describe('parameterValuesService', () => {
 
     expect(calendar.data.metadata.valueDefinitions).toMatchObject({
       summaryPeriod:
-        'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี; lowDataDays นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok เมื่อ endDate เป็นวันนี้เริ่มย้อนจากเมื่อวาน โดยไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง',
+        'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี; lowDataDays นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok เมื่อ endDate เป็นวันนี้เริ่มย้อนจากเมื่อวาน โดยไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง; วันที่ไม่เหลือชั่วโมงที่ต้องส่งหลังหัก Shut Down ไม่เป็น lowData และหยุดช่วงต่อเนื่อง',
       dataCompletenessStatus: {
         lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
         highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',

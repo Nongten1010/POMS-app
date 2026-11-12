@@ -31,7 +31,7 @@ function hourRow(hour: number, late = false): Record<string, unknown> {
     utime: sentAt.slice(11, 19),
     bod_value: '0',
     bod_units: 'mg/l',
-    bod_status: '6',
+    bod_status: 'Normal',
   };
 }
 
@@ -75,7 +75,7 @@ describe('on-time data completeness', () => {
     jest.useRealTimers();
   });
 
-  it('counts only Normal and Shut Down data, excluding numeric placeholders for other statuses', async () => {
+  it('counts only Normal data, excluding numeric placeholders for other statuses', async () => {
     jest.setSystemTime(new Date('2026-10-06T16:15:00Z'));
     repository.listRegisteredParameters.mockResolvedValue([
       'BOD (mg/l)',
@@ -176,7 +176,7 @@ describe('on-time data completeness', () => {
     expect(statistics.data.measurementPoints[0].rows[0].dataCompletenessPercent).toBe(0);
   });
 
-  it.each([1, '1', 'Normal', 'Ok', 6, '6', 'Shut Down'])(
+  it.each([1, '1', 'Normal', 'Ok'])(
     'counts source status %s with numeric zero, distinguishing on-time and late delivery',
     async (status) => {
       loadRows([
@@ -263,23 +263,23 @@ describe('on-time data completeness', () => {
     );
     const { statistics, calendar } = await results();
     expect(statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 86.36,
-      lateDataPercent: 9.09,
+      todayDataCompletenessPercent: 79.17,
+      lateDataPercent: 12.5,
     });
     expect(calendar.data.summary).toEqual(statistics.data.summary);
     expect(
       calendar.data.monthlySummary.map((summary) => summary.todayDataCompletenessPercent),
-    ).toEqual([86.36, 86.36]);
+    ).toEqual([0, 86.36]);
   });
 
   it.each([
     ['Normal', 100],
     ['Calibration', 0],
-    ['6', 100],
-    [6, 100],
-    ['Shut Down', 100],
+    ['6', null],
+    [6, null],
+    ['Shut Down', null],
   ])(
-    'handles all-late status %s today and still counts 24-hour on-time data after midnight',
+    'handles late status %s today and retains missing hours in the historical denominator',
     async (status, latePercent) => {
       jest.setSystemTime(new Date('2026-10-06T15:15:00Z'));
       loadRows(
@@ -290,12 +290,14 @@ describe('on-time data completeness', () => {
       );
       const today = await results();
       expect(today.statistics.data.summary).toMatchObject({
-        todayDataCompletenessPercent: 0,
+        todayDataCompletenessPercent: latePercent === null ? null : 0,
         lateDataPercent: latePercent,
         lowDataDays: 0,
       });
       expect(today.calendar.data.summary).toEqual(today.statistics.data.summary);
-      expect(today.calendar.data.calendar.days[0].dataCompletenessPercent).toBe(0);
+      expect(today.calendar.data.calendar.days[0].dataCompletenessPercent).toBe(
+        latePercent === null ? null : 0,
+      );
       jest.setSystemTime(new Date('2026-10-06T17:01:00Z'));
       const yesterday = await results();
       expect(yesterday.statistics.data.summary).toMatchObject({
@@ -307,7 +309,7 @@ describe('on-time data completeness', () => {
     },
   );
 
-  it('counts the P0446 shutdown day as 22/24 on-time hours and marks delayed values lateData', async () => {
+  it('excludes P0446 shutdown receipts and keeps its missing hour in the denominator', async () => {
     const parameters = ['BOD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'];
     repository.listRegisteredParameters.mockResolvedValue(parameters);
     loadRows(
@@ -315,6 +317,7 @@ describe('on-time data completeness', () => {
         .filter((hour) => hour !== 5)
         .map((hour) => ({
           ...hourRow(hour, hour === 17),
+          bod_status: '6',
           flow_value: '0',
           flow_units: 'm3/hr',
           flow_status: '6',
@@ -326,19 +329,19 @@ describe('on-time data completeness', () => {
 
     const { statistics, calendar, details } = await results();
     expect(statistics.data.summary).toMatchObject({
-      todayDataCompletenessPercent: 91.67,
-      lateDataPercent: 4.17,
-      lowDataDays: 0,
+      todayDataCompletenessPercent: 0,
+      lateDataPercent: 0,
+      lowDataDays: 1,
     });
     expect(calendar.data.summary).toEqual(statistics.data.summary);
     expect(calendar.data.calendar.days[0]).toMatchObject({
-      dataCompletenessPercent: 91.67,
-      dataCompletenessStatus: 'highData',
+      dataCompletenessPercent: 0,
+      dataCompletenessStatus: 'lowData',
     });
     for (const parameter of calendar.data.monthlySummary) {
       expect(parameter).toMatchObject({
-        todayDataCompletenessPercent: 91.67,
-        lateDataPercent: 4.17,
+        todayDataCompletenessPercent: 0,
+        lateDataPercent: 0,
       });
     }
     expect(statistics.data.measurementPoints[0].rows[17].dataCompletenessPercent).toBe(0);
@@ -346,7 +349,7 @@ describe('on-time data completeness', () => {
       expect(value).toEqual({ value: null, displayValue: 'Shut Down', status: 'lateData' });
     }
     expect(statistics.data.measurementPoints[0].rows[5].dataCompletenessPercent).toBe(0);
-    expect(details.data.rows).toEqual([]);
+    expect(details.data.rows).toEqual([{ date, dataCompletenessPercent: 0 }]);
   });
 
   it('counts zero on-time hours for an all-late historical day while retaining lateData pollution status', async () => {
@@ -396,7 +399,7 @@ describe('on-time data completeness', () => {
   });
 
   it.each(['15', '59'])(
-    'counts 21 on-time shutdown hours out of 22 completed hours at 22:%s and masks the unfinished hour',
+    'excludes all 22 completed shutdown hours at 22:%s and masks the unfinished hour',
     async (minute) => {
       repository.listRegisteredParameters.mockResolvedValue([
         'BOD (mg/l)',
@@ -406,6 +409,7 @@ describe('on-time data completeness', () => {
       loadRows(
         Array.from({ length: 23 }, (_, hour) => ({
           ...hourRow(hour, hour === 1),
+          bod_status: '6',
           flow_value: '0',
           flow_units: 'm3/hr',
           flow_status: '6',
@@ -417,14 +421,14 @@ describe('on-time data completeness', () => {
       jest.setSystemTime(new Date(`2026-10-06T15:${minute}:00Z`));
       const { statistics, calendar } = await results();
       expect(statistics.data.summary).toMatchObject({
-        todayDataCompletenessPercent: 95.45,
-        lateDataPercent: 4.55,
+        todayDataCompletenessPercent: null,
+        lateDataPercent: null,
       });
       expect(calendar.data.summary).toEqual(statistics.data.summary);
       for (const summary of calendar.data.monthlySummary) {
         expect(summary).toMatchObject({
-          todayDataCompletenessPercent: 95.45,
-          lateDataPercent: 4.55,
+          todayDataCompletenessPercent: null,
+          lateDataPercent: null,
         });
       }
       const rows = statistics.data.measurementPoints[0].rows;
@@ -461,7 +465,7 @@ describe('on-time data completeness', () => {
     });
     expect(
       at23.statistics.data.measurementPoints[0].rows[22].values['BOD (mg/l)'].displayValue,
-    ).toBe('Shut Down');
+    ).toBe('0.00');
     jest.setSystemTime(new Date('2026-10-06T17:00:00Z'));
     const historical = await results();
     expect(historical.statistics.data.summary).toMatchObject({

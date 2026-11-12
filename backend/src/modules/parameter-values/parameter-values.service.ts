@@ -959,12 +959,11 @@ function toCriteriaThreshold(
   return { normalMax, warningMax };
 }
 
-function buildHourlyStatisticRows(
+function completedRowsByHour(
   date: string,
   rows: Record<string, unknown>[],
-  definitions: ParameterDefinition[],
   current: DateHour | null,
-) {
+): Map<number, Record<string, unknown>[]> {
   const rowsByHour = new Map<number, Record<string, unknown>[]>();
   for (const row of completedRowsForDate(date, rows, current).sort(compareHomeMeasurementRows)) {
     const rowDate = stringValue(row.cdate);
@@ -974,16 +973,31 @@ function buildHourlyStatisticRows(
     }
   }
 
+  return rowsByHour;
+}
+
+function buildHourlyStatisticRows(
+  date: string,
+  rows: Record<string, unknown>[],
+  definitions: ParameterDefinition[],
+  current: DateHour | null,
+) {
+  const rowsByHour = completedRowsByHour(date, rows, current);
   return Array.from({ length: HOURS_PER_DAY }, (_, hour) => {
     const hourRows = rowsByHour.get(hour) ?? [];
-    const onTimeParameters = definitions.filter((definition) =>
+    const expectedDefinitions = definitions.filter(
+      (definition) =>
+        !isShutdownHomeMeasurement(selectHomeParameterRow(hourRows, definition), definition),
+    );
+    const onTimeParameters = expectedDefinitions.filter((definition) =>
       hourRows.some(
         (row) =>
-          hasCountableHomeMeasurement(row, definition) &&
+          hasNormalMeasurementStatus(row, definition) &&
           homeMeasurementReceiptStatus(row) === 'onTime',
       ),
     ).length;
-    const dataCompletenessPercent = percentOfExpected(onTimeParameters, definitions.length) ?? 0;
+    const dataCompletenessPercent =
+      percentOfExpected(onTimeParameters, expectedDefinitions.length) ?? 0;
 
     return {
       time: hourLabel(hour),
@@ -1089,7 +1103,8 @@ function buildDailySummary(
   current: DateHour | null,
 ): DailySummary {
   const expectedHours = expectedHoursForDate(date, current);
-  const completedRows = completedRowsForDate(date, rows, current);
+  const rowsByHour = completedRowsByHour(date, rows, current);
+  const completedRows = [...rowsByHour.values()].flat();
   const parameterCompleteness = new Map<
     string,
     { completeness: number | null; late: number | null; lowData: boolean | null }
@@ -1097,7 +1112,16 @@ function buildDailySummary(
   const parameterStatuses = new Map<string, ParameterValueStatus[]>();
   let totalOnTime = 0;
   let totalLate = 0;
+  let denominator = 0;
   for (const definition of definitions) {
+    // Use the same latest parameter status as the table, including status-only shutdowns.
+    const shutdownHours = new Set(
+      [...rowsByHour]
+        .filter(([, hourRows]) =>
+          isShutdownHomeMeasurement(selectHomeParameterRow(hourRows, definition), definition),
+        )
+        .map(([hour]) => hour),
+    );
     const onTimeHours = new Set<number>();
     const lateHours = new Set<number>();
     const statuses: ParameterValueStatus[] = [];
@@ -1106,11 +1130,12 @@ function buildDailySummary(
       const value = readParameterNumber(row, definition);
       if (hour === null || value === null) continue;
       const receiptStatus = homeMeasurementReceiptStatus(row);
-      if (hasCountableHomeMeasurement(row, definition)) {
+      const normalStatus = hasNormalMeasurementStatus(row, definition);
+      if (normalStatus && !shutdownHours.has(hour)) {
         if (receiptStatus === 'onTime') onTimeHours.add(hour);
         if (receiptStatus === 'late') lateHours.add(hour);
       }
-      if (!hasNormalMeasurementStatus(row, definition)) continue;
+      if (!normalStatus) continue;
       const completeness = readParameterCompletenessPercent(row, definition) ?? 100;
       statuses.push(
         completeness < 80
@@ -1121,14 +1146,16 @@ function buildDailySummary(
     for (const hour of onTimeHours) lateHours.delete(hour);
     totalOnTime += onTimeHours.size;
     totalLate += lateHours.size;
+    const expectedParameterHours = expectedHours - shutdownHours.size;
+    denominator += expectedParameterHours;
     parameterCompleteness.set(definition.label, {
-      completeness: percentOfExpected(onTimeHours.size, expectedHours),
-      late: percentOfExpected(lateHours.size, expectedHours),
-      lowData: expectedHours > 0 ? onTimeHours.size * 5 < expectedHours * 4 : null,
+      completeness: percentOfExpected(onTimeHours.size, expectedParameterHours),
+      late: percentOfExpected(lateHours.size, expectedParameterHours),
+      lowData:
+        expectedParameterHours > 0 ? onTimeHours.size * 5 < expectedParameterHours * 4 : null,
     });
     parameterStatuses.set(definition.label, statuses);
   }
-  const denominator = expectedHours * definitions.length;
   const dataCompletenessPercent = percentOfExpected(totalOnTime, denominator);
   const lateDataPercent = percentOfExpected(totalLate, denominator);
   return {
@@ -1516,19 +1543,11 @@ function readPomsClientStatus(row: Record<string, unknown>, definition: Paramete
   return null;
 }
 
-function hasCountableHomeMeasurement(
-  row: Record<string, unknown>,
+function isShutdownHomeMeasurement(
+  row: Record<string, unknown> | undefined,
   definition: ParameterDefinition,
 ): boolean {
-  for (const prefix of homeParameterPrefixes(row, definition)) {
-    if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
-    if (toNumber(row[`${prefix}_value`]) === null) continue;
-
-    const status = resolvePomsClientParameterStatus(row[`${prefix}_status`]);
-    return status?.code === 1 || status?.code === 6;
-  }
-
-  return false;
+  return row !== undefined && readPomsClientStatus(row, definition)?.code === 6;
 }
 
 function hasNormalMeasurementStatus(
@@ -1782,14 +1801,14 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
       invalid: 'สีเทา ข้อมูลผิดรูปแบบหรือสถานะอื่นๆ',
     },
     dataCompletenessPercent:
-      'ร้อยละ parameter-hour ที่มีค่าตัวเลขและส่งตรงเวลาเท่านั้น ทุกสถานะรวม Shut Down ที่ส่งช้าถือเป็นย้อนหลัง; วันนี้ใช้เฉพาะชั่วโมงที่จบแล้ว วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์; เกณฑ์ lowData และรายละเอียดใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกัน; lateDataPercent แยกจากเปอร์เซ็นต์หลัก ความครบถ้วนต้นทางที่ใช้ตัดสิน insufficient แยกจากเปอร์เซ็นต์การส่งข้อมูล',
+      'ร้อยละ parameter-hour ที่มีค่าตัวเลขตรงหน่วย สถานะ Normal/Ok และส่งตรงเวลาเท่านั้น; ตัด Shut Down ออกจากทั้งตัวตั้งและตัวหารตามสถานะล่าสุดของพารามิเตอร์ในชั่วโมงนั้น แม้ไม่มีค่าตัวเลขหรือส่งช้า; วันนี้ใช้เฉพาะชั่วโมงที่จบแล้ว วันย้อนหลังใช้ฐาน 24 ชั่วโมงต่อพารามิเตอร์ แล้วหักชั่วโมง Shut Down; ชั่วโมงขาดยังอยู่ในตัวหาร; ไม่มีชั่วโมงที่ต้องส่งคืน null สำหรับรายวัน และ 0 สำหรับแถวรายชั่วโมง; เกณฑ์ lowData และรายละเอียดใช้เปอร์เซ็นต์ส่งตรงเวลาเดียวกัน; lateDataPercent นับเฉพาะ Normal/Ok ที่ส่งช้าโดยใช้ตัวหารหลังหัก Shut Down เดียวกัน ความครบถ้วนต้นทางที่ใช้ตัดสิน insufficient แยกจากเปอร์เซ็นต์การส่งข้อมูล',
   };
 }
 
 function calendarStatusValueDefinitions(): Record<string, unknown> {
   return {
     summaryPeriod:
-      'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี; lowDataDays นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok เมื่อ endDate เป็นวันนี้เริ่มย้อนจากเมื่อวาน โดยไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง',
+      'calendar.days แสดงเดือนที่ขอถึง calendarEndDate ซึ่งเป็นวันนี้หรือวันสิ้นเดือนที่ถึงก่อน ไม่ตัดตามวันที่เลือก; exceededDays นับวันไม่ซ้ำตั้งแต่ 1 มกราคมถึง endDate ส่วน lowDataDays นับช่วงต่ำกว่า 80% ต่อเนื่องย้อนจาก endDate จนถึงวันเริ่มใช้งาน รวมข้ามปี; lowDataDays นับเฉพาะวันที่จบแล้วตาม Asia/Bangkok เมื่อ endDate เป็นวันนี้เริ่มย้อนจากเมื่อวาน โดยไม่นำเปอร์เซ็นต์วันนี้มาตัดช่วงต่อเนื่อง; วันที่ไม่เหลือชั่วโมงที่ต้องส่งหลังหัก Shut Down ไม่เป็น lowData และหยุดช่วงต่อเนื่อง',
     dataCompletenessStatus: {
       lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
       highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',

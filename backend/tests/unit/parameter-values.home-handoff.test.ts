@@ -220,7 +220,7 @@ describe('home handoff measurement calculations', () => {
       expect(evaluateHomeMeasurementRow(row, ['CO (ppm)'], options)['CO (ppm)']).toEqual(expected);
       expect(result.data.summary).toMatchObject({
         todayDataCompletenessPercent: 0,
-        lateDataPercent: 10,
+        lateDataPercent: 0,
       });
     },
   );
