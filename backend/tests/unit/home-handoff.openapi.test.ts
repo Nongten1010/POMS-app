@@ -334,6 +334,10 @@ describe('home handoff OpenAPI contract', () => {
         $ref: '#/components/schemas/HomeMeasurementValue',
       },
     );
+    const latestValues = objectAt(propertiesFor('HomeLatestMeasurement'), 'values');
+    expect(latestValues.description).toContain('ใช้เฉพาะ standardCriteria.rows ตามประกาศ อก.');
+    expect(latestValues.description).toContain('ไม่ใช้ eiaCriteria เป็นเกณฑ์สำรอง');
+    expect(latestValues.description).toContain('สถิติและปฏิทินยังใช้');
     const example = responseFor('/public/factory-map-points').example;
     const factories = objectAt(example).data;
     if (!Array.isArray(factories)) throw new Error('Expected factory rows');

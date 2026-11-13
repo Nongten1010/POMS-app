@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="latest-hourly-diw-criteria-only"></a>
+
+## 2026-11-13 — ค่ารายชั่วโมงล่าสุดใช้เฉพาะเกณฑ์ อก.
+
+- **Affected canonical docs:** [ค่าล่าสุดหน้าหลัก](./menus/home/README.md#latest-hourly-criteria), [Integration dashboard](./integrations/factory-dashboard/README.md), [สถิติและปฏิทิน](./shared/connected-measurement-points/README.md#home-measurement-rules)
+- **Impact:** `latestMeasurement.values.<label>.status` ใน `GET /api/v1/operator-factory-dashboard`, `GET /api/v1/public/factory-map-points`, `GET /integrations/lasthour/factories/:registrationNo` และ compatibility endpoint `GET /api/v1/integrations/factories/:registrationNo/dashboard` ประเมินมลพิษจาก `standardCriteria.rows` ตามประกาศ อก. เท่านั้น ไม่ใช้ `eiaCriteria` เป็นเกณฑ์สำรอง ทั้งข้อมูล `current` และ `stale`; หากไม่มีแถวเกณฑ์ อก. ส่วนประเมินมลพิษให้ `normal` ก่อนกฎคุณภาพข้อมูล สถานะเครื่อง และส่งล่าช้า
+- **Migration:** client ใช้สถานะจาก `latestMeasurement.values` และเลิกคำนวณ EIA ซ้ำสำหรับค่าล่าสุด ยังคงรับ `parameterStandards[].eiaCriteria` ได้ตามเดิม ตารางสถิติและปฏิทินคงกติกาใช้เกณฑ์ อก. ก่อนแล้วใช้ EIA เมื่อไม่มีเกณฑ์ อก. ไม่ต้อง migrate ฐานข้อมูล หลัง deploy ที่ได้รับอนุญาตตรวจ `/api/v1/openapi.json` ให้ตรงกับสัญญานี้
+- **Old contract:** ค่าล่าสุดใช้เกณฑ์ อก. ก่อน หากไม่มีแถวเกณฑ์ อก. จะใช้ EIA
+- **New contract:** ค่าล่าสุดใช้เฉพาะเกณฑ์ อก.; รูปแบบ response ชื่อฟิลด์ หน่วยพารามิเตอร์ และสิทธิ์คงเดิม
+- **Breaking change:** yes — สถานะค่าล่าสุดอาจเปลี่ยนจาก `warning`/`exceeded` เป็น `normal` หรือ `lateData` เมื่อเดิมอ้างอิง EIA
+
 <a id="reporting-completeness-exclude-shutdown"></a>
 
 ## 2026-11-12 — ตัด SHUTDOWN ออกจากเปอร์เซ็นต์การส่งข้อมูล

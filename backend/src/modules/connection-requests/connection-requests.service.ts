@@ -3602,7 +3602,11 @@ async function loadLatestHourlyMeasurementData(
     );
     if (!strictParameters || !cutoff) return { data };
     const options = {
-      parameterEvaluations: parameterStandards,
+      // Latest hourly values use DIW criteria only; statistics retain the EIA fallback.
+      parameterEvaluations: parameterStandards.map(({ parameter, standardCriteria }) => ({
+        parameter,
+        standardCriteria,
+      })),
       allowedParameterLabels: parameterDisplayNames,
     };
     const values = evaluateHomeMeasurementRows(selectedRows, parameterDisplayNames, options);
