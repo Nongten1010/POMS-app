@@ -100,7 +100,7 @@ export const homeHandoffSchemas: Record<string, Schema> = {
       values: {
         type: 'object',
         description:
-          'ทุกพารามิเตอร์ที่แสดงใช้ key เป็นชื่อพร้อมหน่วย เลือกชั่วโมงล่าสุดที่มีและจบแล้วทั้งจุด; พารามิเตอร์ที่ไม่มีค่าในชั่วโมงที่เลือกคืน value:null, status:noData ไม่ปะค่าจากชั่วโมงอื่นและไม่ข้าม source NoData ไปหาค่าปกติที่เก่ากว่า',
+          'ทุกพารามิเตอร์ที่แสดงใช้ key เป็นชื่อพร้อมหน่วย เลือกชั่วโมงล่าสุดที่มีและจบแล้วทั้งจุด; เกณฑ์มลพิษใช้เฉพาะ standardCriteria.rows ตามประกาศ อก. ไม่ใช้ eiaCriteria เป็นเกณฑ์สำรอง เมื่อไม่มี standardCriteria.rows ใช้ normal ก่อนกฎคุณภาพข้อมูลและส่งล่าช้า; สถิติและปฏิทินยังใช้ standardCriteria.rows ก่อนและใช้ eiaCriteria.rows เมื่อไม่มีเกณฑ์ อก.; พารามิเตอร์ที่ไม่มีค่าในชั่วโมงที่เลือกคืน value:null, status:noData ไม่ปะค่าจากชั่วโมงอื่นและไม่ข้าม source NoData ไปหาค่าปกติที่เก่ากว่า',
         additionalProperties: ref('HomeMeasurementValue'),
       },
     }),

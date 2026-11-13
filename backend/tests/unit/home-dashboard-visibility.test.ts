@@ -528,6 +528,60 @@ describe('home dashboard visibility projection', () => {
     });
   });
 
+  it.each(['dashboard', 'map'] as const)(
+    'uses only DIW criteria for the latest hourly values in %s',
+    async (surface) => {
+      const eiaCriteria = {
+        enabled: true,
+        standardValue: 5,
+        rows: [
+          { level: 'normal', min: 0, max: 4.99 },
+          { level: 'warning', min: 5, max: 7.99 },
+          { level: 'critical', min: 8, max: null },
+        ],
+      };
+      for (const standardCriteria of [null, { enabled: true, standardValue: 200, rows: [] }]) {
+        pointRows = [
+          point({
+            instruments_json: JSON.stringify({
+              parameters: [
+                {
+                  parameter: 'CO (ppm)',
+                  standardCriteria: {
+                    enabled: true,
+                    standardValue: 100,
+                    rows: [
+                      { level: 'normal', min: 0, max: 100 },
+                      { level: 'warning', min: 100, max: 150 },
+                      { level: 'critical', min: 150, max: null },
+                    ],
+                  },
+                },
+                { parameter: 'NOx (ppm)', standardCriteria, eiaCriteria },
+              ],
+            }),
+          }),
+        ];
+
+        const result =
+          surface === 'dashboard'
+            ? await connectionRequestsService.listOperatorFactoryDashboard(42, 'ALL')
+            : await connectionRequestsService.listPublicFactoryMapPoints();
+        const measuredPoint = result.data[0].measurementPoints[0];
+        expect(measuredPoint.latestMeasurement?.values).toMatchObject({
+          'CO (ppm)': { value: 999, status: 'exceeded' },
+          'NOx (ppm)': { value: 10, status: 'normal' },
+        });
+        expect(measuredPoint.parameterStandards[1]).toEqual({
+          parameter: 'NOx (ppm)',
+          standardCriteria,
+          eiaCriteria,
+        });
+        expect(measuredPoint.data[0]).toMatchObject({ 'CO (ppm)': 999, 'NOx (ppm)': 10 });
+      }
+    },
+  );
+
   it('returns stale values from the latest available hour without filling absent parameters', async () => {
     jest.mocked(parameterValuesService.latestHourly).mockResolvedValue({
       data: [

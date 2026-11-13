@@ -1123,6 +1123,11 @@ describe('parameterValuesService', () => {
         warningMax: 60,
       },
     ]);
+    expect(result.data.measurementPoints[0].rows[0].values['SO2 (ppm)']).toEqual({
+      value: 55,
+      displayValue: '55.00',
+      status: 'warning',
+    });
   });
 
   it('keys measurement statistic values by parameter label with units', async () => {

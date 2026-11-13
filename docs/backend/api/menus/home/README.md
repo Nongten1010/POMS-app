@@ -65,7 +65,13 @@ API สำหรับเปิด dialog ข้อมูลรายนาท�
 | `stale` | ชั่วโมงก่อนหน้าไม่มีแถว จึงเลือกชั่วโมงเก่าล่าสุดที่มี | เก็บวันเวลาจริงของข้อมูลเก่า ไม่แทนด้วยเวลาปัจจุบัน |
 | `noData` | ไม่มีแถวรายชั่วโมงที่จบแล้ว หรือไม่มีตารางรายชั่วโมง | `date: null`, `time: null`, `data: []`; values ทุกพารามิเตอร์เป็น `noData` |
 
-เลือกชั่วโมงเดียวต่อจุดและเก็บทุกแถวพารามิเตอร์/หน่วยในชั่วโมงนั้น ไม่ข้ามแถวที่ต้นทางแจ้ง `NoData` เพื่อหาค่าปกติเก่า และไม่ใช้ข้อมูลรายนาทีแทนข้อมูลรายชั่วโมง `freshness` บอกอายุของชุดข้อมูล ส่วน `values.<label>.status` คงการประเมินมลพิษ/คุณภาพ/ส่งล่าช้าเดิม เช่นข้อมูลเก่ายังมี `status: "exceeded"` ได้
+เลือกชั่วโมงเดียวต่อจุดและเก็บทุกแถวพารามิเตอร์/หน่วยในชั่วโมงนั้น ไม่ข้ามแถวที่ต้นทางแจ้ง `NoData` เพื่อหาค่าปกติเก่า และไม่ใช้ข้อมูลรายนาทีแทนข้อมูลรายชั่วโมง `freshness` บอกอายุของชุดข้อมูล ส่วน `values.<label>.status` บอกผลประเมินมลพิษ คุณภาพ และการส่งล่าช้า เช่นข้อมูลเก่ายังมี `status: "exceeded"` ได้
+
+<a id="latest-hourly-criteria"></a>
+
+ค่ารายชั่วโมงล่าสุดใน `latestMeasurement.values` ของ dashboard, popup แผนที่ และ Integration dashboard ใช้เฉพาะ `parameterStandards[].standardCriteria.rows` ตามประกาศ อก. เพื่อประเมิน `normal`/`warning`/`exceeded` โดยไม่ใช้ `eiaCriteria` เป็นเกณฑ์สำรอง หากไม่มีแถวเกณฑ์ อก. ส่วนประเมินมลพิษให้ `normal` แล้วใช้กฎคุณภาพข้อมูล สถานะเครื่อง และส่งล่าช้าตามเดิม จึงยังคืน `lateData`, `insufficient`, `noData` หรือ `invalid` ได้ เช่น `NOx (ppm)` มีแต่เกณฑ์ EIA และส่งค่าปกติ `21.52` ตรงเวลา จะไม่เป็น `warning`/`exceeded` จาก EIA
+
+ยังคืน `parameterStandards[].eiaCriteria` ตามที่บันทึกไว้ แต่ client ต้องใช้ `latestMeasurement.values.<label>.status` สำหรับสถานะค่าล่าสุด ไม่ประเมิน EIA ซ้ำ ตารางสถิติและปฏิทินคง [กติกาเดิม](../../shared/connected-measurement-points/README.md#home-measurement-rules): ใช้เกณฑ์ อก. ก่อน และใช้ EIA เมื่อไม่มีแถวเกณฑ์ อก.
 
 Frontend แสดงค่าจาก `latestMeasurement.values` พร้อมวันเวลาจริงและป้าย “ข้อมูลเก่า” เมื่อ `freshness: "stale"` ต้องไม่ซ่อนค่าด้วย `hasLatestHourlyMeasurement: false` เพราะ flag นี้บอกว่าทุกจุดมีแถวของชั่วโมงก่อนหน้าหรือไม่เท่านั้น ไม่เปลี่ยน `noData` ในตารางสถิติหรือคำนวณเปอร์เซ็นต์ใหม่ด้วยค่าเก่า
 
@@ -252,7 +258,7 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].measurementPoints[].latestMeasurement.values`              | object | key เป็นชื่อพารามิเตอร์พร้อมหน่วย มีทุกพารามิเตอร์ที่แสดงผลของจุด |
 | `data[].measurementPoints[].latestMeasurement.values.<label>.value` | number \| null | ค่าตรวจวัดที่ใช้ประเมินได้; `null` เมื่อไม่มีข้อมูลหรือแสดงเป็นสถานะ |
 | `data[].measurementPoints[].latestMeasurement.values.<label>.displayValue` | string | ค่าที่ format แล้ว ชื่อ operational status หรือ `-` เมื่อไม่มีค่าที่ใช้แสดง |
-| `data[].measurementPoints[].latestMeasurement.values.<label>.status` | enum | `normal`, `lateData`, `warning`, `exceeded`, `insufficient`, `noData` หรือ `invalid`; ใช้กฎเดียวกับสถิติ |
+| `data[].measurementPoints[].latestMeasurement.values.<label>.status` | enum | `normal`, `lateData`, `warning`, `exceeded`, `insufficient`, `noData` หรือ `invalid`; เกณฑ์มลพิษใช้เฉพาะ อก. ไม่ใช้ EIA ตาม [กติกาค่าล่าสุด](#latest-hourly-criteria) ส่วนคุณภาพข้อมูล สถานะเครื่อง และส่งล่าช้าใช้กฎเดียวกับสถิติ |
 | `data[].status`                                                    | `แสดง`                   | display status ของ row                                                                                                                                                                                                                                    |
 | `meta.total`                                                       | integer                  | จำนวนโรงงานหลังใช้ query filters                                                                                                                                                                                                                          |
 
