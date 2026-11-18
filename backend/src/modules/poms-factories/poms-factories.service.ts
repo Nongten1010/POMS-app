@@ -43,6 +43,7 @@ import {
 import {
   requestedPointParameters,
   alignPointInstruments,
+  preserveEligibleParameters,
 } from './poms-measurement-point-parameters';
 import { pomsFactoriesRepository } from './poms-factories.repository';
 
@@ -895,7 +896,7 @@ function buildProposedMeasurementPoints(
       ? (patch.measurementInstruments ?? null)
       : point.measurementInstruments;
     const details = Object.prototype.hasOwnProperty.call(patch, 'details')
-      ? (patch.details ?? null)
+      ? preserveEligibleParameters(point.details, patch.details)
       : point.details;
 
     const requested = requestedPointParameters(patch.details);

@@ -585,7 +585,7 @@ field ที่ห้ามส่งเพิ่มเติม ได้แก�
 | `measurementPoints[].connectedPointId`       | number           | yes      | active `cems_wpms_connected_measurement_points.id` ของโรงงานเดียวกับ path `factoryId` |
 | `measurementPoints[].pointName`              | string           | no       | trim แล้ว 1–255 ตัวอักษร; omission = คงค่าเดิม                                        |
 | `measurementPoints[].monitoringPointStatus`  | string \| null   | no       | omission = คงค่าเดิม; `null` = ล้างค่า; ใช้ enum สถานะจุดตรวจวัดกลาง                 |
-| `measurementPoints[].details`                | object \| null   | no       | omission = คงค่าเดิม; `null` = ล้างค่า                                                |
+| `measurementPoints[].details`                | object \| null   | no       | ละ `details` เพื่อคงค่าเดิมทั้งก้อน ส่ง `null` เพื่อล้างรายละเอียดอื่นโดยคง `eligibleParameters` |
 | `measurementPoints[].documentsAndImages`     | object[]         | no       | omission = คงค่าเดิม; `[]` = ล้างทั้งหมด                                              |
 | `measurementPoints[].measurementInstruments` | object \| null   | no       | omission = คงค่าเดิม; `null` = ล้างค่า                                                |
 | `remarks`                                    | string \| null   | no       | canonical field ของหมายเหตุผู้ส่ง; ไม่เกิน 1000 ตัวอักษร                                  |
@@ -698,6 +698,8 @@ Frontend ใช้ `GET /poms-factories/:factoryId` อ่าน `data.measureme
 ### เปลี่ยนพารามิเตอร์หลังอนุมัติ
 
 ใช้ `measurementPoints[].details.requestedParameters` เป็นรายการเป้าหมาย เช่น BOD/COD/Watt → BOD/Watt/Flow โดยยังห้ามส่ง `measurementPoints[].parameters` ตรง ๆ ฟิลด์นี้ต้องเป็น `string[]` ไม่เกิน 100 รายการ ชื่อไม่เกิน 255 ตัวอักษร ไม่ว่างและไม่ซ้ำหลัง normalize ตัวพิมพ์/ช่องว่าง; ห้าม `null`, `ไม่มี` และ `ได้รับการยกเว้นทั้งหมด` ใช้ `[]` หากต้องล้างทั้งหมด ส่วน omission หรือ `details: null` คงพารามิเตอร์หลักเดิม
+
+เมื่อสร้างหรือส่งคำขอแก้ไขรอบใหม่ ระบบคง `details.eligibleParameters` ของจุด POMS ถ้าไม่ได้ส่งฟิลด์นี้ หากส่งรายการมาให้ใช้รายการใหม่ และใช้ `eligibleParameters: []` เมื่อต้องการล้างรายการที่เข้าข่าย การอนุมัติใช้กติกาเดียวกันกับคำขอเดิมที่รอพิจารณา โดยตรวจจุดปัจจุบันกับข้อมูลตอนยื่นก่อนบันทึก
 
 ```json
 {

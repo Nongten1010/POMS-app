@@ -4,10 +4,6 @@ import type { Knex } from 'knex';
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), { transaction: jest.fn(), raw: jest.fn(), fn: { now: jest.fn() } }),
 }));
-jest.mock('../../src/modules/kwp-form-submissions/kwp-form-parameters', () => ({
-  getKwpEligibleParameters: jest.fn(async () => ['BOD (mg/l)']),
-  validateKwpParameterSelection: jest.fn(),
-}));
 jest.mock('../../src/modules/kwp-form-submissions/kwp-form-attachments.service', () => ({
   ...jest.requireActual<object>(
     '../../src/modules/kwp-form-submissions/kwp-form-attachments.service',
@@ -39,12 +35,26 @@ const access = {
   publicPath: '/uploads',
 };
 const common = { factoryId: 'F001', factoryName: 'โรงงานทดสอบ', connectedPointId: 8 };
+const pomsEligible = ['BOD (mg/l)', 'COD (mg/l)', 'CO (ppm)'];
 
 beforeEach(() => {
   loseStatusRace = false;
   tables = new Map([
     ['factories', [{ id: 1, fid: 'F001', region_name: 'ภาคเหนือ' }]],
-    ['cems_wpms_connected_measurement_points', [{ id: 8, factory_id: 'F001' }]],
+    [
+      'cems_wpms_connected_measurement_points',
+      [
+        {
+          id: 8,
+          factory_id: 'F001',
+          eligible_factory_id: 1,
+          system_type: 'WPMS',
+          point_code: 'P0208',
+          details_json: JSON.stringify({ eligibleParameters: pomsEligible }),
+          parameters_json: '["BOD (mg/l)","TSS (mg/l)"]',
+        },
+      ],
+    ],
     ['kwp_form_submission_sequences', [{ last_sequence: 0 }]],
   ]);
   const mockDb = db as unknown as jest.Mock;
@@ -63,6 +73,47 @@ beforeEach(() => {
 });
 
 describe('KWP handoff persistence through repository entry points', () => {
+  it('creates and edits a KWP form using the current POMS eligible list', async () => {
+    tables.set('eligible_factories', [{ id: 1, monitoring_point_form_id: 2 }]);
+    tables.set('factory_monitoring_points', [
+      {
+        form_id: 2,
+        system_type: 'WPMS',
+        point_code: 'P0208',
+        eligible_parameters_json: '["TSS (mg/l)"]',
+      },
+    ]);
+    const payload = {
+      ...common,
+      issueReason: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง' as const,
+      unreportedParameters: ['BOD (mg/l)'],
+    };
+    const created = await repository.createKwp01(payload, access);
+    const editAccess = { ...access, formType: 'KWP01' as const };
+    submission().status = 'REVISION_REQUESTED';
+
+    await expect(
+      repository.updateKwp01(
+        created.id,
+        { ...payload, unreportedParameters: ['TSS (mg/l)'] },
+        editAccess,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+      details: { parameter: 'TSS (mg/l)', allowedParameters: pomsEligible },
+    });
+    const updated = await repository.updateKwp01(
+      created.id,
+      { ...payload, unreportedParameters: ['COD (mg/l)'] },
+      editAccess,
+    );
+    expect(updated).toMatchObject({
+      id: created.id,
+      issueReport: { unreportedParameters: ['COD (mg/l)'] },
+    });
+  });
+
   it('creates, reads, retains, clears and resubmits KWP01 attachments and links', async () => {
     const payload = {
       ...common,

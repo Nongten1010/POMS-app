@@ -1,5 +1,27 @@
 # API Breaking Changes
 
+<a id="preserve-poms-point-eligibility"></a>
+
+## 2026-11-18 — คงพารามิเตอร์ที่เข้าข่ายเมื่ออัปเดตจุด POMS
+
+- **Affected canonical docs:** [คำขอเพิ่มพารามิเตอร์](./menus/connection-requests/request-payloads-and-validation.md#post-apiv1cems-wpms-requestsparameters), [คำขอแก้ไขจุด POMS](./menus/master-data/factory-edit-requests.md#เปลี่ยนพารามิเตอร์หลังอนุมัติ)
+- **Impact:** การเชื่อมต่อคำขอ `ADD_PARAMETER` และการสร้าง ส่งกลับหลังแก้ไข และอนุมัติคำขอแก้ไขจุด POMS คง `details.eligibleParameters` เดิมเมื่อไม่ได้ส่งฟิลด์นี้ รวมกรณี `details: null`
+- **Migration:** หากต้องการเปลี่ยนรายการ ให้ส่ง `details.eligibleParameters` ใหม่ ใช้ `details: { "eligibleParameters": [] }` เมื่อต้องการล้างรายการที่เข้าข่าย ใช้ schema ฐานข้อมูลเดิมได้
+- **Old contract:** การบันทึก `details` บางส่วนหรือเป็น `null` อาจล้างรายการที่เข้าข่ายเดิม
+- **New contract:** คงรายการเดิมเมื่อไม่ได้ระบุ `eligibleParameters` และใช้ค่าที่ระบุเมื่อส่งฟิลด์นี้
+- **Breaking change:** yes — `details: null` และออบเจ็กต์ที่ละ `eligibleParameters` มีผลต่อรายการที่เข้าข่ายต่างจากเดิม
+
+<a id="kwp-poms-eligible-parameters"></a>
+
+## 2026-11-18 — แบบ กวภ. ใช้พารามิเตอร์ที่เข้าข่ายของจุด POMS
+
+- **Affected canonical docs:** [รายการจุดและพารามิเตอร์ กวภ.](./menus/kwp-forms/README.md#kwp-eligible-parameters), [การส่งแบบ กวภ.04](./menus/kwp-forms/kwp04-report-condition.md#สร้างและแก้ไขแบบ)
+- **Impact:** `GET /api/v1/kwp-form-reports/factories/:factoryId/measurement-points` คืน `parameterDetails` จาก `details_json.eligibleParameters` ของจุด POMS ปัจจุบัน และ `POST`/`PATCH` กวภ.01–05 ตรวจพารามิเตอร์ด้วยรายการเดียวกัน
+- **Migration:** โหลดรายการจุดและ `parameterDetails` ใหม่ก่อนสร้างหรือแก้ไขแบบ แล้วส่ง `connectedPointId` และป้ายพร้อมหน่วยจากจุดที่เลือก เมื่อได้ `400 BAD_REQUEST` ให้ใช้ `error.details.allowedParameters` ตรวจตัวเลือกอีกครั้ง ใช้ข้อมูลเดิมในฐานได้โดยไม่ต้อง migrate
+- **Old contract:** ใช้รายการในแบบโรงงานที่เข้าข่ายเมื่อจับคู่ได้ รวมกรณีที่รายการว่าง
+- **New contract:** ยึดรายการที่เข้าข่ายของจุด POMS ปัจจุบัน คืน `[]` เมื่อไม่มีรายการที่ใช้ได้สำหรับจุดนั้น
+- **Breaking change:** yes — ตัวเลือกที่แสดงและรายการที่ API ยอมรับอาจเปลี่ยนเมื่อข้อมูลสองแหล่งต่างกัน
+
 <a id="latest-hourly-diw-criteria-only"></a>
 
 ## 2026-11-13 — ค่ารายชั่วโมงล่าสุดใช้เฉพาะเกณฑ์ อก.

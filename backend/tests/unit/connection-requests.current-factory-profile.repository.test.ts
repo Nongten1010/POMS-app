@@ -2161,6 +2161,38 @@ describe('ADD_PARAMETER point ownership at repository write boundaries', () => {
     env.FACTORY_PROFILE_MODE = previousMode;
   });
 
+  it.each([
+    { submitted: null, expected: { eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)'] } },
+    {
+      submitted: { requestedParameters: ['COD (mg/l)'] },
+      expected: {
+        requestedParameters: ['COD (mg/l)'],
+        eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)'],
+      },
+    },
+    { submitted: { eligibleParameters: [] }, expected: { eligibleParameters: [] } },
+    {
+      submitted: { eligibleParameters: ['COD (mg/l)'] },
+      expected: { eligibleParameters: ['COD (mg/l)'] },
+    },
+  ])('retains live eligibility on ADD_PARAMETER unless supplied ($submitted)', async (row) => {
+    const fixture = addParameterOwnershipFixture('connect');
+    fixture.tables[CONNECTED][0].details_json = JSON.stringify({
+      eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)'],
+      wastewaterSource: 'old detail',
+    });
+    const submitted = row.submitted === null ? null : JSON.stringify(row.submitted);
+    fixture.tables[POINTS][0].details_json = submitted;
+
+    await fixture.execute();
+
+    const live = fixture.tables[CONNECTED].filter((point) => point.deleted_at == null);
+    expect(live).toHaveLength(1);
+    expect(JSON.parse(String(live[0].details_json))).toEqual(row.expected);
+    expect(JSON.parse(String(live[0].parameters_json))).toEqual(['BOD (mg/l)', 'COD (mg/l)']);
+    expect(fixture.tables[POINTS][0].details_json).toBe(submitted);
+  });
+
   it.each(addParameterOperations)(
     'rejects another factory before %s without changing any persisted rows',
     async (operation) => {

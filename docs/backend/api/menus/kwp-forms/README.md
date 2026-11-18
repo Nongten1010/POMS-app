@@ -12,7 +12,7 @@ permission code และ scope ที่อ้างในหน้านี้
 
 ### Main Flow
 
-1. อ่านจุดตรวจวัดและข้อมูล prefill ด้วย `GET /api/v1/kwp-form-reports/factories/:factoryId/measurement-points`; สำหรับ กวภ.05 ใช้ `parameterInstrumentDetails[].cemsModel` ตามพารามิเตอร์ที่เลือก
+1. โหลดจุดตรวจวัด POMS และใช้ `parameterDetails` เป็นตัวเลือกพารามิเตอร์ด้วย `GET /api/v1/kwp-form-reports/factories/:factoryId/measurement-points` สำหรับ กวภ.05 ใช้ `parameterInstrumentDetails[].cemsModel` ตามพารามิเตอร์ที่เลือก
 2. อัปโหลดไฟล์แนบด้วย `POST /api/v1/kwp-form-submissions/attachments` และเก็บ metadata กลับไปผูกในฟอร์ม
 3. ส่งแบบ `POST /api/v1/kwp-form-submissions/kwp01` ถึง `kwp05`; กวภ.04 ต้องเลือก `measurementItems[].reportCondition` ทุกแถว ดู [รายงานตามเงื่อนไข กวภ.04](./kwp04-report-condition.md)
 4. อ่านรายการและรายละเอียดแบบผ่าน `kwp-form-reports/*` และ `kwp-form-submissions/*`
@@ -26,6 +26,7 @@ curl --request POST \
   --data '{
     "factoryId": "F000123",
     "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
+    "connectedPointId": 8,
     "issueReasons": ["เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง"],
     "failedParameters": ["BOD (mg/l)"],
     "instruments": ["pH Meter"],
@@ -144,7 +145,7 @@ curl --request POST \
 | --- | --- | --- | --- | --- |
 | `factoryId` | body | string | Yes | รหัสโรงงานที่ backend ใช้ตรวจ data scope |
 | `factoryRegistrationNo` | body | string | No | เลขทะเบียนโรงงานปัจจุบันจาก `newRegistrationNo`; เก็บเป็น submission snapshot และใช้เป็น identifier สำรอง |
-| `connectedPointId` | body | positive integer | No | ID จาก `GET /api/v1/connected-measurement-points/factories/:factoryId`; ส่ง `null` หรือ omit ได้เมื่อ endpoint คืน `null` |
+| `connectedPointId` | body | positive integer/null | No | ID จาก [รายการจุด กวภ.](#kwp-eligible-parameters) หากไม่มี ID ให้ส่ง `pointCode` หรือ `pointName` ที่ระบุจุดเดียวในโรงงานได้ |
 
 ถ้าส่ง `connectedPointId` backend จะตรวจว่าเป็น active row ใน `cems_wpms_connected_measurement_points` และต้องตรงกับ `factoryId` ที่ผ่าน data-scope access control แล้วเท่านั้น ระบบจะไม่ใช้ `factoryRegistrationNo` จาก payload เพื่อขยายสิทธิ์ เพื่อป้องกันการผูกแบบกับจุดตรวจวัดของโรงงานอื่น
 
@@ -213,6 +214,7 @@ curl --request POST \
 {
   "factoryId": "F000123",
   "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
+  "connectedPointId": 8,
   "issueReason": "เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง",
   "problemDate": "2026-07-01T08:00:00",
   "expectedDoneDate": "2026-07-05T06:00:00",
@@ -302,6 +304,7 @@ curl --request POST \
 {
   "factoryId": "F000123",
   "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
+  "connectedPointId": 8,
   "instruments": ["ค่าบีโอดี (BOD)"],
   "issueReasons": ["เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง"],
   "failedParameters": ["BOD (mg/l)"],
@@ -409,6 +412,7 @@ Attachment request เป็น strict object และรับเฉพาะ 
 {
   "factoryId": "F000123",
   "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
+  "connectedPointId": 8,
   "calibrationItems": [
     {
       "parameters": ["NOx (ppm)", "SO2 (ppm)"],
@@ -927,11 +931,11 @@ curl '<BASE_URL>/api/v1/kwp-form-reports/factories/F000123/measurement-points' \
 | `factoryId` | path | string | Required | รหัสโรงงาน 1–64 ตัวอักษรจากตาราง กวภ. |
 | `data[].connectedPointId` | response | integer/null | Nullable | ID จุดเชื่อมต่อ ใช้ส่งกับแบบฟอร์ม |
 | `data[].pointCode`, `pointName`, `pointType` | response | string | code nullable | รหัส ชื่อ และระบบ `CEMS`/`WPMS` |
-| `data[].parameterDetails` | response | string[] | No | พารามิเตอร์ที่เข้าข่ายทั้งหมดพร้อมหน่วย รวมรายการยกเว้นและรายการที่ยังไม่ได้เชื่อมต่อ |
-| `data[].parameterInstrumentDetails` | response | object[] | No | CEMS คืน `parameter` และ `cemsModel` ตามลำดับตัวเลือก; ไม่มีเครื่องมือเป็น `null`; WPMS เป็น `[]` |
+| `data[].parameterDetails` | response | string[] | No | พารามิเตอร์ที่เข้าข่ายของจุด POMS ปัจจุบันพร้อมหน่วย รวมรายการที่ยังไม่ได้เชื่อมต่อหรือได้รับยกเว้นตามที่บันทึกไว้ |
+| `data[].parameterInstrumentDetails` | response | object[] | No | CEMS คืน `parameter` และ `cemsModel` ตามลำดับตัวเลือก หากไม่มีเครื่องมือ `cemsModel` เป็น `null` ส่วน WPMS คืน `[]` |
 | `meta.total` | response | integer | No | จำนวนจุดที่เข้าถึงได้ |
 
-ฟิลด์ prefill อื่นมีรูปแบบเดียวกับ [รายละเอียดจุดตรวจวัด](../../shared/connected-measurement-points/README.md) แต่ `parameterDetails` ของ API นี้ใช้ข้อมูลที่เข้าข่าย
+ดูรูปแบบฟิลด์ prefill อื่นที่ [รายละเอียดจุดตรวจวัด](../../shared/connected-measurement-points/README.md) และใช้ `parameterDetails` จาก endpoint ของ กวภ. เป็นตัวเลือกของแบบ กวภ.
 
 ```json
 {
@@ -941,12 +945,12 @@ curl '<BASE_URL>/api/v1/kwp-form-reports/factories/F000123/measurement-points' \
 }
 ```
 
-- อ่านจาก `factory_monitoring_points.eligible_parameters_json` ของแบบโรงงานที่เข้าข่ายที่ผูกกับ live connected point จับคู่ระบบและรหัสจุดก่อน จากนั้นใช้ชื่อจุดเมื่อไม่พบรหัส ไม่เลือกสุ่มเมื่อข้อมูลซ้ำ
-- หากไม่มีข้อมูล canonical ที่จับคู่ได้ ใช้เฉพาะ `details_json.eligibleParameters` ที่มีการบันทึกไว้; ไม่ใช้รายการที่เชื่อมต่อแทนรายการที่เข้าข่าย หากไม่มีข้อมูลคืน `[]`
+- อ่าน `details_json.eligibleParameters` จากจุดตรวจวัด POMS ที่ยังเชื่อมต่ออยู่ใน `cems_wpms_connected_measurement_points` หรือ view ปัจจุบันใน canonical mode ใช้ `connectedPointId` ก่อน ถ้าไม่ได้ส่ง ID ให้ใช้ `pointCode` แล้วใช้ `pointName` เมื่อไม่ได้ส่งรหัส
+- คืน `[]` เมื่อไม่พบจุดที่ตรงกันเพียงจุดเดียว หรือไม่มีรายการที่เข้าข่ายบันทึกไว้ในจุด POMS นั้น
 - ป้ายชื่อที่ไม่เก็บหน่วยใช้หน่วยจากป้ายจุดเชื่อมต่อได้เฉพาะเมื่อจับคู่ได้ค่าเดียว หากไม่ทราบหน่วยแสดง `(ไม่ระบุหน่วย)` เพื่อไม่เดาค่า
-- POST/PATCH กวภ.01–05 ตรวจพารามิเตอร์กับรายการเดียวกัน ปฏิเสธค่าหรือหน่วยที่ไม่เข้าข่ายด้วย HTTP 400 `BAD_REQUEST` พร้อม `allowedParameters`; รับรหัสเก่าที่ไม่มีหน่วยเฉพาะเมื่อจับคู่ได้ค่าเดียว
+- POST/PATCH กวภ.01–05 ตรวจพารามิเตอร์กับรายการเดียวกัน ค่าหรือหน่วยที่ไม่เข้าข่ายได้ HTTP `400 BAD_REQUEST` พร้อม `error.details.allowedParameters` รหัสเก่าที่ไม่ระบุหน่วยใช้ได้เมื่อจับคู่ได้ค่าเดียว
 - โรงงานนอกขอบเขตไม่คืนข้อมูล; path ไม่ถูกต้องตอบ 400 ไม่มี token ตอบ 401 และไม่มีสิทธิ์เมนูตอบ 403 ใช้ [shared error envelope](../../shared/README.md)
-- Frontend ต้องเปลี่ยนจาก endpoint prefill เดิมมาใช้ endpoint นี้เพื่อแสดงรายการที่เข้าข่ายทั้งหมด
+- โหลด `parameterDetails` ใหม่เมื่อเริ่มสร้างหรือแก้ไขแบบ เพื่อให้ตัวเลือกตรงกับพารามิเตอร์ปัจจุบันของจุด
 
 <a id="kwp-cancel"></a>
 

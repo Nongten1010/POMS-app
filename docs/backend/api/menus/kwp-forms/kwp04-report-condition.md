@@ -11,7 +11,7 @@ curl --request POST \
   --url '<BASE_URL>/api/v1/kwp-form-submissions/kwp04' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
-  --data '{"factoryId":"F000123","factoryName":"โรงงานตัวอย่าง","measurementItems":[{"pollutant":"CO (ppm)","reportCondition":"4(1)"}]}'
+  --data '{"factoryId":"F000123","factoryName":"โรงงานตัวอย่าง","connectedPointId":8,"measurementItems":[{"pollutant":"CO (ppm)","reportCondition":"4(1)"}]}'
 ```
 
 | งาน | Method และ Path | Permission | สำเร็จ |
@@ -35,7 +35,7 @@ curl --request POST \
 | `factoryId` | body | string | Yes | รหัสโรงงานที่ผู้ส่งมีสิทธิ์ |
 | `factoryName` | body | string | Yes | ชื่อโรงงาน |
 | `measurementItems` | body | array | Yes | 1–100 รายการตามเดิม |
-| `measurementItems[].pollutant` | body | string | Yes | ป้ายพารามิเตอร์พร้อมหน่วย เช่น `CO (ppm)`; ต้องอยู่ในรายการที่เข้าข่าย |
+| `measurementItems[].pollutant` | body | string | Yes | เลือกป้ายพร้อมหน่วยจาก `parameterDetails` ของจุด POMS เช่น `CO (ppm)` |
 | `measurementItems[].reportCondition` | body | string enum | Yes | เฉพาะ `"4(1)"`, `"4(2)"`, `"11(3)"`, `"16"`; บังคับทุกแถว ไม่มีค่าเริ่มต้น |
 | `measurementItems[].sampleDate` | body | string/null | No | วันที่ `YYYY-MM-DD` |
 | `measurementItems[].measuredValue` | body | string/number/null | No | ค่าตรวจวัดตาม contract เดิม |
@@ -46,7 +46,7 @@ curl --request POST \
 | `measurementItems[].attachments` | body | array | No | metadata ไฟล์ `SAMPLING_PHOTO`/`LAB_REPORT` ตาม [ข้อกำหนดไฟล์แนบ](./README.md#kwp-handoff-fields) |
 | `reportRound`, `reportYear`, `samplingPhotoLink`, `labReportLink` | body | ตาม contract เดิม | No | ดู [ฟิลด์รอบรายงานและลิงก์](./README.md#kwp-handoff-fields) |
 
-ฟิลด์ข้อมูลโรงงาน ผู้ติดต่อ ผู้จัดทำ และจุดตรวจวัดอื่นยังใช้ contract เดิม ดู schema เต็มใน [runtime OpenAPI](https://d-poms.diw.go.th/api/v1/docs/) หลังนำ release นี้ขึ้นระบบ
+โหลด `connectedPointId` และ `parameterDetails` จาก [รายการจุด กวภ.](./README.md#kwp-eligible-parameters) ดูฟิลด์อื่นใน [runtime OpenAPI](https://d-poms.diw.go.th/api/v1/docs/)
 
 ตัวอย่าง request ขั้นต่ำ ใช้ได้ทั้ง POST และ PATCH:
 
@@ -54,6 +54,7 @@ curl --request POST \
 {
   "factoryId": "F000123",
   "factoryName": "โรงงานตัวอย่าง",
+  "connectedPointId": 8,
   "measurementItems": [
     { "pollutant": "CO (ppm)", "reportCondition": "4(1)" },
     { "pollutant": "NOx (ppm)", "reportCondition": "16" }

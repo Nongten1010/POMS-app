@@ -14,6 +14,7 @@ import {
 const transaction = db.transaction as unknown as jest.Mock<
   (...args: unknown[]) => Promise<unknown>
 >;
+const eligibleParameters = ['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)'];
 
 describe('approved measurement-point parameter replacement', () => {
   beforeEach(() => {
@@ -70,7 +71,7 @@ describe('approved measurement-point parameter replacement', () => {
   });
 
   it.each([false, true])(
-    'updates live parameters from BOD COD Watt to BOD Watt Flow (derived snapshot: %s)',
+    'updates live parameters and retains eligibility omitted from a pending proposal (derived snapshot: %s)',
     async (derivedParameters) => {
       const harness = approvalHarness({ derivedParameters });
       transaction.mockImplementationOnce(harness.runTransaction);
@@ -88,6 +89,7 @@ describe('approved measurement-point parameter replacement', () => {
           Object.assign(liveRow, write.values);
       }
       const live = toPomsFactoryDetailForTests([liveRow], 0);
+      expect(live.measurementPoints[0].details?.eligibleParameters).toEqual(eligibleParameters);
       expect(live.measurementPoints[0].details?.requestedParameters).toEqual([
         'BOD (mg/l)',
         'Watt (kW/hr)',
@@ -118,6 +120,18 @@ describe('approved measurement-point parameter replacement', () => {
     expect(updates[0].parameterChange).toBeNull();
   });
 
+  it('keeps eligibility cleared when an approved proposal explicitly supplies []', async () => {
+    const harness = approvalHarness({ proposedEligibleParameters: [] });
+    transaction.mockImplementationOnce(harness.runTransaction);
+
+    await pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77);
+
+    const liveWrite = harness.committed.find(
+      (write) => write.table === 'cems_wpms_connected_measurement_points',
+    );
+    expect(JSON.parse(String(liveWrite?.values.details_json)).eligibleParameters).toEqual([]);
+  });
+
   it('does not commit approval if retiring an obsolete device channel fails', async () => {
     const harness = approvalHarness({ failChannelWrite: true });
     transaction.mockImplementationOnce(harness.runTransaction);
@@ -135,6 +149,7 @@ function approvalHarness(
   options: {
     derivedParameters?: boolean;
     failChannelWrite?: boolean;
+    proposedEligibleParameters?: string[];
     emails?: string[];
     failPointWrite?: boolean;
     staleEmails?: boolean;
@@ -147,6 +162,7 @@ function approvalHarness(
     system_type: 'WPMS',
     point_code: 'P0260',
     parameters_json: JSON.stringify(['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)']),
+    details_json: JSON.stringify({ eligibleParameters }),
   });
   const current = toPomsFactoryDetailForTests([currentRow], 0);
   const parameters = ['BOD (mg/l)', 'Watt (kW/hr)', 'Flow rate (m3/hr)'];
@@ -154,7 +170,14 @@ function approvalHarness(
     ...point,
     ...(options.derivedParameters ? { parameters } : {}),
     ...(options.emails === undefined
-      ? { details: { requestedParameters: parameters } }
+      ? {
+          details: {
+            requestedParameters: parameters,
+            ...(options.proposedEligibleParameters === undefined
+              ? {}
+              : { eligibleParameters: options.proposedEligibleParameters }),
+          },
+        }
       : { officerNotificationEmails: options.emails }),
   }));
   if (options.staleEmails)

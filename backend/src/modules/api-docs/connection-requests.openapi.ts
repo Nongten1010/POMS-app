@@ -357,6 +357,8 @@ const currentParameterFormDescription =
   currentParameterFormAssetsDescription;
 const connectionProfileWriteDescription =
   'การเชื่อมต่อครั้งแรกปรับเฉพาะข้อมูลทั่วไปที่อนุญาต โดย canonical mode ตรวจ source revision ที่ backend เก็บเมื่อยื่น/ส่งกลับก่อนบันทึก; ถ้า revision หายหรือเปลี่ยนและคำขอมีข้อมูลทั่วไป ให้ส่งคำขอกลับมาใหม่. เมื่อมีจุดเชื่อมต่ออยู่แล้วใช้ข้อมูลโรงงานปัจจุบัน รวม null โดยไม่นำ snapshot เก่ามาเขียนทับ. Backend เก็บ revision ภายใน ผู้เรียกไม่ต้องส่ง field เพิ่ม';
+const addParameterEligibilityDescription =
+  'เมื่อ ADD_PARAMETER เป็น CONNECTED ให้คง details.eligibleParameters ของจุด POMS ปัจจุบันเมื่อคำขอไม่ส่งฟิลด์นี้ รวมกรณีละ details หรือส่ง details: null หากส่ง eligibleParameters ให้ใช้ค่าที่ส่ง โดย [] ล้างรายการที่เข้าข่าย';
 const measurementCleanupDescription =
   'ก่อนยืนยัน CONNECTED ของ NEW_CONNECTION หรือ ADD_MEASUREMENT_POINT ล้างค่าทดสอบเฉพาะรหัสจุดใหม่ในตาราง <stationId>_data_real, _data_1m, _data_5m, _data_60m, _data_1day, _data_test; ข้ามตารางที่ไม่มี. การล้างทั้งตารางนี้ไม่ใช้กับ ADD_PARAMETER หรือรหัสที่เคยมี connected point แม้เลิกใช้งานแล้ว รวมชื่อจุด legacy ที่ใช้แทนรหัส และไม่ย้อนล้างจุดเดิม. ล้างแถวที่มีอยู่เมื่อจับล็อกตารางครบ เก็บค่าที่เข้ามาภายหลังรวมข้อมูลย้อนหลัง โดยไม่ใช้ verifiedAt หรือเวลาจากเครื่องเป็นเกณฑ์. เก็บประวัติการล้างและป้องกันล้างซ้ำแม้การยืนยันสถานะภายหลังล้มเหลว; ล้างไม่สำเร็จตอบ 503 MEASUREMENT_CLEANUP_FAILED และยังไม่เชื่อมต่อสำเร็จ';
 const addedParameterCleanupDescription =
@@ -3443,7 +3445,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'createParameterRequest',
       description:
         'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องมี exactly 1 measurement point พร้อม pointCode เดิม. effective cems_wpms_requests:edit scope ที่ระบุชัดเจน ไม่ใช่ OWN_FACTORY หรือ null ละ details และ measurementInstruments หรือส่ง null ได้โดยไม่จำกัด role หรือ userType; OWN_FACTORY และ edit grant ที่ endpoint ได้เป็น scope null ยังต้องส่งทั้งสองส่วน. โรงงานต้องเป็น active eligible factory ภายใน effective edit scope; OWN_FACTORY ตรวจ assignment ปัจจุบันของโรงงานและนิติบุคคลจริง. Legacy edit grant ที่ endpoint ได้เป็น scope null ใช้ granted view scope เพื่อจำกัดข้อมูลเท่านั้น ไม่ลดรายละเอียดฟอร์ม; ไม่มี data scope ที่ใช้ได้ตอบ 403 FORBIDDEN และโรงงานนอก scope/assignment หรือไม่พบตอบ 404 NOT_FOUND ก่อนสร้างคำขอ. ข้อมูลที่ส่งมาต้องผ่าน validation เดิม; การจับคู่ requestedParameters กับเครื่องมือใช้เมื่อมี measurementInstruments. สร้าง PENDING_DESIGN_REVIEW เหมือนเดิม. เมื่อ CONNECTED ให้รวมพารามิเตอร์เดิมของ active point กับรายการใหม่ ไม่แทนที่รายการเดิม; เก็บลำดับเดิมแล้วต่อท้ายตัวใหม่ ไม่ซ้ำเมื่อแตกต่างเพียงตัวพิมพ์หรือช่องว่างหัวท้าย และแยกหน่วยที่ต่างกัน. เก็บข้อมูลเครื่องมือเดิมที่ยังอยู่ในจุดปัจจุบันแม้ส่งเฉพาะเครื่องมือใหม่หรือละ/ส่ง null ตามสิทธิ์; ถ้าส่งพารามิเตอร์เดิมซ้ำ ใช้ค่าใหม่เฉพาะ field ที่ระบุรวม explicit null และเก็บ field ที่ละไว้ ไม่คืนเครื่องมือของพารามิเตอร์ที่ถูกนำออก. ตัวอย่างเดิม Flow Rate (m3/hr) เพิ่ม NOx (ppm), SO2 (ppm), O2 (%) แล้วจุดปัจจุบันมีครบ 4 ตัว. Response และประวัติคำขอยังคงเป็น snapshot ของคำขอ; การยื่นคำขอยังไม่เปลี่ยน active point. ' +
-        addParameterOwnershipDescription,
+        `${addParameterOwnershipDescription} ${addParameterEligibilityDescription}`,
       requestBody: {
         required: true,
         content: {
@@ -4014,7 +4016,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'verifyConnectionRequestConnection',
       description:
         'Permission: cems_wpms_requests:approve' +
-        ` ${connectionProfileWriteDescription} ${addParameterOwnershipDescription}` +
+        ` ${connectionProfileWriteDescription} ${addParameterOwnershipDescription} ${addParameterEligibilityDescription}` +
         ' ' +
         requestApprovalAccessDescription +
         ' ' +
