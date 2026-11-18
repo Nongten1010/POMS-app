@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { connectedPointVisibility } from '../poms-factories/connected-point-visibility';
 import { readPomsManagedStatuses } from '../poms-factories/poms-status-management.state';
-import { approvedParameterLabel } from '../poms-factories/poms-measurement-point-parameters';
+import {
+  approvedParameterLabel,
+  preserveEligibleParameters,
+} from '../poms-factories/poms-measurement-point-parameters';
 import type { StoredFactoryStatus } from '../poms-factories/poms-status-management.types';
 import type { Knex } from 'knex';
 import {
@@ -186,6 +189,7 @@ interface AddParameterPointOwnerRow extends AlertActivationConnectedPointRow {
   eligible_factory_id: number | string | null;
   system_type: 'CEMS' | 'WPMS';
   point_code: string;
+  details_json: string | null;
 }
 
 interface AddParameterPointOwnerInput {
@@ -1899,6 +1903,9 @@ async function syncConnectedMeasurementPointsInTransaction(
         : []),
       ...pointParameters,
     ]);
+    const details = isAddParameter
+      ? preserveEligibleParameters(parseJsonObject(owner.details_json), point.details)
+      : point.details;
     const instruments = isAddParameter
       ? mergeAddedParameterInstruments(
           parseJsonObject<MeasurementInstrumentsInput>(existing?.instruments_json ?? null),
@@ -1937,7 +1944,7 @@ async function syncConnectedMeasurementPointsInTransaction(
       point_type: point.pointType,
       parameters_json: JSON.stringify(parameters),
       monitoring_point_status: point.monitoringPointStatus ?? null,
-      details_json: point.details ? JSON.stringify(point.details) : null,
+      details_json: details ? JSON.stringify(details) : null,
       documents_json:
         point.documentsAndImages && point.documentsAndImages.length > 0
           ? JSON.stringify(point.documentsAndImages)
@@ -2014,6 +2021,7 @@ async function lockAddParameterPointOwners(
         'point_name',
         'parameters_json',
         'instruments_json',
+        'details_json',
       );
     const owner = matches[0];
     // The stable eligible identity is authoritative. Legacy/null identity must be

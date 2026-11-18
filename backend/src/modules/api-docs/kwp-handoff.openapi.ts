@@ -276,7 +276,8 @@ export function extendKwpHandoffSchemas(schemas: Record<string, Schema>): void {
       parameterDetails: {
         ...strings,
         description:
-          'พารามิเตอร์ที่เข้าข่ายทั้งหมด รวมรายการที่ยกเว้น; ป้ายชื่อพร้อมหน่วย; [] หากไม่มีข้อมูลที่จับคู่ได้แน่นอน',
+          'พารามิเตอร์ที่เข้าข่ายของจุดตรวจวัด POMS ปัจจุบันจาก details.eligibleParameters พร้อมหน่วย รวมรายการที่ยังไม่ได้เชื่อมต่อหรือได้รับยกเว้นตามที่บันทึกไว้ คืน [] เมื่อไม่พบจุดที่ตรงกันเพียงจุดเดียวหรือไม่มีรายการใน POMS',
+        example: ['BOD (mg/l)', 'COD (mg/l)'],
       },
       parameterInstrumentDetails: array({
         type: 'object',

@@ -34,6 +34,16 @@ export function requestedPointParameters(
   return requestedPointParametersSchema.parse(details.requestedParameters);
 }
 
+export function preserveEligibleParameters(
+  current: MeasurementPointDetailsInput | null,
+  submitted: MeasurementPointDetailsInput | null | undefined,
+): MeasurementPointDetailsInput | null {
+  if (submitted?.eligibleParameters !== undefined || current?.eligibleParameters === undefined) {
+    return submitted ?? null;
+  }
+  return { ...submitted, eligibleParameters: current.eligibleParameters };
+}
+
 export function alignPointInstruments(
   instruments: MeasurementInstrumentsInput | null,
   parameters: string[],

@@ -918,9 +918,14 @@ const bodCodReportExample = {
   attachments: [],
 };
 
+const kwpParameterWriteDescription =
+  'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับ parameterDetails ของจุดตรวจวัด POMS ปัจจุบัน ค่าหรือหน่วยที่ไม่อยู่ในรายการตอบ 400 BAD_REQUEST พร้อม error.details.allowedParameters';
+const kwpCreateDescription = `${kwpParameterWriteDescription} ไฟล์แนบต้องอัปโหลดด้วยบัญชีผู้ส่ง`;
+
 const kwp01Example = {
   factoryId: 'F000123',
   factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
+  connectedPointId: 8,
   issueReason: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
   problemDate: '2026-07-01T08:00:00',
   expectedDoneDate: '2026-07-05T06:00:00',
@@ -931,6 +936,7 @@ const kwp01Example = {
 const kwp03Example = {
   factoryId: 'F000123',
   factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
+  connectedPointId: 8,
   instruments: ['pH Meter'],
   issueReasons: ['เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง'],
   failedParameters: ['BOD (mg/l)'],
@@ -941,6 +947,7 @@ const kwp03Example = {
 const kwp05Example = {
   factoryId: 'F000123',
   factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
+  connectedPointId: 8,
   businessActivity: 'ประกอบกิจการตัวอย่าง',
   calibrationItems: [
     {
@@ -2796,7 +2803,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         allOf: [schemaRef('MeasurementPointDetails')],
         nullable: true,
         description:
-          'Optional; omitted = คงค่าเดิม, null = ล้างรายละเอียดโดยคงพารามิเตอร์หลัก. requestedParameters เป็นพารามิเตอร์เป้าหมายหลังอนุมัติ: string[] ไม่ซ้ำ (ไม่แยกตัวพิมพ์), [] = ล้างทั้งหมด, ห้าม null และตัวเลือก ไม่มี/ได้รับการยกเว้นทั้งหมด. Approval อัปเดต parameters_json และเลิกใช้ช่องอุปกรณ์ที่ถูกถอดออก; พารามิเตอร์ใหม่ต้องตั้ง Address ID จริง',
+          'ละ details เพื่อคงค่าเดิมทั้งก้อน ส่ง null เพื่อล้างรายละเอียดอื่นโดยคง eligibleParameters และพารามิเตอร์ที่เชื่อมต่อไว้ เมื่อส่งออบเจ็กต์และละ eligibleParameters จะคงรายการที่เข้าข่ายเดิม ส่ง eligibleParameters: [] เพื่อล้างรายการนี้. requestedParameters เป็นพารามิเตอร์เป้าหมายหลังอนุมัติ: string[] ไม่ซ้ำ (ไม่แยกตัวพิมพ์), [] = ล้างทั้งหมด, ห้าม null และตัวเลือก ไม่มี/ได้รับการยกเว้นทั้งหมด. Approval อัปเดต parameters_json และเลิกใช้ช่องอุปกรณ์ที่ถูกถอดออก พารามิเตอร์ใหม่ต้องตั้ง Address ID จริง',
         properties: {
           requestedParameters: {
             type: 'array',
@@ -6723,7 +6730,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       operationId: 'reviewPomsFactoryEditRequest',
       description:
         'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาใช้ effective factories:approve ไม่จำกัดด้วย role หรือ userType; ผู้มีสิทธิ์พิจารณาคำขอของตนเองได้ ทั้งกรณีเป็น original creator (createdBy) หรือ latest submitter (submittedBy) โดยใช้ได้กับ APPROVE, REQUEST_REVISION และ REJECT. REJECT ได้ทุกสถานะเป็น REJECTED และไม่บังคับเหตุผล; officerNote ส่ง null ค่าว่าง หรือละ field ได้. REJECT บันทึกการพิจารณาโดยไม่ย้อนข้อมูล current/live ที่เคยอนุมัติและคง approvedAt เดิม. APPROVE และ REQUEST_REVISION ยังคงตรวจสถานะเดิม. canonical mode ตรวจ revision ของข้อมูลทั่วไปที่ backend เก็บภายใน ผู้เรียกไม่ต้องส่ง revision เพิ่ม; คำขอเก่าที่ไม่มี revision ตรวจ editable baseline ก่อนอนุมัติ. legacy mode เก็บ source timestamp ระดับมิลลิวินาที; คำขอเก่าที่เวลาในฐานข้อมูลถูกปัดแบบ SQL DATETIME ใช้ currentFactory.updatedAt ใน snapshot เดิมเมื่อยืนยันได้ว่าเป็นผลจากการปัดเวลา และยังต้องตรงกับ current/live ทุกมิลลิวินาที โดยไม่ต้องสร้างหรือส่งคำขอใหม่. แก้เฉพาะจุดตรวจวัดไม่เขียนข้อมูลทั่วไปหรือข้อมูลเข้าข่าย. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction' +
-        ' ' +
+        ' เมื่อ APPROVE คำขอแก้ไขจุด ให้คง details.eligibleParameters เดิมหากข้อเสนอไม่ได้ระบุฟิลด์นี้ รวมถึงคำขอที่บันทึกไว้ก่อนเปลี่ยนกติกานี้ ' +
         menuApprovalAccessDescription,
       parameters: [idParameter],
       requestBody: jsonRequestBody(
@@ -7095,9 +7102,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'อ่านจุดตรวจวัดและพารามิเตอร์ที่เข้าข่ายสำหรับ กวภ.',
       operationId: 'listKwpEligibleMeasurementPoints',
-      parameters: [stringPath('factoryId', 'รหัสโรงงานจากตาราง กวภ.')],
+      parameters: [stringPath('factoryId', 'รหัสโรงงานจากตาราง กวภ.', 64)],
       description:
-        'ใช้ kwp_forms:view และ data scope ของเมนู กวภ. คืนข้อมูล prefill รูปแบบเดิมแต่ parameterDetails ใช้พารามิเตอร์ที่เข้าข่ายทั้งหมด รวมรายการที่ยกเว้น ไม่ต้องมีสิทธิ์ cems_wpms_requests:view',
+        'ใช้ kwp_forms:view และขอบเขตโรงงาน/พื้นที่ของเมนู กวภ. คืน parameterDetails จาก details.eligibleParameters ของจุดตรวจวัด POMS ปัจจุบัน ใช้รายการนี้เลือกพารามิเตอร์สำหรับ POST/PATCH กวภ.01–05',
       successSchema: schemaRef('KwpEligibleMeasurementPointsResponse'),
     }),
   },
@@ -7139,8 +7146,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create KWP01',
       operationId: 'createKwp01',
       successSchema: schemaRef('KwpCreatedResponse'),
-      description:
-        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
+      description: kwpCreateDescription,
       requestBody: jsonRequestBody(schemaRef('Kwp01Request'), kwp01Example),
       successStatus: '201',
     }),
@@ -7157,6 +7163,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Update KWP01',
       operationId: 'updateKwp01',
+      description: kwpParameterWriteDescription,
       successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp01Request'), kwp01Example),
@@ -7178,11 +7185,11 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create KWP02',
       operationId: 'createKwp02',
       successSchema: schemaRef('KwpCreatedResponse'),
-      description:
-        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
+      description: kwpCreateDescription,
       requestBody: jsonRequestBody(schemaRef('Kwp02Or04Request'), {
         factoryId: 'F000123',
         factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
+        connectedPointId: 8,
         measurementItems: [{ pollutant: 'BOD (mg/l)' }],
       }),
       successStatus: '201',
@@ -7200,11 +7207,13 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Update KWP02',
       operationId: 'updateKwp02',
+      description: kwpParameterWriteDescription,
       successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp02Or04Request'), {
         factoryId: 'F000123',
         factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
+        connectedPointId: 8,
         measurementItems: [{ pollutant: 'BOD (mg/l)' }],
       }),
     }),
@@ -7225,8 +7234,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create KWP03',
       operationId: 'createKwp03',
       successSchema: schemaRef('KwpCreatedResponse'),
-      description:
-        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
+      description: kwpCreateDescription,
       requestBody: jsonRequestBody(schemaRef('Kwp03Request'), kwp03Example),
       successStatus: '201',
     }),
@@ -7243,6 +7251,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Update KWP03',
       operationId: 'updateKwp03',
+      description: kwpParameterWriteDescription,
       successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp03Request'), kwp03Example),
@@ -7264,11 +7273,11 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create KWP04',
       operationId: 'createKwp04',
       successSchema: schemaRef('KwpCreatedResponse'),
-      description:
-        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน. บังคับ measurementItems[].reportCondition เป็น string 4(1), 4(2), 11(3) หรือ 16 ทุกแถว ไม่มีค่าเริ่มต้น; ผิดหรือขาดค่าได้ 400 VALIDATION_ERROR. กวภ.02 ไม่รับฟิลด์นี้',
+      description: `${kwpCreateDescription} บังคับ measurementItems[].reportCondition เป็น string 4(1), 4(2), 11(3) หรือ 16 ทุกแถวและไม่มีค่าเริ่มต้น ผิดหรือขาดค่าได้ 400 VALIDATION_ERROR. กวภ.02 ไม่รับฟิลด์นี้`,
       requestBody: jsonRequestBody(schemaRef('Kwp04Request'), {
         factoryId: 'F000123',
         factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
+        connectedPointId: 8,
         measurementItems: [{ pollutant: 'CO (ppm)', reportCondition: '4(1)' }],
       }),
       successStatus: '201',
@@ -7288,13 +7297,13 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Update KWP04',
       operationId: 'updateKwp04',
-      description:
-        'ใช้ kwp_forms:edit และสถานะ REVISION_REQUESTED ตามขอบเขตเดิม; ส่งข้อมูลแบบและ measurementItems[] ทั้งชุดตาม contract เดิม โดยบังคับ reportCondition ทุกแถว รวมรายการเก่าที่นำมาแก้ไข. ค่าที่ขาด ว่าง null ไม่ใช่ string หรือนอก enum ได้ 400 VALIDATION_ERROR; จากนั้นจึง POST resubmit',
+      description: `${kwpParameterWriteDescription} แก้ได้ในสถานะ REVISION_REQUESTED โดยส่งข้อมูลแบบและ measurementItems[] ทั้งชุด พร้อม reportCondition ทุกแถว รวมรายการเก่าที่นำมาแก้ไข ค่าที่ขาด ว่าง null ไม่ใช่ string หรือนอก enum ได้ 400 VALIDATION_ERROR จากนั้นจึง POST resubmit`,
       successSchema: schemaRef('Kwp04SubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp04Request'), {
         factoryId: 'F000123',
         factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
+        connectedPointId: 8,
         measurementItems: [{ pollutant: 'CO (ppm)', reportCondition: '4(2)' }],
       }),
     }),
@@ -7317,8 +7326,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Create KWP05',
       operationId: 'createKwp05',
       successSchema: schemaRef('KwpCreatedResponse'),
-      description:
-        'ใช้ kwp_forms:edit ตามขอบเขตโรงงาน/พื้นที่ ตรวจพารามิเตอร์กับรายการที่เข้าข่ายทั้งหมด และตรวจไฟล์จากผู้ส่ง; ต้องอัปโหลดไฟล์ใหม่ด้วยบัญชีปัจจุบัน',
+      description: kwpCreateDescription,
       requestBody: jsonRequestBody(schemaRef('Kwp05Request'), kwp05Example),
       successStatus: '201',
     }),
@@ -7335,6 +7343,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'KWP Forms',
       summary: 'Update KWP05',
       operationId: 'updateKwp05',
+      description: kwpParameterWriteDescription,
       successSchema: schemaRef('KwpSubmissionDetailResponse'),
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('Kwp05Request'), kwp05Example),

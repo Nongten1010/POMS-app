@@ -14,6 +14,7 @@ import {
 import {
   requestedPointParameters,
   alignPointInstruments,
+  preserveEligibleParameters,
 } from './poms-measurement-point-parameters';
 import { reconcileApprovedStationParameters } from '../device-connections/reconcile-approved-station-parameters';
 import { db } from '../../config/database';
@@ -1034,20 +1035,19 @@ export function buildApprovedPomsMeasurementPointUpdates(
         ? requested
         : current.parameters;
     const parametersChanged = JSON.stringify(parameters) !== JSON.stringify(current.parameters);
-    const effective = parametersChanged
-      ? {
-          ...proposed,
-          parameters,
-          measurementInstruments: alignPointInstruments(
-            proposed.measurementInstruments,
-            parameters,
-          ),
-        }
-      : proposed;
+    const effective = {
+      ...proposed,
+      parameters,
+      // Pending proposals may predate eligibility preservation. The baseline is checked under lock.
+      details: preserveEligibleParameters(current.details, proposed.details),
+      measurementInstruments: parametersChanged
+        ? alignPointInstruments(proposed.measurementInstruments, parameters)
+        : proposed.measurementInstruments,
+    };
     if (
       !parametersChanged &&
       JSON.stringify(editableMeasurementPointState(current)) ===
-        JSON.stringify(editableMeasurementPointState(proposed))
+        JSON.stringify(editableMeasurementPointState(effective))
     ) {
       return [];
     }

@@ -28,6 +28,42 @@ describe('integrated POMS measurement-point edit service', () => {
     mockedRepository.createEditRequest.mockResolvedValue(editRequest() as never);
   });
 
+  it.each([
+    {
+      submitted: { requestedParameters: ['NOx (ppm)'] },
+      expected: { requestedParameters: ['NOx (ppm)'], eligibleParameters: ['CO (ppm)'] },
+    },
+    { submitted: null, expected: { eligibleParameters: ['CO (ppm)'] } },
+    { submitted: { eligibleParameters: [] }, expected: { eligibleParameters: [] } },
+    {
+      submitted: { eligibleParameters: ['NOx (ppm)'] },
+      expected: { eligibleParameters: ['NOx (ppm)'] },
+    },
+  ])('retains POMS eligibility in an edit proposal unless supplied ($submitted)', async (row) => {
+    const current = factoryDetail();
+    mockedRepository.findFactoryDetail.mockResolvedValueOnce({
+      ...current,
+      measurementPoints: current.measurementPoints.map((point) => ({
+        ...point,
+        details: { eligibleParameters: ['CO (ppm)'], stackHeight: 10 },
+      })),
+    } as never);
+
+    await pomsFactoriesService.createEditRequest(
+      current.factoryId,
+      {
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [{ connectedPointId: 15, details: row.submitted }],
+      },
+      42,
+      { scope: 'OWN_FACTORY' },
+      null,
+    );
+
+    const saved = mockedRepository.createEditRequest.mock.calls[0]?.[1];
+    expect(saved?.proposedMeasurementPoints?.[0].details).toEqual(row.expected);
+  });
+
   it('preserves point identity, type and code while deriving approved parameters', async () => {
     await pomsFactoriesService.createEditRequest(
       'factory-001',

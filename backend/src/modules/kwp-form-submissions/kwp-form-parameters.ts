@@ -44,7 +44,7 @@ function stringList(value: unknown): string[] {
     : [];
 }
 
-/** Called only after factory/point access has been checked by the caller. */
+/** Reads the current POMS eligibility list after the caller checks factory/point access. */
 export async function getKwpEligibleParameters(
   connection: Knex | Knex.Transaction,
   reference: KwpParameterPointReference,
@@ -56,54 +56,10 @@ export async function getKwpEligibleParameters(
   else if (reference.pointCode) query.where('point_code', reference.pointCode);
   else if (reference.pointName) query.where('point_name', reference.pointName);
   else return [];
-  const points = await query.select(
-    'id',
-    'eligible_factory_id',
-    'point_code',
-    'point_name',
-    'system_type',
-    'details_json',
-    'parameters_json',
-  );
+  const points = await query.select('details_json', 'parameters_json');
   if (points.length !== 1) return [];
   const point = points[0];
-  const factories = connection(factoryProfileReadTable('eligible_factories')).whereNull(
-    'deleted_at',
-  );
-  if (point.eligible_factory_id != null) factories.where('id', point.eligible_factory_id);
-  else
-    factories.where((builder) =>
-      builder
-        .where('source_factory_id', reference.factoryId)
-        .orWhere('factory_registration_no_new', reference.factoryId)
-        .orWhere('factory_registration_no_old', reference.factoryId),
-    );
-  const matches = await factories.select('monitoring_point_form_id');
-  let eligible: string[] | undefined;
-  if (matches.length === 1 && matches[0].monitoring_point_form_id != null) {
-    const candidates = await connection('factory_monitoring_points')
-      .where('form_id', matches[0].monitoring_point_form_id)
-      .where('system_type', point.system_type)
-      .whereNull('deleted_at')
-      .select('point_code', 'point_name', 'eligible_parameters_json');
-    const byCode = point.point_code
-      ? candidates.filter(
-          (candidate) =>
-            parameterKey(candidate.point_code ?? '') === parameterKey(point.point_code),
-        )
-      : [];
-    const selected = byCode.length
-      ? byCode
-      : candidates.filter(
-          (candidate) =>
-            point.point_name &&
-            parameterKey(candidate.point_name ?? '') === parameterKey(point.point_name),
-        );
-    if (selected.length === 1) eligible = stringList(selected[0].eligible_parameters_json);
-    else if (selected.length > 1) return [];
-  }
-  // Only an explicitly stored eligibility snapshot is a legacy fallback, never the connected list.
-  eligible ??= stringList(jsonObject(point.details_json).eligibleParameters);
+  const eligible = stringList(jsonObject(point.details_json).eligibleParameters);
   const liveLabels = stringList(point.parameters_json);
   return [
     ...new Set(
