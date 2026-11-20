@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { db } from '../../src/config/database';
+import { env } from '../../src/config/env';
 import { connectionRequestsRoutes } from '../../src/modules/connection-requests/connection-requests.routes';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
 import { errorHandler } from '../../src/shared/middlewares/errorHandler';
@@ -83,6 +84,7 @@ describe('canceled point-code reuse through the approval API', () => {
   it.each(['operator', 'officer', 'timeout'] as const)(
     'retires configs during %s cancellation before the code is reused',
     async (action) => {
+      jest.replaceProperty(env, 'CONNECTION_REQUEST_AUTO_CANCEL_ENABLED', action !== 'operator');
       await db(requests)
         .where('id', 101)
         .update({

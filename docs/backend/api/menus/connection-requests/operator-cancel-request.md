@@ -100,6 +100,7 @@
 - หากคำขอเป็น `CANCELED` อยู่แล้ว endpoint ตอบ `409 CONFLICT` และไม่แก้เหตุผล, เวลา, actor หรือเพิ่ม history ซ้ำ รวมกรณีมีการยกเลิกอีกคำสั่งก่อน lock แถวสำเร็จ.
 - Backend lock แถวคำขอใน transaction ก่อนตรวจสถานะและเขียน history เพื่อไม่ให้ cancel แข่งกับ action อื่นแล้วสำเร็จทั้งคู่.
 - เก็บ request, factory snapshot, measurement points, documents และ point codes เป็นประวัติ.
+- ค่าเริ่มต้นพักการยกเลิกอัตโนมัติเมื่อพ้นกำหนด การยกเลิกโดยผู้ประกอบการยังใช้ endpoint นี้ได้ตามสถานะที่อนุญาต ดู [กำหนดตั้งค่าและยืนยันการเชื่อมต่อ](./README.md#connection-setup-deadline)
 - ปิดใช้งาน device configs ของคำขอ (`request_id`) และสำเนา current ที่ `source_request_id` ตรงคำขอ พร้อม `device_measurement_channels` ด้วย soft delete (`deleted_at`, `updated_at`, `updated_by`) ใน transaction เดียวกับสถานะและ history; ไม่ลบแถวหรือค่าตั้งค่าเดิมถาวร และไม่แตะ config ของคำขออื่นหรือ config อิสระ แม้ใช้ station เดียวกัน. การยกเลิกโดยเจ้าหน้าที่และหมดเวลาอัตโนมัติใช้กติกาเดียวกัน หากปิด config ไม่สำเร็จให้ rollback การยกเลิกทั้งหมด.
 - การบันทึก config ล็อกคำขอและตรวจ `WAITING_CONNECTION` ซ้ำใน transaction; คำสั่งที่มาถึงหลังยกเลิกตอบ `409 CONFLICT` แทนการสร้าง config กลับมา ดู [การบันทึก config](./device-configs.md#validation-and-business-rules).
 - แม้เก็บ device configs เป็นประวัติ [Integration device config](../../integrations/device-configs/README.md#สถานะคำขอและการเลือก-config) จะไม่ใช้ config ของคำขอ `CANCELED` รวมสำเนา current; ตรวจสถานะต้นทางทุกครั้งทั้งการยกเลิกโดยผู้ใช้และอัตโนมัติ

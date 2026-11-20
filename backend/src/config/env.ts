@@ -20,6 +20,10 @@ const envSchema = z
       .transform((v) => v === 'true'),
     FACTORY_STATUS_MAX_AGE_SECONDS: z.coerce.number().int().min(60).max(86400).default(3600),
     FACTORY_STATUS_SYNC_HOUR: z.coerce.number().int().min(0).max(23).default(2),
+    CONNECTION_REQUEST_AUTO_CANCEL_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     FACTORY_PROFILE_MODE: z.enum(['legacy', 'canonical']).default('legacy'),
     API_DOCS_ENABLED: z
       .enum(['true', 'false'])

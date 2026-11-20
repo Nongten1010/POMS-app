@@ -120,6 +120,7 @@ describe('connectionRequestsService', () => {
   const actorUserId = 42;
   const now = new Date('2026-05-27T10:00:00.000Z');
   const dueAt = new Date('2026-06-26T10:00:00.000Z').toISOString();
+  const originalAutoCancelEnabled = env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED;
   const payload: CreateConnectionRequestInput = {
     factoryId: 'factory-001',
     factoryName: 'บริษัท ทดสอบ จำกัด',
@@ -347,6 +348,10 @@ describe('connectionRequestsService', () => {
     connectionRequestsService.setClockForTests(() => now);
   });
 
+  afterEach(() => {
+    env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED = originalAutoCancelEnabled;
+  });
+
   it('returns request table rows formatted for officer/operator grids', async () => {
     connectionRequestsService.setClockForTests(() => new Date('2026-06-08T10:00:00.000Z'));
     const request = requestDto({
@@ -391,7 +396,12 @@ describe('connectionRequestsService', () => {
       statusLabel: 'เชื่อมต่อแล้ว',
       connectionDueAt: dueAt,
     });
-    mockedRepository.list.mockResolvedValue({ rows: [request, connectedRequest], total: 2 });
+    const expiredDueAt = '2026-06-08T09:59:59.000Z';
+    const expiredRequest = { ...request, id: 3, connectionDueAt: expiredDueAt };
+    mockedRepository.list.mockResolvedValue({
+      rows: [request, connectedRequest, expiredRequest],
+      total: 3,
+    });
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
@@ -427,6 +437,12 @@ describe('connectionRequestsService', () => {
       connectionDueAt: null,
       waitingConnectionDaysRemaining: null,
       waitingConnectionText: null,
+    });
+    expect(result.data[2]).toMatchObject({
+      statusCode: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      connectionDueAt: expiredDueAt,
+      waitingConnectionDaysRemaining: 0,
+      waitingConnectionText: 'รอโรงงานตั้งค่าอุปกรณ์ภายใน 0 วัน',
     });
   });
 
@@ -5575,50 +5591,57 @@ describe('connectionRequestsService', () => {
     );
   });
 
-  it('cancels immediately when a confirmed connection is returned after its original due date', async () => {
-    mockedRepository.findById.mockResolvedValue(
-      requestDto({
-        status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
-        connectionDueAt: '2026-05-01T00:00:00.000Z',
-        confirmedAt: '2026-04-30T10:00:00.000Z',
-        createdBy: actorUserId,
-      }),
-    );
-    mockedRepository.updateStatus.mockResolvedValue(
-      requestDto({
-        status: CONNECTION_REQUEST_STATUS.CANCELED,
-        connectionDueAt: '2026-05-01T00:00:00.000Z',
-        confirmedAt: null,
-        createdBy: actorUserId,
-      }),
-    );
+  it.each([
+    {
+      enabled: false,
+      status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
+    },
+    {
+      enabled: true,
+      status: CONNECTION_REQUEST_STATUS.CANCELED,
+      revisionReason:
+        'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง\nระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน',
+    },
+  ])(
+    'returns an expired confirmed connection to $status with auto-cancel=$enabled',
+    async ({ enabled, status, revisionReason }) => {
+      env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED = enabled;
+      const originalDueAt = '2026-05-01T00:00:00.000Z';
+      mockedRepository.findById.mockResolvedValue(
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+          connectionDueAt: originalDueAt,
+          confirmedAt: '2026-04-30T10:00:00.000Z',
+          createdBy: actorUserId,
+        }),
+      );
+      mockedRepository.updateStatus.mockResolvedValue(
+        requestDto({ status, connectionDueAt: originalDueAt, confirmedAt: null }),
+      );
 
-    await connectionRequestsService.changeStatus(
-      1,
-      {
-        action: 'RETURN_TO_WAITING_CONNECTION',
-        revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
-        officerNote: 'ครบกำหนดแล้ว',
-      },
-      7,
-    );
+      await connectionRequestsService.changeStatus(
+        1,
+        {
+          action: 'RETURN_TO_WAITING_CONNECTION',
+          revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
+          officerNote: 'ครบกำหนดแล้ว',
+        },
+        7,
+      );
 
-    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
-      1,
-      CONNECTION_REQUEST_STATUS.CANCELED,
-      7,
-      {
-        officerNote: 'ครบกำหนดแล้ว',
-        revisionReason:
-          'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง\nระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน',
-        confirmedAt: null,
-      },
-      {
-        approvalAccess: { scope: 'ALL', regionalAccess: undefined },
-        issueWaitingConnectionSideEffects: false,
-      },
-    );
-  });
+      expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+        1,
+        status,
+        7,
+        { officerNote: 'ครบกำหนดแล้ว', revisionReason, confirmedAt: null },
+        {
+          approvalAccess: { scope: 'ALL', regionalAccess: undefined },
+          issueWaitingConnectionSideEffects: false,
+        },
+      );
+    },
+  );
 
   it('rejects returning to waiting connection from a non-confirmed status', async () => {
     mockedRepository.findById.mockResolvedValue(
@@ -6321,7 +6344,15 @@ describe('connectionRequestsService', () => {
     );
   });
 
-  it('auto-cancels expired waiting connection requests', async () => {
+  it('skips the expiry sweep while auto-cancellation is paused', async () => {
+    env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED = false;
+
+    await expect(connectionRequestsService.autoCancelExpiredWaitingConnections()).resolves.toBe(0);
+    expect(mockedRepository.autoCancelExpiredWaitingConnectionRequests).not.toHaveBeenCalled();
+  });
+
+  it('auto-cancels expired waiting connection requests when enabled', async () => {
+    env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED = true;
     mockedRepository.autoCancelExpiredWaitingConnectionRequests.mockResolvedValue(2);
 
     await expect(connectionRequestsService.autoCancelExpiredWaitingConnections()).resolves.toBe(2);

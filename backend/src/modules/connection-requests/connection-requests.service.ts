@@ -13,6 +13,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../shared/errors/AppError';
+import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { isCanonicalFactoryProfilesEnabled } from '../factory-profiles/factory-profile-mode';
 import { isFactoryType88 } from '../../shared/utils/factory-type-scope';
@@ -1663,7 +1664,10 @@ export const connectionRequestsService = {
     const request = await loadRequest(id);
     await ensureCanApprove(request, actorUserId, approveScope, regionalAccess);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
-    const nextStatus = isPastConnectionDueDate(request.connectionDueAt, nowProvider())
+    const shouldAutoCancel =
+      env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED &&
+      isPastConnectionDueDate(request.connectionDueAt, nowProvider());
+    const nextStatus = shouldAutoCancel
       ? CONNECTION_REQUEST_STATUS.CANCELED
       : CONNECTION_REQUEST_STATUS.WAITING_CONNECTION;
 
@@ -1673,10 +1677,9 @@ export const connectionRequestsService = {
       actorUserId,
       {
         officerNote: input.officerNote ?? null,
-        revisionReason:
-          nextStatus === CONNECTION_REQUEST_STATUS.CANCELED
-            ? appendAutoCancelNote(input.revisionReason)
-            : input.revisionReason,
+        revisionReason: shouldAutoCancel
+          ? appendAutoCancelNote(input.revisionReason)
+          : input.revisionReason,
         confirmedAt: null,
       },
       {
@@ -1687,6 +1690,7 @@ export const connectionRequestsService = {
   },
 
   autoCancelExpiredWaitingConnections(): Promise<number> {
+    if (!env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED) return Promise.resolve(0);
     return connectionRequestsRepository.autoCancelExpiredWaitingConnectionRequests(
       nowProvider().toISOString(),
     );

@@ -168,7 +168,7 @@ API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต�
 | เปลี่ยนสถานะ/แจ้งแก้ไข/ปฏิเสธ                  | `POST` | `/api/v1/cems-wpms-requests/:id/status`                   | `id` path + JSON body          | `cems_wpms_requests:approve` + data scope | [Approve form status](#approve-form-status), [ปฏิเสธ](#reject-request)                                                             |
 | ผู้ประกอบการยกเลิกคำขอ                        | `POST` | `/api/v1/cems-wpms-requests/:id/cancel`                   | `id` path + `{ reason? }`      | `cems_wpms_requests:edit` + data scope   | [Cancel request](./operator-cancel-request.md)                                                                                    |
 | บันทึก config อุปกรณ์ในคำขอ                   | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs`           | `id` path + JSON body          | `cems_wpms_requests:edit`           | [Device configs](./device-configs.md)                                                                                             |
-| บันทึก/ยืนยันการเชื่อมต่อ                     | `POST` | `/api/v1/cems-wpms-requests/:id/confirm-connection`       | `id` path + JSON body          | `cems_wpms_requests:edit`           | `action`, `confirmedAt?`, `note?`                                                                                                 |
+| บันทึก/ยืนยันการเชื่อมต่อ                     | `POST` | `/api/v1/cems-wpms-requests/:id/confirm-connection`       | `id` path + JSON body          | `cems_wpms_requests:edit`           | [กำหนดตั้งค่าและยืนยันการเชื่อมต่อ](#connection-setup-deadline) |
 | เจ้าหน้าที่ตรวจยืนยันการเชื่อมต่อ             | `POST` | `/api/v1/cems-wpms-requests/:id/verify-connection`        | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Connected factory profile sync](#connected-factory-profile-sync)                                                                 |
 
 ### จุดตรวจวัดที่เชื่อมต่อแล้ว: 6 API
@@ -424,6 +424,32 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
   "notificationEmails": ["name+alerts@example.com"],
   "officerNotificationEmails": ["officer@example.com"]
 }
+```
+
+<a id="connection-setup-deadline"></a>
+
+### กำหนดตั้งค่าและยืนยันการเชื่อมต่อ
+
+- เมื่ออนุมัติเข้า `WAITING_CONNECTION` ระบบตั้ง `connectionDueAt` ไว้ 30 วันนับจากเวลาอนุมัติ `GET /api/v1/cems-wpms-requests/table-rows` คำนวณ `waitingConnectionDaysRemaining` จากเวลาที่เหลือ ปัดขึ้นและต่ำสุดเป็น `0`
+- ค่าเริ่มต้นพักการยกเลิกอัตโนมัติ เมื่อถึงกำหนด คำขอยังอยู่ใน `WAITING_CONNECTION` ตารางคืน `waitingConnectionDaysRemaining: 0` พร้อมวันครบกำหนดเดิมและข้อความ `รอโรงงานตั้งค่าอุปกรณ์ภายใน 0 วัน`
+- `POST /:id/confirm-connection` ใช้ `action: "SAVE"` เพื่อบันทึกความคืบหน้าและคงสถานะรอ ส่วน `action: "CONFIRM"` ตรวจ `confirmedAt` เทียบกับ `connectionDueAt` ตามเดิม หากละ `confirmedAt` ใช้เวลาปัจจุบันของ Backend หากเวลาที่ใช้ตรวจเกินกำหนด ตอบ `400 BAD_REQUEST`
+- ตั้ง `CONNECTION_REQUEST_AUTO_CANCEL_ENABLED=true` แล้วเริ่ม Backend ใหม่เพื่อเปิดการยกเลิกอัตโนมัติอีกครั้ง รอบตรวจจะรวมคำขอ `WAITING_CONNECTION` ที่พ้นกำหนดอยู่แล้ว ดู [ผลของการสั่งกลับไปตั้งค่าอุปกรณ์](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsidstatus)
+
+| ฟิลด์ของ `POST /:id/confirm-connection` | ชนิด | เงื่อนไข |
+| --- | --- | --- |
+| `id` (path) | integer | จำนวนเต็มบวก |
+| `action` | enum | `SAVE` หรือ `CONFIRM` ค่าเริ่มต้น `CONFIRM` |
+| `confirmedAt` | string | ISO 8601 UTC ละได้ |
+| `note` | string \| null | ละได้ สูงสุด 1,000 ตัวอักษรหลัง trim |
+
+ตัวอย่าง request และ response ขั้นต่ำของ `SAVE` สำหรับคำขอที่พ้นกำหนด
+
+```json
+{ "action": "SAVE" }
+```
+
+```json
+{ "success": true, "data": { "id": 101, "status": "WAITING_CONNECTION" } }
 ```
 
 ### Request table location source

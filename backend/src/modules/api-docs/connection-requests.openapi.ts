@@ -1516,7 +1516,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
       codeIssuedAt: { type: 'string', format: 'date-time', nullable: true },
       codeIssuedDate: { type: 'string', nullable: true },
       connectionDueAt: { type: 'string', format: 'date-time', nullable: true },
-      waitingConnectionDaysRemaining: { type: 'integer', nullable: true },
+      waitingConnectionDaysRemaining: {
+        type: 'integer',
+        minimum: 0,
+        nullable: true,
+        description:
+          'จำนวนวันคงเหลือถึง connectionDueAt ปัดขึ้น คืน 0 เมื่อถึงกำหนดหรือพ้นกำหนดขณะที่คำขอยังอยู่ใน WAITING_CONNECTION ค่าเริ่มต้นพักการยกเลิกอัตโนมัติเมื่อพ้นกำหนด',
+      },
       waitingConnectionText: {
         type: 'string',
         nullable: true,
@@ -3813,6 +3819,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
         '. ' +
         canceledPointCodeReuseDescription +
         ' ' +
+        'action RETURN_TO_WAITING_CONNECTION ใช้จาก CONNECTION_CONFIRMED ล้าง confirmedAt และคง connectionDueAt เดิม ค่าเริ่มต้นคืน WAITING_CONNECTION แม้พ้นกำหนดแล้ว เมื่อเปิดการยกเลิกอัตโนมัติ คำขอที่พ้นกำหนดจะเปลี่ยนเป็น CANCELED. ' +
         'ล็อกคำขอและตรวจ approve scope ซ้ำก่อน REJECT; นอก scope ตอบ 404 โดยไม่เปลี่ยนสถานะ/ประวัติ. คำสั่งอื่นที่ล่าช้าหลัง REJECTED ตอบ 409 CONFLICT พร้อม error.details.currentStatus = REJECTED ก่อนจองรหัสหรือ activate จุด. ' +
         'action REJECT เปลี่ยนเป็น REJECTED ได้จากทุกสถานะ รวม CONNECTED, CANCELED และ REJECTED ซ้ำ โดยไม่บังคับ officerNote/revisionReason (omitted, null หรือข้อความว่างได้). ตรวจ approve permission และ data scope เดิม บันทึกสถานะและประวัติ ไม่ยกเลิกการเชื่อมต่อหรือย้อนข้อมูล live ที่เชื่อมต่อแล้ว. ' +
         'Permission: cems_wpms_requests:approve. ใน canonical mode ผู้พิจารณาใช้ action REQUEST_REVISION จาก WAITING_CONNECTION หรือ CONNECTION_CONFIRMED กลับ WAITING_FACTORY_REVISION ได้เฉพาะการเชื่อมต่อครั้งแรกที่ยังไม่มี active connected point และ source revision หายหรือเก่าสำหรับข้อมูลทั่วไปที่ส่งมา; จากนั้นผู้มีสิทธิ์ edit ตาม scope/assignment ของโรงงาน resubmit เพื่อเก็บ revision ใหม่ ทั้ง OPERATOR_FORM และ OFFICER_DIRECT_API โดยคง createdBy เดิม. กรณีอื่นคงข้อจำกัด transition เดิม. ' +
@@ -3985,7 +3992,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'confirmConnectionRequestConnection',
       description:
         requestEditAccessDescription +
-        'ใช้ได้ใน WAITING_CONNECTION สำหรับ SAVE และ CONFIRM; ' +
+        'ใช้ได้ใน WAITING_CONNECTION โดย SAVE คงสถานะรอ ส่วน CONFIRM ตรวจ confirmedAt เทียบกับ connectionDueAt แม้อยู่ระหว่างพักการยกเลิกอัตโนมัติ หากละ confirmedAt ใช้เวลา Backend และเมื่อเวลาที่ใช้ตรวจเกินกำหนด ตอบ 400 BAD_REQUEST. ' +
         connectionProfileWriteDescription +
         ' ' +
         addParameterOwnershipDescription,

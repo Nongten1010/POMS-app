@@ -1,5 +1,16 @@
 # API Breaking Changes
 
+<a id="connection-request-auto-cancel-pause"></a>
+
+## 2026-11-20 — พักการยกเลิกอัตโนมัติเมื่อพ้นกำหนดเชื่อมต่อ
+
+- **Affected canonical docs:** [กำหนดตั้งค่าและยืนยันการเชื่อมต่อ](./menus/connection-requests/README.md#connection-setup-deadline), [ย้อนกลับไปรอตั้งค่าอุปกรณ์](./menus/connection-requests/request-payloads-and-validation.md#post-apiv1cems-wpms-requestsidstatus)
+- **Impact:** ค่าเริ่มต้นคงคำขอที่พ้นกำหนดไว้ใน `WAITING_CONNECTION` และคืนวันคงเหลือ `0` ในตาราง `RETURN_TO_WAITING_CONNECTION` ใช้กติกาเดียวกันและคง `connectionDueAt` เดิม เส้นตายของ `CONFIRM` ยังคง 30 วัน
+- **Migration:** อ่านสถานะจาก API และแสดงวันคงเหลือ `0` ตามค่าที่ได้ ใช้ฐานข้อมูลเดิมได้ หากเปิด `CONNECTION_REQUEST_AUTO_CANCEL_ENABLED=true` แล้วเริ่ม Backend ใหม่ รอบตรวจจะยกเลิกคำขอที่รอและพ้นกำหนดอยู่แล้วด้วย
+- **Old contract:** รอบตรวจยกเลิกคำขอ `WAITING_CONNECTION` ที่พ้นกำหนด และ `RETURN_TO_WAITING_CONNECTION` คืน `CANCELED` เมื่อพ้นกำหนดเดิม
+- **New contract:** ค่าเริ่มต้นพักการเปลี่ยนเป็น `CANCELED` เพราะพ้นกำหนดทั้งสองทาง
+- **Breaking change:** yes — สถานะจาก API หลังพ้นกำหนดและผลของ `RETURN_TO_WAITING_CONNECTION` เปลี่ยนตามค่าเริ่มต้นใหม่
+
 <a id="preserve-poms-point-eligibility"></a>
 
 ## 2026-11-18 — คงพารามิเตอร์ที่เข้าข่ายเมื่ออัปเดตจุด POMS

@@ -399,7 +399,7 @@ criteria normalization สำคัญ
 - `CEMS` ต้องมีเอกสารแนบอย่างน้อย 1 รายการต่อ point; `WPMS` ไม่บังคับ
 - สถานะ `ได้รับการยกเว้นทั้งหมด` และการขยายเวลาทั้งจุดใช้ช่องกฎหมาย/ประกาศ เอกสาร สิทธิ์ และ validation ของฟอร์มเดิม โดยส่ง `details.requestedParameters: []` กับ `measurementInstruments.parameters: []`
 - คำขอ `ADD_MEASUREMENT_POINT` ที่ทุกจุดยกเว้นทั้งหมด หรืออยู่ระหว่างขยายเวลาโดยไม่มีพารามิเตอร์ ใช้ flow อนุมัติเดียวกัน รวมกรณีที่แต่ละจุดใช้คนละสถานะในสองค่านี้ การอนุมัติด้วย `APPROVE_DESIGN` หรือ `APPROVE_FORM` ออกรหัสจุด เปลี่ยนคำขอเป็น `CONNECTED` บันทึกเวลาอนุมัติเป็น `verifiedAt` และสร้าง active row ใน `cems_wpms_connected_measurement_points` ทันที โดยคง `monitoringPointStatus` เดิม
-- ไม่ผ่าน `WAITING_CONNECTION`, device config, confirm หรือ verify และไม่สร้างกำหนดตั้งค่าอุปกรณ์ 30 วัน; worker ยกเลิกเมื่อหมดเวลาจะไม่เลือกคำขอ `CONNECTED`
+- ไม่ผ่าน `WAITING_CONNECTION`, device config, confirm หรือ verify และไม่สร้างกำหนดตั้งค่าอุปกรณ์ 30 วัน
 - ถ้าจุดขยายเวลามีพารามิเตอร์จริง หรือมีจุดอื่นที่ไม่เข้าเงื่อนไขในคำขอเดียวกัน ใช้ flow ตั้งค่าอุปกรณ์ปกติ คำขอ `ADD_PARAMETER` ไม่ใช้ทางลัดนี้แม้ส่งสถานะขยายเวลามาด้วย
 - จุดที่อนุมัติแบบไม่มีพารามิเตอร์เก็บ `parameters: []` และสถานะระดับจุดแยกกัน ใช้ `pointCode` เดิมยื่น `ADD_PARAMETER` เมื่อต้องการเพิ่มพารามิเตอร์ภายหลังได้
 
@@ -1070,6 +1070,8 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 | `action`         | body     | Yes         | No       | enum    | `APPROVE_FORM`, `REQUEST_REVISION`, `RETURN_TO_WAITING_CONNECTION` หรือ `REJECT` |
 | `revisionReason` | body     | Conditional | เฉพาะ `REJECT` | string | required เมื่อ action เป็น `REQUEST_REVISION` หรือ `RETURN_TO_WAITING_CONNECTION` (trim 1-2000); `REJECT` เป็น optional สูงสุด 1000 ตัวอักษร และรับ `null`/blank |
 | `officerNote`    | body     | No          | Yes      | string  | trim <=2000 เมื่อแจ้งแก้ไข; action/decision อื่น <=1000; รับ omitted/null/blank |
+
+เมื่อคำขออยู่ใน `CONNECTION_CONFIRMED` การส่ง `RETURN_TO_WAITING_CONNECTION` ล้าง `confirmedAt` และคง `connectionDueAt` เดิม ค่าเริ่มต้นคืนสถานะ `WAITING_CONNECTION` แม้พ้นกำหนดแล้ว เมื่อเปิด `CONNECTION_REQUEST_AUTO_CANCEL_ENABLED=true` คำขอที่พ้นกำหนดจะเปลี่ยนเป็น `CANCELED` ดู [กำหนดตั้งค่าและยืนยันการเชื่อมต่อ](./README.md#connection-setup-deadline)
 
 เมื่อเลือก `REJECT` ส่งเฉพาะ discriminator ของ endpoint ได้ ไม่จำกัดสถานะต้นทาง แม้เป็น `CONNECTED`, `CANCELED` หรือ `REJECTED`; optional `revisionReason`/`officerNote` ที่ละ field, `null`, ข้อความว่าง หรือช่องว่างล้วนไม่ทำให้ validation ล้มเหลว สถานะปลายทางคือ terminal `REJECTED` (`ไม่อนุมัติ`) โดยไม่เลิกใช้งานจุด live หรือย้อนข้อมูลโรงงานที่เคยเชื่อมต่อสำเร็จแล้ว รายละเอียด request/response และข้อผิดพลาดอยู่ใน [สัญญาการปฏิเสธคำขอ](./README.md#reject-request)
 
