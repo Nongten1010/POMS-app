@@ -7,7 +7,7 @@ export const generalUploadPolicyDescription =
   'TXT ต้องเป็น UTF-8 และไม่มี NUL; รับข้อความอธิบายที่มีตัวอย่างแท็ก `<script>`/`<svg>` อยู่ภายใน แต่ยังบล็อก prefix ที่เป็น active markup หรือสคริปต์ที่ตัวตรวจรู้จัก รวม BOM/ช่องว่างนำหน้า; ข้อยกเว้นนี้ใช้เฉพาะ .txt ไม่รวม XML/ไฟล์ชนิดอื่น. TXT ดาวน์โหลดเป็น attachment พร้อม nosniff และ client ต้องไม่ตีความเนื้อหาเป็น HTML. ' +
   'PDF ตรวจโครงสร้างออบเจ็กต์ รวมชื่อแบบ #xx และออบเจ็กต์บีบอัด; รับข้อความ/comment/ข้อมูลรูปภาพที่มีคำคล้าย /JS โดยไม่ถือเป็นคำสั่ง. ' +
   'บล็อก JavaScript รวม OnInstantiate ของ 3D, Launch, RichMedia และไฟล์ฝังจริง; ใช้ข้อความ PDF active content or embedded files are not allowed. ' +
-  'PDF ที่เสีย เข้ารหัส มีฟอร์ม XFA หรืออ่านตรวจไม่ได้ รวมกรณีเกิน 100000 ออบเจ็กต์ที่ตรวจ ตอบ 400 ด้วยข้อความ Invalid, encrypted or unsupported PDF file; ฟอร์ม AcroForm ที่ไม่มีสคริปต์ยังรับได้. ' +
+  'PDF ที่เสีย เข้ารหัส มีฟอร์ม XFA หรืออ่านตรวจไม่ได้ รวมกรณีเกิน 100000 ออบเจ็กต์ที่ตรวจ ตอบ 400 ด้วยข้อความ Invalid, encrypted or unsupported PDF file. ฟอร์ม AcroForm ที่ไม่มีสคริปต์และ PDF ที่ใช้ XFA เป็นค่าชื่อทั่วไป เช่น ชื่อสีพิเศษ ยังรับได้เมื่อผ่านการตรวจอื่น. ' +
   'FAQ คง VALIDATION_ERROR และ details.files ส่วน upload ทั่วไปคง BAD_REQUEST. ' +
   'จำกัดรวม 256 entries, ขนาดหลังแตกไฟล์รวม 25 MiB, ต่อ entry 10 MiB และ ZIP ซ้อนภายในได้ 2 ชั้น. ' +
   'MIME ใน response กำหนดจากชนิดที่ตรวจและนามสกุล; ชนิดที่ไม่รู้จักใช้ application/octet-stream. ' +

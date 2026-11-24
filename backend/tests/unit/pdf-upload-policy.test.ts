@@ -169,13 +169,14 @@ describe('PDF upload structure inspection', () => {
     await expect(validateGeneralUpload(upload(buffer), LIMIT)).resolves.toBe('application/pdf');
   });
 
-  it('rejects uninspectable XFA forms that can carry scripts inside XML streams', async () => {
-    const xml = Buffer.from(
-      '<template xmlns="http://www.xfa.org/schema/xfa-template/3.3/"><subform><event activity="initialize"><script contentType="application/x-javascript">void(0);</script></event></subform></template>',
-    );
+  it.each(['6 0 R', '[(template) 6 0 R]'])('rejects XFA form data in %s', async (xfaValue) => {
+    const xml = Buffer.from('<template xmlns="http://www.xfa.org/schema/xfa-template/3.3/"/>');
     const buffer = pdfFixture({
       catalogEntries: '/AcroForm 5 0 R',
-      objects: ['<< /Fields [] /XFA 6 0 R >>', pdfStream(deflateSync(xml), '/Filter /FlateDecode')],
+      objects: [
+        `<< /Fields [] /XFA ${xfaValue} >>`,
+        pdfStream(deflateSync(xml), '/Filter /FlateDecode'),
+      ],
     });
     await expect(validateGeneralUpload(upload(buffer), LIMIT)).rejects.toThrow(
       'Invalid, encrypted or unsupported PDF file',
