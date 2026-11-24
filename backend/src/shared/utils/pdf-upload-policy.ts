@@ -47,11 +47,7 @@ export async function validatePdfUpload(buffer: Buffer): Promise<void> {
       if (visited.size > MAX_INSPECTED_OBJECTS) throw new Error('PDF inspection limit');
 
       if (object instanceof PDFName) {
-        const name = decodedName(object);
-        // XFA can carry JavaScript in XML packets, outside PDF action dictionaries.
-        // This inspector does not parse XFA; accepting opaque packets would bypass it.
-        if (name === 'XFA') throw new Error('Unsupported XFA form');
-        if (blockedNames.has(name)) {
+        if (blockedNames.has(decodedName(object))) {
           throw new BadRequestError(ACTIVE_CONTENT_ERROR);
         }
       } else if (object instanceof PDFStream) {
@@ -63,7 +59,12 @@ export async function validatePdfUpload(buffer: Buffer): Promise<void> {
         }
         pending.push(object.dict);
       } else if (object instanceof PDFDict) {
-        for (const [key, value] of object.entries()) pending.push(key, value);
+        for (const [key, value] of object.entries()) {
+          // XFA packets are carried by a dictionary entry. A name value can label
+          // ordinary content, such as a spot color.
+          if (decodedName(key) === 'XFA') throw new Error('Unsupported XFA form');
+          pending.push(key, value);
+        }
       } else if (object instanceof PDFArray) {
         for (let index = 0; index < object.size(); index++) pending.push(object.get(index));
       }

@@ -81,6 +81,8 @@ Backend อ่านโครงสร้าง PDF ก่อนจัดเก�
 
 ฟอร์ม AcroForm ที่ไม่มีสคริปต์ยังรับได้ แต่ปฏิเสธฟอร์ม XFA ทั้งหมดเพราะอาจมีสคริปต์ใน XML packets ที่ตัวตรวจนี้ยังอ่านตรวจไม่ได้ และบล็อก JavaScript ของ 3D ผ่าน `OnInstantiate` ตาม [Adobe 3D stream reference](https://opensource.adobe.com/dc-acrobat-sdk-docs/library/plugin/Plugins_3D_samples.html)
 
+ตัวตรวจฟอร์ม XFA ตรวจจากคีย์ในโครงสร้าง PDF ไฟล์ที่ใช้ `XFA` เป็นค่าชื่อทั่วไป เช่น ชื่อสีพิเศษ สามารถอัปโหลดได้เมื่อผ่านการตรวจอื่น
+
 | ผลตรวจ | HTTP | ข้อความจากตัวตรวจ |
 | --- | --- | --- |
 | พบโครงสร้าง JavaScript, Launch, RichMedia หรือไฟล์ฝัง เช่น `/JS`, `/S /JavaScript`, `/OnInstantiate`, `/Type /EmbeddedFile`, `/EmbeddedFiles`, `/EF` | `400` | `PDF active content or embedded files are not allowed` |

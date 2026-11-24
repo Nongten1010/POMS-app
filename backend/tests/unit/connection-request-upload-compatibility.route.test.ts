@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it } from '@jest/globals';
 import { createApp } from '../../src/app';
 import { env } from '../../src/config/env';
 import { signTestAccessToken } from '../helpers/live-authorization-fixture';
+import { pdfFixture } from '../helpers/pdf-fixture';
 import { jpegUploadFixture, pngUploadFixture } from '../helpers/raster-upload-fixture';
 
 describe('connection request upload compatibility with ordinary document content', () => {
@@ -148,6 +149,26 @@ describe('connection request upload compatibility with ordinary document content
       });
     },
   );
+
+  it.each(['InkName', 'XFA'])('accepts a PDF with spot color named %s', async (colorName) => {
+    const contents = pdfFixture({
+      resources: `<< /ColorSpace << /Spot [/Separation /${colorName} /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>] >> >>`,
+      content: '/Spot cs 0.5 scn 10 10 20 20 re f',
+    });
+
+    await withUploadDirectory(async () => {
+      const response = await request(createApp())
+        .post('/api/v1/cems-wpms-requests/document-images')
+        .set('Authorization', `Bearer ${accessToken()}`)
+        .attach('file', contents, { filename: 'report.pdf', contentType: 'application/pdf' });
+
+      expect(response.body.error?.message).toBeUndefined();
+      expect({ status: response.status, body: response.body }).toMatchObject({
+        status: 201,
+        body: { success: true, data: { fileName: 'report.pdf', fileType: 'application/pdf' } },
+      });
+    });
+  });
 
   it('serves a plain-text explanation of a script tag only as an inert download', async () => {
     await withUploadDirectory(async (uploadDir) => {
