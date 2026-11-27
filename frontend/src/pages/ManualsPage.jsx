@@ -10,12 +10,10 @@ import {
 } from '@mui/material'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import DownloadIcon from '@mui/icons-material/Download'
 
 const officerManualUrl = new URL('../manuals/คู่มือ สำหรับเจ้าหน้าที่.pdf', import.meta.url).href
 const operatorManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ประกอบการ-v3.1.pdf', import.meta.url).href
 const adminManualUrl = new URL('../manuals/คู่มือ สำหรับผู้ดูแลระบบ.pdf', import.meta.url).href
-const dpomsClientUrl = new URL('../download/D-POMS_Client_v0.8.5b.zip', import.meta.url).href
 
 function getAvailableManuals(userType = '', roleCode = '') {
   const isOperator = userType === 'operator'
@@ -76,15 +74,6 @@ function ManualsPage({ userType = '', roleCode = '' }) {
               </Typography>
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-              <Button
-                component="a"
-                href={dpomsClientUrl}
-                download="D-POMS_Client_v0.8.5b.zip"
-                variant="contained"
-                startIcon={<DownloadIcon />}
-              >
-                DPOMS-Client
-              </Button>
               {selectedManual ? (
               <Button
                 component="a"
