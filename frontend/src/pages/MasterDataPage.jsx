@@ -36,6 +36,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestDocumentDialog, RequestFormBottomSheet } from './ConnectionRequestPage'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
+import { formatFactoryAddress } from '../utils/factoryAddress.mjs'
 import { getPdfRequestStatusLabel, isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
 import { getContactComparison, getMeasurementPointComparisonPair, getMeasurementPointComparisonPairs } from '../utils/contactComparison.mjs'
 import {
@@ -1544,7 +1545,7 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
                   slotProps={{ htmlInput: { maxLength: 500 } }}
                   sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
                 />
-                <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={factory?.address} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
+                <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={formatFactoryAddress(factory?.address)} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
                 <TextField name="latitude" label="ละติจูด" size="small" defaultValue={factory?.latitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField name="longitude" label="ลองจิจูด" size="small" defaultValue={factory?.longitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <Box sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}>
@@ -1679,7 +1680,7 @@ function RequestGeneralInfoPreview({ factory, highlightedFieldNames = [] }) {
             highlighted={highlightedFields.has('projectName')}
             sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
           />
-          <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={factory?.address} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
+          <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={formatFactoryAddress(factory?.address)} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
           <ReadOnlyFormField
             label="ละติจูด"
             value={factory?.latitude}

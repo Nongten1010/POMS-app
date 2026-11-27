@@ -2,6 +2,7 @@ import fontkit from '@pdf-lib/fontkit'
 import { PDFDocument, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
+import { formatFactoryAddress } from './factoryAddress.mjs'
 import { formatKwpDocumentDate } from './kwpFormPresentation.mjs'
 import { KwpPdfTemplate } from './kwpPdfTemplate.mjs'
 import { getPdfRequestStatusLabel } from './requestProcessStatus.mjs'
@@ -536,7 +537,7 @@ function drawKwp01(layout, data) {
   drawDottedValue('ทะเบียนโรงงานเลขที่', data.factoryRegistration, x + 8, y + 8, x + width * 0.66)
   drawDottedValue('ลำดับประเภทโรงงาน', data.industryType, x + width * 0.66 + 8, y + 8, right)
   drawRow(20)
-  drawDottedValue('สถานที่ตั้งโรงงาน', data.factoryAddress, x + 8, y + 8, right)
+  drawDottedValue('สถานที่ตั้งโรงงาน', formatFactoryAddress(data.factoryAddress), x + 8, y + 8, right)
   drawRow(20)
   drawDottedValue('รายชื่อผู้ติดต่อ', data.contactName, x + 8, y + 8, right)
   drawRow(20, { verticals: [x + width * 0.66] })
@@ -940,7 +941,7 @@ async function drawKwp02(layout, data) {
   drawDottedValue('ทะเบียนโรงงานเลขที่', data.factoryRegistration, x + 8, y + 8, x + width * 0.66)
   drawDottedValue('ลำดับประเภทโรงงาน', data.industryType, x + width * 0.66 + 8, y + 8, right)
   drawRow(20)
-  drawDottedValue('สถานที่ตั้งโรงงาน', data.factoryAddress, x + 8, y + 8, right)
+  drawDottedValue('สถานที่ตั้งโรงงาน', formatFactoryAddress(data.factoryAddress), x + 8, y + 8, right)
   drawRow(20)
   drawDottedValue('รายชื่อผู้ติดต่อ', data.contactName, x + 8, y + 8, right)
   drawRow(20, { verticals: [x + width * 0.66] })
@@ -1239,7 +1240,7 @@ function drawKwp03(layout, data) {
   drawPlainValue('ทะเบียนโรงงานเลขที่', data.factoryRegistration, x + 8, y + 8, (width * 0.5) - 16)
   drawPlainValue('ลำดับประเภทโรงงาน', data.industryType, x + width * 0.5 + 8, y + 8, (width * 0.5) - 16)
   drawRow(20)
-  drawPlainValue('สถานที่ตั้งโรงงาน', data.factoryAddress, x + 8, y + 8, width - 16)
+  drawPlainValue('สถานที่ตั้งโรงงาน', formatFactoryAddress(data.factoryAddress), x + 8, y + 8, width - 16)
   drawRow(20)
   drawPlainValue('รายชื่อผู้ติดต่อ', data.contactName, x + 8, y + 8, width - 16)
   drawRow(20, { verticals: [x + width * 0.5] })
@@ -1492,7 +1493,7 @@ function drawKwp05(layout, data) {
   drawDottedValue('ประกอบกิจการ', data.businessActivity, rightFieldX, y, contentRight, { fitSingleLine: true })
   y -= 18
   flow.row(y + 12, 18)
-  drawDottedValue('สถานที่ตั้ง', data.factoryAddress, contentX, y, contentRight)
+  drawDottedValue('สถานที่ตั้ง', formatFactoryAddress(data.factoryAddress), contentX, y, contentRight)
   y -= 18
   flow.row(y + 12, 18)
   drawDottedValue('ผู้เก็บตัวอย่าง', data.samplerName, contentX, y, leftFieldEndX)

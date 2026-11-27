@@ -3,6 +3,7 @@ import { PDFDocument, PDFName, PDFString, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
 import { getEiaAssessmentValue, getEnvironmentalAssessmentValues } from './environmentalAssessment.mjs'
+import { formatFactoryAddress } from './factoryAddress.mjs'
 import { formatIndustrialEstate, getIndustrialEstateInfo } from './industrialEstate.mjs'
 
 const colors = {
@@ -1618,7 +1619,7 @@ function renderGeneralFactorySection(layout, request, context, options = {}) {
     }
   }
   layout.labelValue('ชื่อโครงการ : ', assessment.projectName)
-  layout.labelValue('ที่ตั้ง เลขที่ : ', request?.address ?? factory.address)
+  layout.labelValue('ที่ตั้ง เลขที่ : ', formatFactoryAddress(request?.address ?? factory.address))
   layout.labelValueRow([
     { label: 'พิกัดโรงงาน ละติจูด : ', value: request?.latitude ?? factory.latitude },
     { label: 'ลองจิจูด : ', value: request?.longitude ?? factory.longitude },

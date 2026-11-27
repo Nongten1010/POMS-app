@@ -4,6 +4,7 @@ import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
 import locationOptions from '../option/locationOptions.json'
 import { calculateBodCodErrorValue, formatBodCodStandardDeviation } from './bodCodDeviationCriteria'
+import { formatFactoryAddress } from './factoryAddress.mjs'
 import { formatBodCodDate, getBodCodSequenceLabel } from './bodCodReportRules'
 import { getPdfRequestStatusLabel } from './requestProcessStatus.mjs'
 
@@ -713,7 +714,7 @@ function drawMainFormFields(layout, report = {}) {
   layout.y = y
   layout.ensureSpace(rowGap * 9 + 34)
   y = layout.y
-  line('สถานที่ตั้ง', report.factoryAddress, x, right)
+  line('สถานที่ตั้ง', formatFactoryAddress(report.factoryAddress), x, right)
   next()
   line('ปริมาณการระบายน้ำทิ้งขณะเก็บตัวอย่าง', report.wastewaterFlow, x, right, 'ลบ.ม./ชั่วโมง')
   next()

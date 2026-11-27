@@ -50,6 +50,7 @@ import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasurementMethodOptions.json'
 import { createKwpFormPdf } from '../utils/kwpFormPdf'
+import { formatFactoryAddress } from '../utils/factoryAddress.mjs'
 import { isTerminalProcessRequest } from '../utils/requestProcessStatus.mjs'
 import {
   canCreateKwpRequest, canEditKwpRequest, isKwpAdmin, canCancelKwpRequest, cancelKwpSubmission, getCurrentThaiYear, getKwpDocumentMetadata, countPendingKwpRequests,
@@ -974,7 +975,7 @@ function Kwp01Form({
               <ReadOnlyField label="ลำดับประเภทโรงงาน" value={getFactoryIndustryMainOrder(factory)} />
             </Grid>
             <Grid size={{ xs: 12, md: 12 }}>
-              <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
+              <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={formatFactoryAddress(factory?.address ?? '')} multiline />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" defaultValue={defaults.contactName ?? ''} fullWidth />
@@ -2180,7 +2181,7 @@ function Kwp01PaperDocument({ data }) {
                 <TableCell>ลำดับประเภทโรงงาน : {data.industryType}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell colSpan={2}>สถานที่ตั้งโรงงาน : {data.factoryAddress}</TableCell>
+                <TableCell colSpan={2}>สถานที่ตั้งโรงงาน : {formatFactoryAddress(data.factoryAddress)}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell colSpan={2}>รายชื่อผู้ติดต่อ : {data.contactName}</TableCell>
@@ -2304,7 +2305,7 @@ function KwpPaperRowsOneAndTwo({ data, totalColumns = 2 }) {
         <TableCell colSpan={rightColumns}>ลำดับประเภทโรงงาน : {data.industryType}</TableCell>
       </TableRow>
       <TableRow>
-        <TableCell colSpan={totalColumns}>สถานที่ตั้งโรงงาน : {data.factoryAddress}</TableCell>
+        <TableCell colSpan={totalColumns}>สถานที่ตั้งโรงงาน : {formatFactoryAddress(data.factoryAddress)}</TableCell>
       </TableRow>
       <TableRow>
         <TableCell colSpan={totalColumns}>รายชื่อผู้ติดต่อ : {data.contactName}</TableCell>
@@ -2621,7 +2622,7 @@ function Kwp03PaperDocument({ data }) {
                 <TableCell colSpan={2}>ลำดับประเภทโรงงาน : {data.industryType}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell colSpan={4}>สถานที่ตั้งโรงงาน : {data.factoryAddress}</TableCell>
+                <TableCell colSpan={4}>สถานที่ตั้งโรงงาน : {formatFactoryAddress(data.factoryAddress)}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell colSpan={4}>รายชื่อผู้ติดต่อ : {data.contactName}</TableCell>
@@ -2782,7 +2783,7 @@ function Kwp05PaperDocument({ data }) {
             <Kwp05Field label="เลขทะเบียนโรงงาน" value={data.factoryRegistration} minWidth={190} sx={{ width: 340 }} />
             <Kwp05Field label="ประกอบกิจการ" value={data.businessActivity} minWidth={190} sx={{ flex: 1 }} />
           </Kwp05FormRow>
-          <Kwp05Field label="สถานที่ตั้ง" value={data.factoryAddress} minWidth={520} />
+          <Kwp05Field label="สถานที่ตั้ง" value={formatFactoryAddress(data.factoryAddress)} minWidth={520} />
           <Kwp05FormRow>
             <Kwp05Field label="ผู้เก็บตัวอย่าง" value={data.samplerName} minWidth={250} sx={{ flex: 1.1 }} />
             <Kwp05Field label="ทะเบียนเจ้าหน้าที่" value={data.officerRegistration} minWidth={170} sx={{ flex: 0.9 }} />
@@ -3821,7 +3822,7 @@ function Kwp02Form({
               <ReadOnlyField label="ลำดับประเภทโรงงาน" value={getFactoryIndustryMainOrder(factory)} />
             </Grid>
             <Grid size={{ xs: 12, md: 12 }}>
-              <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
+              <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={formatFactoryAddress(factory?.address ?? '')} multiline />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" defaultValue={defaults.contactName ?? ''} fullWidth />
@@ -4050,7 +4051,7 @@ function Kwp03Form({
               <ReadOnlyField label="ลำดับประเภทโรงงาน" value={getFactoryIndustryMainOrder(factory)} />
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
+              <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={formatFactoryAddress(factory?.address ?? '')} multiline />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" defaultValue={defaults.contactName ?? ''} fullWidth />
@@ -4295,7 +4296,7 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
               <TextField name="businessActivity" label="ประกอบกิจการ" size="small" defaultValue={businessActivityDefault} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 12 }}>
-              <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
+              <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={formatFactoryAddress(factory?.address ?? '')} multiline />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" defaultValue={defaults.contactName ?? ''} fullWidth />

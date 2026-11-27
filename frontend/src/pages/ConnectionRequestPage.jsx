@@ -60,6 +60,7 @@ import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import ModbusAddressField from '../components/ModbusAddressField'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
+import { formatFactoryAddress } from '../utils/factoryAddress.mjs'
 import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
 import { buildPreviousConnectionRequestPrefill, loadPreviousConnectionRequest } from '../utils/previousConnectionRequest.mjs'
 import { canCancelConnectionRequest } from '../utils/connectionRequestCancellation.mjs'
@@ -7836,7 +7837,7 @@ export function RequestFormBottomSheet({
                   <Grid size={{ xs: 12 }}>
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={formFactory?.address ?? ''} />
+                        <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={formatFactoryAddress(formFactory?.address ?? '')} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 3 }}>
                         {generalFactoryFieldsReadOnly ? (

@@ -49,6 +49,7 @@ import diwLogo from '../assets/diwLogo.png'
 import locationOptions from '../option/locationOptions.json'
 import measurementValueAbbreviationOptions from '../option/measurementValueAbbreviationOptions.json'
 import MinuteMeasurementsDialog from '../components/MinuteMeasurementsDialog'
+import { formatFactoryAddress } from '../utils/factoryAddress.mjs'
 import { getMeasurementHour } from '../utils/minuteMeasurements.mjs'
 
 const longdoMapKey = import.meta.env.VITE_LONGDO_MAP_KEY ?? ''
@@ -1468,7 +1469,7 @@ function FactoryCard({
             color={cardTextColor}
             sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
-            {factory.address}
+            {formatFactoryAddress(factory.address)}
           </Typography>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mt: 0.5 }}>
             {isNotInPoms ? (
@@ -1994,7 +1995,7 @@ function FactoryMapResultCard({ factory, canViewDetails = false, onSelect, onClo
             {[factory.factoryId, factory.oldRegistrationNo ? `(${factory.oldRegistrationNo})` : ''].filter(Boolean).join(' ')}
           </Typography>
           <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {factory.address}
+            {formatFactoryAddress(factory.address)}
           </Typography>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mt: 0.5 }}>
             {systems.map((system) => (
@@ -2464,7 +2465,7 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
 
               <Stack spacing={0.5} sx={{ mt: 0.75 }}>
                 <FactoryMeta label="เลขทะเบียนโรงงาน" value={factory.factoryId || '-'} hideLabel valueSx={{ fontWeight: 400 }} />
-                <FactoryMeta label="ที่อยู่" value={factory.address} hideLabel valueSx={{ fontWeight: 400 }} />
+                <FactoryMeta label="ที่อยู่" value={formatFactoryAddress(factory.address)} hideLabel valueSx={{ fontWeight: 400 }} />
               </Stack>
             </Box>
           </Stack>

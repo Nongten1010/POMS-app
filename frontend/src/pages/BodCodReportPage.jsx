@@ -45,6 +45,7 @@ import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import locationOptions from '../option/locationOptions.json'
 import { calculateBodCodErrorValue, formatBodCodStandardDeviation, getBodCodStandardDeviation } from '../utils/bodCodDeviationCriteria'
 import { createBodCodReportPdf, createBodCodResultNoticePdf, getBodCodInspectorPosition, getBodCodResultNoticeSigners } from '../utils/bodCodReportPdf'
+import { formatFactoryAddress } from '../utils/factoryAddress.mjs'
 import { countPendingBodCodReports, findPendingBodCodReport, getBodCodActions, getBodCodConflictAction, getBodCodIdentity, getBodCodParameters, getBodCodPeriod, getBodCodPeriodLabel, getBodCodSequenceLabel, getBodCodStatus, getBodCodSubmissionError, hasBodCodIdentityChanged } from '../utils/bodCodReportRules'
 import { bodCodDeviationReportsApiBaseUrl, cancelBodCodReport, readBodCodApiResponse } from '../utils/bodCodReportApi'
 
@@ -897,7 +898,7 @@ function BodCodPaperDocument({ report }) {
             ประกอบกิจการ : <PaperLine minWidth={220}>{report.businessActivity}</PaperLine>
           </Box>
           <Box>
-            สถานที่ตั้ง : <PaperLine minWidth={520}>{report.factoryAddress}</PaperLine>
+            สถานที่ตั้ง : <PaperLine minWidth={520}>{formatFactoryAddress(report.factoryAddress)}</PaperLine>
           </Box>
           <Box>
             ปริมาณการระบายน้ำทิ้งขณะเก็บตัวอย่าง : <PaperLine minWidth={260}>{report.wastewaterFlow}</PaperLine> ลบ.ม./ชั่วโมง
@@ -2336,7 +2337,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview, validationErr
                   <ReadOnlyField label="ประกอบกิจการ" value={report.businessActivity} />
                 </Grid>
                 <Grid size={{ xs: 12 }}>
-                  <ReadOnlyField label="สถานที่ตั้ง" value={report.factoryAddress} multiline />
+                  <ReadOnlyField label="สถานที่ตั้ง" value={formatFactoryAddress(report.factoryAddress)} multiline />
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
                   <ReadOnlyField label="รอบรายงาน" value={getBodCodPeriodLabel(report.roundNo)} />

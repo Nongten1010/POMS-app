@@ -46,6 +46,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import EligibleOperatorAccessDialog from '../components/EligibleOperatorAccessDialog'
 import { isAccessAdministrator } from '../utils/eligibleOperatorAccess.mjs'
+import { formatFactoryAddress } from '../utils/factoryAddress.mjs'
 import { DataGrid } from '@mui/x-data-grid'
 import cemsInstallationRequiredOptions from '../option/cemsInstallationRequiredOptions.json'
 import cemsParameterOptionItems from '../option/cemsParameterOptions.json'
@@ -108,7 +109,7 @@ const baseColumns = [
   { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงานแบบเดิม', width: 190 },
   { field: 'factoryClass', headerName: 'ลำดับประเภทโรงงานหลัก', width: 190 },
   { field: 'factorySubclass', headerName: 'ลำดับประเภทโรงงานรอง', width: 190 },
-  { field: 'location', headerName: 'สถานที่ตั้ง', width: 320 },
+  { field: 'location', headerName: 'สถานที่ตั้ง', width: 320, valueFormatter: formatFactoryAddress },
   { field: 'province', headerName: 'จังหวัด', width: 130 },
   { field: 'industrialEstate', headerName: 'นิคมอุตสาหกรรม', width: 210 },
   { field: 'coordinates', headerName: 'พิกัดโรงงาน', width: 170 },
@@ -2193,7 +2194,7 @@ function EligibleFactoryBottomSheet({
               </Grid>
             ) : null}
             <Grid size={{ xs: 12, md: 6 }}>
-              <ReadOnlyField label="สถานที่ตั้ง" value={factory?.location} />
+              <ReadOnlyField label="สถานที่ตั้ง" value={formatFactoryAddress(factory?.location)} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField
