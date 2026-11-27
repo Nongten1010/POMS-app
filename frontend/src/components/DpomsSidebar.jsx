@@ -59,6 +59,8 @@ const menuItems = [
   {
     label: 'รายงานค่าความคลาดเคลื่อน BOD/COD Online',
     value: 'bod-cod-report',
+    adminOnly: true,
+    secondary: 'อยู่ระหว่างการปรับปรุง',
     permissionKey: 'bod_cod_errors',
     icon: <AssessmentIcon />,
   },
@@ -136,7 +138,7 @@ const menuItems = [
   },
 ]
 
-function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permissions, accessToken = '', generalInformationAllowed = false }) {
+function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permissions, accessToken = '', generalInformationAllowed = false, isAdmin = false }) {
   const badges = useMenuBadges(accessToken)
   const visibleMenuItems = menuItems.filter((item) => item.staffOnly ? generalInformationAllowed : item.alwaysVisible || permissions?.[item.permissionKey]?.view === true)
 
@@ -178,12 +180,15 @@ function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permiss
         <List sx={{ px: 1, py: 1 }}>
           {visibleMenuItems.map((item) => {
             const isSelected = item.value === selectedValue
+            const isDisabled = item.adminOnly && !isAdmin
 
             return (
               <ListItemButton
                 key={item.label}
                 selected={isSelected}
+                disabled={isDisabled}
                 onClick={() => {
+                  if (isDisabled) return
                   onSelect?.(item.value)
                   onClose()
                 }}
@@ -212,6 +217,7 @@ function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permiss
                 </ListItemIcon>
                 <ListItemText
                   primary={item.label}
+                  secondary={item.secondary}
                   sx={{ minWidth: 0 }}
                   slotProps={{
                     primary: {

@@ -142,7 +142,10 @@ function getRoleCodeFromAuth(auth) {
   return getRoleCodesFromAuth(auth)[0] ?? ''
 }
 
-function canViewMenu(menuValue, permissions) {
+function canViewMenu(menuValue, permissions, roleCodes = []) {
+  if (menuValue === 'bod-cod-report' && !roleCodes.includes('admin')) {
+    return false
+  }
   if (publicMenuValues.has(menuValue)) {
     return true
   }
@@ -151,8 +154,8 @@ function canViewMenu(menuValue, permissions) {
   return permissions?.[permissionKey]?.view === true
 }
 
-function getFirstViewableMenu(permissions) {
-  return Object.keys(menuPermissionMap).find((menuValue) => canViewMenu(menuValue, permissions)) ?? 'home'
+function getFirstViewableMenu(permissions, roleCodes) {
+  return Object.keys(menuPermissionMap).find((menuValue) => canViewMenu(menuValue, permissions, roleCodes)) ?? 'home'
 }
 
 function getUserFromAuth(auth) {
@@ -237,9 +240,9 @@ function App() {
   const activePermissions = useMemo(() => getPermissionsFromAuth(authResponse), [authResponse])
   const [selectedMenu, setSelectedMenu] = useState('home')
   const generalInformationAllowed = Boolean(accessToken) && canViewGeneralInformation(userType, roleCodes)
-  const visibleSelectedMenu = (selectedMenu === 'general-information' ? generalInformationAllowed : canViewMenu(selectedMenu, activePermissions))
+  const visibleSelectedMenu = (selectedMenu === 'general-information' ? generalInformationAllowed : canViewMenu(selectedMenu, activePermissions, roleCodes))
     ? selectedMenu
-    : getFirstViewableMenu(activePermissions)
+    : getFirstViewableMenu(activePermissions, roleCodes)
   const isWorkspacePage =
     visibleSelectedMenu === 'home' ||
     visibleSelectedMenu === 'master-data' ||
@@ -273,6 +276,7 @@ function App() {
         }}
       />
       <DpomsSidebar
+        isAdmin={roleCodes.includes('admin')}
         key={accessToken || 'anonymous'}
         accessToken={accessToken}
         open={isMenuOpen}
