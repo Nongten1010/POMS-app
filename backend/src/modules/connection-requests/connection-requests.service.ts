@@ -1817,7 +1817,10 @@ export const connectionRequestsService = {
     }
 
     const confirmedAt = input.confirmedAt ?? nowProvider().toISOString();
-    if (new Date(confirmedAt).getTime() > new Date(request.connectionDueAt).getTime()) {
+    if (
+      env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED &&
+      isPastConnectionDueDate(request.connectionDueAt, new Date(confirmedAt))
+    ) {
       throw new BadRequestError('Connection confirmation must be submitted within 30 days');
     }
 

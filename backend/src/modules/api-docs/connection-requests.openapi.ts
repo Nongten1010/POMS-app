@@ -3992,7 +3992,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       operationId: 'confirmConnectionRequestConnection',
       description:
         requestEditAccessDescription +
-        'ใช้ได้ใน WAITING_CONNECTION โดย SAVE คงสถานะรอ ส่วน CONFIRM ตรวจ confirmedAt เทียบกับ connectionDueAt แม้อยู่ระหว่างพักการยกเลิกอัตโนมัติ หากละ confirmedAt ใช้เวลา Backend และเมื่อเวลาที่ใช้ตรวจเกินกำหนด ตอบ 400 BAD_REQUEST. ' +
+        'ใช้ได้ใน WAITING_CONNECTION โดย SAVE คงสถานะรอ ส่วน CONFIRM เปลี่ยนเป็น CONNECTION_CONFIRMED และต้องมี connectionDueAt ค่าเริ่มต้น CONNECTION_REQUEST_AUTO_CANCEL_ENABLED=false อนุญาตให้ยืนยันได้แม้พ้นกำหนด 30 วัน เมื่อเปิดเป็น true และ confirmedAt เกิน connectionDueAt จะตอบ 400 BAD_REQUEST หากละ confirmedAt ใช้เวลาปัจจุบันของ Backend. ' +
         connectionProfileWriteDescription +
         ' ' +
         addParameterOwnershipDescription,

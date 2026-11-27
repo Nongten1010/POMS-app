@@ -6507,7 +6507,8 @@ describe('connectionRequestsService', () => {
     );
   });
 
-  it('rejects connection confirmation after the 30 day due date', async () => {
+  it('rejects overdue connection confirmation when auto-cancellation is enabled', async () => {
+    env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED = true;
     mockedRepository.findById.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
@@ -6522,8 +6523,46 @@ describe('connectionRequestsService', () => {
         { confirmedAt: now.toISOString() },
         actorUserId,
       ),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Connection confirmation must be submitted within 30 days',
+    });
+    expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
   });
+
+  it.each([undefined, '2026-05-26T10:00:00.000Z'])(
+    'confirms an overdue waiting connection while auto-cancellation is paused (confirmedAt=%s)',
+    async (confirmedAt) => {
+      env.CONNECTION_REQUEST_AUTO_CANCEL_ENABLED = false;
+      const request = requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        connectionDueAt: '2026-05-01T00:00:00.000Z',
+        createdBy: 99,
+      });
+      const confirmedRequest = {
+        ...request,
+        status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+        confirmedAt: confirmedAt ?? now.toISOString(),
+      };
+      mockedRepository.findById.mockResolvedValue(request);
+      mockedRepository.updateStatus.mockResolvedValue(confirmedRequest);
+
+      await expect(
+        connectionRequestsService.confirmConnection(
+          1,
+          { action: 'CONFIRM', confirmedAt },
+          actorUserId,
+        ),
+      ).resolves.toEqual(confirmedRequest);
+
+      expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+        1,
+        CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+        actorUserId,
+        { confirmedAt: confirmedRequest.confirmedAt, officerNote: null },
+      );
+    },
+  );
 
   it('saves connection confirmation progress without changing to confirmed status', async () => {
     mockedRepository.findById.mockResolvedValue(

@@ -432,7 +432,7 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 - เมื่ออนุมัติเข้า `WAITING_CONNECTION` ระบบตั้ง `connectionDueAt` ไว้ 30 วันนับจากเวลาอนุมัติ `GET /api/v1/cems-wpms-requests/table-rows` คำนวณ `waitingConnectionDaysRemaining` จากเวลาที่เหลือ ปัดขึ้นและต่ำสุดเป็น `0`
 - ค่าเริ่มต้นพักการยกเลิกอัตโนมัติ เมื่อถึงกำหนด คำขอยังอยู่ใน `WAITING_CONNECTION` ตารางคืน `waitingConnectionDaysRemaining: 0` พร้อมวันครบกำหนดเดิมและข้อความ `รอโรงงานตั้งค่าอุปกรณ์ภายใน 0 วัน`
-- `POST /:id/confirm-connection` ใช้ `action: "SAVE"` เพื่อบันทึกความคืบหน้าและคงสถานะรอ ส่วน `action: "CONFIRM"` ตรวจ `confirmedAt` เทียบกับ `connectionDueAt` ตามเดิม หากละ `confirmedAt` ใช้เวลาปัจจุบันของ Backend หากเวลาที่ใช้ตรวจเกินกำหนด ตอบ `400 BAD_REQUEST`
+- `POST /:id/confirm-connection` ใช้ `action: "SAVE"` เพื่อบันทึกความคืบหน้าและคงสถานะรอ ส่วน `action: "CONFIRM"` ต้องมี `connectionDueAt` และเปลี่ยนคำขอเป็น `CONNECTION_CONFIRMED` เพื่อรอเจ้าหน้าที่ตรวจ เมื่อ `CONNECTION_REQUEST_AUTO_CANCEL_ENABLED=false` ยืนยันคำขอที่ยังอยู่ใน `WAITING_CONNECTION` ได้แม้พ้นกำหนด 30 วัน เมื่อเปิดเป็น `true` และ `confirmedAt` เกิน `connectionDueAt` ระบบตอบ `400 BAD_REQUEST` หากละ `confirmedAt` ระบบใช้เวลาปัจจุบันของ Backend
 - ตั้ง `CONNECTION_REQUEST_AUTO_CANCEL_ENABLED=true` แล้วเริ่ม Backend ใหม่เพื่อเปิดการยกเลิกอัตโนมัติอีกครั้ง รอบตรวจจะรวมคำขอ `WAITING_CONNECTION` ที่พ้นกำหนดอยู่แล้ว ดู [ผลของการสั่งกลับไปตั้งค่าอุปกรณ์](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsidstatus)
 
 | ฟิลด์ของ `POST /:id/confirm-connection` | ชนิด | เงื่อนไข |
@@ -442,14 +442,14 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 | `confirmedAt` | string | ISO 8601 UTC ละได้ |
 | `note` | string \| null | ละได้ สูงสุด 1,000 ตัวอักษรหลัง trim |
 
-ตัวอย่าง request และ response ขั้นต่ำของ `SAVE` สำหรับคำขอที่พ้นกำหนด
+ตัวอย่าง request และ response ขั้นต่ำเมื่อยืนยันคำขอที่พ้นกำหนดระหว่างพักการยกเลิกอัตโนมัติ
 
 ```json
-{ "action": "SAVE" }
+{ "action": "CONFIRM" }
 ```
 
 ```json
-{ "success": true, "data": { "id": 101, "status": "WAITING_CONNECTION" } }
+{ "success": true, "data": { "id": 101, "status": "CONNECTION_CONFIRMED" } }
 ```
 
 ### Request table location source
